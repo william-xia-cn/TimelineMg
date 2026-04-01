@@ -653,7 +653,160 @@ interface ParsedEmail {
 
 ---
 
-## 第八部分：待细化内容
+## 第八部分：系统结构设计
+
+## 8.1 模块化架构原则
+
+**设计目标**：模块独立运行，无直接依赖，基于 Google 数据持久层关联
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                 Google 数据持久层                        │
+├─────────────────────────────────────────────────────────┤
+│  Google Tasks      │  Google Calendar   │  Google Sheets│
+│  - Tasks 数据      │  - 容器/日程        │  - 日志/配置  │
+└─────────────────────────────────────────────────────────┘
+         ↑                      ↑                  ↑
+         │                      │                  │
+    ┌────┴─────┐         ┌─────┴─────┐      ┌────┴────┐
+    │          │         │           │      │         │
+┌───▼───┐  ┌──▼────┐  ┌──▼────┐  ┌───▼────┐ │         │
+│Tasks  │  │Calendar│  │Scheduler│ │Dashboard│         │
+│Module │  │Module │  │(Framework)│ │Module  │         │
+└───────┘  └───────┘  └─────────┘ └─────────┘         │
+    │          │              │            ↑
+    │          │              │            │
+    └──────────┴──────────────┴────────────┘
+              数据驱动协同
+```
+
+## 8.2 模块定义
+
+| 模块 | 职责 | 核心功能 | 数据源 |
+|------|------|----------|--------|
+| **Framework** | 公用逻辑 | 鉴权、数据存储、调度引擎、事件监听 | - |
+| **Tasks Module** | 任务管理 | 任务 CRUD、看板视图、Habit 管理 | Google Tasks |
+| **Calendar Module** | 日历与容器 | 时间容器配置、日程查看 | Google Calendar |
+| **Dashboard Module** | Focus界面 | 当下任务展示、番茄钟、Up Next | Google Tasks + Calendar |
+| **Reminder Module** | 触发与提醒 | Gmail 解析、Reminder 生成 | Gmail + Sheets (待定) |
+
+## 8.3 模块依赖关系
+
+```
+Framework (框架层)
+├── auth/           - 鉴权模块
+├── storage/        - 数据存储封装
+│   ├── tasks.ts    - Google Tasks API
+│   ├── calendar.ts - Google Calendar API
+│   └── sheets.ts   - Google Sheets API
+├── scheduler/       - 调度引擎
+│   ├── arrange.ts  - Arrange 调度
+│   └── dailySettlement.ts
+└── watcher/        - 数据变更监听
+
+独立模块（无直接依赖，通过数据层关联）
+├── dashboard/      - Focus Dashboard
+├── tasks/         - 任务管理
+├── calendar/      - 日历容器
+└── reminder/      - 触发器与提醒（待定）
+```
+
+## 8.4 目录结构
+
+```
+TimelineMg/
+├── framework/                    # 框架层（公用）
+│   ├── auth/                    # 鉴权模块
+│   ├── storage/                 # 数据存储
+│   │   ├── tasks.ts             # Tasks API 封装
+│   │   ├── calendar.ts          # Calendar API 封装
+│   │   └── sheets.ts            # Sheets API 封装
+│   ├── scheduler/               # 调度引擎
+│   │   ├── arrange.ts
+│   │   └── dailySettlement.ts
+│   ├── watcher/                 # 数据变更监听
+│   └── utils/                   # 公共工具
+│
+├── modules/
+│   ├── dashboard/               # Dashboard 模块
+│   │   ├── ui/
+│   │   │   ├── focus.html
+│   │   │   ├── upnext.html
+│   │   │   └── tomato.html
+│   │   ├── services/
+│   │   └── manifest.json
+│   │
+│   ├── tasks/                  # Tasks 模块
+│   │   ├── ui/
+│   │   ├── services/
+│   │   └── manifest.json
+│   │
+│   ├── calendar/               # Calendar 模块
+│   │   ├── ui/
+│   │   ├── services/
+│   │   └── manifest.json
+│   │
+│   └── reminder/              # Reminder 模块（待定）
+│       ├── services/
+│       └── manifest.json
+│
+├── shared/                    # 共享类型定义
+│   └── types/
+│
+└── appsscript.json            # 根配置
+```
+
+## 8.5 模块间通信
+
+**方案**：基于数据变更 Watcher，无独立事件总线
+
+```
+数据变更流程：
+1. 用户在 Tasks Module 完成一个任务
+2. Google Tasks 状态变为 completed
+3. Dashboard Module 通过 Watcher 检测到变更
+4. 自动更新 UI
+
+Watcher 监听：
+- Google Tasks 变更 → 通知 Dashboard 更新
+- Google Calendar 变更 → 通知相关模块
+```
+
+## 8.6 模块清单 (manifest.json)
+
+```typescript
+interface ModuleManifest {
+  module_id: string;
+  module_name: string;
+  version: string;
+  dependencies: string[];      // 仅限 framework
+  entry_point: string;         // 入口 HTML
+  triggers: TriggerConfig[];   // 定时触发器
+  permissions: string[];      // 需要的权限
+}
+```
+
+## 8.7 部署方案
+
+**当前**：Google Apps Script Web App
+
+```
+TimelineMg (主项目)
+├── Web App 部署
+│   ├── 主入口 → Focus Dashboard
+│   ├── /tasks → 任务管理
+│   ├── /calendar → 日历配置
+│   └── /reminder → 提醒设置
+│
+└── 未来扩展
+    └── Google Workspace Add-on
+        ├── Calendar 侧边栏
+        └── Gmail 侧边栏
+```
+
+---
+
+## 第九部分：待细化内容
 
 ## 8.1 调度相关（待细化）
 
