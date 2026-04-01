@@ -688,6 +688,7 @@ interface ParsedEmail {
 | **Tasks Module** | 任务管理 | 任务 CRUD、看板视图、Habit 管理 | Google Tasks |
 | **Calendar Module** | 日历与容器 | 时间容器配置、日程查看 | Google Calendar |
 | **Dashboard Module** | Focus界面 | 当下任务展示、番茄钟、Up Next | Google Tasks + Calendar |
+| **Settings Module** | 系统配置 | 配置管理、初始化、用户设置 | Google Sheets |
 | **Reminder Module** | 触发与提醒 | Gmail 解析、Reminder 生成 | Gmail + Sheets (待定) |
 
 ## 8.3 模块依赖关系
@@ -708,6 +709,7 @@ Framework (框架层)
 ├── dashboard/      - Focus Dashboard
 ├── tasks/         - 任务管理
 ├── calendar/      - 日历容器
+├── settings/      - 系统配置与初始化
 └── reminder/      - 触发器与提醒（待定）
 ```
 
@@ -744,6 +746,14 @@ TimelineMg/
 │   ├── calendar/               # Calendar 模块
 │   │   ├── ui/
 │   │   ├── services/
+│   │   └── manifest.json
+│   │
+│   ├── settings/              # Settings 模块
+│   │   ├── ui/
+│   │   │   └── settings.html
+│   │   ├── services/
+│   │   │   ├── configService.ts
+│   │   │   └── initService.ts
 │   │   └── manifest.json
 │   │
 │   └── reminder/              # Reminder 模块（待定）
