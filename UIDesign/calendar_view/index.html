@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeWhere Calendar</title>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Google Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- 导航栏 (保持与 dashboard 风格一致) -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon"><span class="material-symbols-outlined">change_history</span></div>
+            </div>
+            <nav class="nav-menu">
+                <a href="../timewhere_dashboard/index.html" class="nav-item" title="仪表盘"><span class="material-symbols-outlined">grid_view</span></a>
+                <a href="#" class="nav-item" title="任务"><span class="material-symbols-outlined">task</span></a>
+                <a href="#" class="nav-item active" title="日历"><span class="material-symbols-outlined">calendar_today</span></a>
+                <a href="#" class="nav-item" title="更多"><span class="material-symbols-outlined">apps</span></a>
+            </nav>
+            <div class="sidebar-bottom">
+                <a href="#" class="nav-item" title="设置"><span class="material-symbols-outlined">settings</span></a>
+                <img src="https://i.pravatar.cc/150?img=32" alt="Avatar" class="user-avatar">
+            </div>
+        </aside>
+
+        <!-- 主体日历视图 -->
+        <main class="main-content rounded-container glass-panel custom-scrollbar">
+
+
+            <!-- Calendar Section -->
+            <section class="calendar-section">
+                <!-- Toolbar -->
+                <div class="calendar-toolbar">
+                    <div class="toolbar-left">
+                        <button class="btn-today">今天</button>
+                        <div class="nav-arrows">
+                            <button class="icon-btn btn-arrow"><span class="material-symbols-outlined">chevron_left</span></button>
+                            <button class="icon-btn btn-arrow"><span class="material-symbols-outlined">chevron_right</span></button>
+                        </div>
+                        <h2 class="current-date">2026年3月 – 4月</h2>
+                    </div>
+                    <div class="toolbar-right">
+                        <button class="icon-btn tb-icon"><span class="material-symbols-outlined">search</span></button>
+                        <button class="icon-btn tb-icon"><span class="material-symbols-outlined">help</span></button>
+                        <button class="icon-btn tb-icon"><span class="material-symbols-outlined">settings</span></button>
+                        <div class="view-selector">
+                            <button class="btn-dropdown">周 <span class="material-symbols-outlined">expand_more</span></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calendar View Area -->
+                <div class="calendar-container custom-scrollbar">
+                    
+                    <!-- Days Header -->
+                    <div class="calendar-header-row">
+                        <div class="timezone-cell">GMT+08</div>
+                        <div class="days-wrapper">
+                            <div class="day-header"><div class="day-name">周一</div><div class="day-num">30</div></div>
+                            <div class="day-header"><div class="day-name">周二</div><div class="day-num">31</div></div>
+                            <div class="day-header active"><div class="day-name">周三</div><div class="day-num">1</div></div>
+                            <div class="day-header"><div class="day-name">周四</div><div class="day-num">2</div></div>
+                            <div class="day-header"><div class="day-name">周五</div><div class="day-num">3</div></div>
+                            <div class="day-header"><div class="day-name">周六</div><div class="day-num">4</div></div>
+                            <div class="day-header"><div class="day-name">周日</div><div class="day-num">5</div></div>
+                        </div>
+                    </div>
+
+                    <!-- All Day Events Row -->
+                    <div class="allday-row">
+                        <div class="allday-spacer"></div>
+                        <div class="allday-grid">
+                            <div class="allday-wrapper" style="grid-column: 3 / span 1;">
+                                <div class="allday-event bg-indigo">全天任务</div>
+                                <div class="allday-event bg-light-purple"><span class="material-symbols-outlined" style="font-size: 14px;">check_circle</span> 1 项待处理任务</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main Grid -->
+                    <div class="calendar-body">
+                        <!-- Time Axis -->
+                        <div class="time-axis">
+                            <div class="time-slot-label"><span>上午6点</span></div>
+                            <div class="time-slot-label"><span>上午7点</span></div>
+                            <div class="time-slot-label"><span>上午8点</span></div>
+                            <div class="time-slot-label"><span>上午9点</span></div>
+                            <div class="time-slot-label"><span>上午10点</span></div>
+                            <div class="time-slot-label"><span>上午11点</span></div>
+                            <div class="time-slot-label"><span>下午12点</span></div>
+                            <div class="time-slot-label"><span>下午1点</span></div>
+                            <div class="time-slot-label"><span>下午2点</span></div>
+                            <div class="time-slot-label"><span>下午3点</span></div>
+                            <div class="time-slot-label"><span>下午4点</span></div>
+                            <div class="time-slot-label"><span>下午5点</span></div>
+                            <div class="time-slot-label"><span>下午6点</span></div>
+                            <div class="time-slot-label"><span>下午7点</span></div>
+                            <div class="time-slot-label"><span>下午8点</span></div>
+                            <div class="time-slot-label"><span>下午9点</span></div>
+                            <div class="time-slot-label"><span>下午10点</span></div>
+                        </div>
+                        
+                        <!-- Grid Lines -->
+                        <div class="lines-layer">
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                            <div class="grid-line"></div>
+                        </div>
+
+                        <!-- Days Columns (Events) -->
+                        <div class="columns-layer">
+                            <!-- Column 0 (Monday) -->
+                            <div class="day-col" id="col-0">
+                                <div class="gcal-event event-yellow" style="top: 80px; height: 50px;"> <!-- 8:00 - 9:15, 75m => 50px -->
+                                    <h4>C&V - Character and Values...</h4>
+                                    <span>上午8点 - 9:15</span>
+                                </div>
+                                <div class="gcal-event event-yellow" style="top: 147px; height: 50px;"> <!-- 9:40 - 10:55 -->
+                                    <h4>Sciences - Sciences</h4>
+                                    <span>上午9:40 - 10:55</span>
+                                </div>
+                                <div class="gcal-event event-yellow" style="top: 207px; height: 50px;"> <!-- 11:10 - 12:25 -->
+                                    <h4>Chinese - Chinese Lang...</h4>
+                                    <span>上午11:10 - 下午12:25</span>
+                                </div>
+                                <div class="gcal-event event-orange" style="top: 297px; height: 30px;"> <!-- 1:25 - 2:10 -->
+                                    <h4>ComTime - ARE$Comunity</h4>
+                                    <span>下午1:25 - 2:10</span>
+                                </div>
+                                <div class="gcal-event event-yellow" style="top: 330px; height: 50px;"> <!-- 2:15 - 3:30 -->
+                                    <h4>Music 9 - Music 9</h4>
+                                    <span>下午2:15 - 3:30</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Column 1 (Tuesday) -->
+                            <div class="day-col" id="col-1">
+                                <div class="gcal-event event-yellow" style="top: 80px; height: 50px;">
+                                    <h4>Maths - Standard Level...</h4>
+                                    <span>上午8点 - 9:15</span>
+                                </div>
+                                <div class="gcal-event event-yellow" style="top: 147px; height: 50px;">
+                                    <h4>Design - Design 9</h4>
+                                    <span>上午9:40 - 10:55</span>
+                                </div>
+                                <div class="gcal-event event-orange" style="top: 207px; height: 50px;">
+                                    <h4>English - English Lang...</h4>
+                                    <span>上午11:10 - 下午12:25</span>
+                                </div>
+                                <div class="gcal-event event-orange" style="top: 297px; height: 30px;">
+                                    <h4>ComTime - ARE$Comunity</h4>
+                                    <span>下午1:25 - 2:10</span>
+                                </div>
+                                <div class="gcal-event event-orange" style="top: 330px; height: 50px;">
+                                    <h4>C&C - Chinese Civilization 9</h4>
+                                    <span>下午2:15 - 3:30</span>
+                                </div>
+                            </div>
+
+                            <!-- Column 2 (Wednesday) -->
+                            <div class="day-col" id="col-2">
+                                <div class="gcal-event event-orange" style="top: 80px; height: 50px;">
+                                    <h4>Arts - Chinese Peforming...</h4>
+                                    <span>上午8点 - 9:15</span>
+                                </div>
+                                <div class="gcal-event event-yellow" style="top: 147px; height: 50px;">
+                                    <h4>PHE - Physical & Health...</h4>
+                                    <span>上午9:40 - 10:55</span>
+                                </div>
+                                <div class="gcal-event event-orange" style="top: 207px; height: 50px;">
+                                    <h4>Sciences - Sciences</h4>
+                                    <span>上午11:10 - 下午12:25</span>
+                                </div>
+                                <div class="gcal-event event-yellow" style="top: 300px; height: 50px;"> <!-- 1:30 - 2:45 -->
+                                    <h4>Chinese - Chinese Lang...</h4>
+                                    <span>下午1:30 - 2:45</span>
+                                </div>
+                                <!-- 当前时间红线 (假设当前是下午4:15 => 10小时15分钟 = 400 + 10 = 410px) -->
+                                <div class="gcal-current-time" style="top: 410px;"></div>
+                            </div>
+
+                            <!-- Column 3 (Thursday) -->
+                            <div class="day-col" id="col-3">
+                                <div class="gcal-event event-yellow" style="top: 80px; height: 50px;">
+                                    <h4>I&S - Individuals & Societies</h4>
+                                    <span>上午8点 - 9:15</span>
+                                </div>
+                                <div class="gcal-event event-orange" style="top: 147px; height: 50px;">
+                                    <h4>Maths - Standard Level</h4>
+                                    <span>上午9:40 - 10:55</span>
+                                </div>
+                                <div class="gcal-event event-orange" style="top: 207px; height: 50px;">
+                                    <h4>Design - Design 9</h4>
+                                    <span>上午11:10 - 下午12:25</span>
+                                </div>
+                                <div class="gcal-event event-yellow" style="top: 297px; height: 30px;">
+                                    <h4>ComTime - ARE$Comunity</h4>
+                                    <span>下午1:25 - 2:10</span>
+                                </div>
+                                <div class="gcal-event event-orange" style="top: 330px; height: 50px;">
+                                    <h4>English - English Lang</h4>
+                                    <span>下午2:15 - 3:30</span>
+                                </div>
+                            </div>
+
+                            <!-- Column 4 (Friday) -->
+                            <div class="day-col" id="col-4">
+                                <div class="gcal-event event-orange" style="top: 80px; height: 50px;">
+                                    <h4>Chinese - Chinese Lang</h4>
+                                    <span>上午8点 - 9:15</span>
+                                </div>
+                                <div class="gcal-event event-yellow" style="top: 147px; height: 50px;">
+                                    <h4>Music 9 - Music 9</h4>
+                                    <span>上午9:40 - 10:55</span>
+                                </div>
+                                <div class="gcal-event event-orange" style="top: 207px; height: 50px;">
+                                    <h4>PHE - Physical & Health</h4>
+                                    <span>上午11:10 - 下午12:25</span>
+                                </div>
+                                <div class="gcal-event event-yellow" style="top: 297px; height: 30px;">
+                                    <h4>ComTime - ARE$Comunity</h4>
+                                    <span>下午1:25 - 2:10</span>
+                                </div>
+                                <div class="gcal-event event-orange" style="top: 330px; height: 50px;">
+                                    <h4>Sciences - Sciences</h4>
+                                    <span>下午2:15 - 3:30</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Column 5 (Saturday) -->
+                            <div class="day-col" id="col-5"></div>
+                            
+                            <!-- Column 6 (Sunday) -->
+                            <div class="day-col" id="col-6"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

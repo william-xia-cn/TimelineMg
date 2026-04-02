@@ -1,0 +1,17 @@
+{
+  "module_id": "settings",
+  "module_name": "TimeWhere Settings Module",
+  "version": "1.0.0",
+  "description": "系统配置与初始化模块",
+  "dependencies": ["framework"],
+  "entry_point": "settings/settings.html",
+  "permissions": [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/calendar"
+  ],
+  "features": {
+    "config_management": true,
+    "init_wizard": true,
+    "data_export": true
+  }
+}

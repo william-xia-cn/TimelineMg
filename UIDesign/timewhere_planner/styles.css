@@ -1,0 +1,496 @@
+/* Planner 看板模块样式 - 统一高阶玻璃拟物化设计 */
+
+:root {
+    --bg-app: #f1f5f9;
+    --color-sidebar: #2b56e3;          /* 主侧边栏深蓝色 */
+    --color-context: rgba(255, 255, 255, 0.4); /* 次级侧边栏微透 */
+    --color-purple: #7c4dff;           /* Create 按钮紫色 */
+    --column-bg: rgba(248, 250, 252, 0.5); /* 看板列背景 */
+    --card-bg: rgba(255, 255, 255, 0.95);
+    
+    --text-main: #1e293b;
+    --text-sub: #64748b;
+    
+    --border-light: rgba(255, 255, 255, 0.6);
+    --border-stroke: rgba(226, 232, 240, 0.8);
+    
+    --accent: #2b56e3;
+    --red: #ef4444;
+    --orange: #f59e0b;
+    --green: #10b981;
+    --blue: #3b82f6;
+    --purple: #8b5cf6;
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+    
+    --transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', -apple-system, sans-serif;
+}
+
+body {
+    background: url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop') center/cover no-repeat fixed;
+    color: var(--text-main);
+    overflow: hidden;
+    height: 100vh;
+}
+
+body::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(241, 245, 249, 0.9) 0%, rgba(226, 232, 240, 0.8) 100%);
+    z-index: -1;
+}
+
+.app-layout {
+    display: flex;
+    height: 100vh;
+    padding: 12px;
+    gap: 12px;
+}
+
+/* ==================
+   1. 主导航栏 (Primary Sidebar) 
+   ================== */
+.sidebar {
+    width: 64px;
+    background-color: var(--color-sidebar);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 0;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    z-index: 10;
+}
+
+.logo-icon {
+    width: 36px;
+    height: 36px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 20px;
+    margin-bottom: 32px;
+}
+
+.nav-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+    align-items: center;
+    flex: 1;
+}
+
+.nav-item {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 22px;
+    border-radius: 10px;
+    transition: var(--transition);
+    text-decoration: none;
+}
+
+.nav-item:hover {
+    background-color: rgba(255,255,255,0.1);
+    color: white;
+}
+
+.nav-item.active {
+    background-color: rgba(255,255,255,0.2);
+    color: white;
+}
+
+.sidebar-bottom {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.5);
+}
+
+/* ==================
+   2. 次级菜单 (Context Sidebar)
+   ================== */
+.context-sidebar {
+    width: 240px;
+    display: flex;
+    flex-direction: column;
+    padding: 8px 4px;
+}
+
+.sidebar-header {
+    padding: 12px 12px 24px 12px;
+}
+
+.btn-create-plan {
+    width: 100%;
+    padding: 10px;
+    background: var(--color-purple);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(124, 77, 255, 0.3);
+    transition: var(--transition);
+}
+
+.btn-create-plan:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+}
+
+.context-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.context-item {
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-sub);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: var(--radius-md);
+    transition: var(--transition);
+}
+
+.context-item span {
+    font-size: 20px;
+}
+
+.context-item:hover {
+    background: rgba(0,0,0,0.03);
+    color: var(--text-main);
+}
+
+.context-item.active {
+    background: rgba(255,255,255,0.5);
+    color: var(--accent);
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+}
+
+.menu-divider {
+    height: 1px;
+    background: rgba(0,0,0,0.05);
+    margin: 12px 16px;
+}
+
+.section-title {
+    padding: 8px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.subject-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.bg-green { background-color: var(--green); }
+.bg-blue { background-color: var(--blue); }
+.bg-orange { background-color: var(--orange); }
+.bg-purple { background-color: var(--purple); }
+
+/* ==================
+   3. 主工作区域面板 (Main Board)
+   ================== */
+.main-content {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-light);
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.board-header {
+    padding: 24px 32px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header-breadcrumb {
+    font-size: 18px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bc-parent { color: var(--text-sub); }
+.bc-sep { color: #cbd5e1; font-weight: 400; }
+.bc-current { color: var(--text-main); }
+
+.header-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.search-bar {
+    background: white;
+    border: 1px solid var(--border-stroke);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    padding: 6px 16px;
+    gap: 8px;
+}
+
+.search-bar span { font-size: 18px; color: var(--text-sub); }
+.search-bar input {
+    border: none;
+    outline: none;
+    font-size: 13px;
+    width: 150px;
+    background: transparent;
+}
+
+.icon-btn {
+    background: white;
+    padding: 6px 14px;
+    border: 1px solid var(--border-stroke);
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-sub);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.icon-btn:hover { background: var(--bg-app); color: var(--text-main); }
+
+.view-tabs {
+    padding: 0 32px;
+    display: flex;
+    gap: 24px;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+.btn-tab {
+    padding: 12px 4px;
+    background: none;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-sub);
+    cursor: pointer;
+    position: relative;
+    transition: var(--transition);
+}
+
+.btn-tab.active {
+    color: var(--accent);
+}
+
+.btn-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent);
+}
+
+/* ==================
+   4. 看板 (Kanban Board) 
+   ================== */
+.kanban-board {
+    flex: 1;
+    display: flex;
+    gap: 16px;
+    padding: 20px 32px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-behavior: smooth;
+}
+
+.kanban-column {
+    width: 250px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.column-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.column-header h3 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.col-actions {
+    display: flex;
+    gap: 4px;
+    color: var(--text-sub);
+}
+
+.col-actions span {
+    font-size: 20px;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 4px;
+}
+
+.col-actions span:hover { background: rgba(0,0,0,0.05); }
+
+.column-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+    padding-bottom: 20px;
+}
+
+/* 任务卡片样式 */
+.task-card {
+    background: var(--card-bg);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    border: 1px solid white;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+    transition: var(--transition);
+    cursor: pointer;
+}
+
+.task-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.08);
+}
+
+.task-tag {
+    display: inline-block;
+    padding: 3px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+}
+
+.bg-blue-light { background: #eff6ff; color: #3b82f6; }
+
+.task-title {
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--text-main);
+    margin-bottom: 12px;
+}
+
+.task-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.task-info {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-sub);
+}
+
+.task-info span { font-size: 14px; }
+.date-text { font-size: 11px; font-weight: 500; }
+.text-red { color: var(--red) !important; }
+
+.task-assignee img {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+}
+
+.done-section {
+    padding: 8px 0;
+    color: var(--text-sub);
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+
+.empty-column {
+    border: 2px dashed rgba(0,0,0,0.05);
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+}
+
+.empty-state {
+    text-align: center;
+    color: #cbd5e1;
+}
+
+.empty-state span { font-size: 40px; }
+.empty-state p { font-size: 13px; margin-top: 8px; font-weight: 500; }
+
+/* 自定义滚动条 */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }

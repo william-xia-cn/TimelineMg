@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planner Board - Academic</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- 1. 全局导航栏 (Primary Sidebar) -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon"><span class="material-symbols-outlined">change_history</span></div>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-item" title="仪表盘"><span class="material-symbols-outlined">grid_view</span></a>
+                <a href="#" class="nav-item active" title="计划"><span class="material-symbols-outlined">task</span></a>
+                <a href="#" class="nav-item" title="日历"><span class="material-symbols-outlined">calendar_today</span></a>
+                <a href="#" class="nav-item" title="更多"><span class="material-symbols-outlined">apps</span></a>
+            </nav>
+            <div class="sidebar-bottom">
+                <a href="#" class="nav-item" title="设置"><span class="material-symbols-outlined">settings</span></a>
+                <img src="https://i.pravatar.cc/150?img=32" alt="Avatar" class="user-avatar">
+            </div>
+        </aside>
+
+        <!-- 2. 次级菜单侧边栏 (Context Sidebar) -->
+        <aside class="context-sidebar">
+            <div class="sidebar-header">
+                <button class="btn-create-plan">
+                    <span class="material-symbols-outlined">add</span> Create a plan
+                </button>
+            </div>
+            <div class="sidebar-content custom-scrollbar">
+                <nav class="context-menu">
+                    <a href="#" class="context-item"><span class="material-symbols-outlined">wb_sunny</span> My day</a>
+                    <a href="#" class="context-item"><span class="material-symbols-outlined">assignment</span> My Tasks</a>
+                    <a href="#" class="context-item active"><span class="material-symbols-outlined">list_alt</span> My plans</a>
+                    
+                    <div class="menu-divider"></div>
+                    <div class="section-title">PINNED PLANS <span class="material-symbols-outlined">expand_more</span></div>
+                    
+                    <a href="#" class="context-item plan-link">
+                        <div class="subject-icon bg-green">科</div> 科学
+                    </a>
+                    <a href="#" class="context-item plan-link active">
+                        <div class="subject-icon bg-blue">英</div> 英文
+                    </a>
+                    <a href="#" class="context-item plan-link">
+                        <div class="subject-icon bg-orange">中</div> 中文
+                    </a>
+                    <a href="#" class="context-item plan-link">
+                        <div class="subject-icon bg-purple">数</div> 数学
+                    </a>
+                </nav>
+            </div>
+            <div class="sidebar-footer">
+                <!-- Additional sidebar info -->
+            </div>
+        </aside>
+
+        <!-- 3. 主工作区域 (Kanban Board Area) -->
+        <main class="main-content glass-panel">
+            <header class="board-header">
+                <div class="header-breadcrumb">
+                    <span class="bc-parent">My plans</span>
+                    <span class="bc-sep">/</span>
+                    <span class="bc-current">英文</span>
+                </div>
+                <div class="header-actions">
+                    <div class="search-bar">
+                        <span class="material-symbols-outlined">search</span>
+                        <input type="text" placeholder="Search tasks...">
+                    </div>
+                    <button class="icon-btn"><span class="material-symbols-outlined">filter_list</span> Filter</button>
+                    <button class="icon-btn"><span class="material-symbols-outlined">group_work</span> Group by: Progress</button>
+                </div>
+            </header>
+
+            <nav class="view-tabs">
+                <button class="btn-tab active">Board</button>
+                <button class="btn-tab">Schedule</button>
+            </nav>
+
+            <section class="kanban-board custom-scrollbar">
+                <!-- Column: Past -->
+                <div class="kanban-column">
+                    <div class="column-header">
+                        <h3>Past</h3>
+                        <div class="col-actions">
+                             <span class="material-symbols-outlined">add</span>
+                             <span class="material-symbols-outlined">more_horiz</span>
+                        </div>
+                    </div>
+                    <div class="column-body">
+                        <div class="task-card">
+                            <div class="task-tag bg-blue-light">学业 English</div>
+                            <h4 class="task-title">Wordly Wise Test 4</h4>
+                            <div class="task-footer">
+                                <div class="task-info">
+                                     <span class="material-symbols-outlined text-red">schedule</span>
+                                     <span class="date-text text-red">逾期</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="done-section">
+                             <span class="material-symbols-outlined">expand_more</span> Completed tasks (48)
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Column: Today -->
+                <div class="kanban-column">
+                    <div class="column-header">
+                        <h3>Today</h3>
+                        <div class="col-actions">
+                             <span class="material-symbols-outlined">add</span>
+                             <span class="material-symbols-outlined">more_horiz</span>
+                        </div>
+                    </div>
+                    <div class="column-body empty-column">
+                         <div class="empty-state">
+                             <span class="material-symbols-outlined">task_alt</span>
+                             <p>No tasks for today</p>
+                         </div>
+                    </div>
+                </div>
+
+                <!-- Column: Tomorrow -->
+                <div class="kanban-column">
+                    <div class="column-header">
+                        <h3>Tomorrow</h3>
+                        <div class="col-actions">
+                             <span class="material-symbols-outlined">add</span>
+                             <span class="material-symbols-outlined">more_horiz</span>
+                        </div>
+                    </div>
+                    <div class="column-body">
+                        <div class="task-card">
+                            <div class="task-tag bg-blue-light">学业 English</div>
+                            <h4 class="task-title">Essay Draft Submission</h4>
+                            <div class="task-footer">
+                                <div class="task-info">
+                                     <span class="material-symbols-outlined">event</span>
+                                     <span class="date-text">明天</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Column: 本周 (This Week) -->
+                <div class="kanban-column">
+                    <div class="column-header">
+                        <h3>本周</h3>
+                        <div class="col-actions">
+                             <span class="material-symbols-outlined">add</span>
+                             <span class="material-symbols-outlined">more_horiz</span>
+                        </div>
+                    </div>
+                    <div class="column-body">
+                        <div class="task-card">
+                            <div class="task-tag bg-blue-light">学业 Maths</div>
+                            <h4 class="task-title">Weekly Math Quiz prep</h4>
+                            <div class="task-footer">
+                                <div class="task-info">
+                                     <span class="material-symbols-outlined">event</span>
+                                     <span class="date-text">周五</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Column: 未来 (Future) -->
+                <div class="kanban-column">
+                    <div class="column-header">
+                        <h3>未来</h3>
+                        <div class="col-actions">
+                             <span class="material-symbols-outlined">add</span>
+                             <span class="material-symbols-outlined">more_horiz</span>
+                        </div>
+                    </div>
+                    <div class="column-body">
+                        <div class="task-card">
+                            <div class="task-tag bg-blue-light">学业 Chinese</div>
+                            <h4 class="task-title">Monthly Reading Report</h4>
+                            <div class="task-footer">
+                                <div class="task-info">
+                                     <span class="material-symbols-outlined">event</span>
+                                     <span class="date-text">4月30日</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Column: No Date (Expanded horizontally) -->
+                <div class="kanban-column">
+                    <div class="column-header">
+                        <h3>No date</h3>
+                        <div class="col-actions">
+                             <span class="material-symbols-outlined">add</span>
+                             <span class="material-symbols-outlined">more_horiz</span>
+                        </div>
+                    </div>
+                    <div class="column-body">
+                        <div class="task-card">
+                            <div class="task-tag bg-blue-light">学业 English</div>
+                            <h4 class="task-title">NoRedInk Map 1</h4>
+                            <div class="task-footer">
+                                <div class="task-info">
+                                     <span class="material-symbols-outlined text-red">event</span>
+                                     <span class="date-text text-red">3月28日</span>
+                                </div>
+                                <div class="task-assignee">
+                                     <img src="https://i.pravatar.cc/150?img=32" alt="A">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

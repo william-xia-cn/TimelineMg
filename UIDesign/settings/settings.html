@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设置与初始化 - TimeWhere</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+    <style>
+        .material-symbols-rounded { font-size: 20px; vertical-align: middle; }
+        .wizard-view { display: none; flex-direction: column; height: 100%; transition: var(--transition); }
+        .settings-view { display: block; transition: var(--transition); }
+        .container-item {
+            background: rgba(255, 255, 255, 0.4);
+            border: 1px solid white;
+            border-radius: var(--radius-md);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            text-align: left;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <!-- 导航栏 -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon"><i class="ri-triangle-fill"></i></div>
+            </div>
+            <nav class="nav-menu">
+                <a href="../timewhere_dashboard/index.html" class="nav-item" title="仪表盘"><i class="ri-layout-grid-fill"></i></a>
+                <a href="#" class="nav-item" title="项目"><i class="ri-folder-2-fill"></i></a>
+                <a href="../calendar_view/index.html" class="nav-item" title="日历"><i class="ri-calendar-todo-fill"></i></a>
+                <a href="#" class="nav-item" title="分析"><i class="ri-pie-chart-2-fill"></i></a>
+            </nav>
+            <div class="sidebar-bottom">
+                <a href="#" class="nav-item active" title="设置"><i class="ri-settings-4-fill"></i></a>
+                <img src="https://i.pravatar.cc/150?img=32" alt="Avatar" class="user-avatar">
+            </div>
+        </aside>
+
+        <!-- 主体结构 -->
+        <main class="main-wrapper">
+            <div class="settings-container" id="mainContainer">
+                <!-- Unified Header -->
+                <header class="header">
+                    <div class="header-left">
+                        <h1 id="pageTitle">设置</h1>
+                    </div>
+                    <button class="save-btn" id="saveBtn">保存修改</button>
+                </header>
+
+                <!-- Settings View Content -->
+                <div id="settingsView" class="settings-view">
+                    <div class="content custom-scrollbar">
+                        <!-- 通用设置 -->
+                        <section class="section">
+                            <h2 class="section-title">
+                                <span class="material-symbols-rounded">settings</span> 通用
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">显示主题</span>
+                                        <span class="setting-desc">选择系统的视觉风格</span>
+                                    </div>
+                                    <select id="theme">
+                                        <option value="light">浅色模式</option>
+                                        <option value="dark">深色模式</option>
+                                        <option value="system">跟随系统</option>
+                                    </select>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">周起始日</span>
+                                        <span class="setting-desc">日历视图显示的起始日</span>
+                                    </div>
+                                    <select id="weekStartsOn">
+                                        <option value="1">周一</option>
+                                        <option value="0">周日</option>
+                                    </select>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">番茄钟时长</span>
+                                        <span class="setting-desc">工作阶段的默认时长（分钟）</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="number" id="tomatoDuration" value="25" min="1" max="120" style="width: 80px;">
+                                        <span style="font-size: 13px; color: var(--text-sub);">分钟</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 通知设置 -->
+                        <section class="section">
+                            <h2 class="section-title">
+                                <span class="material-symbols-rounded">notifications</span> 通知
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">启用通知</span>
+                                        <span class="setting-desc">接收任务提醒和系统通知</span>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="notificationsEnabled" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">截止前提醒</span>
+                                        <span class="setting-desc">在任务到期前发送提醒</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="number" id="reminderBefore" value="15" min="0" max="60" style="width: 80px;">
+                                        <span style="font-size: 13px; color: var(--text-sub);">分钟</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 调度参数 -->
+                        <section class="section">
+                            <h2 class="section-title">
+                                <span class="material-symbols-rounded">auto_schedule</span> 调度
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">Arrange 触发方式</span>
+                                        <span class="setting-desc">系统如何重新编排您的时间表</span>
+                                    </div>
+                                    <select id="arrangeTrigger">
+                                        <option value="manual">手动触发</option>
+                                        <option value="auto">自动触发</option>
+                                    </select>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">防御翻转阈值</span>
+                                        <span class="setting-desc">任务自动推迟的时间期限（小时）</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="number" id="defensiveThreshold" value="24" min="1" max="168" style="width: 80px;">
+                                        <span style="font-size: 13px; color: var(--text-sub);">小时</span>
+                                    </div>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">每日结算时间</span>
+                                        <span class="setting-desc">系统执行每日结算和清理的时间点</span>
+                                    </div>
+                                    <input type="text" id="healTime" value="23:00" placeholder="HH:mm" style="width: 100px;">
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 数据管理 -->
+                        <section class="section" style="margin-bottom: 0;">
+                            <h2 class="section-title">
+                                <span class="material-symbols-rounded">database</span> 数据管理
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">导出数据</span>
+                                        <span class="setting-desc">将您的备份导出为 JSON 格式</span>
+                                    </div>
+                                    <button class="action-btn">导出</button>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">重置配置</span>
+                                        <span class="setting-desc">恢复所有设置为默认值</span>
+                                    </div>
+                                    <button class="action-btn danger">重置</button>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">重新初始化</span>
+                                        <span class="setting-desc">清除所有数据并重新开始向导</span>
+                                    </div>
+                                    <button class="action-btn danger" id="reinitBtn">重新引导</button>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- Wizard View Content -->
+                <div id="wizardView" class="wizard-view">
+                    <div class="wizard-steps">
+                        <div class="step active" id="wizardStepIndicator1">1<span class="step-label">授权</span></div>
+                        <div class="step" id="wizardStepIndicator2">2<span class="step-label">容器</span></div>
+                        <div class="step" id="wizardStepIndicator3">3<span class="step-label">课表</span></div>
+                        <div class="step" id="wizardStepIndicator4">4<span class="step-label">计划</span></div>
+                        <div class="step" id="wizardStepIndicator5">5<span class="step-label">完成</span></div>
+                    </div>
+
+                    <div class="wizard-content" id="wizardStepContent" style="padding-bottom: 20px;">
+                        <div id="wizardStep1">
+                            <span class="material-symbols-rounded" style="font-size: 64px; color: var(--accent); margin-bottom: 16px;">key</span>
+                            <h2>授权 Google 账号</h2>
+                            <p>TimeWhere 需要访问您的 Google 日历和云端硬盘。</p>
+                            <div style="margin-top: 24px;">
+                                <button class="wizard-btn primary" id="authBtn">立即授权</button>
+                                <p style="font-size: 11px; margin-top: 12px; color: var(--text-sub);">我们将确保您的数据安全且仅用于系统功能。</p>
+                            </div>
+                        </div>
+                        <div id="wizardStep2" style="display: none;">
+                            <h2>创建默认容器</h2>
+                            <p>时间容器是您日常活动的预定义时段。</p>
+                            <div style="margin-top: 20px;">
+                                <div class="container-item"><div><strong>学习时间</strong><div style="font-size: 12px; color: var(--text-sub);">18:30 - 21:30 | 每天</div></div><input type="checkbox" checked></div>
+                                <div class="container-item"><div><strong>自由时间</strong><div style="font-size: 12px; color: var(--text-sub);">21:30 - 23:00 | 每天</div></div><input type="checkbox" checked></div>
+                                <div class="container-item"><div><strong>睡眠时间</strong><div style="font-size: 12px; color: var(--text-sub);">23:30 - 07:30 | 每天</div></div><input type="checkbox" checked></div>
+                            </div>
+                        </div>
+                        <div id="wizardStep3" style="display: none;">
+                            <span class="material-symbols-rounded" style="font-size: 48px; color: var(--blue);">calendar_month</span>
+                            <h2>导入课表或固定计划</h2>
+                            <p>您可以导入已有的课表 ICS 文件。</p>
+                            <div style="margin: 20px 0; padding: 24px; border: 2px dashed rgba(0,0,0,0.1); border-radius: var(--radius-lg);">
+                                <span class="material-symbols-rounded">upload</span>
+                                <div style="font-size: 14px; margin-top: 8px;">点击上传 .ics 文件</div>
+                            </div>
+                            <button class="action-btn" id="skipTimetableBtn">跳过此步</button>
+                        </div>
+                        <div id="wizardStep4" style="display: none;">
+                            <h2>初始化默认 Plan</h2>
+                            <p>我们将为您创建 Inbox 和 Habit。</p>
+                            <div style="margin: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div class="container-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                                    <span class="material-symbols-rounded" style="color: var(--accent);">inbox</span>
+                                    <div style="font-weight: 700;">Inbox</div>
+                                </div>
+                                <div class="container-item" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                                    <span class="material-symbols-rounded" style="color: var(--green);">habit</span>
+                                    <div style="font-weight: 700;">Habit</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="wizardStep5" style="display: none;">
+                            <span class="material-symbols-rounded" style="font-size: 80px; color: var(--green); margin-bottom: 16px;">check_circle</span>
+                            <h2>配置完成！</h2>
+                            <p>TimeWhere 已准备就绪。</p>
+                            <div style="margin-top: 32px;">
+                                <button class="wizard-btn primary" onclick="window.location.href='../timewhere_dashboard/index.html'">进入主界面</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="wizard-footer" id="wizardFooter" style="display: none;">
+                        <button class="action-btn" id="wizardPrevBtn">上一步</button>
+                        <button class="wizard-btn primary" id="wizardNextBtn">下一步</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const configService = {
+            isInitialized: () => false,
+            updateConfig: (data) => console.log('Config Updated:', data)
+        };
+
+        let currentView = 'settings';
+        let currentWizardStep = 1;
+
+        const settingsView = document.getElementById('settingsView');
+        const wizardView = document.getElementById('wizardView');
+        const pageTitle = document.getElementById('pageTitle');
+        const saveBtn = document.getElementById('saveBtn');
+        const reinitBtn = document.getElementById('reinitBtn');
+
+        const wizardNextBtn = document.getElementById('wizardNextBtn');
+        const wizardPrevBtn = document.getElementById('wizardPrevBtn');
+        const wizardFooter = document.getElementById('wizardFooter');
+        const authBtn = document.getElementById('authBtn');
+
+        function switchView(view) {
+            if (view === 'settings') {
+                settingsView.style.display = 'block';
+                wizardView.style.display = 'none';
+                pageTitle.innerText = '设置';
+                saveBtn.style.display = 'block';
+                currentView = 'settings';
+            } else {
+                settingsView.style.display = 'none';
+                wizardView.style.display = 'flex';
+                pageTitle.innerText = '初始化向导';
+                saveBtn.style.display = 'none';
+                currentView = 'wizard';
+                updateWizardStep(1);
+            }
+        }
+
+        function updateWizardStep(step) {
+            currentWizardStep = step;
+            for (let i = 1; i <= 5; i++) {
+                const content = document.getElementById('wizardStep' + i);
+                const indicator = document.getElementById('wizardStepIndicator' + i);
+                if (content) content.style.display = 'none';
+                if (indicator) indicator.classList.remove('active', 'completed');
+                if (indicator && i < step) indicator.classList.add('completed');
+            }
+            const currentContent = document.getElementById('wizardStep' + step);
+            if (currentContent) currentContent.style.display = 'block';
+            const currentIndicator = document.getElementById('wizardStepIndicator' + step);
+            if (currentIndicator) currentIndicator.classList.add('active');
+
+            wizardFooter.style.display = (step === 1 || step === 5) ? 'none' : 'flex';
+            wizardPrevBtn.disabled = step <= 2;
+            wizardNextBtn.innerText = step === 4 ? '完成初始化' : '下一步';
+        }
+
+        reinitBtn.onclick = function() {
+            switchView('wizard');
+        };
+
+        saveBtn.onclick = function() {
+            saveBtn.innerHTML = '<span class="material-symbols-rounded">check</span> 已保存';
+            saveBtn.style.background = 'var(--green)';
+            setTimeout(() => {
+                saveBtn.innerText = '保存修改';
+                saveBtn.style.background = 'var(--accent)';
+            }, 2000);
+        };
+
+        authBtn.onclick = function() {
+            authBtn.innerText = '正在授权...';
+            setTimeout(() => {
+                updateWizardStep(2);
+                authBtn.innerText = '立即授权';
+            }, 800);
+        };
+
+        wizardNextBtn.onclick = function() {
+            if (currentWizardStep < 5) updateWizardStep(currentWizardStep + 1);
+        };
+
+        wizardPrevBtn.onclick = function() {
+            if (currentWizardStep > 1) updateWizardStep(currentWizardStep - 1);
+        };
+
+        document.getElementById('skipTimetableBtn').onclick = function() {
+            updateWizardStep(4);
+        };
+    </script>
+</body>
+</html>

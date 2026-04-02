@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeWhere & 任务管理板块 (TimeWhere & Task Planner)</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Remix Icon -->
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- 导航栏 -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon"><i class="ri-triangle-fill"></i></div>
+            </div>
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" title="仪表盘"><i class="ri-layout-grid-fill"></i></a>
+                <a href="#" class="nav-item" title="项目"><i class="ri-folder-2-fill"></i></a>
+                <a href="../calendar_view/index.html" class="nav-item" title="日历"><i class="ri-calendar-todo-fill"></i></a>
+                <a href="#" class="nav-item" title="分析"><i class="ri-pie-chart-2-fill"></i></a>
+            </nav>
+            <div class="sidebar-bottom">
+                <a href="../settings/settings.html" class="nav-item" title="设置"><i class="ri-settings-4-fill"></i></a>
+                <img src="https://i.pravatar.cc/150?img=32" alt="Avatar" class="user-avatar">
+            </div>
+        </aside>
+
+        <!-- 主体看板布局 -->
+        <main class="board-layout">
+            <!-- 顶部标题与快速入口 -->
+            <header class="board-top-header" style="position: absolute; top: 24px; right: 32px; z-index: 100; display: flex; align-items: center; gap: 16px;">
+                <a href="../settings/settings.html" class="icon-btn" title="设置" style="width: 40px; height: 40px; background: var(--column-bg); backdrop-filter: blur(10px); border: 1px solid var(--border-light); font-size: 20px;">
+                    <i class="ri-settings-4-line"></i>
+                </a>
+                <div class="user-profile" style="display: flex; align-items: center; gap: 10px; background: var(--column-bg); backdrop-filter: blur(10px); padding: 4px 12px 4px 4px; border-radius: 30px; border: 1px solid var(--border-light);">
+                    <img src="https://i.pravatar.cc/150?img=32" alt="Avatar" style="width: 32px; height: 32px; border-radius: 50%;">
+                    <span style="font-size: 13px; font-weight: 600; color: var(--text-main);">Will Smith</span>
+                </div>
+            </header>
+            
+            <!-- 第1列：当下任务 -->
+            <section class="board-column column-now">
+                <div class="column-header">
+                    <h2>当下任务</h2>
+                    <span class="badge red">进行中</span>
+                </div>
+                <div class="column-content custom-scrollbar">
+                    <div class="accordion-task">
+                        <details open>
+                            <summary>
+                                <div class="task-title">
+                                    <span class="status-dot pulsing"></span>
+                                    <h4>完成系统设计草图</h4>
+                                </div>
+                                <i class="ri-arrow-down-s-line"></i>
+                            </summary>
+                            <div class="task-details">
+                                <p>整理并绘制五列布局的 UI 界面，包含动画和毛玻璃特效。</p>
+                                <div class="task-meta">
+                                    <span><i class="ri-time-line"></i> 剩余 2 小时</span>
+                                    <button class="btn-micro primary">完成</button>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+
+                    <div class="accordion-task">
+                        <details>
+                            <summary>
+                                <div class="task-title">
+                                    <span class="status-dot pending"></span>
+                                    <h4>回复重要邮件</h4>
+                                </div>
+                                <i class="ri-arrow-down-s-line"></i>
+                            </summary>
+                            <div class="task-details">
+                                <p>需要回复导师关于项目进度的邮件。</p>
+                                <div class="task-meta">
+                                    <span><i class="ri-time-line"></i> 10 分钟</span>
+                                    <button class="btn-micro">开始</button>
+                                </div>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 第2列 & 第3列合并：Google日历视图 (今日/明日) -->
+            <section class="board-column column-calendar double-width">
+                <div class="column-header">
+                    <h2>日程 (今日 & 明日)</h2>
+                    <div class="cal-actions">
+                        <button class="icon-btn"><i class="ri-arrow-left-s-line"></i></button>
+                        <span>4月1日 - 4月2日</span>
+                        <button class="icon-btn"><i class="ri-arrow-right-s-line"></i></button>
+                    </div>
+                </div>
+                <!-- 日历容器区 -->
+                <div class="gcal-container custom-scrollbar">
+                    <!-- 顶部日期名 (Header) -->
+                    <div class="gcal-header">
+                        <div class="gcal-time-filler">GMT+8</div>
+                        <div class="gcal-day-header active">
+                            <span class="day-name">周三</span>
+                            <span class="day-num">1</span>
+                        </div>
+                        <div class="gcal-day-header">
+                            <span class="day-name">周四</span>
+                            <span class="day-num">2</span>
+                        </div>
+                    </div>
+                    
+                    <!-- 主体网格区 -->
+                    <div class="gcal-body">
+                        <!-- 左侧时间线 -->
+                        <div class="gcal-times">
+                            <div class="gcal-time-slot"><span>08:00</span></div>
+                            <div class="gcal-time-slot"><span>09:00</span></div>
+                            <div class="gcal-time-slot"><span>10:00</span></div>
+                            <div class="gcal-time-slot"><span>11:00</span></div>
+                            <div class="gcal-time-slot"><span>12:00</span></div>
+                            <div class="gcal-time-slot"><span>13:00</span></div>
+                            <div class="gcal-time-slot"><span>14:00</span></div>
+                            <div class="gcal-time-slot"><span>15:00</span></div>
+                            <div class="gcal-time-slot"><span>16:00</span></div>
+                            <div class="gcal-time-slot"><span>17:00</span></div>
+                            <div class="gcal-time-slot"><span>18:00</span></div>
+                        </div>
+
+                        <!-- “今日”列 -->
+                        <div class="gcal-day-col">
+                            <div class="gcal-grid-lines"></div>
+                            <!-- 绝对定位的行程块 -->
+                            <!-- 假设每小时高度为60px -->
+                            <div class="gcal-event event-blue" style="top: 0px; height: 60px;">
+                                <h4>晨跑 3km</h4>
+                                <span>8:00 - 9:00</span>
+                            </div>
+                            <div class="gcal-event event-red" style="top: 120px; height: 120px;">
+                                <h4>专业课期中考试</h4>
+                                <span>10:00 - 12:00</span>
+                            </div>
+                            <div class="gcal-event event-orange" style="top: 360px; height: 120px;">
+                                <h4>计算机网络复习</h4>
+                                <span>14:00 - 16:00</span>
+                            </div>
+                            <!-- 当前时间红线 -->
+                            <div class="gcal-current-time" style="top: 450px;"></div>
+                        </div>
+
+                        <!-- “明日”列 -->
+                        <div class="gcal-day-col">
+                            <div class="gcal-grid-lines"></div>
+                            <div class="gcal-event event-purple" style="top: 60px; height: 150px;">
+                                <h4>操作系统实验</h4>
+                                <span>09:00 - 11:30 | 实验室201</span>
+                            </div>
+                            <div class="gcal-event event-pink" style="top: 360px; height: 90px;">
+                                <h4>小组碰头会</h4>
+                                <span>14:00 - 15:30 | 图书馆</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 第4列：本周 -->
+            <section class="board-column column-week">
+                <div class="column-header">
+                    <h2>本周进度</h2>
+                </div>
+                <div class="column-content custom-scrollbar" style="gap: 20px;">
+                    <!-- 顶端部分：统计图 -->
+                    <div class="week-stats-section">
+                        <h3>学业产出统计</h3>
+                        <div class="pie-chart-container">
+                            <div class="pie-chart-wrapper">
+                                <div class="pie-chart"></div>
+                                <div class="pie-center">
+                                    <span class="pie-total-num">24</span>
+                                    <span class="pie-total-label">总任务</span>
+                                </div>
+                            </div>
+                            <div class="pie-legend">
+                                <div class="legend-item"><span class="legend-color bg-green"></span>已完成 <strong>12</strong></div>
+                                <div class="legend-item"><span class="legend-color bg-orange"></span>进行中 <strong>8</strong></div>
+                                <div class="legend-item"><span class="legend-color bg-red"></span>未完成 <strong>4</strong></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <!-- 底部部分：任务列表 -->
+                    <div class="week-tasks-section">
+                        <h3>本周重点任务</h3>
+                        <div class="simple-task-list">
+                            <label class="simple-task-item">
+                                <input type="checkbox">
+                                <span class="custom-chk"></span>
+                                <div class="task-desc">整理学术文献库 (Zotero)</div>
+                            </label>
+                            <label class="simple-task-item">
+                                <input type="checkbox" checked>
+                                <span class="custom-chk"></span>
+                                <div class="task-desc completed-text">提交第一阶段项目代码</div>
+                            </label>
+                            <label class="simple-task-item">
+                                <input type="checkbox">
+                                <span class="custom-chk"></span>
+                                <div class="task-desc">团队内部组会材料准备</div>
+                            </label>
+                            <label class="simple-task-item">
+                                <input type="checkbox">
+                                <span class="custom-chk"></span>
+                                <div class="task-desc">算法刷题 (LeetCode 10道)</div>
+                            </label>
+                        </div>
+                        <button class="add-task-btn"><i class="ri-add-line"></i> 添加周任务</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 第5列：当下消息流 / 提醒事项 -->
+            <section class="board-column column-feed">
+                <div class="column-header">
+                    <h2>消息流 & 提醒</h2>
+                    <button class="icon-btn"><i class="ri-notification-4-line"></i></button>
+                </div>
+                <div class="column-content custom-scrollbar">
+                    <div class="feed-item alert">
+                        <div class="feed-icon"><i class="ri-alarm-warning-line"></i></div>
+                        <div class="feed-text">
+                            <p><strong>作业即将截止</strong>: 算法导论作业将在 4小时后截止提交。</p>
+                            <span class="feed-time">刚才</span>
+                        </div>
+                    </div>
+                    <div class="feed-item note">
+                        <div class="feed-icon"><i class="ri-mail-line"></i></div>
+                        <div class="feed-text">
+                            <p><strong>导师邮件</strong>: 你的毕业设计开题报告已通过。</p>
+                            <span class="feed-time">1小时前</span>
+                        </div>
+                    </div>
+                    <div class="feed-item mention">
+                        <div class="feed-icon"><img src="https://i.pravatar.cc/150?img=12" alt=""></div>
+                        <div class="feed-text">
+                            <p><strong>Sarah</strong> 在项目中提到了你："这个接口数据有点问题，麻烦看一下。"</p>
+                            <span class="feed-time">昨天</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
