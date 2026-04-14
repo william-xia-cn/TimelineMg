@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeWhere - Settings</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <!-- Local Fonts -->
+    <link rel="stylesheet" href="../../shared/styles/fonts.css">
+    <!-- Local Icons -->
+    <link rel="stylesheet" href="../../shared/styles/icons.css">
+    <!-- Page Styles -->
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .wizard-view { display: none; flex-direction: column; height: 100%; transition: var(--transition); }
+        .settings-view { display: block; transition: var(--transition); }
+        .container-item {
+            background: rgba(255, 255, 255, 0.4);
+            border: 1px solid white;
+            border-radius: var(--radius-md);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            text-align: left;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.05); border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.2); border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.3); }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <!-- 导航栏 -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon"><span class="material-symbols-outlined"> change_history</span></div>
+            </div>
+            <nav class="nav-menu">
+                <a href="../focus/focus.html" class="nav-item" title="仪表盘"><span class="material-symbols-outlined">grid_view</span></a>
+                <a href="../tasks/tasks.html" class="nav-item" title="任务"><span class="material-symbols-outlined">task</span></a>
+                <a href="../calendar/calendar.html" class="nav-item" title="日历"><span class="material-symbols-outlined">calendar_today</span></a>
+                <a href="#" class="nav-item" title="更多"><span class="material-symbols-outlined">apps</span></a>
+            </nav>
+            <div class="sidebar-bottom">
+                <a href="settings.html" class="nav-item active" title="设置"><span class="material-symbols-outlined">settings</span></a>
+                <img src="../../shared/images/avatar-default.png" alt="Avatar" class="user-avatar">
+            </div>
+        </aside>
+
+        <!-- 主体结构 -->
+        <main class="main-wrapper">
+            <div class="settings-container" id="mainContainer">
+                <!-- Unified Header -->
+                <header class="header">
+                    <div class="header-left">
+                        <h1 id="pageTitle">设置</h1>
+                    </div>
+                    <button class="save-btn" id="saveBtn">保存修改</button>
+                </header>
+
+                <!-- Settings View Content -->
+                <div id="settingsView" class="settings-view">
+                    <div class="content custom-scrollbar">
+                        <!-- 通用设置 -->
+                        <section class="section">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">settings</span> 通用
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">显示主题</span>
+                                        <span class="setting-desc">选择系统的视觉风格</span>
+                                    </div>
+                                    <select id="theme">
+                                        <option value="light">浅色模式</option>
+                                        <option value="dark">深色模式</option>
+                                        <option value="system">跟随系统</option>
+                                    </select>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">周起始日</span>
+                                        <span class="setting-desc">日历视图显示的起始日</span>
+                                    </div>
+                                    <select id="weekStartsOn">
+                                        <option value="1">周一</option>
+                                        <option value="0">周日</option>
+                                    </select>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">番茄钟时长</span>
+                                        <span class="setting-desc">工作阶段的默认时长（分钟）</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="number" id="tomatoDuration" value="25" min="1" max="120" style="width: 80px;">
+                                        <span style="font-size: 13px; color: var(--text-sub);">分钟</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 日历设置 -->
+                        <section class="section" id="calendarSection">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">calendar_today</span> 日历
+                            </h2>
+                            <div class="settings-group">
+                                <!-- 导入课表 -->
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">导入课表</span>
+                                        <span class="setting-desc">从 ICS 文件或网址导入课程安排</span>
+                                    </div>
+                                    <button class="action-btn" id="importCalendarBtn">导入</button>
+                                </div>
+                                <!-- 导入区域 (默认隐藏) -->
+                                <div class="import-area" id="importArea" style="display: none;">
+                                    <div class="import-option">
+                                        <span id="timetableStatus" style="font-size: 12px; color: var(--text-sub);">尚未导入课表</span>
+                                        <span style="font-size: 12px; color: var(--text-sub);">· 重新导入将替换现有课表，不影响手动添加的日程</span>
+                                    </div>
+                                    <div class="import-option">
+                                        <span class="import-label">从您的计算机中选择文件</span>
+                                        <button class="action-btn" id="selectFileBtn">选择</button>
+                                        <input type="file" id="icsFileInput" accept=".ics" style="display: none;">
+                                        <span class="file-name" id="selectedFileName"></span>
+                                    </div>
+                                    <div class="import-divider">
+                                        <span>或</span>
+                                    </div>
+                                    <div class="import-option">
+                                        <span class="import-label">添加网址</span>
+                                        <input type="url" id="icsUrlInput" class="url-input" placeholder="https://example.com/calendar.ics">
+                                        <button class="action-btn" id="addUrlBtn">添加</button>
+                                    </div>
+                                    <button class="import-btn" id="importBtn" disabled>导入</button>
+                                    <p class="import-hint">导入的课表将作为单次日程事件添加到日历（不影响时间容器）</p>
+                                </div>
+                                <!-- 配置时间容器 -->
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">配置时间容器</span>
+                                        <span class="setting-desc">管理每日时间块</span>
+                                    </div>
+                                    <button class="action-btn" id="manageContainersBtn">管理</button>
+                                </div>
+                                <!-- 容器管理区域 (默认隐藏) -->
+                                <div class="container-manage-area" id="containerManageArea" style="display: none;">
+                                    <div id="settingsContainerList"></div>
+                                    <div class="empty-state" id="containerEmptyState">
+                                        <span class="material-symbols-outlined">inbox</span>
+                                        <p>暂无时间容器</p>
+                                    </div>
+                                    <button class="action-btn" id="addContainerBtn">
+                                        <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;">add</span> 添加容器
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 任务设置 -->
+                        <section class="section" id="taskSection">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">task</span> 任务
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">配置初始化计划模版</span>
+                                        <span class="setting-desc">设置默认任务分类和 Plan</span>
+                                    </div>
+                                    <button class="action-btn" id="manageTaskTemplatesBtn">管理</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 通知设置 -->
+                        <section class="section">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">notifications</span> 通知
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">启用通知</span>
+                                        <span class="setting-desc">接收任务提醒和系统通知</span>
+                                    </div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="notificationsEnabled" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">截止前提醒</span>
+                                        <span class="setting-desc">在任务到期前发送提醒</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="number" id="reminderBefore" value="15" min="0" max="60" style="width: 80px;">
+                                        <span style="font-size: 13px; color: var(--text-sub);">分钟</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 调度参数 -->
+                        <section class="section">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">auto_schedule</span> 调度
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">Arrange 触发方式</span>
+                                        <span class="setting-desc">系统如何重新编排您的时间表</span>
+                                    </div>
+                                    <select id="arrangeTrigger">
+                                        <option value="manual">手动触发</option>
+                                        <option value="auto">自动触发</option>
+                                    </select>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">防御翻转阈值</span>
+                                        <span class="setting-desc">任务自动推迟的时间期限（小时）</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="number" id="defensiveThreshold" value="24" min="1" max="168" style="width: 80px;">
+                                        <span style="font-size: 13px; color: var(--text-sub);">小时</span>
+                                    </div>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">每日结算时间</span>
+                                        <span class="setting-desc">系统执行每日结算和清理的时间点</span>
+                                    </div>
+                                    <input type="text" id="healTime" value="23:00" placeholder="HH:mm" style="width: 100px;">
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 账号设置 -->
+                        <section class="section">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">account_circle</span> 账号
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">Google 账号</span>
+                                        <span class="setting-desc" id="googleAccountDesc">未连接</span>
+                                    </div>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button class="action-btn" id="googleAuthBtn">连接</button>
+                                        <button class="action-btn danger" id="googleRevokeBtn" style="display: none;">断开</button>
+                                    </div>
+                                </div>
+                                <div class="setting-row" id="syncStatusRow" style="display: none;">
+                                    <div class="setting-info">
+                                        <span class="setting-label">同步状态</span>
+                                        <span class="setting-desc" id="syncStatusDesc">从未同步</span>
+                                    </div>
+                                    <button class="action-btn" id="syncNowBtn">立即同步</button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 数据管理 -->
+                        <section class="section" style="margin-bottom: 0;">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">database</span> 数据管理
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">导出数据</span>
+                                        <span class="setting-desc">将您的备份导出为 JSON 格式</span>
+                                    </div>
+                                    <button class="action-btn">导出</button>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">重置配置</span>
+                                        <span class="setting-desc">恢复所有设置为默认值</span>
+                                    </div>
+                                    <button class="action-btn danger">重置</button>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">重新初始化</span>
+                                        <span class="setting-desc">清除所有数据并重新开始向导</span>
+                                    </div>
+                                    <button class="action-btn danger" id="reinitBtn">重新引导</button>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                    <!-- Wizard View Content (初始化向导) -->
+                <div id="wizardView" class="wizard-view">
+                    <div class="wizard-steps">
+                        <div class="step active" id="wizardStepIndicator1">1<span class="step-label">授权</span></div>
+                        <div class="step" id="wizardStepIndicator2">2<span class="step-label">日程</span></div>
+                        <div class="step" id="wizardStepIndicator3">3<span class="step-label">任务</span></div>
+                        <div class="step" id="wizardStepIndicator4">4<span class="step-label">完成</span></div>
+                    </div>
+
+                    <div class="wizard-content" id="wizardStepContent" style="padding-bottom: 20px;">
+                        <div id="wizardStep1">
+                            <span class="material-symbols-outlined" style="font-size: 64px; color: var(--accent); margin-bottom: 16px;">key</span>
+                            <h2>授权 Google 账号</h2>
+                            <p>TimeWhere 需要访问您的 Google 日历和云端硬盘。</p>
+                            <div style="margin-top: 24px;">
+                                <button class="wizard-btn primary" id="authBtn">立即授权</button>
+                                <p style="font-size: 11px; margin-top: 12px; color: var(--text-sub);">我们将确保您的数据安全且仅用于系统功能。</p>
+                            </div>
+                        </div>
+                        <div id="wizardStep2" style="display: none;">
+                            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--accent); margin-bottom: 16px;">event</span>
+                            <h2>日程初始化</h2>
+                            <p>创建时间容器或导入课表</p>
+                            <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px; align-items: center;">
+                                <label class="init-option">
+                                    <input type="checkbox" id="initContainer" checked>
+                                    <span class="material-symbols-outlined" style="color: var(--blue);">schedule</span>
+                                    <div style="text-align: left;">
+                                        <strong>创建默认容器</strong>
+                                        <div style="font-size: 12px; color: var(--text-sub);">学习时间、自由时间、睡前时间</div>
+                                    </div>
+                                </label>
+                                <label class="init-option">
+                                    <input type="checkbox" id="initTimetable">
+                                    <span class="material-symbols-outlined" style="color: var(--purple);">upload_file</span>
+                                    <div style="text-align: left;">
+                                        <strong>导入课表</strong>
+                                        <div style="font-size: 12px; color: var(--text-sub);">上传 ICS 文件生成日程</div>
+                                    </div>
+                                </label>
+                            </div>
+                            <button class="action-btn" id="skipScheduleBtn" style="margin-top: 16px;">跳过</button>
+                        </div>
+                        <div id="wizardStep3" style="display: none;">
+                            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--blue); margin-bottom: 16px;">task</span>
+                            <h2>任务初始化</h2>
+                            <p>设置任务分类和管理方式</p>
+                            <p style="font-size: 13px; color: var(--text-sub); margin-top: 16px;">该功能将在任务管理模块中详细配置</p>
+                            <button class="action-btn" id="skipTaskInitBtn" style="margin-top: 16px;">跳过</button>
+                        </div>
+                        <div id="wizardStep4" style="display: none;">
+                            <span class="material-symbols-outlined" style="font-size: 80px; color: var(--green); margin-bottom: 16px;">check_circle</span>
+                            <h2>配置完成！</h2>
+                            <p>TimeWhere 已准备就绪</p>
+                            <div style="margin-top: 32px;">
+                                <button class="wizard-btn primary" id="wizardFinishBtn">进入主界面</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="wizard-footer" id="wizardFooter" style="display: none;">
+                        <button class="action-btn" id="wizardPrevBtn">上一步</button>
+                        <button class="wizard-btn primary" id="wizardNextBtn">下一步</button>
+                    </div>
+                </div>
+
+                <!-- 添加容器弹窗 -->
+                <div id="addContainerModal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>添加时间容器</h3>
+                            <button class="modal-close" id="closeContainerModal">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="form-group">
+                                <label>容器名称</label>
+                                <input type="text" id="newContainerName" placeholder="例如：早晨学习">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>开始时间</label>
+                                    <input type="time" id="newContainerStart" value="18:30">
+                                </div>
+                                <div class="form-group">
+                                    <label>结束时间</label>
+                                    <input type="time" id="newContainerEnd" value="21:30">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>重复</label>
+                                <select id="newContainerRepeat">
+                                    <option value="daily">每天</option>
+                                    <option value="weekday" selected>工作日</option>
+                                    <option value="weekend">周末</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>颜色</label>
+                                <div class="color-picker">
+                                    <button class="color-option" data-color="#4A90D9" style="background: #4A90D9;"></button>
+                                    <button class="color-option" data-color="#7B68EE" style="background: #7B68EE;"></button>
+                                    <button class="color-option" data-color="#2E8B57" style="background: #2E8B57;"></button>
+                                    <button class="color-option" data-color="#E74C3C" style="background: #E74C3C;"></button>
+                                    <button class="color-option" data-color="#F39C12" style="background: #F39C12;"></button>
+                                    <button class="color-option" data-color="#1ABC9C" style="background: #1ABC9C;"></button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="action-btn" id="cancelContainerBtn">取消</button>
+                            <button class="wizard-btn primary" id="confirmAddContainer">添加</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <!-- Icons Library -->
+    <script src="../../shared/js/icons.js"></script>
+    <!-- Dexie.js -->
+    <script src="../../shared/js/dexie.js"></script>
+    <!-- Database -->
+    <script src="../../shared/js/db.js"></script>
+    <!-- Sync Engine -->
+    <script src="../../shared/js/sync.js"></script>
+    <!-- Settings Script -->
+    <script src="script.js"></script>
+</body>
+</html>

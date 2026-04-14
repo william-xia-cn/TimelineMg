@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DB Test - Events</title>
+    <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js"></script>
+    <script src="db.js"></script>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #f5f5f5; }
+        .test { background: white; padding: 16px; margin: 8px 0; border-radius: 8px; border-left: 4px solid #ccc; }
+        .test.pass { border-left-color: #4CAF50; }
+        .test.fail { border-left-color: #f44336; }
+        .test h3 { margin: 0 0 8px 0; }
+        .test .result { color: #666; font-size: 13px; }
+        .test .error { color: #f44336; }
+        button { padding: 12px 24px; background: #2b56e3; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; margin: 4px; }
+        button:hover { background: #1e40af; }
+        #output { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; margin-top: 16px; white-space: pre-wrap; font-size: 13px; max-height: 400px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>Events 数据库测试</h1>
+    <button onclick="runAllTests()">运行全部测试</button>
+    <div id="results"></div>
+    <div id="output"></div>
+
+    <script>
+        const results = [];
+        const output = [];
+
+        function log(msg) {
+            output.push(msg);
+            document.getElementById('output').textContent = output.join('\n');
+        }
+
+        async function test(name, fn) {
+            try {
+                await fn();
+                results.push({ name, pass: true, msg: '通过' });
+                log(`✅ ${name}`);
+            } catch (e) {
+                results.push({ name, pass: false, msg: e.message });
+                log(`❌ ${name}: ${e.message}`);
+            }
+        }
+
+        function assert(condition, msg) {
+            if (!condition) throw new Error(msg);
+        }
+
+        async function runAllTests() {
+            results.length = 0;
+            output.length = 0;
+            document.getElementById('results').innerHTML = '';
+            document.getElementById('output').textContent = '';
+
+            log('=== 开始测试 ===\n');
+
+            await test('1. events 表存在', async () => {
+                const count = await db.events.count();
+                assert(typeof count === 'number', `count 应为 number，得到 ${typeof count}`);
+            });
+
+            await test('2. 添加事件', async () => {
+                const event = await TimeWhereDB.addEvent({
+                    title: '数学考试',
+                    date: '2026-04-03',
+                    time_start: '10:00',
+                    time_end: '11:30',
+                    color: '#E91E63',
+                    description: '期中考试'
+                });
+                assert(event.id, '事件应有 id');
+                assert(event.title === '数学考试', `标题应为 数学考试，得到 ${event.title}`);
+                assert(event.date === '2026-04-03', `日期应为 2026-04-03，得到 ${event.date}`);
+                assert(event.time_start === '10:00', `开始时间应为 10:00，得到 ${event.time_start}`);
+                assert(event.color === '#E91E63', `颜色应为 #E91E63，得到 ${event.color}`);
+                log(`   创建事件: id=${event.id}, title=${event.title}`);
+            });
+
+            await test('3. 查询所有事件', async () => {
+                const events = await TimeWhereDB.getEvents({});
+                assert(Array.isArray(events), '应返回数组');
+                assert(events.length >= 1, `应至少有 1 个事件，得到 ${events.length}`);
+                log(`   事件总数: ${events.length}`);
+            });
+
+            await test('4. 按日期查询事件', async () => {
+                const events = await TimeWhereDB.getEvents({ date: '2026-04-03' });
+                assert(events.length >= 1, `应至少有 1 个 2026-04-03 的事件`);
+                assert(events[0].title === '数学考试', `标题应为 数学考试`);
+                log(`   2026-04-03 事件: ${events.length} 个`);
+            });
+
+            await test('5. 按日期范围查询事件', async () => {
+                const events = await TimeWhereDB.getEventsByDateRange('2026-04-01', '2026-04-07');
+                assert(Array.isArray(events), '应返回数组');
+                assert(events.length >= 1, `范围内应至少有 1 个事件`);
+                log(`   4/1-4/7 事件: ${events.length} 个`);
+            });
+
+            await test('6. 按 ID 查询事件', async () => {
+                const allEvents = await TimeWhereDB.getEvents({});
+                const firstEvent = allEvents[0];
+                const event = await TimeWhereDB.getEventById(firstEvent.id);
+                assert(event, '应找到事件');
+                assert(event.title === firstEvent.title, '标题应匹配');
+                log(`   查询 id=${firstEvent.id}: ${event.title}`);
+            });
+
+            await test('7. 更新事件', async () => {
+                const allEvents = await TimeWhereDB.getEvents({});
+                const firstEvent = allEvents[0];
+                const updated = await TimeWhereDB.updateEvent(firstEvent.id, { title: '更新后的考试' });
+                assert(updated.title === '更新后的考试', `标题应为 更新后的考试，得到 ${updated.title}`);
+                log(`   更新后: ${updated.title}`);
+            });
+
+            await test('8. 删除事件', async () => {
+                const allEvents = await TimeWhereDB.getEvents({});
+                const firstEvent = allEvents[0];
+                await TimeWhereDB.deleteEvent(firstEvent.id);
+                const remaining = await TimeWhereDB.getEvents({});
+                assert(remaining.length === allEvents.length - 1, `应减少 1 个事件`);
+                log(`   删除前: ${allEvents.length}, 删除后: ${remaining.length}`);
+            });
+
+            await test('9. 添加事件默认值', async () => {
+                const event = await TimeWhereDB.addEvent({});
+                assert(event.title === '新事件', `默认标题应为 新事件`);
+                assert(event.time_start === '09:00', `默认开始时间应为 09:00`);
+                assert(event.time_end === '10:00', `默认结束时间应为 10:00`);
+                assert(event.color === '#4A90D9', `默认颜色应为 #4A90D9`);
+                log(`   默认事件: ${event.title}, ${event.time_start}-${event.time_end}`);
+            });
+
+            await test('10. 数据库信息', async () => {
+                const info = await TimeWhereDB.getDatabaseInfo();
+                assert(typeof info.events === 'number', 'events 计数应为 number');
+                log(`   数据库信息: ${JSON.stringify(info)}`);
+            });
+
+            // 渲染结果
+            const container = document.getElementById('results');
+            const passCount = results.filter(r => r.pass).length;
+            const failCount = results.filter(r => !r.pass).length;
+
+            container.innerHTML = `
+                <div style="padding: 12px; background: ${failCount === 0 ? '#e8f5e9' : '#ffebee'}; border-radius: 8px; margin-bottom: 16px;">
+                    <strong>${failCount === 0 ? '✅ 全部通过' : `❌ ${failCount} 个失败`}</strong>
+                    <span> (${passCount}/${results.length})</span>
+                </div>
+                ${results.map(r => `
+                    <div class="test ${r.pass ? 'pass' : 'fail'}">
+                        <h3>${r.pass ? '✅' : '❌'} ${r.name}</h3>
+                        <div class="result ${r.pass ? '' : 'error'}">${r.msg}</div>
+                    </div>
+                `).join('')}
+            `;
+
+            log(`\n=== 测试完成: ${passCount}/${results.length} 通过 ===`);
+        }
+    </script>
+</body>
+</html>

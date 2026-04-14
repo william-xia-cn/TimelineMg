@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "TimeWhere",
+  "version": "2.0.0",
+  "description": "个人时间管理与任务规划系统 - TimeWhere for IB Students",
+  "options_page": "pages/settings/settings.html",
+  "permissions": [
+    "storage",
+    "tabs",
+    "alarms",
+    "notifications",
+    "identity",
+    "unlimitedStorage"
+  ],
+  "host_permissions": [
+    "https://www.googleapis.com/*",
+    "https://accounts.google.com/*",
+    "https://oauth2.googleapis.com/*"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "TimeWhere"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["shared/**/*", "popup/**/*", "pages/**/*", "fonts/**/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

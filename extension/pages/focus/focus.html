@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeWhere - Focus Dashboard</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <!-- Local Fonts -->
+    <link rel="stylesheet" href="../../shared/styles/fonts.css">
+    <!-- Local Icons -->
+    <link rel="stylesheet" href="../../shared/styles/icons.css">
+    <!-- Page Styles -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- 导航栏 -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon"><span class="material-symbols-outlined">change_history</span></div>
+            </div>
+            <nav class="nav-menu">
+                <a href="focus.html" class="nav-item active" title="仪表盘"><span class="material-symbols-outlined">grid_view</span></a>
+                <a href="../tasks/tasks.html" class="nav-item" title="任务"><span class="material-symbols-outlined">task</span></a>
+                <a href="../calendar/calendar.html" class="nav-item" title="日历"><span class="material-symbols-outlined">calendar_today</span></a>
+                <a href="#" class="nav-item" title="更多"><span class="material-symbols-outlined">apps</span></a>
+            </nav>
+            <div class="sidebar-bottom">
+                <a href="../settings/settings.html" class="nav-item" title="设置"><span class="material-symbols-outlined">settings</span></a>
+                <img src="../../shared/images/avatar-default.png" alt="Avatar" class="user-avatar">
+            </div>
+        </aside>
+
+        <!-- 主体看板布局 -->
+        <main class="board-layout">
+            
+            <!-- 第1列：当下任务 -->
+            <section class="board-column column-now">
+                <div class="column-header">
+                    <h2>当下任务</h2>
+                    <span class="badge red">进行中</span>
+                </div>
+                <div class="column-content custom-scrollbar">
+                    <!-- JS 动态填充 -->
+                </div>
+            </section>
+
+            <!-- 第2列 & 第3列合并：Google日历视图 (今日/明日) -->
+            <section class="board-column column-calendar double-width">
+                <div class="column-header">
+                    <h2>日程 (今日 & 明日)</h2>
+                    <div class="cal-actions">
+                        <button class="icon-btn"><span class="material-symbols-outlined">chevron_left</span></button>
+                        <span id="cal-date-range"></span>
+                        <button class="icon-btn"><span class="material-symbols-outlined">chevron_right</span></button>
+                    </div>
+                </div>
+                <!-- 日历容器区 -->
+                <div class="gcal-container custom-scrollbar">
+                    <!-- 顶部日期名 (Header) -->
+                    <div class="gcal-header">
+                        <div class="gcal-time-filler">GMT+8</div>
+                        <div class="gcal-day-header">
+                            <span class="day-name"></span>
+                            <span class="day-num"></span>
+                        </div>
+                        <div class="gcal-day-header">
+                            <span class="day-name"></span>
+                            <span class="day-num"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- 主体网格区 -->
+                    <div class="gcal-body">
+                        <!-- 左侧时间线 -->
+                        <div class="gcal-times">
+                            <div class="gcal-time-slot"><span>00:00</span></div>
+                            <div class="gcal-time-slot"><span>01:00</span></div>
+                            <div class="gcal-time-slot"><span>02:00</span></div>
+                            <div class="gcal-time-slot"><span>03:00</span></div>
+                            <div class="gcal-time-slot"><span>04:00</span></div>
+                            <div class="gcal-time-slot"><span>05:00</span></div>
+                            <div class="gcal-time-slot"><span>06:00</span></div>
+                            <div class="gcal-time-slot"><span>07:00</span></div>
+                            <div class="gcal-time-slot"><span>08:00</span></div>
+                            <div class="gcal-time-slot"><span>09:00</span></div>
+                            <div class="gcal-time-slot"><span>10:00</span></div>
+                            <div class="gcal-time-slot"><span>11:00</span></div>
+                            <div class="gcal-time-slot"><span>12:00</span></div>
+                            <div class="gcal-time-slot"><span>13:00</span></div>
+                            <div class="gcal-time-slot"><span>14:00</span></div>
+                            <div class="gcal-time-slot"><span>15:00</span></div>
+                            <div class="gcal-time-slot"><span>16:00</span></div>
+                            <div class="gcal-time-slot"><span>17:00</span></div>
+                            <div class="gcal-time-slot"><span>18:00</span></div>
+                            <div class="gcal-time-slot"><span>19:00</span></div>
+                            <div class="gcal-time-slot"><span>20:00</span></div>
+                            <div class="gcal-time-slot"><span>21:00</span></div>
+                            <div class="gcal-time-slot"><span>22:00</span></div>
+                            <div class="gcal-time-slot"><span>23:00</span></div>
+                        </div>
+
+                        <!-- "今日"列 -->
+                        <div class="gcal-day-col" id="gcal-today">
+                            <!-- JS 动态填充 -->
+                        </div>
+
+                        <!-- "明日"列 -->
+                        <div class="gcal-day-col" id="gcal-tomorrow">
+                            <!-- JS 动态填充 -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 第4列：本周 -->
+            <section class="board-column column-week">
+                <div class="column-header">
+                    <h2>本周进度</h2>
+                </div>
+                <div class="column-content custom-scrollbar" style="gap: 20px;">
+                    <!-- 顶端部分：统计图 -->
+                    <div class="week-stats-section">
+                        <h3>学业产出统计</h3>
+                        <div class="pie-chart-container">
+                            <div class="pie-chart-wrapper">
+                                <div class="pie-chart"></div>
+                                <div class="pie-center">
+                                    <span class="pie-total-num">0</span>
+                                    <span class="pie-total-label">总任务</span>
+                                </div>
+                            </div>
+                            <div class="pie-legend">
+                                <div class="legend-item"><span class="legend-color bg-green"></span>已完成 <strong id="legend-completed">0</strong></div>
+                                <div class="legend-item"><span class="legend-color bg-orange"></span>进行中 <strong id="legend-in-progress">0</strong></div>
+                                <div class="legend-item"><span class="legend-color bg-red"></span>未完成 <strong id="legend-not-started">0</strong></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="divider"></div>
+
+                    <!-- 底部部分：任务列表 -->
+                    <div class="week-tasks-section">
+                        <h3>本周重点任务</h3>
+                        <div class="simple-task-list">
+                            <!-- JS 动态填充 -->
+                        </div>
+                        <button class="add-task-btn"><span class="material-symbols-outlined">add</span> 添加周任务</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 第5列：当下消息流 / 提醒事项 -->
+            <section class="board-column column-feed">
+                <div class="column-header">
+                    <h2>消息流 & 提醒</h2>
+                    <button class="icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+                </div>
+                <div class="column-content custom-scrollbar">
+                    <!-- JS 动态填充 -->
+                </div>
+            </section>
+
+        </main>
+    </div>
+    <!-- Icons Library -->
+    <script src="../../shared/js/icons.js"></script>
+    <!-- Dexie.js -->
+    <script src="../../shared/js/dexie.js"></script>
+    <!-- Database -->
+    <script src="../../shared/js/db.js"></script>
+    <!-- Page Script -->
+    <script src="script.js"></script>
+</body>
+</html>

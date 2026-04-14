@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeWhere - Calendar</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link rel="stylesheet" href="../../shared/styles/fonts.css">
+    <link rel="stylesheet" href="../../shared/styles/icons.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon"><span class="material-symbols-outlined">change_history</span></div>
+            </div>
+            <nav class="nav-menu">
+                <a href="../focus/focus.html" class="nav-item" title="仪表盘"><span class="material-symbols-outlined">grid_view</span></a>
+                <a href="../tasks/tasks.html" class="nav-item" title="任务"><span class="material-symbols-outlined">task</span></a>
+                <a href="calendar.html" class="nav-item active" title="日历"><span class="material-symbols-outlined">calendar_today</span></a>
+                <a href="#" class="nav-item" title="更多"><span class="material-symbols-outlined">apps</span></a>
+            </nav>
+            <div class="sidebar-bottom">
+                <a href="../settings/settings.html" class="nav-item" title="设置"><span class="material-symbols-outlined">settings</span></a>
+                <img src="../../shared/images/avatar-default.png" alt="Avatar" class="user-avatar">
+            </div>
+        </aside>
+
+        <main class="main-content rounded-container glass-panel custom-scrollbar">
+            <section class="calendar-section">
+                <div class="calendar-toolbar">
+                    <div class="toolbar-left">
+                        <button class="btn-today" id="btnToday">今天</button>
+                        <div class="nav-arrows">
+                            <button class="icon-btn btn-arrow" id="btnPrev"><span class="material-symbols-outlined">chevron_left</span></button>
+                            <button class="icon-btn btn-arrow" id="btnNext"><span class="material-symbols-outlined">chevron_right</span></button>
+                        </div>
+                        <h2 class="current-date" id="currentDate"></h2>
+                    </div>
+                    <div class="toolbar-right">
+                        <button class="icon-btn tb-icon" id="btnSearch" title="搜索"><span class="material-symbols-outlined">search</span></button>
+                        <div class="search-bar" id="searchBar" style="display:none;">
+                            <input type="text" id="searchInput" placeholder="搜索事件...">
+                            <button class="icon-btn search-close-btn" id="searchClose"><span class="material-symbols-outlined">close</span></button>
+                        </div>
+                        <button class="icon-btn tb-icon" title="帮助"><span class="material-symbols-outlined">help</span></button>
+                        <button class="icon-btn tb-icon" title="设置"><span class="material-symbols-outlined">settings</span></button>
+                        <div class="view-selector">
+                            <button class="btn-dropdown" id="viewSelector">
+                                <span id="currentViewLabel">周</span>
+                                <span class="material-symbols-outlined">expand_more</span>
+                            </button>
+                            <div class="view-dropdown" id="viewDropdown" style="display: none;">
+                                <div class="dropdown-item" data-view="week">周</div>
+                                <div class="dropdown-item" data-view="month">月</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="calendar-container custom-scrollbar">
+                    <!-- Week View -->
+                    <div id="weekView" class="view-panel">
+                        <div class="calendar-header-row">
+                            <div class="timezone-cell">GMT+08</div>
+                            <div class="days-wrapper" id="weekDaysHeader"></div>
+                        </div>
+                        <div class="allday-row">
+                            <div class="allday-spacer"></div>
+                            <div class="allday-grid" id="weekAlldayGrid"></div>
+                        </div>
+                        <div class="calendar-body">
+                            <div class="time-axis" id="timeAxis"></div>
+                            <div class="lines-layer" id="gridLines"></div>
+                            <div class="columns-layer" id="weekColumns"></div>
+                        </div>
+                    </div>
+
+                    <!-- Month View -->
+                    <div id="monthView" class="view-panel" style="display: none;">
+                        <div class="month-header-row">
+                            <div class="month-day-header">周一</div>
+                            <div class="month-day-header">周二</div>
+                            <div class="month-day-header">周三</div>
+                            <div class="month-day-header">周四</div>
+                            <div class="month-day-header">周五</div>
+                            <div class="month-day-header">周六</div>
+                            <div class="month-day-header">周日</div>
+                        </div>
+                        <div class="month-grid" id="monthGrid"></div>
+                    </div>
+                </div>
+
+                <!-- Unified Calendar Modal -->
+                <div id="calModal" class="event-modal" style="display: none;">
+                    <div class="event-modal-backdrop" id="calModalBackdrop"></div>
+                    <div class="event-modal-content">
+                        <div class="event-modal-header">
+                            <h3 id="calModalTitle">创建日程</h3>
+                            <button class="event-modal-close" id="calModalClose">&times;</button>
+                        </div>
+                        <div class="event-modal-body" id="calModalBody"></div>
+                        <div class="event-modal-footer" id="calModalFooter"></div>
+                    </div>
+                </div>
+
+                <div id="initPanel" class="init-panel" style="display: none;">
+                    <div class="init-panel-header">
+                        <h3>日程初始化</h3>
+                        <button class="init-close" id="closeInitPanel">&times;</button>
+                    </div>
+                    <div class="init-panel-content">
+                        <div class="init-section" id="initContainerSection">
+                            <h4><span class="material-symbols-outlined">schedule</span> 默认容器</h4>
+                            <div class="init-options">
+                                <label class="init-option">
+                                    <input type="checkbox" id="enableStudyContainer" checked>
+                                    <span>学习时间 <small>18:30 - 21:30</small></span>
+                                </label>
+                                <label class="init-option">
+                                    <input type="checkbox" id="enableFreeContainer" checked>
+                                    <span>自由时间 <small>21:30 - 23:00</small></span>
+                                </label>
+                                <label class="init-option">
+                                    <input type="checkbox" id="enableSleepContainer" checked>
+                                    <span>睡前时间 <small>23:00 - 23:30</small></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="init-section" id="initTimetableSection">
+                            <h4><span class="material-symbols-outlined">upload_file</span> 导入课表</h4>
+                            <div class="upload-area" id="icsUploadArea">
+                                <input type="file" id="icsFileInput" accept=".ics" style="display: none;">
+                                <span class="material-symbols-outlined" style="font-size: 32px; color: var(--text-sub);">cloud_upload</span>
+                                <p>点击上传 .ics 文件</p>
+                                <small id="icsFileName"></small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="init-panel-footer">
+                        <button class="btn-secondary" id="initSkipBtn">跳过</button>
+                        <button class="btn-primary" id="initCompleteBtn">完成</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="../../shared/js/icons.js"></script>
+    <script src="../../shared/js/dexie.js"></script>
+    <script src="../../shared/js/db.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
