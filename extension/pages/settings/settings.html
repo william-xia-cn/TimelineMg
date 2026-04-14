@@ -244,6 +244,28 @@
                                     </div>
                                     <input type="text" id="healTime" value="23:00" placeholder="HH:mm" style="width: 100px;">
                                 </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">默认任务时长</span>
+                                        <span class="setting-desc">新建任务时的预设时长</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="number" id="defaultDuration" value="45" min="5" max="480" step="5" style="width: 80px;">
+                                        <span style="font-size: 13px; color: var(--text-sub);">分钟</span>
+                                    </div>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">默认优先级</span>
+                                        <span class="setting-desc">新建任务时的预设优先级</span>
+                                    </div>
+                                    <select id="defaultPriority">
+                                        <option value="urgent">P1 紧急</option>
+                                        <option value="important">P2 重要</option>
+                                        <option value="medium" selected>P3 中等</option>
+                                        <option value="low">P4 低</option>
+                                    </select>
+                                </div>
                             </div>
                         </section>
 
@@ -403,13 +425,20 @@
                             </div>
                             <div class="form-group">
                                 <label>颜色</label>
-                                <div class="color-picker">
-                                    <button class="color-option" data-color="#4A90D9" style="background: #4A90D9;"></button>
+                                <div class="color-picker" id="newContainerColorPicker">
+                                    <button class="color-option active" data-color="#4A90D9" style="background: #4A90D9;"></button>
                                     <button class="color-option" data-color="#7B68EE" style="background: #7B68EE;"></button>
                                     <button class="color-option" data-color="#2E8B57" style="background: #2E8B57;"></button>
                                     <button class="color-option" data-color="#E74C3C" style="background: #E74C3C;"></button>
                                     <button class="color-option" data-color="#F39C12" style="background: #F39C12;"></button>
                                     <button class="color-option" data-color="#1ABC9C" style="background: #1ABC9C;"></button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>类型</label>
+                                <div class="layer-toggle" id="newContainerLayerToggle">
+                                    <button class="layer-btn active" data-layer="1">学习时间</button>
+                                    <button class="layer-btn" data-layer="2">自由时间</button>
                                 </div>
                             </div>
                         </div>
@@ -428,6 +457,8 @@
     <script src="../../shared/js/dexie.js"></script>
     <!-- Database -->
     <script src="../../shared/js/db.js"></script>
+    <!-- Scheduling -->
+    <script src="../../shared/js/scheduling.js"></script>
     <!-- Sync Engine -->
     <script src="../../shared/js/sync.js"></script>
     <!-- Settings Script -->

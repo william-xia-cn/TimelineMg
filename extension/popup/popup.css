@@ -337,6 +337,14 @@ body {
     color: var(--text-sub);
 }
 
+.container-name {
+    font-size: 11px;
+    color: var(--accent, #2b56e3);
+    background: rgba(43, 86, 227, 0.08);
+    border-radius: 3px;
+    padding: 1px 6px;
+}
+
 .deadline {
     margin-top: 8px;
     font-size: 12px;

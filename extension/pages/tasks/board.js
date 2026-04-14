@@ -159,16 +159,29 @@ function createTaskCardHTML(task) {
             </span>`;
     }
 
-    // Due date text
+    // Due date + status labels
     let dueDateHTML = '';
+    const todayStr = new Date().toISOString().split('T')[0];
     if (task.due_date) {
-        const isOverdue = new Date(task.due_date + 'T23:59:59') < new Date();
-        const cls = isOverdue ? 'text-red' : '';
+        const isOverdue = task.due_date < todayStr;
+        const isDueToday = task.due_date === todayStr;
+        const cls = isOverdue ? 'text-red' : (isDueToday ? 'text-orange' : '');
         dueDateHTML = `
             <span class="task-due-badge ${cls}">
                 <span class="material-symbols-outlined">schedule</span>
                 ${formatDueDate(task.due_date)}
             </span>`;
+    }
+
+    // Schedule status badges
+    let statusBadges = '';
+    if (task.due_date && task.due_date < todayStr && task.progress !== 'completed') {
+        statusBadges += `<span class="task-status-badge status-overdue">逾期</span>`;
+    } else if (task.due_date === todayStr && task.progress !== 'completed') {
+        statusBadges += `<span class="task-status-badge status-today">今日截止</span>`;
+    }
+    if (task.schedule_time) {
+        statusBadges += `<span class="task-status-badge status-timed">⏰ ${task.schedule_time}</span>`;
     }
 
     // Bucket tag
@@ -195,6 +208,7 @@ function createTaskCardHTML(task) {
                 </button>
                 <h4 class="task-title">${escapeHTML(task.title)}</h4>
             </div>
+            ${statusBadges ? `<div class="task-status-badges">${statusBadges}</div>` : ''}
             <div class="task-card-footer">
                 <div class="task-card-meta">
                     ${bucketHTML}
@@ -333,6 +347,11 @@ function showQuickAdd(columnEl) {
             return;
         }
 
+        // 从 settings 读取默认时长和优先级
+        const settingsData = await TimeWhereDB.getSettings();
+        const defaultDuration = settingsData.default_duration || 45;
+        const defaultPriority = settingsData.default_priority || 'medium';
+
         // Determine default values based on current groupBy and column
         const colKey = columnEl.dataset.columnKey;
         const defaults = getQuickAddDefaults(colKey);
@@ -340,6 +359,8 @@ function showQuickAdd(columnEl) {
         await TimeWhereDB.addTask({
             title,
             plan_id: planId,
+            duration: defaultDuration,
+            priority: defaults.priority || defaultPriority,
             ...defaults
         });
 

@@ -620,6 +620,43 @@ input:checked + .slider:before {
     transform: scale(1.1);
 }
 
+.color-option.active {
+    border-color: var(--text-main);
+    box-shadow: 0 0 0 2px white, 0 0 0 4px var(--text-sub);
+}
+
+/* Layer toggle in settings container modal */
+.layer-toggle {
+    display: flex;
+    gap: 8px;
+}
+.layer-btn {
+    flex: 1;
+    padding: 7px 0;
+    border: 1px solid var(--border-stroke);
+    background: white;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--text-sub);
+    transition: var(--transition);
+}
+.layer-btn.active {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: white;
+}
+
+/* Layer badges in container list */
+.layer-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 3px;
+}
+.layer-study { background: #dbeafe; color: #1d4ed8; }
+.layer-free  { background: #f3e8ff; color: #7c3aed; }
+
 .init-option {
     display: flex;
     align-items: center;

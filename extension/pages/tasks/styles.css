@@ -557,7 +557,26 @@ body::before {
 }
 .task-due-badge .material-symbols-outlined,
 .task-checklist-badge .material-symbols-outlined { font-size: 14px; }
-.task-due-badge.text-red { color: var(--red); }
+.task-due-badge.text-red   { color: var(--red); }
+.task-due-badge.text-orange { color: #f59e0b; }
+
+/* 调度状态标签 (逾期 / 今日截止 / 定时) */
+.task-status-badges {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    padding: 2px 0 4px;
+}
+.task-status-badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+}
+.status-overdue { background: #fee2e2; color: #dc2626; }
+.status-today   { background: #fef3c7; color: #b45309; }
+.status-timed   { background: #eff6ff; color: #2563eb; }
 
 .task-priority-badge {
     font-size: 10px;

@@ -203,49 +203,66 @@ function renderTimeAxis() {
     lines.innerHTML = hours.map(() => `<div class="grid-line" style="height: ${TIME_RANGE.pxPerHour}px;"></div>`).join('');
 }
 
-// containerAppliesToDate 已迁移到 shared/js/scheduling.js
-const { containerAppliesToDate, _nthWeekdayOfMonth } = window.TimeWhereScheduling;
+// 调度相关函数从 shared/js/scheduling.js 导入
+const { containerAppliesToDate, _nthWeekdayOfMonth,
+        dailySettle, getContainerLayer, priorityLabel, priorityClass } = window.TimeWhereScheduling;
 
 async function renderWeekColumns(dates) {
     const container = document.getElementById('weekColumns');
     if (!container) return;
-    
+
     container.innerHTML = '';
-    
+
     const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
-    console.log('[DEBUG] Containers:', allContainers.length);
     const weekStart = dates[0].toISOString().split('T')[0];
     const weekEnd = dates[6].toISOString().split('T')[0];
     const dbEvents = (await TimeWhereDB.getEventsByDateRange(weekStart, weekEnd)) || [];
-    console.log('[DEBUG] Events:', dbEvents.length, 'Range:', weekStart, '-', weekEnd);
-    
+
+    // 加载任务，用于 Daily Settle
+    const allTasks = (await TimeWhereDB.getAllTasks()) || [];
+
     dates.forEach((date, index) => {
         const col = document.createElement('div');
         col.className = 'day-col';
         col.id = `col-${index}`;
-        col.dataset.date = date.toISOString().split('T')[0];
-        
+        const dateStr = date.toISOString().split('T')[0];
+        col.dataset.date = dateStr;
+
         const dayOfWeek = date.getDay();
         const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        const dateStr = date.toISOString().split('T')[0];
-        
+
         // Collect overrides/skips for this date
         const dayOverrides = dbEvents.filter(e => e.date === dateStr && (e.source === 'container_override' || e.source === 'container_skip'));
         const overriddenIds = new Set(dayOverrides.filter(e => e.source === 'container_override').map(e => e.container_id));
         const skippedIds   = new Set(dayOverrides.filter(e => e.source === 'container_skip').map(e => e.container_id));
 
-        const containerEvents = allContainers.filter(c => {
+        // 该日生效的容器
+        const dayContainers = allContainers.filter(c => {
             if (skippedIds.has(c.id) || overriddenIds.has(c.id)) return false;
             return containerAppliesToDate(c, date, dateStr, dayOfWeek, isWeekday, isWeekend);
-        }).map(c => ({
+        });
+
+        // 当日任务池（start_date ≤ 该日 且未完成）
+        const taskPool = allTasks.filter(t =>
+            t.progress !== 'completed' &&
+            t.start_date && t.start_date <= dateStr
+        );
+
+        // Daily Settle — 用该日正午作为"当前时间"（让所有容器都处于"未来"状态参与分配）
+        const dayNoon = new Date(dateStr + 'T12:00:00');
+        const settle = dailySettle(taskPool, dayContainers, dayNoon);
+
+        const containerEvents = dayContainers.map(c => ({
             title: c.name,
             time_start: c.time_start,
             time_end: c.time_end,
             color: c.color,
             type: 'container',
             id: c.id,
-            source: 'container'
+            source: 'container',
+            layer: getContainerLayer(c),
+            tasks: settle.result.get(c.id)?.tasks || []
         }));
 
         const dateEvents = dbEvents.filter(e => e.date === dateStr && e.source !== 'container_skip').map(e => ({
@@ -257,36 +274,28 @@ async function renderWeekColumns(dates) {
             id: e.id,
             source: e.source || 'manual'
         }));
-        
-        const allEvents = [...containerEvents, ...dateEvents].sort((a, b) => {
-            return a.time_start.localeCompare(b.time_start);
-        });
-        
-        console.log('[DEBUG] Day:', dateStr, 'Events:', allEvents.length, allEvents.map(e => ({title: e.title, start: e.time_start, end: e.time_end})));
-        
-        const layout = calculateEventLayout(allEvents);
-        
-        console.log('[DEBUG] Layout for', dateStr, ':', layout.map(l => ({title: l.title, left: l.left, width: l.width, top: l.top})));
-        
+
+        const allItems = [...containerEvents, ...dateEvents].sort((a, b) =>
+            a.time_start.localeCompare(b.time_start)
+        );
+
+        const layout = calculateEventLayout(allItems);
+
         layout.forEach(item => {
             const card = createEventCard(item);
             if (card) {
                 card.style.left = `${item.left}%`;
                 card.style.right = 'auto';
                 card.style.width = `calc(${item.width}% - 8px)`;
-                
-                // Debug: log actual position
-                console.log('[RENDER] title:', item.title, 'top:', card.style.top, 'left:', card.style.left, 'width:', card.style.width);
-                
                 col.appendChild(card);
             }
         });
-        
+
         if (date.toDateString() === new Date().toDateString()) {
             const indicator = createTimeIndicator();
             if (indicator) col.appendChild(indicator);
         }
-        
+
         container.appendChild(col);
     });
 }
@@ -297,53 +306,86 @@ function createEventCard(item) {
     const timeEnd = item.time_end;
     const color = item.color || '#4A90D9';
     const type = item.type || 'container';
-    
+
     if (!timeStart || !timeEnd) return null;
-    
+
     const [startH, startM] = timeStart.split(':').map(Number);
     const [endH, endM] = timeEnd.split(':').map(Number);
-    
+
     const startMinutes = startH * 60 + startM;
     let endMinutes = endH * 60 + endM;
     if (endMinutes <= startMinutes) endMinutes += 24 * 60;
     const duration = endMinutes - startMinutes;
-    
+
     const baseHour = TIME_RANGE.startHour;
     const pxPerHour = TIME_RANGE.pxPerHour;
     const pxPerMinute = pxPerHour / 60;
     const totalHours = TIME_RANGE.endHour - TIME_RANGE.startHour;
     const maxTop = totalHours * pxPerHour;
-    
+
     const top = (startMinutes - baseHour * 60) * pxPerMinute;
     const height = duration * pxPerMinute;
-    
-    console.log('[DEBUG] createEventCard:', title, 'startMinutes:', startMinutes, 'top:', top, 'height:', height);
-    console.log('[DEBUG] baseHour:', baseHour, 'pxPerMinute:', pxPerMinute, 'maxTop:', maxTop);
-    
+
     if (top < 0 || top > maxTop) return null;
-    
+
     const source = item.source || (type === 'event' ? 'manual' : 'container');
+    const layer = item.layer ?? 2;
 
     const event = document.createElement('div');
-    event.className = 'gcal-event';
     event.dataset.type = type;
     event.dataset.id = item.id;
     event.dataset.source = source;
     event.style.top = `${Math.max(top, 0)}px`;
     event.style.height = `${Math.max(Math.min(height, maxTop - top), 20)}px`;
-    event.style.backgroundColor = color;
-    // 课表事件用较深左边框标识来源；手动事件用圆点样式无边框
-    if (source === 'manual') {
+
+    if (source === 'container') {
+        if (layer === 1) {
+            // 学习时间 — 实色背景 + 深色左边框
+            event.className = 'gcal-event layer-1';
+            event.style.backgroundColor = color;
+            event.style.borderLeft = `3px solid ${darkenColor(color, 0.3)}`;
+        } else {
+            // 自由时间 — 浅色背景 + 虚线边框
+            event.className = 'gcal-event layer-2';
+            event.style.backgroundColor = color + '25'; // ~15% 透明
+            event.style.border = `2px dashed ${color}`;
+            event.style.color = darkenColor(color, 0.35);
+        }
+    } else if (source === 'manual') {
+        event.className = 'gcal-event';
+        event.style.backgroundColor = color;
         event.style.borderLeft = `3px solid rgba(255,255,255,0.4)`;
     } else {
+        // container_override or ics
+        event.className = 'gcal-event';
+        event.style.backgroundColor = color;
         event.style.borderLeft = `3px solid ${darkenColor(color, 0.3)}`;
     }
-    
+
     const startTimeStr = formatTime(timeStart);
     const endTimeStr = formatTime(timeEnd);
-    
-    event.innerHTML = `<h4>${title}</h4><span>${startTimeStr} - ${endTimeStr}</span>`;
-    
+
+    // 容器内任务列表
+    const tasks = item.tasks || [];
+    let tasksHTML = '';
+    if (type === 'container' && tasks.length > 0) {
+        tasksHTML = `<div class="container-tasks">` +
+            tasks.map(t => {
+                const pLabel = priorityLabel(t.priority);
+                const pCls = priorityClass(t.priority);
+                const timedMark = t.schedule_time ? `<span class="task-timed">${t.schedule_time}</span>` : '';
+                return `<div class="container-task-item">
+                    <span class="task-priority-dot ${pCls}" title="${pLabel}"></span>
+                    <span class="task-item-title">${t.title || '无标题'}</span>
+                    <span class="task-item-dur">${t.duration || 45}m</span>
+                    ${timedMark}
+                </div>`;
+            }).join('') +
+        `</div>`;
+    }
+
+    event.innerHTML = `<h4>${title}</h4><span>${startTimeStr} - ${endTimeStr}</span>${tasksHTML}`;
+
     return event;
 }
 
@@ -1214,6 +1256,13 @@ async function _renderModal({ date, timeStart, timeEnd }) {
                 <label>颜色</label>
                 <div class="color-picker" id="modalColorPicker">${colorSwatches}</div>
             </div>
+            <div class="form-group">
+                <label>类型</label>
+                <div class="layer-toggle" id="layerToggle">
+                    <button class="layer-btn${(data?.layer ?? 1) === 1 ? ' active' : ''}" data-layer="1">学习时间</button>
+                    <button class="layer-btn${(data?.layer ?? 1) === 2 ? ' active' : ''}" data-layer="2">自由时间</button>
+                </div>
+            </div>
             ${!isCreate ? `
             <div class="scope-row" id="scopeRow">
                 <label>修改范围</label>
@@ -1331,6 +1380,14 @@ function _bindModalEvents() {
         if (timeRow) timeRow.style.display = e.target.checked ? 'none' : '';
     });
 
+    // Layer toggle (container only)
+    document.getElementById('layerToggle')?.addEventListener('click', e => {
+        const btn = e.target.closest('.layer-btn');
+        if (!btn) return;
+        document.querySelectorAll('#layerToggle .layer-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    });
+
     // Scope toggle (edit container only)
     document.getElementById('scopeRow')?.addEventListener('click', e => {
         const btn = e.target.closest('.scope-btn');
@@ -1380,9 +1437,10 @@ function _getModalValues() {
     const yearlyDom   = selOpt ? parseInt(selOpt.dataset.yearlyDom  ?? NaN) : NaN;
 
     const allDay = document.getElementById('modalAllDay')?.checked || false;
+    const layer = parseInt(document.querySelector('#layerToggle .layer-btn.active')?.dataset.layer || '1');
 
     return { name, start, end, color, date, repeat, scope, repeatDays,
-             weeklyDay, monthlyNth, monthlyDow, yearlyMonth, yearlyDom, allDay };
+             weeklyDay, monthlyNth, monthlyDow, yearlyMonth, yearlyDom, allDay, layer };
 }
 
 function _repeatPayload(v) {
@@ -1433,6 +1491,7 @@ async function _saveModal() {
             await TimeWhereDB.addContainer({
                 name: v.name, color: v.color,
                 time_start: v.start, time_end: v.end,
+                layer: v.layer,
                 ..._repeatPayload(v)
             });
             showToast('时间容器已创建', 'success');
@@ -1460,6 +1519,7 @@ async function _saveModal() {
                 await TimeWhereDB.updateContainer(_modal.id, {
                     name: v.name, color: v.color,
                     time_start: v.start, time_end: v.end,
+                    layer: v.layer,
                     ..._repeatPayload(v)
                 });
                 showToast('时间容器已更新', 'success');

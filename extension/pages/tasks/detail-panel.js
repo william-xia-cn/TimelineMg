@@ -124,6 +124,18 @@ async function renderDetailPanel(taskId) {
                 </div>
             </div>
 
+            <!-- Schedule time + Duration -->
+            <div class="detail-field detail-field-row">
+                <div class="detail-field-half">
+                    <label>定时时间</label>
+                    <input type="time" class="detail-date" data-field="schedule_time" value="${task.schedule_time || ''}">
+                </div>
+                <div class="detail-field-half">
+                    <label>预计时长 (分钟)</label>
+                    <input type="number" class="detail-date" data-field="duration" value="${task.duration || 45}" min="5" max="480" step="5">
+                </div>
+            </div>
+
             <!-- Labels -->
             <div class="detail-field">
                 <label>Labels</label>
@@ -210,11 +222,17 @@ function wireDetailPanelEvents(taskId) {
         });
     }
 
-    // Date inputs
+    // Date / time / number inputs (start_date, due_date, schedule_time, duration)
     panel.querySelectorAll('.detail-date').forEach(input => {
         input.addEventListener('change', async () => {
             const field = input.dataset.field;
-            await TimeWhereDB.updateTask(taskId, { [field]: input.value || null });
+            let value = input.value;
+            if (field === 'duration') {
+                value = value ? parseInt(value, 10) : 45;
+            } else {
+                value = value || null;
+            }
+            await TimeWhereDB.updateTask(taskId, { [field]: value });
             await TaskApp.refresh();
         });
     });

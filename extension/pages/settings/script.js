@@ -45,6 +45,8 @@ async function loadSettings() {
     document.getElementById('tomatoDuration').value = settings.pomodoro_work || 25;
     document.getElementById('notificationsEnabled').checked = settings.notification_enabled !== false;
     document.getElementById('reminderBefore').value = settings.reminder_before || 15;
+    document.getElementById('defaultDuration').value = settings.default_duration || 45;
+    document.getElementById('defaultPriority').value = settings.default_priority || 'medium';
     
     // Google 账号
     const googleConnected = settings.google_connected;
@@ -113,6 +115,43 @@ function setupImportEvents() {
     document.getElementById('importBtn')?.addEventListener('click', handleImport);
     document.getElementById('addContainerBtn')?.addEventListener('click', () => {
         document.getElementById('addContainerModal').style.display = 'flex';
+    });
+
+    // Container modal — close
+    document.getElementById('closeContainerModal')?.addEventListener('click', closeContainerModal);
+    document.getElementById('cancelContainerBtn')?.addEventListener('click', closeContainerModal);
+
+    // Container modal — color picker
+    document.getElementById('newContainerColorPicker')?.addEventListener('click', e => {
+        const btn = e.target.closest('.color-option');
+        if (!btn) return;
+        document.querySelectorAll('#newContainerColorPicker .color-option').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    });
+
+    // Container modal — layer toggle
+    document.getElementById('newContainerLayerToggle')?.addEventListener('click', e => {
+        const btn = e.target.closest('.layer-btn');
+        if (!btn) return;
+        document.querySelectorAll('#newContainerLayerToggle .layer-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    });
+
+    // Container modal — confirm add
+    document.getElementById('confirmAddContainer')?.addEventListener('click', async () => {
+        const name = document.getElementById('newContainerName')?.value.trim();
+        if (!name) { showToast('请输入容器名称', 'error'); return; }
+        const start = document.getElementById('newContainerStart')?.value;
+        const end = document.getElementById('newContainerEnd')?.value;
+        if (!start || !end || start >= end) { showToast('请设置有效的时间范围', 'error'); return; }
+        const repeat = document.getElementById('newContainerRepeat')?.value || 'weekday';
+        const color = document.querySelector('#newContainerColorPicker .color-option.active')?.dataset.color || '#4A90D9';
+        const layer = parseInt(document.querySelector('#newContainerLayerToggle .layer-btn.active')?.dataset.layer || '1');
+
+        await TimeWhereDB.addContainer({ name, color, time_start: start, time_end: end, repeat, layer });
+        showToast('时间容器已添加', 'success');
+        closeContainerModal();
+        loadContainers();
     });
 }
 
@@ -299,16 +338,23 @@ async function loadContainers() {
     
     emptyState.classList.remove('show');
     
+    const { getContainerLayer } = window.TimeWhereScheduling;
     for (const container of containers) {
+        const layer = getContainerLayer(container);
+        const layerBadge = layer === 1
+            ? `<span class="layer-badge layer-study">学习</span>`
+            : `<span class="layer-badge layer-free">自由</span>`;
         const div = document.createElement('div');
         div.className = 'container-item';
         div.innerHTML = `
             <div class="container-info">
-                <span class="container-name">${container.name}</span>
-                <span class="container-time">${container.time_start} - ${container.time_end} | ${getRepeatText(container.repeat)}</span>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span class="container-name">${container.name}</span>
+                    ${layerBadge}
+                </div>
+                <span class="container-time">${container.time_start} - ${container.time_end} · ${getRepeatText(container.repeat)}</span>
             </div>
             <div class="container-actions">
-                <button class="edit" data-id="${container.id}"><span class="material-symbols-outlined" style="font-size: 18px;">edit</span></button>
                 <button class="delete" data-id="${container.id}"><span class="material-symbols-outlined" style="font-size: 18px;">delete</span></button>
             </div>
         `;
@@ -457,13 +503,15 @@ async function saveSettings() {
         start_week_on: parseInt(document.getElementById('weekStartsOn').value),
         pomodoro_work: parseInt(document.getElementById('tomatoDuration').value),
         notification_enabled: document.getElementById('notificationsEnabled').checked,
-        reminder_before: parseInt(document.getElementById('reminderBefore').value)
+        reminder_before: parseInt(document.getElementById('reminderBefore').value),
+        default_duration: parseInt(document.getElementById('defaultDuration').value) || 45,
+        default_priority: document.getElementById('defaultPriority').value || 'medium'
     };
-    
+
     for (const [key, value] of Object.entries(settings)) {
         await TimeWhereDB.setSetting(key, value);
     }
-    
+
     showToast('设置已保存', 'success');
 }
 
@@ -631,7 +679,14 @@ function closeContainerModal() {
     document.getElementById('newContainerStart').value = '18:30';
     document.getElementById('newContainerEnd').value = '21:30';
     document.getElementById('newContainerRepeat').value = 'weekday';
-    document.querySelectorAll('.color-option').forEach(b => b.style.border = 'none');
+    // Reset color picker
+    document.querySelectorAll('#newContainerColorPicker .color-option').forEach((b, i) => {
+        b.classList.toggle('active', i === 0);
+    });
+    // Reset layer toggle
+    document.querySelectorAll('#newContainerLayerToggle .layer-btn').forEach((b, i) => {
+        b.classList.toggle('active', i === 0);
+    });
 }
 
 function addContainerToList(container) {
