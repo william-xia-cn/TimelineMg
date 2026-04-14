@@ -203,33 +203,8 @@ function renderTimeAxis() {
     lines.innerHTML = hours.map(() => `<div class="grid-line" style="height: ${TIME_RANGE.pxPerHour}px;"></div>`).join('');
 }
 
-/**
- * 判断一个时间容器是否应该出现在指定日期。
- * 支持: none / daily / weekly / monthly_nth / yearly / weekday / custom
- */
-function containerAppliesToDate(c, dateObj, dateStr, dayOfWeek, isWeekday, isWeekend) {
-    switch (c.repeat) {
-        case 'none':   return false;
-        case 'daily':  return true;
-        case 'weekday': return isWeekday;
-        case 'weekend': return isWeekend;
-        case 'weekly':
-            return c.repeat_days && c.repeat_days.includes(dayOfWeek);
-        case 'monthly_nth': {
-            const { dayOfWeek: dow, nth } = _nthWeekdayOfMonth(dateStr);
-            return dow === (c.monthly_dow ?? -1) && nth === (c.monthly_week ?? -1);
-        }
-        case 'yearly': {
-            const d = new Date(dateStr + 'T00:00:00');
-            return d.getMonth() + 1 === (c.yearly_month ?? -1) && d.getDate() === (c.yearly_dom ?? -1);
-        }
-        case 'custom':
-            return c.repeat_days && c.repeat_days.includes(dayOfWeek);
-        case 'once':
-            return c.once_date === dateStr;
-        default: return false;
-    }
-}
+// containerAppliesToDate 已迁移到 shared/js/scheduling.js
+const { containerAppliesToDate, _nthWeekdayOfMonth } = window.TimeWhereScheduling;
 
 async function renderWeekColumns(dates) {
     const container = document.getElementById('weekColumns');
@@ -1107,15 +1082,6 @@ const MODAL_COLORS = ['#4A90D9','#E91E63','#FF9800','#4CAF50','#9C27B0','#E74C3C
 const DAY_NAMES_CN  = ['周日','周一','周二','周三','周四','周五','周六'];
 const MONTH_NAMES_CN = ['一','二','三','四','五','六','七','八','九','十','十一','十二'];
 const WEEK_ORD_CN    = ['第一个','第二个','第三个','第四个','最后一个'];
-
-/** 给定一个日期字符串，计算它是该月第几个星期X（1-based，最多4或5） */
-function _nthWeekdayOfMonth(dateStr) {
-    const d = new Date(dateStr + 'T00:00:00');
-    const dayOfWeek = d.getDay();   // 0-6
-    const dayOfMonth = d.getDate(); // 1-31
-    const nth = Math.ceil(dayOfMonth / 7); // 1-5
-    return { dayOfWeek, nth };
-}
 
 /**
  * 根据点击日期动态构造 Google Calendar 风格的重复选项。

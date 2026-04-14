@@ -438,6 +438,7 @@ const TimeWhereDB = {
             subjects: container.subjects || null,
             defense: container.defense || 'soft',
             squeezing: container.squeezing || 'p1_only',
+            layer: container.layer ?? null,
             enabled: true,
             google_calendar_event_id: null,
             created_at: now,
