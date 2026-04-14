@@ -208,6 +208,50 @@
         };
     }
 
+    /**
+     * 幂等初始化默认容器（仅当容器表为空时写入）
+     * 依赖外部传入的 db 对象（TimeWhereDB），避免循环依赖
+     * @param {Object} db - TimeWhereDB 实例
+     */
+    async function initDefaultContainers(db) {
+        const containers = await db.getContainers();
+        if (containers && containers.length > 0) return;
+
+        await db.addContainer({
+            name: '自由时间',
+            color: '#7B68EE',
+            time_start: '15:30',
+            time_end: '18:30',
+            repeat: 'daily',
+            layer: 2,
+            task_types: ['homework', 'test', 'ia', 'notes', 'review', 'project', 'other'],
+            defense: 'soft',
+            squeezing: 'p1_p2'
+        });
+        await db.addContainer({
+            name: '学习时间',
+            color: '#4A90D9',
+            time_start: '18:30',
+            time_end: '21:30',
+            repeat: 'weekday',
+            layer: 1,
+            task_types: ['homework', 'test', 'ia', 'notes', 'review'],
+            defense: 'soft',
+            squeezing: 'p1_only'
+        });
+        await db.addContainer({
+            name: '自由时间',
+            color: '#7B68EE',
+            time_start: '21:30',
+            time_end: '22:30',
+            repeat: 'daily',
+            layer: 2,
+            task_types: ['homework', 'test', 'ia', 'notes', 'review', 'project', 'other'],
+            defense: 'soft',
+            squeezing: 'p1_p2'
+        });
+    }
+
     // 导出
     global.TimeWhereScheduling = {
         timeToMinutes,
@@ -219,6 +263,7 @@
         getContainerLayer,
         getContainerCapacity,
         dailySettle,
+        initDefaultContainers,
         _nthWeekdayOfMonth
     };
 })(typeof window !== 'undefined' ? window : this);

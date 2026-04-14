@@ -1,67 +1,8 @@
-console.log('[Calendar] script.js loaded');
-
 let currentView = 'week';
 let currentDate = new Date();
 const TIME_RANGE = { startHour: 6, endHour: 22, pxPerHour: 40 };
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('[Calendar] DOMContentLoaded fired');
-    
-    // Debug: Query database in DOMContentLoaded
-    if (typeof TimeWhereDB !== 'undefined') {
-        console.log('[DEBUG] === DATABASE CONTENTS ===');
-        
-        const allContainers = await TimeWhereDB.getContainers({});
-        console.log('[DEBUG] Containers (all):', allContainers.slice(0, 20));
-        
-        const enabledContainers = await TimeWhereDB.getContainers({ enabled: true });
-        console.log('[DEBUG] Containers (enabled only):', enabledContainers.slice(0, 20));
-        
-        const allEvents = await TimeWhereDB.db.events.toArray();
-        console.log('[DEBUG] Events (first 20):', allEvents.slice(0, 20));
-        
-        console.log('[DEBUG] === END DATABASE ===');
-        
-        // DEBUG: Seed test data if no data
-        if (allContainers.length === 0 && allEvents.length === 0) {
-            console.log('[DEBUG] Seeding test data...');
-            await TimeWhereDB.addContainer({
-                name: '早自习',
-                color: '#4A90D9',
-                time_start: '07:00',
-                time_end: '08:00',
-                repeat: 'daily',
-                enabled: true
-            });
-            await TimeWhereDB.addContainer({
-                name: '数学课',
-                color: '#E74C3C',
-                time_start: '09:00',
-                time_end: '10:30',
-                repeat: 'weekday',
-                enabled: true
-            });
-            const today = new Date().toISOString().split('T')[0];
-            await TimeWhereDB.addEvent({
-                title: '会议A',
-                date: today,
-                time_start: '14:00',
-                time_end: '15:00',
-                color: '#27AE60'
-            });
-            await TimeWhereDB.addEvent({
-                title: '会议B',
-                date: today,
-                time_start: '14:30',
-                time_end: '15:30',
-                color: '#F39C12'
-            });
-            console.log('[DEBUG] Test data seeded. Please refresh.');
-        }
-    } else {
-        console.log('[DEBUG] TimeWhereDB not defined!');
-    }
-    
     await initApp();
     setupCalendar();
     checkInitMode();

@@ -22,9 +22,9 @@ async function initApp() {
     }
     // 确保默认容器存在
     try {
-        await ensureDefaultContainers();
+        await TimeWhereScheduling.initDefaultContainers(TimeWhereDB);
     } catch(e) {
-        console.error('ensureDefaultContainers failed:', e);
+        console.error('initDefaultContainers failed:', e);
     }
     await loadDashboardData();
 }
@@ -111,55 +111,6 @@ function getWeekBounds() {
 }
 
 const WEEKDAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-
-// ============================================================
-// 默认容器初始化
-// ============================================================
-
-async function ensureDefaultContainers() {
-    const containers = await TimeWhereDB.getContainers();
-    if (containers && containers.length > 0) return;
-
-    console.log('[Focus] Creating default containers...');
-
-    await TimeWhereDB.addContainer({
-        name: '自由时间',
-        color: '#7B68EE',
-        time_start: '15:30',
-        time_end: '18:30',
-        repeat: 'daily',
-        layer: 2,
-        task_types: ['homework', 'test', 'ia', 'notes', 'review', 'project', 'other'],
-        defense: 'soft',
-        squeezing: 'p1_p2'
-    });
-
-    await TimeWhereDB.addContainer({
-        name: '学习时间',
-        color: '#4A90D9',
-        time_start: '18:30',
-        time_end: '21:30',
-        repeat: 'weekday',
-        layer: 1,
-        task_types: ['homework', 'test', 'ia', 'notes', 'review'],
-        defense: 'soft',
-        squeezing: 'p1_only'
-    });
-
-    await TimeWhereDB.addContainer({
-        name: '自由时间',
-        color: '#7B68EE',
-        time_start: '21:30',
-        time_end: '22:30',
-        repeat: 'daily',
-        layer: 2,
-        task_types: ['homework', 'test', 'ia', 'notes', 'review', 'project', 'other'],
-        defense: 'soft',
-        squeezing: 'p1_p2'
-    });
-
-    console.log('[Focus] Default containers created.');
-}
 
 // ============================================================
 // 第 1 列：当下任务
