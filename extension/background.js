@@ -14,6 +14,8 @@ async function initializeOnFirstInstall() {
     try {
         const response = await fetch(chrome.runtime.getURL('shared/js/db.js'));
         if (response.ok) {
+            console.log('TimeWhere: Extension installed successfully');
+        }
     } catch (e) {
         console.error('TimeWhere: Failed to initialize', e);
     }

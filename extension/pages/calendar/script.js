@@ -50,6 +50,10 @@ async function checkCalendarEmptyState() {
     const monthView = document.getElementById('monthView');
     if (!emptyEl) return;
 
+    // CSP-safe click handler (replaces inline onclick)
+    emptyEl.onclick = () => { window.location.href = '../settings/settings.html'; };
+    emptyEl.style.cursor = 'pointer';
+
     const containers = await TimeWhereDB.getContainers({ enabled: true });
     const events = await TimeWhereDB.db.events.count();
     const hasData = (containers && containers.length > 0) || events > 0;

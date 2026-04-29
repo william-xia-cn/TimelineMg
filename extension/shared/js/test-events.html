@@ -21,7 +21,7 @@
 </head>
 <body>
     <h1>Events 数据库测试</h1>
-    <button onclick="runAllTests()">运行全部测试</button>
+    <button id="runTestsBtn">运行全部测试</button>
     <div id="results"></div>
     <div id="output"></div>
 
@@ -161,6 +161,10 @@
 
             log(`\n=== 测试完成: ${passCount}/${results.length} 通过 ===`);
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('runTestsBtn').addEventListener('click', runAllTests);
+        });
     </script>
 </body>
 </html>
