@@ -2,6 +2,13 @@ let currentView = 'week';
 let currentDate = new Date();
 const TIME_RANGE = { startHour: 6, endHour: 22, pxPerHour: 40 };
 
+function formatDateISO(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     await initApp();
     setupCalendar();
@@ -89,14 +96,14 @@ async function renderAlldayRow(dates) {
     if (!grid) return;
     grid.innerHTML = '';
 
-    const weekStart = dates[0].toISOString().split('T')[0];
-    const weekEnd   = dates[dates.length - 1].toISOString().split('T')[0];
+    const weekStart = formatDateISO(dates[0]);
+    const weekEnd   = formatDateISO(dates[dates.length - 1]);
     const dbEvents  = (await TimeWhereDB.getEventsByDateRange(weekStart, weekEnd)) || [];
 
     dates.forEach(date => {
         const wrapper = document.createElement('div');
         wrapper.className = 'allday-wrapper';
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = formatDateISO(date);
 
         const alldayEvents = dbEvents.filter(e =>
             e.date === dateStr && (!e.time_start && !e.time_end)
@@ -177,8 +184,8 @@ async function renderWeekColumns(dates) {
     container.innerHTML = '';
 
     const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
-    const weekStart = dates[0].toISOString().split('T')[0];
-    const weekEnd = dates[6].toISOString().split('T')[0];
+    const weekStart = formatDateISO(dates[0]);
+    const weekEnd = formatDateISO(dates[6]);
     const dbEvents = (await TimeWhereDB.getEventsByDateRange(weekStart, weekEnd)) || [];
 
     // 加载任务，用于 Daily Settle
@@ -188,7 +195,7 @@ async function renderWeekColumns(dates) {
         const col = document.createElement('div');
         col.className = 'day-col';
         col.id = `col-${index}`;
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = formatDateISO(date);
         col.dataset.date = dateStr;
 
         const dayOfWeek = date.getDay();
@@ -507,7 +514,7 @@ function renderMonthView() {
         
         const cell = document.createElement('div');
         cell.className = 'month-cell';
-        cell.dataset.date = date.toISOString().split('T')[0];
+        cell.dataset.date = formatDateISO(date);
         
         const isCurrentMonth = date.getMonth() === month;
         if (!isCurrentMonth) cell.classList.add('other-month');
@@ -535,8 +542,8 @@ async function renderMonthEvents() {
     const totalDays = Math.ceil((lastDay - startDate) / (1000 * 60 * 60 * 24));
 
     // Use full visible range (including overflow days into adjacent months)
-    const visStart = startDate.toISOString().split('T')[0];
-    const visEnd = new Date(startDate.getTime() + (totalDays - 1) * 86400000).toISOString().split('T')[0];
+    const visStart = formatDateISO(startDate);
+    const visEnd = formatDateISO(new Date(startDate.getTime() + (totalDays - 1) * 86400000));
 
     const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
     const dbEvents = (await TimeWhereDB.getEventsByDateRange(visStart, visEnd)) || [];
@@ -549,7 +556,7 @@ async function renderMonthEvents() {
         const dayOfWeek = date.getDay();
         const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = formatDateISO(date);
 
         // Override/skip filtering (same logic as renderWeekColumns)
         const dayOverrides = dbEvents.filter(e => e.date === dateStr &&
@@ -848,7 +855,7 @@ function setupCalendar() {
         const startOfWeek = getStartOfWeek(currentDate);
         const date = new Date(startOfWeek);
         date.setDate(date.getDate() + idx);
-        openEditModal(type, id, date.toISOString().split('T')[0]);
+        openEditModal(type, id, formatDateISO(date));
     });
 
     document.getElementById('monthGrid')?.addEventListener('click', (e) => {
@@ -1105,7 +1112,7 @@ async function _renderModal({ date, timeStart, timeEnd }) {
     let bodyHTML = typeToggle;
 
     if (isContainer) {
-        const refDate = _modal.date || date || new Date().toISOString().split('T')[0];
+        const refDate = _modal.date || date || formatDateISO(new Date());
         const repeat = data?.repeat || 'weekday';
         const repeatDays = data?.repeat_days || [];
         const customDisplay = repeat === 'custom' ? '' : 'display:none';

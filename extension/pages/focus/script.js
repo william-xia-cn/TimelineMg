@@ -5,6 +5,13 @@
 
 const PX_PER_HOUR = 40;
 
+function formatDateISO(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     await initApp();
     setupEventListeners();
@@ -69,8 +76,8 @@ function formatDate(dateStr) {
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const todayStr = today.toISOString().split('T')[0];
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const todayStr = formatDateISO(today);
+    const tomorrowStr = formatDateISO(tomorrow);
 
     if (dateStr === todayStr) return '今天';
     if (dateStr === tomorrowStr) return '明天';
@@ -113,8 +120,8 @@ function getWeekBounds() {
     sunday.setDate(monday.getDate() + 6);
     sunday.setHours(23, 59, 59, 999);
     return {
-        start: monday.toISOString().split('T')[0],
-        end: sunday.toISOString().split('T')[0],
+        start: formatDateISO(monday),
+        end: formatDateISO(sunday),
         startDate: monday,
         endDate: sunday
     };
@@ -131,7 +138,7 @@ async function loadTaskColumn() {
     if (!section) return;
 
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = formatDateISO(now);
 
     // 构建当日任务池：start_date <= today 或 null，且未完成，且未延后到未来
     const allTasks = await TimeWhereDB.getAllTasks();
@@ -289,7 +296,7 @@ async function deferTask(taskId, days) {
     const today = new Date();
     const target = new Date(today);
     target.setDate(today.getDate() + days);
-    const targetStr = target.toISOString().split('T')[0];
+    const targetStr = formatDateISO(target);
     await TimeWhereDB.updateTask(taskId, { start_date: targetStr });
     await loadDashboardData();
     showToast(`任务已延后 ${days} 天`, 'info');
@@ -311,8 +318,8 @@ async function loadCalendarColumn() {
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
-    const todayStr = today.toISOString().split('T')[0];
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const todayStr = formatDateISO(today);
+    const tomorrowStr = formatDateISO(tomorrow);
 
     // 更新日期头部
     const dateDisplay = document.getElementById('cal-date-range');
@@ -532,8 +539,8 @@ async function loadFeedColumn() {
     if (!section) return;
 
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    const tomorrowStr = new Date(today.getTime() + 86400000).toISOString().split('T')[0];
+    const todayStr = formatDateISO(today);
+    const tomorrowStr = formatDateISO(new Date(today.getTime() + 86400000));
     const dayOfWeek = today.getDay();
 
     const allTasks = await TimeWhereDB.getAllTasks();
@@ -820,7 +827,7 @@ async function saveNewTask() {
         return;
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = formatDateISO(new Date());
     await TimeWhereDB.addTask({
         title,
         priority,

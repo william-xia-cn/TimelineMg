@@ -507,7 +507,9 @@ async function exportData() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `timewhere_backup_${new Date().toISOString().split('T')[0]}.json`;
+        const d = new Date();
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        a.download = `timewhere_backup_${dateStr}.json`;
         a.click();
         URL.revokeObjectURL(url);
         showToast('数据已导出', 'success');

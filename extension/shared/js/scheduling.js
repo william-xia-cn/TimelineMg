@@ -6,6 +6,13 @@
 (function (global) {
     'use strict';
 
+    function formatDateISO(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
     function timeToMinutes(timeStr) {
         if (!timeStr) return 0;
         const [h, m] = String(timeStr).split(':').map(Number);
@@ -74,7 +81,7 @@
      * 便捷封装：给 Date 对象，内部推导 dateStr/dayOfWeek/isWeekday/isWeekend
      */
     function containerAppliesOn(c, date) {
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = formatDateISO(date);
         const dayOfWeek = date.getDay();
         const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
@@ -109,7 +116,7 @@
      * @returns {{ result, activeContainer, containerInfo, currentTasks, unassigned, sortedPool, allContainers }}
      */
     function dailySettle(taskPool, todayContainers, now) {
-        const todayStr = now.toISOString().split('T')[0];
+        const todayStr = formatDateISO(now);
         const nowMin = now.getHours() * 60 + now.getMinutes();
 
         // === Step 1: 排序任务池 ===
@@ -259,7 +266,7 @@
      * @returns {{ arranged: number, skipped: number, errors: Array, today: string }}
      */
     async function arrangeTasks(db, referenceDate) {
-        const todayStr = referenceDate || new Date().toISOString().split('T')[0];
+        const todayStr = referenceDate || formatDateISO(new Date());
 
         const allTasks = await db.getAllTasks();
         const incompleteTasks = allTasks.filter(t => t.progress !== 'completed');

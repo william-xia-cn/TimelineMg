@@ -161,7 +161,7 @@ function createTaskCardHTML(task) {
 
     // Due date + status labels
     let dueDateHTML = '';
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = formatDateISO(new Date());
     if (task.due_date) {
         const isOverdue = task.due_date < todayStr;
         const isDueToday = task.due_date === todayStr;
@@ -333,7 +333,7 @@ function createTaskListRowHTML(task) {
     }
 
     let dueHTML = '';
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = formatDateISO(new Date());
     if (task.due_date) {
         const cls = task.due_date < todayStr ? 'text-red' : (task.due_date === todayStr ? 'text-orange' : '');
         dueHTML = `<span class="task-list-due ${cls}">${formatDueDate(task.due_date)}</span>`;

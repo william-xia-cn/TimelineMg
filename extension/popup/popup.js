@@ -3,6 +3,13 @@ window.addEventListener('unhandledrejection', (event) => {
     console.warn('Unhandled promise rejection:', event.reason);
 });
 
+function formatDateISO(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         await initApp();
@@ -45,7 +52,7 @@ async function loadCurrentTask() {
     }
 
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
+    const todayStr = formatDateISO(now);
     const dayOfWeek = now.getDay();
     const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
@@ -133,8 +140,8 @@ function formatDate(dateStr) {
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
     
-    const todayStr = today.toISOString().split('T')[0];
-    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const todayStr = formatDateISO(today);
+    const tomorrowStr = formatDateISO(tomorrow);
     
     if (dateStr === todayStr) return '今天';
     if (dateStr === tomorrowStr) return '明天';
@@ -179,7 +186,7 @@ function setupEventListeners() {
 
             // 用 Daily Settle 获取当前任务（与 loadCurrentTask 保持一致）
             const now = new Date();
-            const todayStr = now.toISOString().split('T')[0];
+            const todayStr = formatDateISO(now);
             const dayOfWeek = now.getDay();
             const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
             const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;

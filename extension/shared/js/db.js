@@ -102,6 +102,13 @@ const TimeWhereDB = {
 
     getNowISO: () => new Date().toISOString(),
 
+    formatDateISO(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    },
+
     // ========== Plans ==========
     async getPlans() {
         return await db.plans.orderBy('created_at').toArray();
@@ -304,7 +311,7 @@ const TimeWhereDB = {
             bucket_id: task.bucket_id || null,
             progress: progressVal,
             priority: task.priority || 'medium',
-            start_date: task.start_date || new Date().toISOString().split('T')[0],
+            start_date: task.start_date || this.formatDateISO(new Date()),
             due_date: task.due_date || null,
             labels: task.labels || [],
             notes: task.notes || '',
@@ -382,7 +389,7 @@ const TimeWhereDB = {
     },
 
     async getTodayCompletedCount() {
-        const today = new Date().toISOString().split('T')[0];
+        const today = this.formatDateISO(new Date());
         const allTasks = await db.tasks.toArray();
         return allTasks.filter(t => t.completed_at && t.completed_at.startsWith(today)).length;
     },
@@ -491,7 +498,7 @@ const TimeWhereDB = {
         const newEvent = {
             id: this.generateId(),
             title: event.title || '新事件',
-            date: event.date || new Date().toISOString().split('T')[0],
+            date: event.date || this.formatDateISO(new Date()),
             time_start: event.time_start || '09:00',
             time_end: event.time_end || '10:00',
             color: event.color || '#4A90D9',
@@ -580,7 +587,7 @@ const TimeWhereDB = {
         if (lastCompleted !== today) {
             const yesterday = new Date();
             yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = yesterday.toISOString().split('T')[0];
+            const yesterdayStr = this.formatDateISO(yesterday);
             
             if (lastCompleted === yesterdayStr) {
                 newStreak = habit.streak + 1;
