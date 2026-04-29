@@ -333,7 +333,7 @@
                     <!-- Wizard View Content (初始化向导) -->
                 <div id="wizardView" class="wizard-view">
                     <div class="wizard-steps">
-                        <div class="step active" id="wizardStepIndicator1">1<span class="step-label">授权</span></div>
+                        <div class="step active" id="wizardStepIndicator1">1<span class="step-label">欢迎</span></div>
                         <div class="step" id="wizardStepIndicator2">2<span class="step-label">日程</span></div>
                         <div class="step" id="wizardStepIndicator3">3<span class="step-label">任务</span></div>
                         <div class="step" id="wizardStepIndicator4">4<span class="step-label">完成</span></div>
@@ -341,12 +341,11 @@
 
                     <div class="wizard-content" id="wizardStepContent" style="padding-bottom: 20px;">
                         <div id="wizardStep1">
-                            <span class="material-symbols-outlined" style="font-size: 64px; color: var(--accent); margin-bottom: 16px;">key</span>
-                            <h2>授权 Google 账号</h2>
-                            <p>TimeWhere 需要访问您的 Google 日历和云端硬盘。</p>
+                            <span class="material-symbols-outlined" style="font-size: 64px; color: var(--accent); margin-bottom: 16px;">change_history</span>
+                            <h2>欢迎使用 TimeWhere</h2>
+                            <p style="max-width: 400px; margin: 0 auto;">专为 IB 学生打造的时间管理与任务规划工具。让我们用几分钟完成初始设置。</p>
                             <div style="margin-top: 24px;">
-                                <button class="wizard-btn primary" id="authBtn">立即授权</button>
-                                <p style="font-size: 11px; margin-top: 12px; color: var(--text-sub);">我们将确保您的数据安全且仅用于系统功能。</p>
+                                <button class="wizard-btn primary" id="wizardNextBtnAlt">开始设置</button>
                             </div>
                         </div>
                         <div id="wizardStep2" style="display: none;">

@@ -31,10 +31,19 @@ async function initDatabase() {
 }
 
 async function checkAndShowWizard() {
-    document.getElementById('settingsView').style.display = 'block';
-    document.getElementById('wizardView').style.display = 'none';
-    document.getElementById('wizardFooter').style.display = 'none';
-    document.getElementById('saveBtn').style.display = 'block';
+    const initialized = await TimeWhereDB.getSetting('initialized');
+    if (!initialized) {
+        // Show wizard for first-time users
+        document.getElementById('settingsView').style.display = 'none';
+        document.getElementById('wizardView').style.display = 'block';
+        document.getElementById('wizardFooter').style.display = 'flex';
+        document.getElementById('saveBtn').style.display = 'none';
+    } else {
+        document.getElementById('settingsView').style.display = 'block';
+        document.getElementById('wizardView').style.display = 'none';
+        document.getElementById('wizardFooter').style.display = 'none';
+        document.getElementById('saveBtn').style.display = 'block';
+    }
 }
 
 async function loadSettings() {
@@ -503,49 +512,48 @@ function setupWizardEvents() {
         if (currentStep === 2) {
             const initContainer = document.getElementById('initContainer')?.checked;
             const initTimetable = document.getElementById('initTimetable')?.checked;
-            
-            if (initContainer || initTimetable) {
-                localStorage.setItem('wizard_init_container', initContainer);
-                localStorage.setItem('wizard_init_timetable', initTimetable);
-                window.location.href = '../calendar/calendar.html?init=true';
-                return;
+
+            if (initContainer) {
+                await TimeWhereScheduling.initDefaultContainers(TimeWhereDB);
+                showToast('默认容器已创建', 'success');
+            }
+
+            if (initTimetable) {
+                const importArea = document.getElementById('importArea');
+                if (importArea) importArea.style.display = 'block';
+                showToast('请在下方导入课表', 'info');
             }
         }
-        
-        if (currentStep === 3) {
-            // 任务初始化步骤，暂时跳过
-        }
-        
+
         if (currentStep < totalSteps) {
             currentStep++;
             updateWizardUI();
         }
     });
-    
+
     document.getElementById('wizardPrevBtn').addEventListener('click', () => {
         if (currentStep > 1) {
             currentStep--;
             updateWizardUI();
         }
     });
-    
-    document.getElementById('authBtn').addEventListener('click', async () => {
-        await handleGoogleAuth();
+
+    document.getElementById('wizardNextBtnAlt')?.addEventListener('click', () => {
+        currentStep = 2;
+        updateWizardUI();
     });
-    
+
     document.getElementById('skipScheduleBtn')?.addEventListener('click', async () => {
-        localStorage.setItem('wizard_init_container', false);
-        localStorage.setItem('wizard_init_timetable', false);
         currentStep = 3;
         updateWizardUI();
     });
-    
+
     document.getElementById('skipTaskInitBtn')?.addEventListener('click', async () => {
         currentStep = 4;
         updateWizardUI();
     });
-    
-    document.getElementById('wizardFinishBtn')?.addEventListener('click', async () => {
+
+    document.getElementById('wizardFinishBtn').addEventListener('click', async () => {
         await TimeWhereDB.setSetting('initialized', true);
         await TimeWhereDB.setSetting('first_launch', new Date().toISOString());
         window.location.href = '../focus/focus.html';
