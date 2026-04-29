@@ -1139,3 +1139,79 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
     font-size: 13px;
     margin-bottom: 12px;
 }
+
+/* ==================
+   Pomodoro Widget
+   ================== */
+.pomodoro-widget {
+    background: var(--card-bg);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    margin: 0 12px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid white;
+    gap: 10px;
+}
+.pomo-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+.pomo-info .material-symbols-outlined {
+    font-size: 20px;
+    color: var(--accent);
+}
+.pomo-time {
+    font-size: 20px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-main);
+    min-width: 60px;
+}
+.pomo-mode {
+    font-size: 11px;
+    color: var(--text-sub);
+    font-weight: 500;
+    padding: 2px 8px;
+    background: rgba(0,0,0,0.04);
+    border-radius: 20px;
+    white-space: nowrap;
+}
+.pomo-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+.pomo-btn {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border-stroke);
+    background: white;
+    color: var(--text-main);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.pomo-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+}
+.pomo-btn.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+.pomo-btn.secondary {
+    background: transparent;
+    color: var(--text-sub);
+    border-color: transparent;
+}
+.pomo-btn.secondary:hover {
+    background: rgba(0,0,0,0.04);
+    box-shadow: none;
+}

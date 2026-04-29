@@ -36,6 +36,7 @@ async function initApp() {
         console.error('Auto arrange failed:', e);
     }
     await loadDashboardData();
+    await initPomodoro();
 }
 
 async function loadDashboardData() {
@@ -678,6 +679,11 @@ function setupEventListeners() {
             }
         });
     }
+
+    const pomoToggle = document.getElementById('pomoToggle');
+    const pomoReset = document.getElementById('pomoReset');
+    if (pomoToggle) pomoToggle.addEventListener('click', togglePomodoro);
+    if (pomoReset) pomoReset.addEventListener('click', resetPomodoro);
 }
 
 function openAddTaskModal() {
@@ -782,6 +788,121 @@ function showToast(message, type = 'info') {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
     }, 3000);
+}
+
+// ============================================================
+// Pomodoro Timer
+// ============================================================
+
+let pomoState = {
+    mode: 'work',
+    remaining: 25 * 60,
+    isRunning: false,
+    completedSessions: 0,
+    intervalId: null
+};
+
+let pomoSettings = {
+    work: 25,
+    break: 5,
+    longBreak: 15,
+    interval: 4
+};
+
+async function initPomodoro() {
+    const settings = await TimeWhereDB.getSettings();
+    pomoSettings.work = settings.pomodoro_work || 25;
+    pomoSettings.break = settings.pomodoro_break || 5;
+    pomoSettings.longBreak = settings.pomodoro_long_break || 15;
+    pomoSettings.interval = settings.pomodoro_interval || 4;
+
+    pomoState.remaining = pomoSettings.work * 60;
+    renderPomodoro();
+
+    const widget = document.getElementById('pomodoroWidget');
+    if (widget) widget.style.display = 'flex';
+}
+
+function renderPomodoro() {
+    const timeEl = document.getElementById('pomoTime');
+    const modeEl = document.getElementById('pomoMode');
+    const toggleBtn = document.getElementById('pomoToggle');
+
+    if (!timeEl) return;
+
+    const m = Math.floor(pomoState.remaining / 60).toString().padStart(2, '0');
+    const s = (pomoState.remaining % 60).toString().padStart(2, '0');
+    timeEl.textContent = `${m}:${s}`;
+
+    const modeLabels = { work: '专注中', break: '短休息', longBreak: '长休息' };
+    modeEl.textContent = modeLabels[pomoState.mode] || '准备开始';
+
+    if (toggleBtn) {
+        toggleBtn.textContent = pomoState.isRunning ? '暂停' : '开始';
+        toggleBtn.classList.toggle('active', pomoState.isRunning);
+    }
+}
+
+function startPomodoro() {
+    if (pomoState.isRunning) return;
+    pomoState.isRunning = true;
+    renderPomodoro();
+    pomoState.intervalId = setInterval(tickPomodoro, 1000);
+}
+
+function pausePomodoro() {
+    pomoState.isRunning = false;
+    if (pomoState.intervalId) {
+        clearInterval(pomoState.intervalId);
+        pomoState.intervalId = null;
+    }
+    renderPomodoro();
+}
+
+function togglePomodoro() {
+    if (pomoState.isRunning) {
+        pausePomodoro();
+    } else {
+        startPomodoro();
+    }
+}
+
+function resetPomodoro() {
+    pausePomodoro();
+    pomoState.mode = 'work';
+    pomoState.remaining = pomoSettings.work * 60;
+    renderPomodoro();
+}
+
+function tickPomodoro() {
+    pomoState.remaining--;
+    if (pomoState.remaining <= 0) {
+        completePomodoroSession();
+    } else {
+        renderPomodoro();
+    }
+}
+
+function completePomodoroSession() {
+    pausePomodoro();
+
+    if (pomoState.mode === 'work') {
+        pomoState.completedSessions++;
+        if (pomoState.completedSessions % pomoSettings.interval === 0) {
+            pomoState.mode = 'longBreak';
+            pomoState.remaining = pomoSettings.longBreak * 60;
+            showToast('专注完成！进入长休息', 'success');
+        } else {
+            pomoState.mode = 'break';
+            pomoState.remaining = pomoSettings.break * 60;
+            showToast('专注完成！休息一下吧', 'success');
+        }
+    } else {
+        pomoState.mode = 'work';
+        pomoState.remaining = pomoSettings.work * 60;
+        showToast('休息结束！继续专注', 'info');
+    }
+    renderPomodoro();
 }
 
 // ============================================================
