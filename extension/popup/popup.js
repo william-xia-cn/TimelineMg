@@ -54,7 +54,8 @@ async function loadCurrentTask() {
     const allTasks = await TimeWhereDB.getAllTasks();
     const taskPool = allTasks.filter(t =>
         t.progress !== 'completed' &&
-        t.start_date && t.start_date <= todayStr
+        t.start_date && t.start_date <= todayStr &&
+        (t.deferred_until == null || new Date(t.deferred_until) <= now)
     );
 
     // 获取今日生效容器
@@ -183,14 +184,17 @@ function setupEventListeners() {
             const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
             const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
             const allTasks = await TimeWhereDB.getAllTasks();
-            const taskPool = allTasks.filter(t => t.progress !== 'completed' && t.start_date && t.start_date <= todayStr);
+            const taskPool = allTasks.filter(t =>
+                t.progress !== 'completed' && t.start_date && t.start_date <= todayStr &&
+                (t.deferred_until == null || new Date(t.deferred_until) <= now)
+            );
             const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
             const todayContainers = allContainers.filter(c =>
                 TimeWhereScheduling.containerAppliesToDate(c, now, todayStr, dayOfWeek, isWeekday, isWeekend)
             );
             const { currentTasks, sortedPool } = TimeWhereScheduling.dailySettle(taskPool, todayContainers, now);
             const task = currentTasks[0] || sortedPool[0] || null;
-            
+
             if (btn.id === 'btnStart' && task) {
                 showToast('继续任务', 'info');
             } else if (btn.id === 'btnComplete' && task) {

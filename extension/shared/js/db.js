@@ -312,6 +312,7 @@ const TimeWhereDB = {
             schedule_time: task.schedule_time || null,
             duration: task.duration || 45,
             subject: subject,
+            deferred_until: task.deferred_until || null,
             completed_at: null,
             google_task_id: null,
             created_at: now,

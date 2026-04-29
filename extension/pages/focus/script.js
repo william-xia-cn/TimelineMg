@@ -133,11 +133,12 @@ async function loadTaskColumn() {
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
 
-    // 构建当日任务池：start_date <= today 或 null，且未完成
+    // 构建当日任务池：start_date <= today 或 null，且未完成，且未延后到未来
     const allTasks = await TimeWhereDB.getAllTasks();
     const taskPool = allTasks.filter(t =>
         t.progress !== 'completed' &&
-        (t.start_date == null || t.start_date <= todayStr)
+        (t.start_date == null || t.start_date <= todayStr) &&
+        (t.deferred_until == null || new Date(t.deferred_until) <= now)
     );
 
     // 获取今日容器
@@ -234,6 +235,8 @@ function createTaskCard(task, opts = {}) {
     const deferHtml = `
         <div class="defer-row">
             <span class="defer-label">延后</span>
+            <button class="btn-defer" onclick="deferTaskHours('${task.id}', 1)">1h</button>
+            <button class="btn-defer" onclick="deferTaskHours('${task.id}', 3)">3h</button>
             <button class="btn-defer" onclick="deferTask('${task.id}', 1)">1天</button>
             <button class="btn-defer" onclick="deferTask('${task.id}', 3)">3天</button>
             <button class="btn-defer" onclick="deferTask('${task.id}', 7)">7天</button>
@@ -290,6 +293,14 @@ async function deferTask(taskId, days) {
     await TimeWhereDB.updateTask(taskId, { start_date: targetStr });
     await loadDashboardData();
     showToast(`任务已延后 ${days} 天`, 'info');
+}
+
+async function deferTaskHours(taskId, hours) {
+    const now = new Date();
+    const target = new Date(now.getTime() + hours * 60 * 60 * 1000);
+    await TimeWhereDB.updateTask(taskId, { deferred_until: target.toISOString() });
+    await loadDashboardData();
+    showToast(`任务已延后 ${hours} 小时`, 'info');
 }
 
 // ============================================================
@@ -913,6 +924,7 @@ window.startTaskNow = startTaskNow;
 window.pauseTask = pauseTask;
 window.completeTaskNow = completeTaskNow;
 window.deferTask = deferTask;
+window.deferTaskHours = deferTaskHours;
 window.toggleWeekTask = toggleWeekTask;
 window.openAddTaskModal = openAddTaskModal;
 window.closeAddTaskModal = closeAddTaskModal;
