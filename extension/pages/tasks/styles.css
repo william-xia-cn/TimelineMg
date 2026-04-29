@@ -1374,3 +1374,43 @@ body::before {
     gap: 4px;
     flex-shrink: 0;
 }
+
+/* ====================
+   15. Responsive
+   ==================== */
+@media (max-width: 1200px) {
+    .context-sidebar {
+        width: 200px;
+    }
+    .kanban-board {
+        min-width: 600px;
+    }
+}
+
+@media (max-width: 900px) {
+    .app-layout {
+        overflow-x: auto;
+    }
+    .context-sidebar {
+        width: 180px;
+        min-width: 180px;
+    }
+    .main-content {
+        min-width: 500px;
+    }
+    .kanban-board {
+        min-width: 500px;
+    }
+}
+
+@media (max-width: 768px) {
+    .board-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    .board-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}

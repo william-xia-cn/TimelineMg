@@ -1476,3 +1476,26 @@ body::before {
     accent-color: var(--primary);
     cursor: pointer;
 }
+
+/* ====================
+   Responsive
+   ==================== */
+@media (max-width: 1200px) {
+    .calendar-container {
+        min-width: 700px;
+    }
+}
+
+@media (max-width: 900px) {
+    .main-content {
+        min-width: 600px;
+    }
+    .calendar-toolbar {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .toolbar-left, .toolbar-right {
+        width: 100%;
+        justify-content: space-between;
+    }
+}

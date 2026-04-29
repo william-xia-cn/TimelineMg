@@ -1304,3 +1304,51 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
     gap: 10px;
     padding: 0 12px 12px;
 }
+
+/* ==================
+   Responsive
+   ================== */
+@media (max-width: 1400px) {
+    .board-column {
+        width: 240px;
+    }
+    .board-column.double-width {
+        width: 420px;
+    }
+    .board-column.column-feed {
+        width: 260px;
+    }
+}
+
+@media (max-width: 1200px) {
+    .board-column {
+        width: 220px;
+        padding: 12px;
+    }
+    .board-column.double-width {
+        width: 380px;
+    }
+    .board-column.column-feed {
+        width: 240px;
+    }
+}
+
+@media (max-width: 900px) {
+    .board-layout {
+        flex-wrap: wrap;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+    .board-column {
+        width: calc(50% - 6px);
+        min-width: 280px;
+        flex: 1 1 auto;
+    }
+    .board-column.double-width {
+        width: 100%;
+        order: -1;
+    }
+    .board-column.column-feed {
+        width: 100%;
+    }
+}
