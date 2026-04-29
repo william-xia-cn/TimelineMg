@@ -225,4 +225,3 @@ function showDeletePlanDialog(plan) {
     });
 }
 
-console.log('[Sidebar] Sidebar module loaded');

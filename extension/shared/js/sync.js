@@ -221,7 +221,6 @@ const SyncEngine = {
         }
 
         if (!this.accessToken) {
-            console.log('TimeWhere: Not signed in');
             return { success: false, reason: 'not_signed_in' };
         }
 

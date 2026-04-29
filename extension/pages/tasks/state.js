@@ -41,7 +41,6 @@ window.TaskApp = {
         this.currentPlanBuckets = buckets;
         this.currentPlanLabels = labels;
         this.currentPlanTasks = tasks;
-        console.log('[TaskApp] Loaded plan', planId, ':', tasks.length, 'tasks,', buckets.length, 'buckets,', labels.length, 'labels');
     },
 
     async loadMyDay() {
@@ -73,8 +72,6 @@ window.TaskApp = {
             if (!t.due_date) return false;
             return t.due_date <= todayStr; // Today + overdue
         });
-
-        console.log('[TaskApp] My Day loaded:', this.currentPlanTasks.length, 'tasks');
     },
 
     async loadMyTasks() {
@@ -98,7 +95,6 @@ window.TaskApp = {
 
         // All tasks from all plans
         this.currentPlanTasks = await TimeWhereDB.getAllTasks();
-        console.log('[TaskApp] My Tasks loaded:', this.currentPlanTasks.length, 'tasks');
     },
 
     async refresh() {
@@ -217,4 +213,3 @@ if (typeof formatDateISO !== 'function') {
     };
 }
 
-console.log('[TaskApp] State module loaded');

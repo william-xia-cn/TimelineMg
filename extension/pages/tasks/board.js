@@ -580,4 +580,3 @@ function showToast(message, type = 'info') {
     }, 2500);
 }
 
-console.log('[Board] Board module loaded');

@@ -401,4 +401,3 @@ function showGroupByMenu() {
     }, 10);
 }
 
-console.log('[Dialogs] Dialogs module loaded');

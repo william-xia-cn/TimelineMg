@@ -326,4 +326,3 @@ function wireDetailPanelEvents(taskId) {
     });
 }
 
-console.log('[DetailPanel] Detail panel module loaded');

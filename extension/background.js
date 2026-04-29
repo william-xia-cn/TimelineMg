@@ -5,8 +5,6 @@
  */
 
 chrome.runtime.onInstalled.addListener(async (details) => {
-    console.log('TimeWhere Extension Installed', details.reason);
-    
     if (details.reason === 'install') {
         await initializeOnFirstInstall();
     }
@@ -16,8 +14,6 @@ async function initializeOnFirstInstall() {
     try {
         const response = await fetch(chrome.runtime.getURL('shared/js/db.js'));
         if (response.ok) {
-            console.log('TimeWhere: Database ready for initialization');
-        }
     } catch (e) {
         console.error('TimeWhere: Failed to initialize', e);
     }
@@ -29,7 +25,6 @@ chrome.alarms.create('syncAlarm', {
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === 'syncAlarm') {
-        console.log('TimeWhere: Sync alarm triggered');
         await performBackgroundSync();
     }
 });
@@ -43,7 +38,7 @@ async function performBackgroundSync() {
             chrome.tabs.sendMessage(timeWhereTab.id, { action: 'sync' });
         }
     } catch (e) {
-        console.log('TimeWhere: No active tab for sync');
+        // No active tab for sync
     }
 }
 
@@ -71,11 +66,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 chrome.notifications.onClicked.addListener(async (notificationId) => {
-    console.log('TimeWhere: Notification clicked', notificationId);
-    
     chrome.tabs.create({
         url: 'pages/focus/focus.html'
     });
 });
-
-console.log('TimeWhere: Background Service Worker loaded');
