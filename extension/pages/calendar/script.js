@@ -27,12 +27,34 @@ async function initApp() {
     render();
 }
 
-function render() {
+async function render() {
     updateCurrentDateDisplay();
     if (currentView === 'week') {
         renderWeekView();
     } else {
         renderMonthView();
+    }
+    await checkCalendarEmptyState();
+}
+
+async function checkCalendarEmptyState() {
+    const emptyEl = document.getElementById('calendarEmptyState');
+    const weekView = document.getElementById('weekView');
+    const monthView = document.getElementById('monthView');
+    if (!emptyEl) return;
+
+    const containers = await TimeWhereDB.getContainers({ enabled: true });
+    const events = await TimeWhereDB.db.events.count();
+    const hasData = (containers && containers.length > 0) || events > 0;
+
+    if (hasData) {
+        emptyEl.style.display = 'none';
+        if (weekView) weekView.style.opacity = '1';
+        if (monthView) monthView.style.opacity = '1';
+    } else {
+        emptyEl.style.display = 'flex';
+        if (weekView) weekView.style.opacity = '0.15';
+        if (monthView) monthView.style.opacity = '0.15';
     }
 }
 

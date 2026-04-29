@@ -62,6 +62,18 @@
                 </div>
 
                 <div class="calendar-container custom-scrollbar">
+                    <!-- Empty State Guide -->
+                    <div id="calendarEmptyState" class="calendar-empty-state" style="display:none;"
+                        onclick="window.location.href='../settings/settings.html'"
+                    >
+                        <span class="material-symbols-outlined" style="font-size: 48px; color: var(--accent);"
+                            >event_note</span>
+                        <h3>日历暂无内容</h3>
+                        <p>创建时间容器或导入课表来开始使用</p>
+                        <span class="empty-state-link"
+                            >前往设置 →</span>
+                    </div>
+
                     <!-- Week View -->
                     <div id="weekView" class="view-panel">
                         <div class="calendar-header-row">
