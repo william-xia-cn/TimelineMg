@@ -724,6 +724,33 @@ const TimeWhereDB = {
             settings: await db.settings.count(),
             sync_logs: await db.sync_log.count()
         };
+    },
+
+    async exportAllData() {
+        const data = {
+            _meta: { version: 1, exported_at: new Date().toISOString(), app: 'TimeWhere' }
+        };
+        data.plans = await db.plans.toArray();
+        data.buckets = await db.buckets.toArray();
+        data.labels = await db.labels.toArray();
+        data.tasks = await db.tasks.toArray();
+        data.containers = await db.containers.toArray();
+        data.habits = await db.habits.toArray();
+        data.events = await db.events.toArray();
+        data.settings = await db.settings.toArray();
+        return data;
+    },
+
+    async importAllData(data) {
+        if (!data || typeof data !== 'object') throw new Error('Invalid backup format');
+        const tables = ['plans', 'buckets', 'labels', 'tasks', 'containers', 'habits', 'events', 'settings'];
+        for (const table of tables) {
+            if (!Array.isArray(data[table])) continue;
+            await db[table].clear();
+            if (data[table].length > 0) {
+                await db[table].bulkAdd(data[table]);
+            }
+        }
     }
 };
 

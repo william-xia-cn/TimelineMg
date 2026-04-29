@@ -98,6 +98,10 @@ function setupEventListeners() {
     document.getElementById('googleRevokeBtn')?.addEventListener('click', handleGoogleRevoke);
     document.getElementById('syncNowBtn')?.addEventListener('click', handleSyncNow);
     document.getElementById('btnRunArrange')?.addEventListener('click', runArrange);
+    document.getElementById('exportBtn')?.addEventListener('click', exportData);
+    document.getElementById('importJsonBtn')?.addEventListener('click', () => document.getElementById('importJsonInput')?.click());
+    document.getElementById('importJsonInput')?.addEventListener('change', importData);
+    document.getElementById('resetSettingsBtn')?.addEventListener('click', resetSettings);
     setupWizardEvents();
     setupImportEvents();
 }
@@ -490,8 +494,55 @@ async function runArrange() {
 
 async function reinitialize() {
     if (confirm('确定要重新初始化吗？这将清除所有数据。')) {
+        await TimeWhereDB.clearAllData();
         await TimeWhereDB.setSetting('initialized', false);
         window.location.reload();
+    }
+}
+
+async function exportData() {
+    try {
+        const data = await TimeWhereDB.exportAllData();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `timewhere_backup_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('数据已导出', 'success');
+    } catch (e) {
+        showToast('导出失败：' + e.message, 'error');
+    }
+}
+
+async function importData(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (!confirm('导入将覆盖当前所有数据，确定继续吗？')) return;
+        await TimeWhereDB.importAllData(data);
+        showToast('数据导入成功', 'success');
+        await loadSettings();
+        await loadContainers();
+    } catch (err) {
+        showToast('导入失败：' + err.message, 'error');
+    } finally {
+        e.target.value = '';
+    }
+}
+
+async function resetSettings() {
+    if (!confirm('确定要恢复所有设置为默认值吗？')) return;
+    try {
+        await TimeWhereDB.db.settings.clear();
+        await TimeWhereDB.initDefaultSettings();
+        await loadSettings();
+        showToast('设置已重置', 'success');
+    } catch (e) {
+        showToast('重置失败：' + e.message, 'error');
     }
 }
 
