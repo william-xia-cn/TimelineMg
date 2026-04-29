@@ -215,10 +215,8 @@ async function parseICSAndSave(content, source = 'timetable') {
     // 删除相同来源的旧事件，不影响其他来源和手动事件
     const oldCount = await TimeWhereDB.db.events.filter(e => e.source === source).count();
     await TimeWhereDB.db.events.filter(e => e.source === source).delete();
-    console.log('[ICS] 已清除旧课表事件:', oldCount);
 
-    const parsedEvents = parseICS(content);
-    console.log('[ICS] 解析到事件:', parsedEvents.length);
+    const parsedEvents = TimeWhereICS.parseICSToEvents(content);
 
     if (parsedEvents.length === 0) {
         showToast('未找到有效事件', 'error');
@@ -240,7 +238,6 @@ async function parseICSAndSave(content, source = 'timetable') {
         }
     }
 
-    console.log('[ICS] 导入完成:', savedCount);
     showToast(`课表已更新：导入 ${savedCount} 节课（替换了 ${oldCount} 条旧记录）`, 'success');
     await updateTimetableStatus();
 }
@@ -250,76 +247,6 @@ async function updateTimetableStatus() {
     if (!statusEl) return;
     const count = await TimeWhereDB.db.events.filter(e => e.source === 'timetable').count();
     statusEl.textContent = count > 0 ? `已导入 ${count} 节课` : '尚未导入课表';
-}
-
-/** UTC → UTC+8 日期时间解析（处理跨午夜和 RFC 5545 参数前缀） */
-function parseDTLine(line) {
-    const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) return null;
-    const value = line.substring(colonIdx + 1).trim();
-    const isUTC = value.endsWith('Z');
-
-    const match = value.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2}))?/);
-    if (!match) return null;
-
-    let year = parseInt(match[1]);
-    let month = parseInt(match[2]);
-    let day = parseInt(match[3]);
-
-    if (!match[4]) {
-        return { date: `${match[1]}-${match[2]}-${match[3]}`, time: null };
-    }
-
-    let hour = parseInt(match[4]);
-    let minute = parseInt(match[5]);
-
-    if (isUTC) {
-        const utc = new Date(Date.UTC(year, month - 1, day, hour, minute));
-        const local = new Date(utc.getTime() + 8 * 3600 * 1000);
-        year   = local.getUTCFullYear();
-        month  = local.getUTCMonth() + 1;
-        day    = local.getUTCDate();
-        hour   = local.getUTCHours();
-        minute = local.getUTCMinutes();
-    }
-
-    return {
-        date: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-        time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
-    };
-}
-
-function parseICS(content) {
-    // RFC 5545 §3.1: 展开续行（CRLF + 空格/Tab）
-    const unfolded = content.replace(/\r?\n[ \t]/g, '');
-    const lines = unfolded.split(/\r?\n/);
-    const events = [];
-    let cur = null;
-
-    for (const line of lines) {
-        if (line === 'BEGIN:VEVENT') {
-            cur = {};
-        } else if (line === 'END:VEVENT' && cur) {
-            events.push(cur);
-            cur = null;
-        } else if (cur) {
-            if (line.startsWith('SUMMARY:')) {
-                cur.summary = line.substring(8)
-                    .replace(/\\,/g, ',')
-                    .replace(/\\n/g, ' ')
-                    .replace(/\\\\/g, '\\');
-            } else if (line.startsWith('DTSTART')) {
-                const parsed = parseDTLine(line);
-                if (parsed) { cur.startDate = parsed.date; cur.startTime = parsed.time; }
-            } else if (line.startsWith('DTEND')) {
-                const parsed = parseDTLine(line);
-                if (parsed) { cur.endDate = parsed.date; cur.endTime = parsed.time; }
-            }
-        }
-    }
-
-    console.log('[ICS DEBUG] Parsed events:', events.length);
-    return events;
 }
 
 async function loadContainers() {

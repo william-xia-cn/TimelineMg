@@ -731,8 +731,6 @@ async function saveNewTask() {
         due_date: deadline || null,
         start_date: todayStr,
         duration: duration || 30,
-        bucket_id: bucket,
-        bucket,
         progress: 'not_started'
     });
 

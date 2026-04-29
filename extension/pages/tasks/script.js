@@ -4,8 +4,6 @@
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('[Tasks] Initializing...');
-
     try {
         // Init default settings
         await TimeWhereDB.initDefaultSettings();
@@ -15,7 +13,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // If no plans exist, seed demo data
         if (TaskApp.plans.length === 0) {
-            console.log('[Tasks] No plans found, seeding demo data...');
             await seedDemoData();
             await TaskApp.loadPlans();
         }
@@ -26,8 +23,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Render everything
         TaskApp.renderAll();
         showNoPlanState(false);
-
-        console.log('[Tasks] Initialized with plan:', TaskApp.getCurrentPlan()?.name);
     } catch (err) {
         console.error('[Tasks] Init failed:', err);
     }
@@ -296,7 +291,6 @@ async function seedDemoData() {
         await TimeWhereDB.addTask({ plan_id: chem.id, ...t });
     }
 
-    console.log('[Seed] Demo data created: 3 plans, 18 tasks');
 }
 
 // Expose for console access
@@ -306,5 +300,3 @@ window.clearAndReseed = async function() {
     await seedDemoData();
     location.reload();
 };
-
-console.log('[Tasks] Script module loaded');

@@ -931,93 +931,13 @@ function handleICSUpload(event) {
     const reader = new FileReader();
     reader.onload = async (e) => {
         const icsContent = e.target.result;
-        await parseICS(icsContent);
+        await importICS(icsContent);
     };
     reader.readAsText(file);
 }
 
-/**
- * 解析 DTSTART/DTEND 行，返回 { date, time } 对象。
- * 处理 UTC（Z 后缀）→ Asia/Shanghai (UTC+8) 转换。
- */
-function parseDTLine(line) {
-    const colonIdx = line.indexOf(':');
-    if (colonIdx === -1) return null;
-    const value = line.substring(colonIdx + 1).trim();
-    const isUTC = value.endsWith('Z');
-
-    const match = value.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2}))?/);
-    if (!match) return null;
-
-    let year = parseInt(match[1]);
-    let month = parseInt(match[2]);
-    let day = parseInt(match[3]);
-
-    if (!match[4]) {
-        // 全天事件，无时间部分
-        return { date: `${match[1]}-${match[2]}-${match[3]}`, time: null };
-    }
-
-    let hour = parseInt(match[4]);
-    let minute = parseInt(match[5]);
-
-    if (isUTC) {
-        // UTC → UTC+8
-        const utc = new Date(Date.UTC(year, month - 1, day, hour, minute));
-        const local = new Date(utc.getTime() + 8 * 3600 * 1000);
-        year   = local.getUTCFullYear();
-        month  = local.getUTCMonth() + 1;
-        day    = local.getUTCDate();
-        hour   = local.getUTCHours();
-        minute = local.getUTCMinutes();
-    }
-
-    return {
-        date: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
-        time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
-    };
-}
-
-/**
- * 将 ICS 文本解析为事件对象数组（纯函数，不写 DB）。
- * 修复：1) 展开 RFC 5545 折行  2) UTC→+8 转换  3) 解转义 SUMMARY
- */
-function parseICSToEvents(content) {
-    // RFC 5545 §3.1: 续行以 CRLF + 空格/Tab 开头，展开后去掉该前缀
-    const unfolded = content.replace(/\r?\n[ \t]/g, '');
-    const lines = unfolded.split(/\r?\n/);
-
-    const events = [];
-    let cur = null;
-
-    for (const line of lines) {
-        if (line === 'BEGIN:VEVENT') {
-            cur = {};
-        } else if (line === 'END:VEVENT' && cur) {
-            events.push(cur);
-            cur = null;
-        } else if (cur) {
-            if (line.startsWith('SUMMARY:')) {
-                // ICS 转义: \, → ,  \n → 空格  \\ → \
-                cur.summary = line.substring(8)
-                    .replace(/\\,/g, ',')
-                    .replace(/\\n/g, ' ')
-                    .replace(/\\\\/g, '\\');
-            } else if (line.startsWith('DTSTART')) {
-                const parsed = parseDTLine(line);
-                if (parsed) { cur.startDate = parsed.date; cur.startTime = parsed.time; }
-            } else if (line.startsWith('DTEND')) {
-                const parsed = parseDTLine(line);
-                if (parsed) { cur.endDate = parsed.date; cur.endTime = parsed.time; }
-            }
-        }
-    }
-
-    return events;
-}
-
-async function parseICS(content) {
-    const events = parseICSToEvents(content);
+async function importICS(content) {
+    const events = TimeWhereICS.parseICSToEvents(content);
     showToast(`解析到 ${events.length} 个事件`, 'info');
 
     let imported = 0;

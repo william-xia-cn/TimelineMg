@@ -4,10 +4,7 @@
  * 日期: 2026-04-14
  */
 
-console.log('[DB] Loading db.js...');
-
 const db = new Dexie('TimeWhere');
-console.log('[DB] Dexie db created:', db.name);
 
 // --- Schema v2 (original) ---
 db.version(2).stores({
@@ -31,8 +28,6 @@ db.version(4).stores({
     labels:  '++id, plan_id, color, name',
     tasks:   '++id, plan_id, bucket_id, due_date, progress, priority, created_at, updated_at'
 }).upgrade(async tx => {
-    console.log('[DB] Running v4 migration...');
-
     // 1. Create default plan
     const defaultPlanId = await tx.table('plans').add({
         name: 'My Tasks',
@@ -41,7 +36,6 @@ db.version(4).stores({
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
     });
-    console.log('[DB] Created default plan, id:', defaultPlanId);
 
     // 2. Collect unique bucket values from existing tasks → create Bucket records
     const existingTasks = await tx.table('tasks').toArray();
@@ -66,8 +60,6 @@ db.version(4).stores({
         });
         bucketValueToId[val] = bucketId;
     }
-    console.log('[DB] Migrated buckets:', bucketValueToId);
-
     // 3. Migrate each task
     const STATUS_TO_PROGRESS = {
         'pending': 'not_started',
@@ -99,10 +91,7 @@ db.version(4).stores({
         await tx.table('tasks').update(task.id, updates);
     }
 
-    console.log('[DB] v4 migration complete. Migrated', existingTasks.length, 'tasks');
 });
-
-console.log('[DB] Schema defined (v2 → v3 → v4)');
 
 const TimeWhereDB = {
     db: db,
@@ -314,17 +303,9 @@ const TimeWhereDB = {
             labels: task.labels || [],
             notes: task.notes || '',
             checklist: task.checklist || [],
-            // Legacy / extended fields (kept for compat with focus/popup)
-            description: task.description || task.notes || '',
             schedule_time: task.schedule_time || null,
             duration: task.duration || 45,
-            deadline: task.due_date || task.deadline || null,
-            deadline_time: task.deadline_time || null,
-            subject: task.subject || null,
-            bucket: task.bucket || null,
-            status: progressVal === 'completed' ? 'completed' : (progressVal === 'in_progress' ? 'in_progress' : 'pending'),
             completed_at: null,
-            container_id: task.container_id || null,
             google_task_id: null,
             created_at: now,
             updated_at: now
@@ -446,7 +427,6 @@ const TimeWhereDB = {
             updated_at: now
         };
         
-        console.log('[DB] Adding container:', newContainer.name, newContainer.time_start, newContainer.repeat);
         await db.containers.add(newContainer);
         await this.addSyncLog('container', 'create', newContainer);
         return newContainer;
@@ -734,6 +714,4 @@ const TimeWhereDB = {
     }
 };
 
-console.log('[DB] TimeWhereDB defined, assigning to window...');
 window.TimeWhereDB = TimeWhereDB;
-console.log('[DB] Done! TimeWhereDB on window:', typeof window.TimeWhereDB);
