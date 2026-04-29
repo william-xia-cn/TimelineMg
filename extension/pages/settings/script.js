@@ -285,7 +285,7 @@ async function loadContainers() {
             ? `<span class="layer-badge layer-study">学习</span>`
             : `<span class="layer-badge layer-free">自由</span>`;
         const div = document.createElement('div');
-        div.className = 'container-item';
+        div.className = 'container-item' + (container.enabled === false ? ' disabled' : '');
         div.innerHTML = `
             <div class="container-info">
                 <div style="display:flex;align-items:center;gap:6px;">
@@ -295,12 +295,24 @@ async function loadContainers() {
                 <span class="container-time">${container.time_start} - ${container.time_end} · ${getRepeatText(container.repeat)}</span>
             </div>
             <div class="container-actions">
+                <label class="toggle-switch">
+                    <input type="checkbox" class="container-toggle" data-id="${container.id}" ${container.enabled !== false ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
                 <button class="delete" data-id="${container.id}"><span class="material-symbols-outlined" style="font-size: 18px;">delete</span></button>
             </div>
         `;
         containerList.appendChild(div);
     }
-    
+
+    containerList.querySelectorAll('.container-toggle').forEach(toggle => {
+        toggle.addEventListener('change', async () => {
+            const id = parseInt(toggle.dataset.id);
+            await TimeWhereDB.updateContainer(id, { enabled: toggle.checked });
+            loadContainers();
+        });
+    });
+
     containerList.querySelectorAll('.delete').forEach(btn => {
         btn.addEventListener('click', async () => {
             if (confirm('确定要删除这个容器吗？')) {
