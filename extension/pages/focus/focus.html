@@ -41,7 +41,10 @@
             <section class="board-column column-now">
                 <div class="column-header">
                     <h2>当下任务</h2>
-                    <span class="badge red">进行中</span>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <button class="icon-btn" id="btnArrange" title="重新编排"><span class="material-symbols-outlined">auto_schedule</span></button>
+                        <span class="badge red">进行中</span>
+                    </div>
                 </div>
                 <div class="column-content custom-scrollbar">
                     <!-- JS 动态填充 -->

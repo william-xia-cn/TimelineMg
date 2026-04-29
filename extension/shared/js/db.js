@@ -116,7 +116,8 @@ const TimeWhereDB = {
         const newPlan = {
             name: plan.name || 'New Plan',
             color: plan.color || '#2b56e3',
-            icon_char: plan.icon_char || plan.name ? plan.name.charAt(0) : 'P',
+            icon_char: plan.icon_char || (plan.name ? plan.name.charAt(0) : 'P'),
+            subject: plan.subject || null,
             created_at: now,
             updated_at: now
         };
@@ -288,6 +289,11 @@ const TimeWhereDB = {
 
     async addTask(task) {
         const now = this.getNowISO();
+        let subject = task.subject || null;
+        if (!subject && task.plan_id) {
+            const plan = await db.plans.get(task.plan_id);
+            if (plan) subject = plan.subject || plan.name || null;
+        }
         const progressVal = task.progress || 'not_started';
         const newTask = {
             // Use UUID for consistency with existing tasks
@@ -305,6 +311,7 @@ const TimeWhereDB = {
             checklist: task.checklist || [],
             schedule_time: task.schedule_time || null,
             duration: task.duration || 45,
+            subject: subject,
             completed_at: null,
             google_task_id: null,
             created_at: now,
@@ -644,7 +651,12 @@ const TimeWhereDB = {
                 theme: 'light',
                 start_week_on: 1,
                 notification_enabled: true,
-                reminder_before: 15
+                reminder_before: 15,
+                arrange_trigger: 'manual',
+                defensive_threshold: 24,
+                heal_time: '23:00',
+                default_duration: 45,
+                default_priority: 'medium'
             };
             
             for (const [key, value] of Object.entries(defaults)) {

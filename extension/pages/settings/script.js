@@ -47,6 +47,9 @@ async function loadSettings() {
     document.getElementById('reminderBefore').value = settings.reminder_before || 15;
     document.getElementById('defaultDuration').value = settings.default_duration || 45;
     document.getElementById('defaultPriority').value = settings.default_priority || 'medium';
+    document.getElementById('arrangeTrigger').value = settings.arrange_trigger || 'manual';
+    document.getElementById('defensiveThreshold').value = settings.defensive_threshold || 24;
+    document.getElementById('healTime').value = settings.heal_time || '23:00';
     
     // Google 账号
     const googleConnected = settings.google_connected;
@@ -85,6 +88,7 @@ function setupEventListeners() {
     document.getElementById('googleAuthBtn').addEventListener('click', handleGoogleAuth);
     document.getElementById('googleRevokeBtn')?.addEventListener('click', handleGoogleRevoke);
     document.getElementById('syncNowBtn')?.addEventListener('click', handleSyncNow);
+    document.getElementById('btnRunArrange')?.addEventListener('click', runArrange);
     setupWizardEvents();
     setupImportEvents();
 }
@@ -432,7 +436,10 @@ async function saveSettings() {
         notification_enabled: document.getElementById('notificationsEnabled').checked,
         reminder_before: parseInt(document.getElementById('reminderBefore').value),
         default_duration: parseInt(document.getElementById('defaultDuration').value) || 45,
-        default_priority: document.getElementById('defaultPriority').value || 'medium'
+        default_priority: document.getElementById('defaultPriority').value || 'medium',
+        arrange_trigger: document.getElementById('arrangeTrigger').value || 'manual',
+        defensive_threshold: parseInt(document.getElementById('defensiveThreshold').value) || 24,
+        heal_time: document.getElementById('healTime').value || '23:00'
     };
 
     for (const [key, value] of Object.entries(settings)) {
@@ -440,6 +447,24 @@ async function saveSettings() {
     }
 
     showToast('设置已保存', 'success');
+}
+
+async function runArrange() {
+    try {
+        const btn = document.getElementById('btnRunArrange');
+        if (btn) btn.disabled = true;
+        const stats = await TimeWhereScheduling.arrangeTasks(TimeWhereDB);
+        if (stats.arranged > 0) {
+            showToast(`已编排 ${stats.arranged} 个任务，跳过 ${stats.skipped} 个`, 'success');
+        } else {
+            showToast(`没有需要编排的任务（跳过 ${stats.skipped} 个）`, 'info');
+        }
+    } catch (e) {
+        showToast('编排失败：' + e.message, 'error');
+    } finally {
+        const btn = document.getElementById('btnRunArrange');
+        if (btn) btn.disabled = false;
+    }
 }
 
 async function reinitialize() {

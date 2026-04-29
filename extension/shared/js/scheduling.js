@@ -252,6 +252,70 @@
         });
     }
 
+    /**
+     * Arrange — 基于课表为带 subject 的任务分配 start_date
+     * @param {Object} db - TimeWhereDB 实例
+     * @param {String} referenceDate - 基准日期 YYYY-MM-DD，默认今天
+     * @returns {{ arranged: number, skipped: number, errors: Array, today: string }}
+     */
+    async function arrangeTasks(db, referenceDate) {
+        const todayStr = referenceDate || new Date().toISOString().split('T')[0];
+
+        const allTasks = await db.getAllTasks();
+        const incompleteTasks = allTasks.filter(t => t.progress !== 'completed');
+
+        const timetableEvents = await db.db.events
+            .filter(e => e.source === 'timetable' && e.date >= todayStr)
+            .sortBy('date');
+
+        let arranged = 0;
+        let skipped = 0;
+        const errors = [];
+
+        function eventMatchesSubject(ev, subject) {
+            const s = (subject || '').toLowerCase();
+            const t = (ev.title || '').toLowerCase();
+            return t.includes(s) || s.includes(t);
+        }
+
+        for (const task of incompleteTasks) {
+            let subject = task.subject;
+            if (!subject && task.plan_id) {
+                const plan = await db.getPlanById(task.plan_id);
+                if (plan) subject = plan.subject || plan.name;
+            }
+            if (!subject) {
+                skipped++;
+                continue;
+            }
+
+            if (task.start_date && task.start_date > todayStr) {
+                skipped++;
+                continue;
+            }
+
+            const matches = timetableEvents.filter(ev => eventMatchesSubject(ev, subject));
+            if (matches.length === 0) {
+                skipped++;
+                continue;
+            }
+
+            const nextDate = matches[0].date;
+            if (task.start_date !== nextDate) {
+                try {
+                    await db.updateTask(task.id, { start_date: nextDate });
+                    arranged++;
+                } catch (e) {
+                    errors.push({ task: task.id, error: e.message });
+                }
+            } else {
+                skipped++;
+            }
+        }
+
+        return { arranged, skipped, errors, today: todayStr };
+    }
+
     // 导出
     global.TimeWhereScheduling = {
         timeToMinutes,
@@ -264,6 +328,7 @@
         getContainerCapacity,
         dailySettle,
         initDefaultContainers,
+        arrangeTasks,
         _nthWeekdayOfMonth
     };
 })(typeof window !== 'undefined' ? window : this);

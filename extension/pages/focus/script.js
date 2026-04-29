@@ -26,6 +26,15 @@ async function initApp() {
     } catch(e) {
         console.error('initDefaultContainers failed:', e);
     }
+    // 自动 Arrange
+    try {
+        const trigger = await TimeWhereDB.getSetting('arrange_trigger');
+        if (trigger === 'auto') {
+            await TimeWhereScheduling.arrangeTasks(TimeWhereDB);
+        }
+    } catch (e) {
+        console.error('Auto arrange failed:', e);
+    }
     await loadDashboardData();
 }
 
@@ -649,6 +658,26 @@ function setupEventListeners() {
     document.querySelectorAll('.add-task-btn').forEach(btn => {
         btn.addEventListener('click', openAddTaskModal);
     });
+
+    const btnArrange = document.getElementById('btnArrange');
+    if (btnArrange) {
+        btnArrange.addEventListener('click', async () => {
+            try {
+                btnArrange.disabled = true;
+                const stats = await TimeWhereScheduling.arrangeTasks(TimeWhereDB);
+                if (stats.arranged > 0) {
+                    showToast(`已编排 ${stats.arranged} 个任务`, 'success');
+                    await loadTaskColumn();
+                } else {
+                    showToast(`没有需要编排的任务`, 'info');
+                }
+            } catch (e) {
+                showToast('编排失败：' + e.message, 'error');
+            } finally {
+                btnArrange.disabled = false;
+            }
+        });
+    }
 }
 
 function openAddTaskModal() {

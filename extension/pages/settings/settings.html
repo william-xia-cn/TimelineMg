@@ -222,10 +222,13 @@
                                         <span class="setting-label">Arrange 触发方式</span>
                                         <span class="setting-desc">系统如何重新编排您的时间表</span>
                                     </div>
-                                    <select id="arrangeTrigger">
-                                        <option value="manual">手动触发</option>
-                                        <option value="auto">自动触发</option>
-                                    </select>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <select id="arrangeTrigger">
+                                            <option value="manual">手动触发</option>
+                                            <option value="auto">自动触发</option>
+                                        </select>
+                                        <button class="btn-secondary" id="btnRunArrange" type="button">立即编排</button>
+                                    </div>
                                 </div>
                                 <div class="setting-row">
                                     <div class="setting-info">
