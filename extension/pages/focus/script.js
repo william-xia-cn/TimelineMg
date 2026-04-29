@@ -534,9 +534,19 @@ async function loadFeedColumn() {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
     const tomorrowStr = new Date(today.getTime() + 86400000).toISOString().split('T')[0];
+    const dayOfWeek = today.getDay();
 
     const allTasks = await TimeWhereDB.getAllTasks();
     const todayEvents = (await TimeWhereDB.getEventsByDateRange(todayStr, todayStr)) || [];
+    const allHabits = await TimeWhereDB.getHabits();
+
+    // 过滤今日习惯
+    const todayHabits = allHabits.filter(h => {
+        if (h.frequency === 'daily') return true;
+        if (h.frequency === 'custom' && h.repeat_days && h.repeat_days.includes(dayOfWeek)) return true;
+        if (h.frequency === 'weekly') return true;
+        return false;
+    });
 
     const feedItems = [];
 
@@ -621,16 +631,42 @@ async function loadFeedColumn() {
     feedItems.sort((a, b) => a.sortKey - b.sortKey);
     const limited = feedItems.slice(0, 20);
 
-    if (limited.length === 0) {
-        section.innerHTML = `
-            <div class="empty-state">
-                <span class="material-symbols-outlined" style="font-size: 48px;">notifications_none</span>
-                <p>一切就绪，暂无提醒</p>
-            </div>`;
-        return;
+    let html = '';
+
+    // 习惯区块
+    if (todayHabits.length > 0) {
+        html += `<div class="habits-section">
+            <h3 class="habits-title"><span class="material-symbols-outlined">fitness_center</span> 今日习惯</h3>
+            <div class="habit-list">`;
+        for (const h of todayHabits) {
+            const isDone = h.status_today === 'done';
+            html += `
+                <div class="habit-item" data-habit-id="${h.id}">
+                    <button class="habit-check ${isDone ? 'done' : ''}" data-habit-id="${h.id}">
+                        <span class="material-symbols-outlined">${isDone ? 'check' : 'circle'}</span>
+                    </button>
+                    <div class="habit-info">
+                        <span class="habit-title ${isDone ? 'done' : ''}">${escapeHTML(h.title)}</span>
+                        <span class="habit-streak">${h.streak || 0} 天连胜</span>
+                    </div>
+                </div>`;
+        }
+        html += '</div></div>';
     }
 
-    section.innerHTML = limited.map(item => createFeedItem(item)).join('');
+    if (limited.length === 0) {
+        if (todayHabits.length === 0) {
+            html += `
+                <div class="empty-state">
+                    <span class="material-symbols-outlined" style="font-size: 48px;">notifications_none</span>
+                    <p>一切就绪，暂无提醒</p>
+                </div>`;
+        }
+    } else {
+        html += `<div class="feed-list">${limited.map(item => createFeedItem(item)).join('')}</div>`;
+    }
+
+    section.innerHTML = html;
 }
 
 function createFeedItem({ type, icon, title, body, time }) {
@@ -695,6 +731,20 @@ function setupEventListeners() {
     const pomoReset = document.getElementById('pomoReset');
     if (pomoToggle) pomoToggle.addEventListener('click', togglePomodoro);
     if (pomoReset) pomoReset.addEventListener('click', resetPomodoro);
+
+    // Habit check buttons (delegated)
+    const feedColumn = document.querySelector('.column-feed');
+    if (feedColumn) {
+        feedColumn.addEventListener('click', async (e) => {
+            const habitBtn = e.target.closest('.habit-check');
+            if (habitBtn) {
+                e.stopPropagation();
+                const habitId = habitBtn.dataset.habitId;
+                await completeHabitNow(habitId);
+                return;
+            }
+        });
+    }
 }
 
 function openAddTaskModal() {
@@ -799,6 +849,20 @@ function showToast(message, type = 'info') {
         toast.classList.remove('show');
         setTimeout(() => toast.remove(), 300);
     }, 3000);
+}
+
+// ============================================================
+// Habit
+// ============================================================
+
+async function completeHabitNow(habitId) {
+    try {
+        await TimeWhereDB.completeHabit(habitId);
+        await loadFeedColumn();
+        showToast('习惯已完成', 'success');
+    } catch (e) {
+        showToast('操作失败：' + e.message, 'error');
+    }
 }
 
 // ============================================================
@@ -925,6 +989,7 @@ window.pauseTask = pauseTask;
 window.completeTaskNow = completeTaskNow;
 window.deferTask = deferTask;
 window.deferTaskHours = deferTaskHours;
+window.completeHabitNow = completeHabitNow;
 window.toggleWeekTask = toggleWeekTask;
 window.openAddTaskModal = openAddTaskModal;
 window.closeAddTaskModal = closeAddTaskModal;
