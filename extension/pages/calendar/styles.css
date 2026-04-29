@@ -1457,6 +1457,41 @@ body::before {
 }
 .search-close-btn:hover { opacity: 1; }
 
+/* Timetable badge icon */
+.timetable-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 9px !important;
+    opacity: 0.6;
+    line-height: 1;
+    pointer-events: none;
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+}
+
+/* Timetable readonly modal */
+.readonly-banner {
+    background: var(--bg-app);
+    border: 1px solid var(--border-stroke);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--text-sub);
+    margin-bottom: 14px;
+}
+.readonly-value {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-main);
+    padding: 4px 0;
+}
+.readonly-hint {
+    font-size: 12px;
+    color: var(--text-sub);
+    margin-top: 12px;
+    line-height: 1.5;
+}
+
 /* All-day toggle */
 .allday-toggle-row {
     padding: 2px 0;
