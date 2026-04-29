@@ -265,7 +265,7 @@ function renderColumnHTML(colData) {
 
 // ========== Main Render ==========
 
-function renderBoard() {
+function renderKanbanBoard() {
     const boardEl = document.getElementById('kanbanBoard');
     if (!boardEl) return;
 
@@ -281,6 +281,104 @@ function renderBoard() {
 
     // Update header
     updateBoardHeader();
+}
+
+function renderListView() {
+    const listEl = document.getElementById('taskListView');
+    if (!listEl) return;
+
+    const tasks = TaskApp.getFilteredTasks();
+    const sorted = [...tasks].sort((a, b) => {
+        // Priority: urgent > important > medium > low
+        const pMap = { urgent: 0, important: 1, medium: 2, low: 3 };
+        const pa = pMap[a.priority] ?? 2;
+        const pb = pMap[b.priority] ?? 2;
+        if (pa !== pb) return pa - pb;
+        // Due date: closer first
+        if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date);
+        if (a.due_date) return -1;
+        if (b.due_date) return 1;
+        return 0;
+    });
+
+    if (sorted.length === 0) {
+        listEl.innerHTML = `
+            <div class="empty-state">
+                <span class="material-symbols-outlined">task_alt</span>
+                <p>No tasks</p>
+            </div>`;
+        return;
+    }
+
+    let html = '<div class="task-list">';
+    for (const task of sorted) {
+        html += createTaskListRowHTML(task);
+    }
+    html += '</div>';
+    listEl.innerHTML = html;
+}
+
+function createTaskListRowHTML(task) {
+    const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
+    const bucketName = TaskApp.getBucketName(task.bucket_id);
+
+    let labelsHTML = '';
+    if (task.labels && task.labels.length > 0) {
+        const dots = task.labels.map(lid => {
+            const info = TaskApp.getLabelInfo(lid);
+            if (!info) return '';
+            return `<span class="label-dot" style="background:${info.color}" title="${info.name || ''}"></span>`;
+        }).join('');
+        labelsHTML = `<div class="task-list-labels">${dots}</div>`;
+    }
+
+    let dueHTML = '';
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (task.due_date) {
+        const cls = task.due_date < todayStr ? 'text-red' : (task.due_date === todayStr ? 'text-orange' : '');
+        dueHTML = `<span class="task-list-due ${cls}">${formatDueDate(task.due_date)}</span>`;
+    }
+
+    const progressIcons = {
+        not_started: 'radio_button_unchecked',
+        in_progress: 'timelapse',
+        completed: 'check_circle'
+    };
+    const progressIcon = progressIcons[task.progress] || progressIcons.not_started;
+
+    return `
+        <div class="task-list-row" data-task-id="${task.id}">
+            <button class="task-list-progress-btn" data-task-id="${task.id}">
+                <span class="material-symbols-outlined">${progressIcon}</span>
+            </button>
+            <div class="task-list-main">
+                <div class="task-list-title-wrap">
+                    <span class="task-list-title">${escapeHTML(task.title)}</span>
+                    ${labelsHTML}
+                </div>
+                <div class="task-list-meta">
+                    ${bucketName ? `<span class="task-list-bucket">${escapeHTML(bucketName)}</span>` : ''}
+                    ${dueHTML}
+                </div>
+            </div>
+            <span class="task-list-priority" style="color:${priorityCfg.color};background:${priorityCfg.bgColor}">${priorityCfg.label}</span>
+        </div>`;
+}
+
+function renderBoard() {
+    const boardEl = document.getElementById('kanbanBoard');
+    const listEl = document.getElementById('taskListView');
+    if (!boardEl || !listEl) return;
+
+    if (TaskApp.currentView === 'list') {
+        boardEl.style.display = 'none';
+        listEl.style.display = '';
+        renderListView();
+    } else {
+        boardEl.style.display = '';
+        listEl.style.display = 'none';
+        renderKanbanBoard();
+    }
 }
 
 function updateBoardHeader() {

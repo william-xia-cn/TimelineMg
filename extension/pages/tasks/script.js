@@ -113,6 +113,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    // ========== Event Delegation: List View ==========
+    const listView = document.getElementById('taskListView');
+    if (listView) {
+        listView.addEventListener('click', async (e) => {
+            const progressBtn = e.target.closest('.task-list-progress-btn');
+            if (progressBtn) {
+                e.stopPropagation();
+                const taskId = progressBtn.dataset.taskId;
+                await cycleTaskProgress(taskId);
+                return;
+            }
+
+            const row = e.target.closest('.task-list-row');
+            if (row) {
+                const taskId = row.dataset.taskId;
+                openDetailPanel(taskId);
+                return;
+            }
+        });
+    }
+
     // ========== Header Actions ==========
 
     // Search
@@ -146,7 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.querySelectorAll('.btn-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             TaskApp.currentView = tab.dataset.view;
-            // TODO: render list view when implemented
+            TaskApp.renderAll();
         });
     });
 
