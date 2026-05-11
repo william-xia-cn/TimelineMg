@@ -4,10 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TimeWhere - Settings</title>
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
     <!-- Local Fonts -->
     <link rel="stylesheet" href="../../shared/styles/fonts.css">
     <!-- Local Icons -->
@@ -117,7 +113,7 @@
                                 <div class="setting-row">
                                     <div class="setting-info">
                                         <span class="setting-label">导入课表</span>
-                                        <span class="setting-desc">从 ICS 文件或网址导入课程安排</span>
+                                        <span class="setting-desc">从本地 ICS 文件导入课程安排</span>
                                     </div>
                                     <button class="action-btn" id="importCalendarBtn">导入</button>
                                 </div>
@@ -132,14 +128,6 @@
                                         <button class="action-btn" id="selectFileBtn">选择</button>
                                         <input type="file" id="icsFileInput" accept=".ics" style="display: none;">
                                         <span class="file-name" id="selectedFileName"></span>
-                                    </div>
-                                    <div class="import-divider">
-                                        <span>或</span>
-                                    </div>
-                                    <div class="import-option">
-                                        <span class="import-label">添加网址</span>
-                                        <input type="url" id="icsUrlInput" class="url-input" placeholder="https://example.com/calendar.ics">
-                                        <button class="action-btn" id="addUrlBtn">添加</button>
                                     </div>
                                     <button class="import-btn" id="importBtn" disabled>导入</button>
                                     <p class="import-hint">导入的课表将作为单次日程事件添加到日历（不影响时间容器）</p>
@@ -167,7 +155,7 @@
                         </section>
 
                         <!-- 任务设置 -->
-                        <section class="section" id="taskSection">
+                        <section class="section" id="taskSection" style="display: none;">
                             <h2 class="section-title">
                                 <span class="material-symbols-outlined">task</span> 任务
                             </h2>
@@ -182,71 +170,12 @@
                             </div>
                         </section>
 
-                        <!-- 通知设置 -->
+                        <!-- 任务默认值 -->
                         <section class="section">
                             <h2 class="section-title">
-                                <span class="material-symbols-outlined">notifications</span> 通知
+                                <span class="material-symbols-outlined">tune</span> 任务默认值
                             </h2>
                             <div class="settings-group">
-                                <div class="setting-row">
-                                    <div class="setting-info">
-                                        <span class="setting-label">启用通知</span>
-                                        <span class="setting-desc">接收任务提醒和系统通知</span>
-                                    </div>
-                                    <label class="switch">
-                                        <input type="checkbox" id="notificationsEnabled" checked>
-                                        <span class="slider"></span>
-                                    </label>
-                                </div>
-                                <div class="setting-row">
-                                    <div class="setting-info">
-                                        <span class="setting-label">截止前提醒</span>
-                                        <span class="setting-desc">在任务到期前发送提醒</span>
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="number" id="reminderBefore" value="15" min="0" max="60" style="width: 80px;">
-                                        <span style="font-size: 13px; color: var(--text-sub);">分钟</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-
-                        <!-- 调度参数 -->
-                        <section class="section">
-                            <h2 class="section-title">
-                                <span class="material-symbols-outlined">auto_schedule</span> 调度
-                            </h2>
-                            <div class="settings-group">
-                                <div class="setting-row">
-                                    <div class="setting-info">
-                                        <span class="setting-label">Arrange 触发方式</span>
-                                        <span class="setting-desc">系统如何重新编排您的时间表</span>
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 8px;">
-                                        <select id="arrangeTrigger">
-                                            <option value="manual">手动触发</option>
-                                            <option value="auto">自动触发</option>
-                                        </select>
-                                        <button class="btn-secondary" id="btnRunArrange" type="button">立即编排</button>
-                                    </div>
-                                </div>
-                                <div class="setting-row">
-                                    <div class="setting-info">
-                                        <span class="setting-label">防御翻转阈值</span>
-                                        <span class="setting-desc">任务自动推迟的时间期限（小时）</span>
-                                    </div>
-                                    <div style="display: flex; align-items: center; gap: 8px;">
-                                        <input type="number" id="defensiveThreshold" value="24" min="1" max="168" style="width: 80px;">
-                                        <span style="font-size: 13px; color: var(--text-sub);">小时</span>
-                                    </div>
-                                </div>
-                                <div class="setting-row">
-                                    <div class="setting-info">
-                                        <span class="setting-label">每日结算时间</span>
-                                        <span class="setting-desc">系统执行每日结算和清理的时间点</span>
-                                    </div>
-                                    <input type="text" id="healTime" value="23:00" placeholder="HH:mm" style="width: 100px;">
-                                </div>
                                 <div class="setting-row">
                                     <div class="setting-info">
                                         <span class="setting-label">默认任务时长</span>
@@ -268,32 +197,6 @@
                                         <option value="medium" selected>P3 中等</option>
                                         <option value="low">P4 低</option>
                                     </select>
-                                </div>
-                            </div>
-                        </section>
-
-                        <!-- 账号设置 -->
-                        <section class="section">
-                            <h2 class="section-title">
-                                <span class="material-symbols-outlined">account_circle</span> 账号
-                            </h2>
-                            <div class="settings-group">
-                                <div class="setting-row">
-                                    <div class="setting-info">
-                                        <span class="setting-label">Google 账号</span>
-                                        <span class="setting-desc" id="googleAccountDesc">未连接</span>
-                                    </div>
-                                    <div style="display: flex; gap: 8px;">
-                                        <button class="action-btn" id="googleAuthBtn">连接</button>
-                                        <button class="action-btn danger" id="googleRevokeBtn" style="display: none;">断开</button>
-                                    </div>
-                                </div>
-                                <div class="setting-row" id="syncStatusRow" style="display: none;">
-                                    <div class="setting-info">
-                                        <span class="setting-label">同步状态</span>
-                                        <span class="setting-desc" id="syncStatusDesc">从未同步</span>
-                                    </div>
-                                    <button class="action-btn" id="syncNowBtn">立即同步</button>
                                 </div>
                             </div>
                         </section>
@@ -470,8 +373,6 @@
     <!-- Scheduling -->
     <script src="../../shared/js/scheduling.js"></script>
     <script src="../../shared/js/ics.js"></script>
-    <!-- Sync Engine -->
-    <script src="../../shared/js/sync.js"></script>
     <!-- Settings Script -->
     <script src="script.js"></script>
 </body>

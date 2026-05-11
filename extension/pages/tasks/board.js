@@ -142,7 +142,7 @@ function createTaskCardHTML(task) {
         const dots = task.labels.map(lid => {
             const info = TaskApp.getLabelInfo(lid);
             if (!info) return '';
-            return `<span class="label-dot" style="background:${info.color}" title="${info.name || ''}"></span>`;
+            return `<span class="label-dot" style="background:${info.color}" title="${escapeHTML(info.name || '')}"></span>`;
         }).join('');
         labelsHTML = `<div class="task-card-labels">${dots}</div>`;
     }
@@ -327,7 +327,7 @@ function createTaskListRowHTML(task) {
         const dots = task.labels.map(lid => {
             const info = TaskApp.getLabelInfo(lid);
             if (!info) return '';
-            return `<span class="label-dot" style="background:${info.color}" title="${info.name || ''}"></span>`;
+            return `<span class="label-dot" style="background:${info.color}" title="${escapeHTML(info.name || '')}"></span>`;
         }).join('');
         labelsHTML = `<div class="task-list-labels">${dots}</div>`;
     }

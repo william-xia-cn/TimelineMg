@@ -52,52 +52,13 @@ async function loadSettings() {
     document.getElementById('theme').value = settings.theme || 'light';
     document.getElementById('weekStartsOn').value = settings.start_week_on || 1;
     document.getElementById('tomatoDuration').value = settings.pomodoro_work || 25;
-    document.getElementById('notificationsEnabled').checked = settings.notification_enabled !== false;
-    document.getElementById('reminderBefore').value = settings.reminder_before || 15;
     document.getElementById('defaultDuration').value = settings.default_duration || 45;
     document.getElementById('defaultPriority').value = settings.default_priority || 'medium';
-    document.getElementById('arrangeTrigger').value = settings.arrange_trigger || 'manual';
-    document.getElementById('defensiveThreshold').value = settings.defensive_threshold || 24;
-    document.getElementById('healTime').value = settings.heal_time || '23:00';
-    
-    // Google 账号
-    const googleConnected = settings.google_connected;
-    const googleEmail = settings.google_email;
-    const authBtn = document.getElementById('googleAuthBtn');
-    const accountDesc = document.getElementById('googleAccountDesc');
-    const revokeBtn = document.getElementById('googleRevokeBtn');
-    const syncStatusRow = document.getElementById('syncStatusRow');
-    const syncStatusDesc = document.getElementById('syncStatusDesc');
-    
-    if (googleConnected && googleEmail) {
-        accountDesc.textContent = googleEmail;
-        authBtn.textContent = '重新授权';
-        if (revokeBtn) revokeBtn.style.display = 'inline-flex';
-        if (syncStatusRow) syncStatusRow.style.display = 'flex';
-        
-        // 显示最后同步时间
-        const lastSync = settings.last_sync;
-        if (lastSync) {
-            const syncDate = new Date(lastSync);
-            syncStatusDesc.textContent = `上次同步: ${syncDate.toLocaleString('zh-CN')}`;
-        } else {
-            syncStatusDesc.textContent = '从未同步';
-        }
-    } else {
-        accountDesc.textContent = '未连接';
-        authBtn.textContent = '连接';
-        if (revokeBtn) revokeBtn.style.display = 'none';
-        if (syncStatusRow) syncStatusRow.style.display = 'none';
-    }
 }
 
 function setupEventListeners() {
     document.getElementById('saveBtn').addEventListener('click', saveSettings);
     document.getElementById('reinitBtn').addEventListener('click', reinitialize);
-    document.getElementById('googleAuthBtn').addEventListener('click', handleGoogleAuth);
-    document.getElementById('googleRevokeBtn')?.addEventListener('click', handleGoogleRevoke);
-    document.getElementById('syncNowBtn')?.addEventListener('click', handleSyncNow);
-    document.getElementById('btnRunArrange')?.addEventListener('click', runArrange);
     document.getElementById('exportBtn')?.addEventListener('click', exportData);
     document.getElementById('importJsonBtn')?.addEventListener('click', () => document.getElementById('importJsonInput')?.click());
     document.getElementById('importJsonInput')?.addEventListener('change', importData);
@@ -128,7 +89,6 @@ function setupImportEvents() {
     });
     
     document.getElementById('icsFileInput')?.addEventListener('change', handleFileSelect);
-    document.getElementById('addUrlBtn')?.addEventListener('click', handleUrlAdd);
     document.getElementById('importBtn')?.addEventListener('click', handleImport);
     document.getElementById('addContainerBtn')?.addEventListener('click', () => {
         document.getElementById('addContainerModal').style.display = 'flex';
@@ -181,27 +141,6 @@ function handleFileSelect(event) {
     }
 }
 
-function handleUrlAdd() {
-    const url = document.getElementById('icsUrlInput').value.trim();
-    if (url && isValidUrl(url)) {
-        document.getElementById('selectedFileName').textContent = url;
-        document.getElementById('importBtn').disabled = false;
-        localStorage.setItem('icsFileType', 'url');
-        localStorage.setItem('icsFileUrl', url);
-    } else {
-        showToast('请输入有效的网址', 'error');
-    }
-}
-
-function isValidUrl(string) {
-    try {
-        new URL(string);
-        return true;
-    } catch (_) {
-        return false;
-    }
-}
-
 async function handleImport() {
     const type = localStorage.getItem('icsFileType');
     
@@ -214,17 +153,8 @@ async function handleImport() {
             };
             reader.readAsText(fileInput.files[0]);
         }
-    } else if (type === 'url') {
-        const url = localStorage.getItem('icsFileUrl');
-        if (url) {
-            try {
-                const response = await fetch(url);
-                const content = await response.text();
-                await parseICSAndSave(content);
-            } catch (e) {
-                showToast('无法获取文件，请检查网址', 'error');
-            }
-        }
+    } else {
+        showToast('请先选择本地 ICS 文件', 'error');
     }
 }
 
@@ -282,7 +212,7 @@ async function loadContainers() {
     
     emptyState.classList.remove('show');
     
-    const { getContainerLayer } = window.TimeWhereScheduling;
+    const { getContainerLayer, escapeHTML, escapeAttribute } = window.TimeWhereScheduling;
     for (const container of containers) {
         const layer = getContainerLayer(container);
         const layerBadge = layer === 1
@@ -293,17 +223,17 @@ async function loadContainers() {
         div.innerHTML = `
             <div class="container-info">
                 <div style="display:flex;align-items:center;gap:6px;">
-                    <span class="container-name">${container.name}</span>
+                    <span class="container-name">${escapeHTML(container.name)}</span>
                     ${layerBadge}
                 </div>
-                <span class="container-time">${container.time_start} - ${container.time_end} · ${getRepeatText(container.repeat)}</span>
+                <span class="container-time">${escapeHTML(container.time_start)} - ${escapeHTML(container.time_end)} · ${escapeHTML(getRepeatText(container.repeat))}</span>
             </div>
             <div class="container-actions">
                 <label class="toggle-switch">
-                    <input type="checkbox" class="container-toggle" data-id="${container.id}" ${container.enabled !== false ? 'checked' : ''}>
+                    <input type="checkbox" class="container-toggle" data-id="${escapeAttribute(container.id)}" ${container.enabled !== false ? 'checked' : ''}>
                     <span class="toggle-slider"></span>
                 </label>
-                <button class="delete" data-id="${container.id}"><span class="material-symbols-outlined" style="font-size: 18px;">delete</span></button>
+                <button class="delete" data-id="${escapeAttribute(container.id)}"><span class="material-symbols-outlined" style="font-size: 18px;">delete</span></button>
             </div>
         `;
         containerList.appendChild(div);
@@ -311,7 +241,7 @@ async function loadContainers() {
 
     containerList.querySelectorAll('.container-toggle').forEach(toggle => {
         toggle.addEventListener('change', async () => {
-            const id = parseInt(toggle.dataset.id);
+            const id = toggle.dataset.id;
             await TimeWhereDB.updateContainer(id, { enabled: toggle.checked });
             loadContainers();
         });
@@ -320,7 +250,7 @@ async function loadContainers() {
     containerList.querySelectorAll('.delete').forEach(btn => {
         btn.addEventListener('click', async () => {
             if (confirm('确定要删除这个容器吗？')) {
-                await TimeWhereDB.deleteContainer(parseInt(btn.dataset.id));
+                await TimeWhereDB.deleteContainer(btn.dataset.id);
                 loadContainers();
             }
         });
@@ -332,139 +262,13 @@ function getRepeatText(repeat) {
     return map[repeat] || repeat;
 }
 
-async function handleGoogleAuth() {
-    const btn = document.getElementById('googleAuthBtn');
-    const originalText = btn.textContent;
-    btn.textContent = '授权中...';
-    btn.disabled = true;
-    
-    try {
-        // 当前使用演示模式（待 OAuth 配置完成后改为真实授权）
-        await simulateGoogleAuth();
-    } catch (e) {
-        console.error('Google auth error:', e);
-        showToast('授权失败: ' + e.message, 'error');
-    } finally {
-        btn.textContent = originalText;
-        btn.disabled = false;
-    }
-}
-
-async function signInWithChromeIdentity() {
-    try {
-        // 使用 chrome.identity.getAuthToken (推荐方式)
-        const token = await new Promise((resolve, reject) => {
-            chrome.identity.getAuthToken({
-                interactive: true,
-                scopes: [
-                    'https://www.googleapis.com/auth/tasks',
-                    'https://www.googleapis.com/auth/calendar',
-                    'https://www.googleapis.com/auth/userinfo.email'
-                ]
-            }, (authToken) => {
-                if (chrome.runtime.lastError) {
-                    reject(new Error(chrome.runtime.lastError.message));
-                } else {
-                    resolve(authToken);
-                }
-            });
-        });
-        
-        if (!token) {
-            throw new Error('未能获取授权令牌');
-        }
-        
-        // 保存 token
-        await TimeWhereDB.setSetting('access_token', token);
-        await TimeWhereDB.setSetting('google_connected', true);
-        
-        // 获取用户信息
-        const userInfo = await getGoogleUserInfo(token);
-        await TimeWhereDB.setSetting('google_email', userInfo.email);
-        
-        showToast('Google 账号连接成功', 'success');
-        await loadSettings();
-        
-    } catch (e) {
-        console.error('Google auth error:', e);
-        throw e;
-    }
-}
-
-async function getGoogleUserInfo(accessToken) {
-    const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-    
-    if (!response.ok) {
-        throw new Error('Failed to get user info');
-    }
-    
-    return await response.json();
-}
-
-async function simulateGoogleAuth() {
-    // 使用演示模式
-    await TimeWhereDB.setSetting('google_connected', true);
-    await TimeWhereDB.setSetting('google_email', 'William.Xia.cn@gmail.com');
-    await TimeWhereDB.setSetting('access_token', 'demo_access_token');
-    await TimeWhereDB.setSetting('refresh_token', 'demo_refresh_token');
-    showToast('演示模式已启用 (William.Xia.cn@gmail.com)', 'success');
-    await loadSettings();
-}
-
-async function handleGoogleRevoke() {
-    if (!confirm('确定要断开 Google 账号连接吗？')) return;
-    
-    await TimeWhereDB.setSetting('google_connected', false);
-    await TimeWhereDB.setSetting('google_email', null);
-    await TimeWhereDB.setSetting('access_token', null);
-    await TimeWhereDB.setSetting('refresh_token', null);
-    await TimeWhereDB.setSetting('google_client_id', null);
-    
-    showToast('已断开 Google 账号', 'success');
-    await loadSettings();
-}
-
-async function handleSyncNow() {
-    const btn = document.getElementById('syncNowBtn');
-    const originalText = btn.textContent;
-    btn.textContent = '同步中...';
-    btn.disabled = true;
-    
-    try {
-        if (typeof SyncEngine !== 'undefined') {
-            const result = await SyncEngine.syncToGoogle();
-            if (result.success) {
-                showToast(`同步完成: ${result.synced} 项已同步`, 'success');
-                await loadSettings(); // 刷新显示
-            } else {
-                showToast('同步失败: ' + (result.reason || result.error), 'error');
-            }
-        } else {
-            showToast('同步引擎未加载', 'error');
-        }
-    } catch (e) {
-        console.error('Sync error:', e);
-        showToast('同步失败: ' + e.message, 'error');
-    } finally {
-        btn.textContent = originalText;
-        btn.disabled = false;
-    }
-}
-
 async function saveSettings() {
     const settings = {
         theme: document.getElementById('theme').value,
         start_week_on: parseInt(document.getElementById('weekStartsOn').value),
         pomodoro_work: parseInt(document.getElementById('tomatoDuration').value),
-        notification_enabled: document.getElementById('notificationsEnabled').checked,
-        reminder_before: parseInt(document.getElementById('reminderBefore').value),
         default_duration: parseInt(document.getElementById('defaultDuration').value) || 45,
-        default_priority: document.getElementById('defaultPriority').value || 'medium',
-        arrange_trigger: document.getElementById('arrangeTrigger').value || 'manual',
-        defensive_threshold: parseInt(document.getElementById('defensiveThreshold').value) || 24,
-        heal_time: document.getElementById('healTime').value || '23:00'
+        default_priority: document.getElementById('defaultPriority').value || 'medium'
     };
 
     for (const [key, value] of Object.entries(settings)) {
@@ -472,24 +276,6 @@ async function saveSettings() {
     }
 
     showToast('设置已保存', 'success');
-}
-
-async function runArrange() {
-    try {
-        const btn = document.getElementById('btnRunArrange');
-        if (btn) btn.disabled = true;
-        const stats = await TimeWhereScheduling.arrangeTasks(TimeWhereDB);
-        if (stats.arranged > 0) {
-            showToast(`已编排 ${stats.arranged} 个任务，跳过 ${stats.skipped} 个`, 'success');
-        } else {
-            showToast(`没有需要编排的任务（跳过 ${stats.skipped} 个）`, 'info');
-        }
-    } catch (e) {
-        showToast('编排失败：' + e.message, 'error');
-    } finally {
-        const btn = document.getElementById('btnRunArrange');
-        if (btn) btn.disabled = false;
-    }
 }
 
 async function reinitialize() {
@@ -625,64 +411,6 @@ function setupWizardEvents() {
     });
 
     updateWizardUI();
-}
-
-async function createDefaultContainers() {
-    const containers = [
-        {
-            name: '学习时间',
-            color: '#4A90D9',
-            time_start: '18:30',
-            time_end: '21:30',
-            repeat: 'weekday',
-            task_types: ['homework', 'test', 'ia', 'notes', 'review'],
-            defense: 'soft',
-            squeezing: 'p1_only'
-        },
-        {
-            name: '自由时间',
-            color: '#7B68EE',
-            time_start: '21:30',
-            time_end: '23:00',
-            repeat: 'daily',
-            task_types: ['project', 'other'],
-            defense: 'soft',
-            squeezing: 'p1_p2'
-        },
-        {
-            name: '睡前时间',
-            color: '#2E8B57',
-            time_start: '23:00',
-            time_end: '23:30',
-            repeat: 'daily',
-            task_types: ['notes', 'review'],
-            defense: 'hard',
-            squeezing: 'none'
-        }
-    ];
-    
-    for (const container of containers) {
-        await TimeWhereDB.addContainer(container);
-    }
-}
-
-async function createDefaultHabits() {
-    const habits = [
-        {
-            title: '每日背单词',
-            frequency: 'daily',
-            target_count: 1
-        },
-        {
-            title: '晨跑',
-            frequency: 'daily',
-            target_count: 1
-        }
-    ];
-    
-    for (const habit of habits) {
-        await TimeWhereDB.addHabit(habit);
-    }
 }
 
 function showToast(message, type = 'info') {

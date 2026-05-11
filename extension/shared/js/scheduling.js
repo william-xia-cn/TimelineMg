@@ -35,6 +35,21 @@
         return map[label] || 'priority-low';
     }
 
+    function escapeHTML(value) {
+        const map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        };
+        return String(value ?? '').replace(/[&<>"']/g, ch => map[ch]);
+    }
+
+    function escapeAttribute(value) {
+        return escapeHTML(value);
+    }
+
     // 给定 YYYY-MM-DD，计算它是该月第几个星期X
     function _nthWeekdayOfMonth(dateStr) {
         const d = new Date(dateStr + 'T00:00:00');
@@ -103,6 +118,22 @@
      */
     function getContainerCapacity(c) {
         return timeToMinutes(c.time_end) - timeToMinutes(c.time_start);
+    }
+
+    function buildDailyTaskPool(tasks, referenceDate) {
+        const now = referenceDate || new Date();
+        const todayStr = formatDateISO(now);
+        return (tasks || []).filter(t =>
+            t.progress !== 'completed' &&
+            (t.start_date == null || t.start_date <= todayStr) &&
+            (t.deferred_until == null || new Date(t.deferred_until) <= now)
+        );
+    }
+
+    function getDeferredStartDate(days, referenceDate) {
+        const date = new Date(referenceDate || new Date());
+        date.setDate(date.getDate() + days);
+        return formatDateISO(date);
     }
 
     /**
@@ -259,68 +290,16 @@
         });
     }
 
-    /**
-     * Arrange — 基于课表为带 subject 的任务分配 start_date
-     * @param {Object} db - TimeWhereDB 实例
-     * @param {String} referenceDate - 基准日期 YYYY-MM-DD，默认今天
-     * @returns {{ arranged: number, skipped: number, errors: Array, today: string }}
-     */
     async function arrangeTasks(db, referenceDate) {
         const todayStr = referenceDate || formatDateISO(new Date());
-
-        const allTasks = await db.getAllTasks();
-        const incompleteTasks = allTasks.filter(t => t.progress !== 'completed');
-
-        const timetableEvents = await db.db.events
-            .filter(e => e.source === 'timetable' && e.date >= todayStr)
-            .sortBy('date');
-
-        let arranged = 0;
-        let skipped = 0;
-        const errors = [];
-
-        function eventMatchesSubject(ev, subject) {
-            const s = (subject || '').toLowerCase();
-            const t = (ev.title || '').toLowerCase();
-            return t.includes(s) || s.includes(t);
-        }
-
-        for (const task of incompleteTasks) {
-            let subject = task.subject;
-            if (!subject && task.plan_id) {
-                const plan = await db.getPlanById(task.plan_id);
-                if (plan) subject = plan.subject || plan.name;
-            }
-            if (!subject) {
-                skipped++;
-                continue;
-            }
-
-            if (task.start_date && task.start_date > todayStr) {
-                skipped++;
-                continue;
-            }
-
-            const matches = timetableEvents.filter(ev => eventMatchesSubject(ev, subject));
-            if (matches.length === 0) {
-                skipped++;
-                continue;
-            }
-
-            const nextDate = matches[0].date;
-            if (task.start_date !== nextDate) {
-                try {
-                    await db.updateTask(task.id, { start_date: nextDate });
-                    arranged++;
-                } catch (e) {
-                    errors.push({ task: task.id, error: e.message });
-                }
-            } else {
-                skipped++;
-            }
-        }
-
-        return { arranged, skipped, errors, today: todayStr };
+        return {
+            arranged: 0,
+            skipped: 0,
+            errors: [],
+            today: todayStr,
+            disabled: true,
+            reason: 'out_of_scope_for_mvp'
+        };
     }
 
     // 导出
@@ -333,9 +312,13 @@
         containerAppliesOn,
         getContainerLayer,
         getContainerCapacity,
+        buildDailyTaskPool,
+        getDeferredStartDate,
         dailySettle,
         initDefaultContainers,
         arrangeTasks,
+        escapeHTML,
+        escapeAttribute,
         _nthWeekdayOfMonth
     };
 })(typeof window !== 'undefined' ? window : this);

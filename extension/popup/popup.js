@@ -51,29 +51,7 @@ async function loadCurrentTask() {
         return;
     }
 
-    const now = new Date();
-    const todayStr = formatDateISO(now);
-    const dayOfWeek = now.getDay();
-    const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-    // 构建今日任务池
-    const allTasks = await TimeWhereDB.getAllTasks();
-    const taskPool = allTasks.filter(t =>
-        t.progress !== 'completed' &&
-        t.start_date && t.start_date <= todayStr &&
-        (t.deferred_until == null || new Date(t.deferred_until) <= now)
-    );
-
-    // 获取今日生效容器
-    const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
-    const todayContainers = allContainers.filter(c =>
-        TimeWhereScheduling.containerAppliesToDate(c, now, todayStr, dayOfWeek, isWeekday, isWeekend)
-    );
-
-    // Daily Settle
-    const { currentTasks, activeContainer, sortedPool } = TimeWhereScheduling.dailySettle(taskPool, todayContainers, now);
-    const task = currentTasks[0] || sortedPool[0] || null;
+    const { task, activeContainer } = await getCurrentTaskProjection();
 
     if (!document.querySelector('.task-card')) return;
 
@@ -84,12 +62,36 @@ async function loadCurrentTask() {
     }
 }
 
+async function getCurrentTaskProjection() {
+    const now = new Date();
+    const todayStr = formatDateISO(now);
+    const dayOfWeek = now.getDay();
+    const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+    // 构建今日任务池
+    const allTasks = await TimeWhereDB.getAllTasks();
+    const taskPool = TimeWhereScheduling.buildDailyTaskPool(allTasks, now);
+
+    // 获取今日生效容器
+    const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
+    const todayContainers = allContainers.filter(c =>
+        TimeWhereScheduling.containerAppliesToDate(c, now, todayStr, dayOfWeek, isWeekday, isWeekend)
+    );
+
+    // Daily Settle
+    const { currentTasks, activeContainer, sortedPool } = TimeWhereScheduling.dailySettle(taskPool, todayContainers, now);
+    const task = currentTasks[0] || sortedPool[0] || null;
+    return { task, activeContainer };
+}
+
 function renderCurrentTask(task, activeContainer) {
     const taskCard = document.querySelector('.task-card');
     if (!taskCard) return;
 
+    const escapeHTML = TimeWhereScheduling.escapeHTML;
     const containerLabel = activeContainer
-        ? `<span class="container-name">${activeContainer.name}</span>`
+        ? `<span class="container-name">${escapeHTML(activeContainer.name)}</span>`
         : '';
     const dueStr = task.due_date || task.deadline;
 
@@ -97,7 +99,7 @@ function renderCurrentTask(task, activeContainer) {
         <div class="current-task-info">
             <div class="task-title-row">
                 <span class="status-dot pulsing"></span>
-                <span class="task-title">${task.title || '无标题任务'}</span>
+                <span class="task-title">${escapeHTML(task.title || '无标题任务')}</span>
             </div>
             <div class="task-meta">
                 <span class="priority-badge ${getPriorityClass(task.priority)}">${TimeWhereScheduling.priorityLabel(task.priority)}</span>
@@ -184,33 +186,24 @@ function setupEventListeners() {
             btn.classList.add('clicked');
             setTimeout(() => btn.classList.remove('clicked'), 150);
 
-            // 用 Daily Settle 获取当前任务（与 loadCurrentTask 保持一致）
-            const now = new Date();
-            const todayStr = formatDateISO(now);
-            const dayOfWeek = now.getDay();
-            const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
-            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-            const allTasks = await TimeWhereDB.getAllTasks();
-            const taskPool = allTasks.filter(t =>
-                t.progress !== 'completed' && t.start_date && t.start_date <= todayStr &&
-                (t.deferred_until == null || new Date(t.deferred_until) <= now)
-            );
-            const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
-            const todayContainers = allContainers.filter(c =>
-                TimeWhereScheduling.containerAppliesToDate(c, now, todayStr, dayOfWeek, isWeekday, isWeekend)
-            );
-            const { currentTasks, sortedPool } = TimeWhereScheduling.dailySettle(taskPool, todayContainers, now);
-            const task = currentTasks[0] || sortedPool[0] || null;
+            const { task } = await getCurrentTaskProjection();
 
             if (btn.id === 'btnStart' && task) {
-                showToast('继续任务', 'info');
+                await TimeWhereDB.startTask(task.id);
+                showToast('任务已开始', 'info');
+                await loadCurrentTask();
+                await loadStats();
             } else if (btn.id === 'btnComplete' && task) {
                 await TimeWhereDB.completeTask(task.id);
                 showToast('任务完成！', 'success');
                 await loadCurrentTask();
                 await loadStats();
             } else if (btn.id === 'btnDelay' && task) {
-                showToast('任务延后15分钟', 'info');
+                const nextStartDate = TimeWhereScheduling.getDeferredStartDate(1, new Date());
+                await TimeWhereDB.updateTask(task.id, { start_date: nextStartDate });
+                showToast('任务已延后1天', 'info');
+                await loadCurrentTask();
+                await loadStats();
             }
         });
     });

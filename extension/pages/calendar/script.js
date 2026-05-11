@@ -179,7 +179,8 @@ function renderTimeAxis() {
 
 // 调度相关函数从 shared/js/scheduling.js 导入
 const { containerAppliesToDate, _nthWeekdayOfMonth,
-        dailySettle, getContainerLayer, priorityLabel, priorityClass } = window.TimeWhereScheduling;
+        dailySettle, buildDailyTaskPool, getContainerLayer, priorityLabel, priorityClass,
+        escapeHTML, escapeAttribute } = window.TimeWhereScheduling;
 
 async function renderWeekColumns(dates) {
     const container = document.getElementById('weekColumns');
@@ -217,14 +218,9 @@ async function renderWeekColumns(dates) {
             return containerAppliesToDate(c, date, dateStr, dayOfWeek, isWeekday, isWeekend);
         });
 
-        // 当日任务池（start_date ≤ 该日 且未完成）
-        const taskPool = allTasks.filter(t =>
-            t.progress !== 'completed' &&
-            t.start_date && t.start_date <= dateStr
-        );
-
         // Daily Settle — 用该日正午作为"当前时间"（让所有容器都处于"未来"状态参与分配）
         const dayNoon = new Date(dateStr + 'T12:00:00');
+        const taskPool = buildDailyTaskPool(allTasks, dayNoon);
         const settle = dailySettle(taskPool, dayContainers, dayNoon);
 
         const containerEvents = dayContainers.map(c => ({
@@ -275,7 +271,7 @@ async function renderWeekColumns(dates) {
 }
 
 function createEventCard(item) {
-    const title = item.title || item.name || '未命名';
+    const title = escapeHTML(item.title || item.name || '未命名');
     const timeStart = item.time_start;
     const timeEnd = item.time_end;
     const color = item.color || '#4A90D9';
@@ -347,10 +343,10 @@ function createEventCard(item) {
             tasks.map(t => {
                 const pLabel = priorityLabel(t.priority);
                 const pCls = priorityClass(t.priority);
-                const timedMark = t.schedule_time ? `<span class="task-timed">${t.schedule_time}</span>` : '';
+                const timedMark = t.schedule_time ? `<span class="task-timed">${escapeHTML(t.schedule_time)}</span>` : '';
                 return `<div class="container-task-item">
-                    <span class="task-priority-dot ${pCls}" title="${pLabel}"></span>
-                    <span class="task-item-title">${t.title || '无标题'}</span>
+                    <span class="task-priority-dot ${pCls}" title="${escapeAttribute(pLabel)}"></span>
+                    <span class="task-item-title">${escapeHTML(t.title || '无标题')}</span>
                     <span class="task-item-dur">${t.duration || 45}m</span>
                     ${timedMark}
                 </div>`;
@@ -358,7 +354,7 @@ function createEventCard(item) {
         `</div>`;
     }
 
-    event.innerHTML = `<h4>${title}</h4><span>${startTimeStr} - ${endTimeStr}</span>${tasksHTML}`;
+    event.innerHTML = `<h4>${title}</h4><span>${escapeHTML(startTimeStr)} - ${escapeHTML(endTimeStr)}</span>${tasksHTML}`;
 
     return event;
 }
@@ -785,9 +781,9 @@ function setupCalendar() {
         const title = type === 'container' ? data.name : data.title;
         const timeStr = data.time_start && data.time_end ? `${data.time_start} – ${data.time_end}` : '全天';
         const extra = type === 'container'
-            ? `<div class="tt-time">${timeStr} · ${_repeatLabel(data)}</div>`
-            : `<div class="tt-time">${data.date} ${timeStr}</div>${data.description ? `<div class="tt-desc">${data.description.slice(0, 60)}</div>` : ''}`;
-        el.innerHTML = `<div class="tt-title">${title}</div>${extra}`;
+            ? `<div class="tt-time">${escapeHTML(timeStr)} · ${escapeHTML(_repeatLabel(data))}</div>`
+            : `<div class="tt-time">${escapeHTML(data.date)} ${escapeHTML(timeStr)}</div>${data.description ? `<div class="tt-desc">${escapeHTML(data.description.slice(0, 60))}</div>` : ''}`;
+        el.innerHTML = `<div class="tt-title">${escapeHTML(title)}</div>${extra}`;
         el.style.borderLeftColor = data.color || 'var(--primary)';
         document.body.appendChild(el);
         _tooltipEl = el;
@@ -926,29 +922,7 @@ function setupInitEvents() {
 
 async function saveInitData() {
     if (localStorage.getItem('wizard_init_container') === 'true') {
-        await createDefaultContainers();
-    }
-}
-
-async function createDefaultContainers() {
-    const containers = [
-        { name: '学习时间', color: '#4A90D9', time_start: '18:30', time_end: '21:30', repeat: 'weekday', task_types: ['homework', 'test', 'notes', 'review'], defense: 'soft', squeezing: 'p1_only' },
-        { name: '自由时间', color: '#7B68EE', time_start: '21:30', time_end: '23:00', repeat: 'daily', task_types: ['project', 'other'], defense: 'soft', squeezing: 'p1_p2' },
-        { name: '睡前时间', color: '#2E8B57', time_start: '23:00', time_end: '23:30', repeat: 'daily', task_types: ['notes', 'review'], defense: 'hard', squeezing: 'none' }
-    ];
-    
-    if (document.getElementById('enableStudyContainer')?.checked === false) {
-        containers.shift();
-    }
-    if (document.getElementById('enableFreeContainer')?.checked === false) {
-        containers.splice(1, 1);
-    }
-    if (document.getElementById('enableSleepContainer')?.checked === false) {
-        containers.pop();
-    }
-    
-    for (const container of containers) {
-        await TimeWhereDB.addContainer(container);
+        await TimeWhereScheduling.initDefaultContainers(TimeWhereDB);
     }
 }
 
@@ -1129,16 +1103,16 @@ async function _renderModal({ date, timeStart, timeEnd }) {
         bodyHTML += `
             <div class="form-group">
                 <label>名称</label>
-                <input type="text" id="modalName" value="${data?.name || ''}" placeholder="输入容器名称">
+                <input type="text" id="modalName" value="${escapeAttribute(data?.name || '')}" placeholder="输入容器名称">
             </div>
             <div class="form-row">
                 <div class="form-group">
                     <label>开始</label>
-                    <input type="time" id="modalStart" value="${data?.time_start || timeStart || '09:00'}">
+                    <input type="time" id="modalStart" value="${escapeAttribute(data?.time_start || timeStart || '09:00')}">
                 </div>
                 <div class="form-group">
                     <label>结束</label>
-                    <input type="time" id="modalEnd" value="${data?.time_end || timeEnd || '10:00'}">
+                    <input type="time" id="modalEnd" value="${escapeAttribute(data?.time_end || timeEnd || '10:00')}">
                 </div>
             </div>
             <div class="form-group">
@@ -1171,11 +1145,11 @@ async function _renderModal({ date, timeStart, timeEnd }) {
         bodyHTML += `
             <div class="form-group">
                 <label>标题</label>
-                <input type="text" id="modalName" value="${data?.title || ''}" placeholder="输入事件标题">
+                <input type="text" id="modalName" value="${escapeAttribute(data?.title || '')}" placeholder="输入事件标题">
             </div>
             <div class="form-group">
                 <label>日期</label>
-                <input type="date" id="modalDate" value="${data?.date || date || ''}">
+                <input type="date" id="modalDate" value="${escapeAttribute(data?.date || date || '')}">
             </div>
             <div class="form-group allday-toggle-row">
                 <label class="allday-label">
@@ -1186,11 +1160,11 @@ async function _renderModal({ date, timeStart, timeEnd }) {
             <div class="form-row" id="modalTimeRow" style="${timeRowDisplay}">
                 <div class="form-group">
                     <label>开始</label>
-                    <input type="time" id="modalStart" value="${data?.time_start || timeStart || '09:00'}">
+                    <input type="time" id="modalStart" value="${escapeAttribute(data?.time_start || timeStart || '09:00')}">
                 </div>
                 <div class="form-group">
                     <label>结束</label>
-                    <input type="time" id="modalEnd" value="${data?.time_end || timeEnd || '10:00'}">
+                    <input type="time" id="modalEnd" value="${escapeAttribute(data?.time_end || timeEnd || '10:00')}">
                 </div>
             </div>
             <div class="form-group">

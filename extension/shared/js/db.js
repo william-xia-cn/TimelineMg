@@ -118,6 +118,32 @@ const TimeWhereDB = {
         return await db.plans.get(id);
     },
 
+    async ensureDefaultPlan() {
+        let plan = await db.plans.orderBy('created_at').first();
+        if (plan) return plan;
+
+        plan = await this.addPlan({
+            name: 'My Tasks',
+            color: '#2b56e3',
+            icon_char: '✓'
+        });
+
+        const defaultBuckets = [
+            ['Homework', 0],
+            ['Test', 1],
+            ['IA / EE', 2],
+            ['Notes', 3],
+            ['Review', 4],
+            ['Project', 5],
+            ['Other', 6]
+        ];
+        for (const [name, sort_order] of defaultBuckets) {
+            await this.addBucket({ plan_id: plan.id, name, sort_order });
+        }
+
+        return plan;
+    },
+
     async addPlan(plan) {
         const now = this.getNowISO();
         const newPlan = {
@@ -296,10 +322,11 @@ const TimeWhereDB = {
 
     async addTask(task) {
         const now = this.getNowISO();
+        const plan = task.plan_id ? await db.plans.get(task.plan_id) : await this.ensureDefaultPlan();
+        const planId = task.plan_id || plan.id;
         let subject = task.subject || null;
-        if (!subject && task.plan_id) {
-            const plan = await db.plans.get(task.plan_id);
-            if (plan) subject = plan.subject || plan.name || null;
+        if (!subject && plan) {
+            subject = plan.subject || plan.name || null;
         }
         const progressVal = task.progress || 'not_started';
         const newTask = {
@@ -307,7 +334,7 @@ const TimeWhereDB = {
             id: this.generateId(),
             // Core Planner fields
             title: task.title || '',
-            plan_id: task.plan_id,
+            plan_id: planId,
             bucket_id: task.bucket_id || null,
             progress: progressVal,
             priority: task.priority || 'medium',
@@ -535,7 +562,8 @@ const TimeWhereDB = {
 
     // ========== Habits ==========
     async getHabits() {
-        return await db.habits.orderBy('created_at').reverse().toArray();
+        const habits = await db.habits.toArray();
+        return habits.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
     },
 
     async getHabitById(id) {
@@ -694,7 +722,8 @@ const TimeWhereDB = {
     },
 
     async getPendingSyncLogs() {
-        return await db.sync_log.where('synced').equals(false).toArray();
+        const logs = await db.sync_log.toArray();
+        return logs.filter(log => log.synced === false);
     },
 
     async clearSyncLog(id) {

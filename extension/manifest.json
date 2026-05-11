@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TimeWhere",
-  "version": "2.0.0",
+  "version": "0.1.0",
   "description": "个人时间管理与任务规划系统 - TimeWhere for IB Students",
   "options_page": "pages/settings/settings.html",
   "icons": {
@@ -12,15 +12,7 @@
   "permissions": [
     "storage",
     "tabs",
-    "alarms",
-    "notifications",
-    "identity",
     "unlimitedStorage"
-  ],
-  "host_permissions": [
-    "https://www.googleapis.com/*",
-    "https://accounts.google.com/*",
-    "https://oauth2.googleapis.com/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",

@@ -33,15 +33,6 @@ async function initApp() {
     } catch(e) {
         console.error('initDefaultContainers failed:', e);
     }
-    // 自动 Arrange
-    try {
-        const trigger = await TimeWhereDB.getSetting('arrange_trigger');
-        if (trigger === 'auto') {
-            await TimeWhereScheduling.arrangeTasks(TimeWhereDB);
-        }
-    } catch (e) {
-        console.error('Auto arrange failed:', e);
-    }
     await loadDashboardData();
     await initPomodoro();
 }
@@ -70,7 +61,7 @@ async function loadDashboardData() {
 // 从 shared/js/scheduling.js 导入调度相关函数
 const { timeToMinutes, prioritySortValue, priorityLabel, priorityClass,
         containerAppliesToDate, getContainerLayer, dailySettle,
-        _nthWeekdayOfMonth } = window.TimeWhereScheduling;
+        buildDailyTaskPool, escapeHTML, escapeAttribute, _nthWeekdayOfMonth } = window.TimeWhereScheduling;
 
 function formatDate(dateStr) {
     const today = new Date();
@@ -142,11 +133,7 @@ async function loadTaskColumn() {
 
     // 构建当日任务池：start_date <= today 或 null，且未完成，且未延后到未来
     const allTasks = await TimeWhereDB.getAllTasks();
-    const taskPool = allTasks.filter(t =>
-        t.progress !== 'completed' &&
-        (t.start_date == null || t.start_date <= todayStr) &&
-        (t.deferred_until == null || new Date(t.deferred_until) <= now)
-    );
+    const taskPool = buildDailyTaskPool(allTasks, now);
 
     // 获取今日容器
     const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
@@ -217,7 +204,9 @@ async function loadTaskColumn() {
 function createTaskCard(task, opts = {}) {
     const { expanded, isOverdue, isDueToday, isTimed, isInProgress } = opts;
     const openAttr = expanded ? ' open' : '';
-    const title = task.title || '无标题任务';
+    const title = escapeHTML(task.title || '无标题任务');
+    const notes = escapeHTML(task.notes || task.description || '');
+    const taskId = escapeAttribute(task.id);
     const pLabel = priorityLabel(task.priority);
     const pClass = priorityClass(task.priority);
     const durationText = `${task.duration || 45}min`;
@@ -230,23 +219,21 @@ function createTaskCard(task, opts = {}) {
     let tagsHtml = '';
     if (isOverdue) tagsHtml += '<span class="tag tag-overdue">逾期</span>';
     if (isDueToday) tagsHtml += '<span class="tag tag-due-today">今日截止</span>';
-    if (isTimed) tagsHtml += `<span class="tag tag-timed">${task.schedule_time}</span>`;
+    if (isTimed) tagsHtml += `<span class="tag tag-timed">${escapeHTML(task.schedule_time)}</span>`;
 
     // 操作按钮
     const progressBtns = isInProgress
-        ? `<button class="btn-micro" onclick="pauseTask('${task.id}')">暂停</button>
-           <button class="btn-micro primary" onclick="completeTaskNow('${task.id}')">完成</button>`
-        : `<button class="btn-micro primary" onclick="startTaskNow('${task.id}')">开始</button>
-           <button class="btn-micro" onclick="completeTaskNow('${task.id}')">完成</button>`;
+        ? `<button class="btn-micro" onclick="pauseTask('${taskId}')">暂停</button>
+           <button class="btn-micro primary" onclick="completeTaskNow('${taskId}')">完成</button>`
+        : `<button class="btn-micro primary" onclick="startTaskNow('${taskId}')">开始</button>
+           <button class="btn-micro" onclick="completeTaskNow('${taskId}')">完成</button>`;
 
     const deferHtml = `
         <div class="defer-row">
             <span class="defer-label">延后</span>
-            <button class="btn-defer" onclick="deferTaskHours('${task.id}', 1)">1h</button>
-            <button class="btn-defer" onclick="deferTaskHours('${task.id}', 3)">3h</button>
-            <button class="btn-defer" onclick="deferTask('${task.id}', 1)">1天</button>
-            <button class="btn-defer" onclick="deferTask('${task.id}', 3)">3天</button>
-            <button class="btn-defer" onclick="deferTask('${task.id}', 7)">7天</button>
+            <button class="btn-defer" onclick="deferTask('${taskId}', 1)">1天</button>
+            <button class="btn-defer" onclick="deferTask('${taskId}', 3)">3天</button>
+            <button class="btn-defer" onclick="deferTask('${taskId}', 7)">7天</button>
         </div>`;
 
     return `
@@ -260,7 +247,7 @@ function createTaskCard(task, opts = {}) {
                     <span class="material-symbols-outlined expand-icon">expand_more</span>
                 </summary>
                 <div class="task-details">
-                    ${task.notes || task.description ? `<p>${task.notes || task.description}</p>` : ''}
+                    ${notes ? `<p>${notes}</p>` : ''}
                     <div class="task-meta-tags">
                         <span class="priority-badge ${pClass}">${pLabel}</span>
                         <span class="meta-item"><span class="material-symbols-outlined">schedule</span>${durationText}</span>
@@ -300,14 +287,6 @@ async function deferTask(taskId, days) {
     await TimeWhereDB.updateTask(taskId, { start_date: targetStr });
     await loadDashboardData();
     showToast(`任务已延后 ${days} 天`, 'info');
-}
-
-async function deferTaskHours(taskId, hours) {
-    const now = new Date();
-    const target = new Date(now.getTime() + hours * 60 * 60 * 1000);
-    await TimeWhereDB.updateTask(taskId, { deferred_until: target.toISOString() });
-    await loadDashboardData();
-    showToast(`任务已延后 ${hours} 小时`, 'info');
 }
 
 // ============================================================
@@ -413,7 +392,7 @@ function renderDayColumn(col, dateObj, dateStr, allContainers, allDbEvents, isTo
         div.className = 'gcal-event';
         div.style.cssText = `top: ${top}px; height: ${height}px; background-color: ${item.color}; border-left: 3px solid ${darkenColor(item.color, 0.3)};`;
         if (item.isContainer) div.style.opacity = '0.7';
-        div.innerHTML = `<h4>${item.title}</h4><span>${item.time_start} - ${item.time_end}</span>`;
+        div.innerHTML = `<h4>${escapeHTML(item.title)}</h4><span>${escapeHTML(item.time_start)} - ${escapeHTML(item.time_end)}</span>`;
         col.appendChild(div);
     });
 
@@ -514,9 +493,9 @@ async function loadWeeklyProgress() {
         const completedClass = task.progress === 'completed' ? ' completed-text' : '';
         return `
             <label class="simple-task-item">
-                <input type="checkbox"${checked} onchange="toggleWeekTask('${task.id}', this.checked)">
+                <input type="checkbox"${checked} onchange="toggleWeekTask('${escapeAttribute(task.id)}', this.checked)">
                 <span class="custom-chk"></span>
-                <div class="task-desc${completedClass}">${task.title || '无标题'}</div>
+                <div class="task-desc${completedClass}">${escapeHTML(task.title || '无标题')}</div>
             </label>`;
     }).join('');
 }
@@ -684,11 +663,11 @@ function createFeedItem({ type, icon, title, body, time }) {
     return `
         <div class="feed-item ${type}">
             <div class="feed-icon" style="${iconStyle}">
-                <span class="material-symbols-outlined">${icon}</span>
+                <span class="material-symbols-outlined">${escapeHTML(icon)}</span>
             </div>
             <div class="feed-text">
-                <p><strong>${title}</strong>: ${body}</p>
-                <span class="feed-time">${timeText}</span>
+                <p><strong>${escapeHTML(title)}</strong>: ${escapeHTML(body)}</p>
+                <span class="feed-time">${escapeHTML(timeText)}</span>
             </div>
         </div>`;
 }
@@ -713,26 +692,6 @@ function setupEventListeners() {
     document.querySelectorAll('.add-task-btn').forEach(btn => {
         btn.addEventListener('click', openAddTaskModal);
     });
-
-    const btnArrange = document.getElementById('btnArrange');
-    if (btnArrange) {
-        btnArrange.addEventListener('click', async () => {
-            try {
-                btnArrange.disabled = true;
-                const stats = await TimeWhereScheduling.arrangeTasks(TimeWhereDB);
-                if (stats.arranged > 0) {
-                    showToast(`已编排 ${stats.arranged} 个任务`, 'success');
-                    await loadTaskColumn();
-                } else {
-                    showToast(`没有需要编排的任务`, 'info');
-                }
-            } catch (e) {
-                showToast('编排失败：' + e.message, 'error');
-            } finally {
-                btnArrange.disabled = false;
-            }
-        });
-    }
 
     const pomoToggle = document.getElementById('pomoToggle');
     const pomoReset = document.getElementById('pomoReset');
@@ -995,7 +954,6 @@ window.startTaskNow = startTaskNow;
 window.pauseTask = pauseTask;
 window.completeTaskNow = completeTaskNow;
 window.deferTask = deferTask;
-window.deferTaskHours = deferTaskHours;
 window.completeHabitNow = completeHabitNow;
 window.toggleWeekTask = toggleWeekTask;
 window.openAddTaskModal = openAddTaskModal;
