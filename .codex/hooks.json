@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node tests/scheduling.test.js",
+            "timeout": 30,
+            "statusMessage": "Running scheduling unit tests..."
+          }
+        ]
+      }
+    ]
+  }
+}
