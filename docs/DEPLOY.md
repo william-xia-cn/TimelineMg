@@ -2,6 +2,8 @@
 
 本文档记录 TimeWhere 扩展从本地开发完成到最终发布上线所需补充和完成的工作。
 
+> Current stage warning (2026-05-12): This document is future release reference only. Product Owner has approved Internal MVP acceptance, not public release. Chrome Web Store submission, public deployment, tag, push, merge, publish, deploy, upload, submit, OAuth setup, and Google Sync are not approved for the current stage.
+
 ---
 
 ## 一、部署前准备
@@ -15,7 +17,7 @@
    - Google Calendar API
    - Google People API (用于获取用户邮箱)
 
-### 1.2 创建 OAuth 2.0 客户端
+### 1.2 创建 OAuth 2.0 客户端（future Google Sync only）
 
 1. 进入 **APIs & Services** → **Credentials**
 2. 点击 **Create Credentials** → **OAuth client ID**
@@ -29,7 +31,7 @@
 
 ## 二、配置 Manifest
 
-### 2.1 添加 OAuth 配置
+### 2.1 添加 OAuth 配置（future Google Sync only）
 
 在 `manifest.json` 中添加：
 
@@ -120,7 +122,7 @@
 | Calendar 页面 | 周视图显示 | ☐ |
 | Settings 页面 | 初始化向导 | ☐ |
 | Settings 页面 | 保存设置 | ☐ |
-| Google 授权 | OAuth 登录流程 | ☐ |
+| Google 授权 | OAuth 登录流程（future only; not current MVP） | ☐ |
 | 同步功能 | 数据同步（如果已实现） | ☐ |
 
 ### 5.2 兼容性测试
@@ -192,7 +194,7 @@ A: 每次更新需要：
 
 ```
 extension/
-├── manifest.json          # 扩展配置（已配置 key 和 OAuth）
+├── manifest.json          # 扩展配置（current MVP does not include OAuth）
 ├── background.js          # Service Worker
 ├── popup/
 │   ├── popup.html

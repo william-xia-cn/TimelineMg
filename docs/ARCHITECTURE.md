@@ -2,7 +2,9 @@
 
 **版本**: v2.3  
 **日期**: 2026-04-14  
-**状态**: MVP 开发中
+**状态**: Internal MVP accepted; baseline stabilized for local-first MVP. Not public release ready.
+
+> Current baseline note (2026-05-12): TimeWhere is a local-first Chrome extension MVP. Google Sync/OAuth, Arrange advancement, reminder notifications, ManageBac subscription, Chrome Web Store submission, and public release are out of current scope unless Product Owner explicitly approves them.
 
 ---
 
@@ -12,10 +14,10 @@
 |------|------|------|
 | 客户端 | Chrome Extension (Manifest V3) | 主要运行环境 |
 | 存储 | **IndexedDB + Dexie.js** | 本地数据存储（统一存储） |
-| 后端同步 | Google Tasks API + Calendar API | 数据备份与查看 |
-| 通知 | Web Notifications API | 提醒功能 |
+| 后端同步 | None in current MVP | `sync.js` remains a local-first stub |
+| 通知 | UI/icon only in current MVP | System reminder notifications are future scope |
 | 图标 | SVG 内联 | 完全离线支持 |
-| 字体 | Google Fonts 本地化 | 完全离线支持 |
+| 字体/图标 | Local CSS/assets only | Extension pages do not load Google Fonts remotely |
 
 ---
 
@@ -37,10 +39,8 @@
 │  └────────────────────────┬────────────────────────────┘  │
 │                           │                                │
 │  ┌────────────────────────▼────────────────────────────┐  │
-│  │                  Sync Engine                          │  │
-│  │   - OAuth2 Auth                                      │  │
-│  │   - Google Tasks API                                 │  │
-│  │   - Google Calendar API                              │  │
+│  │             Future Sync Boundary (stubbed)           │  │
+│  │   - Google/OAuth sync is out of current MVP scope    │  │
 │  └────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -120,7 +120,7 @@ extension/
 │   │   ├── calendar.html
 │   │   ├── script.js          # 周/月视图 + 容器/事件 CRUD
 │   │   └── styles.css
-│   └── settings/              # Settings (待实现)
+│   └── settings/              # Settings (minimal local-first MVP)
 │       └── settings.html
 │
 ├── shared/                    # 共享资源
@@ -134,7 +134,7 @@ extension/
 │       ├── dexie.js           # Dexie.js 库（第三方）
 │       ├── db.js              # IndexedDB 存储层 (TimeWhereDB)
 │       ├── icons.js           # Material Symbols 初始化
-│       └── sync.js            # Google Sync Engine (stub)
+│       └── sync.js            # Local-first MVP stub
 │
 ├── _locales/                  # 国际化
 │   └── en/
@@ -156,7 +156,7 @@ extension/
 |------|------|
 | **本地开发** | 直接双击 `pages/*.html` |
 | **Extension 测试** | 加载 unpacked extension |
-| **生产环境** | Chrome Web Store 安装 |
+| **生产环境** | Not approved for current stage; Chrome Web Store is future release work |
 
 ### 5.2 开发工作流
 
@@ -185,10 +185,6 @@ extension/
         ↓
     弹出设置引导（Settings 页面）
         ↓
-    (可选) 请求 Google OAuth2 授权
-        ↓
-    (可选) 从 Google Tasks/Calendar 导入数据
-        ↓
     写入 IndexedDB
         ↓
     标记 settings.initialized = true
@@ -201,14 +197,7 @@ extension/
         ↓
     更新 IndexedDB (Dexie.js)
         ↓
-    标记 sync_log.pending
-        ↓
-    定时器触发 (每 5 分钟)
-        ↓
-    Sync Engine 推送变更到 Google
-        ↓
-    清除 sync_log.pending
-    更新 last_sync
+    页面刷新/重新加载时从 IndexedDB 读取最新数据
 ```
 
 ---
@@ -263,46 +252,12 @@ const TimeWhereDB = {
 
 **注意**：`updateTask()` 内置双向同步 — `progress` ↔ `status`, `due_date` ↔ `deadline`。
 
-### 7.2 Sync Engine (sync.js)
+### 7.2 Sync Boundary (sync.js stub)
 
 ```javascript
 // shared/js/sync.js
-class SyncEngine {
-  constructor(db, googleAuth) {
-    this.db = db;
-    this.googleAuth = googleAuth;
-  }
-
-  // 初始化导入
-  async importFromGoogle() {
-    // 从 Google Tasks 读取
-    // 从 Google Calendar 读取
-    // 写入 IndexedDB
-  }
-
-  // 同步到 Google
-  async syncToGoogle() {
-    const pending = await this.db.getPendingSyncLogs();
-    for (const log of pending) {
-      if (log.type === 'task') {
-        await this.syncTask(log);
-      } else if (log.type === 'container') {
-        await this.syncContainer(log);
-      }
-      await this.db.clearSyncLog(log.id);
-    }
-  }
-
-  // Google Tasks 操作
-  async createGoogleTask(task) { /* ... */ }
-  async updateGoogleTask(task) { /* ... */ }
-  async deleteGoogleTask(taskId) { /* ... */ }
-
-  // Google Calendar 操作
-  async createCalendarEvent(container) { /* ... */ }
-  async updateCalendarEvent(container) { /* ... */ }
-  async deleteCalendarEvent(eventId) { /* ... */ }
-}
+// Current MVP behavior: return out_of_scope_for_mvp.
+// Do not enable OAuth, Google Tasks, or Google Calendar without Product Owner approval.
 ```
 
 ---
@@ -313,27 +268,14 @@ class SyncEngine {
 {
   "manifest_version": 3,
   "name": "TimeWhere",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "个人时间管理与任务规划系统",
 
   "permissions": [
     "storage",
-    "notifications",
-    "alarms",
-    "identity",
-    "identity.email",
-    "https://www.googleapis.com/*",
-    "https://www.googleapis.com/auth/tasks",
-    "https://www.googleapis.com/auth/calendar"
+    "tabs",
+    "unlimitedStorage"
   ],
-
-  "oauth2": {
-    "client_id": "xxx.apps.googleusercontent.com",
-    "scopes": [
-      "https://www.googleapis.com/auth/tasks",
-      "https://www.googleapis.com/auth/calendar"
-    ]
-  },
 
   "action": {
     "default_popup": "popup/popup.html",
@@ -383,7 +325,7 @@ class SyncEngine {
 | 资源 | 处理方式 |
 |------|----------|
 | 背景图 | 内嵌到 `images/bg.jpg` |
-| Google Fonts | 下载到 `fonts/Inter/` |
+| Fonts / icons | Local CSS/assets; no remote Google Fonts dependency in extension pages |
 | Icons | 全部替换为 SVG 内联 |
 | 用户头像 | 使用本地默认头像 |
 
@@ -398,11 +340,7 @@ pages/*.html
     ↓
 IndexedDB 'TimeWhere'
 
-pages/*.html
-    ↓
-../shared/js/sync.js
-    ↓
-db.js + Google Auth
+Future sync work, if approved, must be re-specified before implementation.
 ```
 
 ---
@@ -417,4 +355,4 @@ db.js + Google Auth
 
 ---
 
-**最后更新**: 2026-04-14
+**最后更新**: 2026-05-12 (v2.3 baseline cleanup)

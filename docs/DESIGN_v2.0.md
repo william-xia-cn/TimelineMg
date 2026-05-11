@@ -3,7 +3,9 @@
 **项目名称**: TimeWhere - 个人时间管理与任务规划系统  
 **版本**: v2.3  
 **日期**: 2026-04-14  
-**状态**: 开发中（MVP 阶段）
+**状态**: Internal MVP accepted; baseline stabilized for local-first MVP. Not public release ready.
+
+> Current baseline note (2026-05-12): Local-first MVP is accepted. Google Sync/OAuth, Arrange advancement, reminder notifications, ManageBac subscription, Chrome Web Store submission, and public release remain future/out-of-current-scope unless Product Owner explicitly approves them.
 
 ---
 
@@ -109,7 +111,7 @@ interface Task {
 
 ```typescript
 interface TimeContainer {
-  id: number;                   // auto-increment
+  id: string;                   // UUID / generated string id
   name: string;
   color: string;                // #HEX
   time_start: string;           // HH:MM
@@ -167,7 +169,7 @@ interface Event {
         | 'container_override'  // 替代容器当天显示
         | 'container_skip';     // 隐藏容器当天
 
-  container_id?: number;        // override/skip 关联容器
+  container_id?: string;        // override/skip 关联容器
   created_at: string;
   updated_at: string;
 }
@@ -367,7 +369,7 @@ extension/
 │   │   ├── calendar.html
 │   │   ├── script.js          # 周/月视图 + 容器/事件 CRUD
 │   │   └── styles.css
-│   └── settings/              # Settings (待实现)
+│   └── settings/              # Settings (minimal local-first MVP)
 │       └── settings.html
 │
 └── shared/                    # 共享资源
@@ -381,7 +383,7 @@ extension/
         ├── dexie.js           # Dexie.js 库
         ├── db.js              # IndexedDB 存储层 (TimeWhereDB)
         ├── icons.js           # Material Symbols
-        └── sync.js            # Google Sync Engine (stub)
+        └── sync.js            # Local-first MVP stub; Google Sync future only
 ```
 
 ### 5.2 模块功能
@@ -392,7 +394,7 @@ extension/
 | **Task Board** | 任务 CRUD、看板视图 | P1 |
 | **Container Config** | 时间容器配置 | P1 |
 | **Settings** | 初始化、Google 授权、偏好设置 | P1 |
-| **Google Sync** | 数据同步（Tasks + Calendar） | P2 |
+| **Google Sync** | Future only; current `sync.js` returns out_of_scope_for_mvp | P2+ |
 | **Reminder** | 提醒通知 | P3 |
 
 ---
@@ -420,7 +422,7 @@ extension/
 - [ ] 容器 defense/squeezing 规则
 - [ ] 截止日逼近 → 自动调整 priority
 
-### Phase 4: Google Sync
+### Phase 4: Google Sync (future only, not current MVP)
 
 - [ ] OAuth2 授权
 - [ ] 初始化导入 (Google → 本地)
@@ -452,8 +454,8 @@ extension/
 - 日视图
 - 多日跨天事件渲染
 - 时区支持
-- Google Sync 实际对接（OAuth2 + Tasks/Calendar API）
-- ManageBac ICS 订阅链接自动导入
+- Google Sync 实际对接（OAuth2 + Tasks/Calendar API; future only）
+- ManageBac ICS 订阅链接自动导入（future only; current MVP supports local `.ics` file import）
 
 ---
 
@@ -470,4 +472,4 @@ extension/
 ---
 
 **最后更新**: 2026-04-14
-**状态**: MVP 开发中
+**状态**: Internal MVP accepted; baseline stabilized for local-first MVP.

@@ -3,6 +3,8 @@
 **版本**: v2.3  
 **日期**: 2026-04-14
 
+> Current baseline note (2026-05-12): Internal MVP acceptance is approved for a local-first MVP. This document is aligned to D-013: `tasks`, `containers`, `events`, and `habits` use string UUID ids; planner helper records such as `plans`, `buckets`, and `labels` may remain numeric for now. Google Sync, Arrange advancement, reminder notifications, ManageBac subscription, Chrome Web Store submission, and public release are out of current scope.
+
 ---
 
 ## 1. 数据模型概览
@@ -167,7 +169,7 @@ const SUBJECTS = {
 ```typescript
 interface TimeContainer {
   // 基础信息
-  id: number;                    // auto-increment
+  id: string;                    // UUID / generated string id
   name: string;                  // 容器名称
   color: string;                 // 显示颜色 (#HEX)
 
@@ -299,7 +301,7 @@ function calculateContainerCapacity(container, schedule) {
 
 ```typescript
 interface Event {
-  id: number;                   // auto-increment
+  id: string;                   // UUID / generated string id
   title: string;                // 事件标题
   date: string;                 // YYYY-MM-DD
 
@@ -316,7 +318,7 @@ interface Event {
         | 'container_override'  // 修改容器此次 → 替代容器显示
         | 'container_skip';     // 删除容器此次 → 隐藏容器
 
-  container_id?: number;        // override/skip 时指向被替代的容器
+  container_id?: string;        // override/skip 时指向被替代的容器
   google_calendar_event_id?: string;
 
   created_at: string;
@@ -394,7 +396,7 @@ interface Habit {
 
 ```javascript
 // Habit 不参与:
-// 1. Arrange 调度
+// 1. Arrange 调度（当前 MVP 中 Arrange 为 out_of_scope_for_mvp）
 // 2. 时间容器分配
 // 3. Overdue 计算
 
@@ -416,16 +418,9 @@ interface Settings {
   initialized: boolean;          // 是否已完成初始化
   first_launch?: string;         // 首次启动时间
   
-  // Google 连接
-  google_connected: boolean;    // 是否已连接 Google
-  google_email?: string;         // Google 账号邮箱
-  access_token?: string;         // OAuth Access Token (加密存储)
-  refresh_token?: string;        // OAuth Refresh Token (加密存储)
-  
-  // 同步配置
-  sync_enabled: boolean;        // 是否启用同步
-  sync_interval: number;         // 同步间隔 (分钟)
-  last_sync?: string;           // 上次同步时间
+  // Local-first MVP: Google/OAuth sync fields are not active.
+  google_connected: false;
+  sync_enabled: false;
   
   // Pomodoro
   pomodoro_work: number;        // 工作时长 (默认 25)
@@ -437,9 +432,7 @@ interface Settings {
   theme: 'light' | 'dark';     // 主题
   start_week_on: 0 | 1;         // 周几开始一周 (0=周日, 1=周一)
   
-  // 提醒
-  notification_enabled: boolean;
-  reminder_before: number;       // 提前提醒分钟数
+  // Reminder notification system is out of current MVP scope.
 }
 ```
 
@@ -536,9 +529,8 @@ interface Conflict {
   
   settings: {
     initialized: true,
-    google_connected: true,
-    sync_enabled: true,
-    sync_interval: 5,
+    google_connected: false,
+    sync_enabled: false,
     pomodoro_work: 25,
     pomodoro_break: 5,
     theme: 'dark'
@@ -577,9 +569,9 @@ interface Conflict {
 | 日视图 | 单日详细时间轴视图 |
 | 多日事件 | 跨多天事件的连续渲染 |
 | 时区支持 | 存储 UTC、按用户时区显示 |
-| Google Sync | OAuth2 + Tasks/Calendar API 实际对接（现为 stub） |
-| ManageBac 订阅 | 解析 ManageBac ICS 订阅链接自动导入任务 |
+| Google Sync | Future only; current `sync.js` is an explicit local-first stub. |
+| ManageBac 订阅 | Future only; current MVP supports local `.ics` file import, not URL subscription. |
 
 ---
 
-**最后更新**: 2026-04-14 (v2.3)
+**最后更新**: 2026-05-12 (v2.3 baseline cleanup)
