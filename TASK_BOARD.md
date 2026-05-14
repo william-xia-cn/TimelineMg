@@ -31,7 +31,7 @@
 
 ## NEXT
 
-- [ ] Build&Test takes ownership of Product&Project Mg's accidental `extension/shared/js/icons.js` hotfix diff using `docs/handoffs/outbox/HANDOFF-ICON-HOTFIX-001.md`.
+- [x] Build&Test ownership of Product&Project Mg's accidental `extension/shared/js/icons.js` hotfix diff is closed. The icon library is in the baseline commit, `icons.js` has no active diff, remote Google Fonts remain removed, and `baseline-safety` verifies static Material icon coverage.
 - [x] Build&Test completed MatrixView correction pass; Product&Project Mg accepted implementation with private sample hygiene required before commit: `docs/handoffs/outbox/REVIEW-MATRIXVIEW-IMPORT-PLAN-001.md`.
 - [x] Build&Test completed MatrixView PDF input correction; Product&Project Mg accepted day reconstruction with private sample hygiene required before commit.
 - [x] Build&Test completed MatrixView MHTML visible input cleanup; Product&Project Mg accepted implementation with private sample hygiene required before commit: `docs/handoffs/outbox/REVIEW-MATRIXVIEW-IMPORT-PLAN-001.md`.
@@ -90,7 +90,7 @@
 | Documentation baseline drift | CLOSED | Product docs now align to current local-first MVP baseline and mark future/out-of-scope features clearly. |
 | REL-MVP-BLOCKER-001: Focus Dashboard Dexie SchemaError | CLOSED | releaseMg MV-01 recheck passed; Focus Dashboard first-load console smoke captured no errors after Build&Test fix. |
 | Audit no-edit boundary | Product&Project Mg / Build&Test | During Project Baseline Audit, do not modify code or tests without explicit Product Owner approval. |
-| Product&Project Mg product-code boundary deviation | Build&Test / Product&Project Mg | Build&Test must review and take ownership of the current `extension/shared/js/icons.js` hotfix diff before it is treated as accepted implementation work. |
+| Product&Project Mg product-code boundary deviation | CLOSED | `extension/shared/js/icons.js` is now part of accepted baseline work; current worktree has no active icon diff and baseline-safety verifies local icon coverage. |
 
 ## Completed
 
