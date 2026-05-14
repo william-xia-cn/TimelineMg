@@ -40,6 +40,7 @@
 - [x] ManageBac real My Classes MHTML left-navigation parser compatibility pass completed and accepted; real sample now parses to 13 subject records without committing private sample content.
 - [x] Build&Test updated ManageBac task sync to use one saved remote subscription link only: local `.ics` file choice removed, extension-context remote fetch fixed through background relay, and host permission narrowed to Keystone ManageBac events path.
 - [x] Build&Test changed ManageBac ICS sync so new events are not auto-created; sync now surfaces pending event mappings for user confirmation, and existing ManageBac source tasks continue to update by UID. Product&Project Mg accepted tests; real UI confirmation pass remains user-side validation.
+- [x] Unified six-hour management review flow implemented and committed: Dashboard entry previews Task Date Arrange + ManageBac new events, opens a full confirmation page, and writes only selected user-confirmed items. Popup / Calendar / Planner no longer run distributed automatic checks.
 - [x] Build&Test completed local-first MVP implementation readiness pass using `docs/handoffs/outbox/HANDOFF-BUILDMVP-001.md`.
 - [x] Product&Project Mg reviewed Build&Test conformance in `docs/handoffs/outbox/REVIEW-BUILDMVP-001.md`.
 - [x] releaseMg completed Internal MVP acceptance and recorded NOT READY result in `docs/release/RELEASE_GATE_REPORT_INTERNAL_MVP_2026-05-11.md`.
@@ -69,7 +70,7 @@
 - [x] Product&Project Mg records Phase 2A recheck receipt in `docs/handoffs/outbox/REVIEW-RELEASE-BASELINE-P2A-RECHECK-001.md`.
 - [x] Product&Project Mg creates docs cleanup handoff: `docs/handoffs/outbox/HANDOFF-DOCS-BASELINE-CLEANUP-001.md`.
 - [x] Product&Project Mg performs documentation baseline cleanup in `docs/handoffs/outbox/REVIEW-DOCS-BASELINE-CLEANUP-001.md`.
-- [ ] Build&Test implements Task Board manual task creation and quick-add due-date rules from D-016.
+- [x] Build&Test implemented Task Board manual task creation and quick-add due-date rules from D-016.
 
 ## LATER
 
