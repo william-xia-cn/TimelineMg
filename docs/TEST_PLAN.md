@@ -10,11 +10,19 @@
 
 | 层级 | 方式 | 覆盖范围 |
 |------|------|----------|
-| L1 单元测试 | Node.js 自动执行 | scheduling.js 纯函数与安全 helper |
+| L1 单元测试 | Node.js 自动执行 / `npm test` | scheduling.js 纯函数与安全 helper |
 | L2 静态分析 / 轻量行为测试 | 代码审查 / baseline-safety / page-flow tests | 跨文件引用、DB 字段映射、事件绑定、安全边界、统一管理确认页 pending/apply/skip 流程 |
 | L3 手动验证 | 加载扩展后操作 | 渲染正确性、用户交互流 |
 
 ---
+
+## Standard Local Test Command
+
+```powershell
+npm test
+```
+
+`npm test` runs the current local-first regression matrix: scheduling, Focus/Popup, Calendar, Task Board, ManageBac, management review confirmation, MatrixView, and baseline safety checks.
 
 ## L1：scheduling.js 单元测试用例
 
