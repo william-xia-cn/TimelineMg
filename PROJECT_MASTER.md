@@ -79,11 +79,11 @@ Escalate to external advisor for:
 - Recording secrets, OAuth client secrets, cookies, tokens, private account data, or private user identifiers in repository documents.
 - Changing product scope, data model, sync behavior, privacy posture, or release standards without Product Owner decision.
 - Google Sync implementation.
-- Background alarm based Arrange automation; current Task Date Arrange runs only from user-opened extension pages, previews changes, and writes only after user confirmation.
+- Background alarm based Arrange automation; current Task Date Arrange is checked from Dashboard entry only, previews changes, and writes only through the unified management confirmation page after user confirmation.
 - Automatic priority downgrade; current Task Date Arrange may only upgrade priority according to D-017.
 - Defense / squeezing rules.
 - Reminder notification system.
-- Background / automatic ManageBac ICS subscription sync. Current ManageBac follow-up supports saved link configuration, manual sync, and user-confirmed task creation only.
+- Background alarm based ManageBac ICS subscription sync. Current ManageBac follow-up supports saved link configuration, Dashboard-entry management checks, manual sync, and user-confirmed task creation only.
 - Chrome Web Store submission.
 
 ## Release / Deployment State

@@ -271,10 +271,12 @@ Google Tasks / Google Calendar 双向同步属于未来版本范围。任何 OAu
 - 找不到匹配上课日时，urgent 或逾期任务排今天；其他任务保留当前 `start_date`，不强行猜日期。
 
 **触发与写入边界**：
-- 当前不引入后台 alarm；6 小时机制只在用户打开 Popup、Focus Dashboard、Planner Task Board、Calendar 时检测。
-- 页面打开时只做后台 preview / dry-run。
-- 如果有日期或 priority 调整，必须弹窗展示摘要，由用户确认后才写入。
-- 用户取消时不得写入任务，也不得更新时间戳。
+- 当前不引入后台 alarm；6 小时机制只在 Dashboard / Focus 入口检测。
+- Popup 本身、Calendar 页面打开、Planner Task Board 页面打开、Planner `my ManageBac` 视图打开，都不得触发 6 小时自动检查。
+- Dashboard 检测同时执行 Task Date Arrange preview 和 ManageBac 新事件 preview；如果存在待确认项，必须进入统一的“任务调整与 ManageBac 同步确认”页面。
+- 确认页展示 Arrange task 列表和新增 ManageBac task 列表；用户确认选中项后才写入，或选择全部跳过完成本轮检查。
+- Planner `my ManageBac` 的手动同步按钮保留，但它只执行 ManageBac-only preview，并打开同一个确认页；不顺带执行 Arrange。
+- 用户取消 / 跳过时不得写入未选任务，也不得把未完成 pending 伪装成已导入。
 
 ### 4.2 Daily Settle — 当日实时调度（已实现）
 
@@ -457,7 +459,7 @@ extension/
 
 ### P2
 
-- Task Date Arrange UI polish（将当前 confirm 升级为页面内专用确认 modal）
+- Task Date Arrange / ManageBac unified management review UI polish
 - 拖拽调整日历事件时间/日期
 - 键盘快捷键（N/E/Del/← →）
 - ICS 导出

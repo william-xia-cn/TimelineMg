@@ -15,7 +15,6 @@ const {
     buildDailyTaskPool,
     containerAppliesToDate,
     getDeferredStartDate,
-    maybeRunTaskArrange,
     priorityLabel,
     priorityClass,
     escapeHTML,
@@ -43,19 +42,6 @@ async function initApp() {
     }
 
     await reloadPopup();
-    runTaskArrangeInBackground();
-}
-
-function runTaskArrangeInBackground() {
-    if (typeof maybeRunTaskArrange !== 'function' || typeof TimeWhereDB === 'undefined') return;
-    maybeRunTaskArrange(TimeWhereDB)
-        .then(result => {
-            if (result?.ran && result.arranged > 0) {
-                return reloadPopup();
-            }
-            return null;
-        })
-        .catch(error => console.warn('[Popup] Task Arrange skipped:', error));
 }
 
 async function reloadPopup() {

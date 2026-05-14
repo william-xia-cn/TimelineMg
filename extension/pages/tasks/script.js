@@ -32,7 +32,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateSidebarActiveState('my_tasks');
             openDetailPanel(initialTaskId);
         }
-        runTaskArrangeInBackground();
     } catch (err) {
         console.error('[Tasks] Init failed:', err);
     }
@@ -114,7 +113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showNoPlanState(false);
                 TaskApp.renderAll();
                 if (typeof closeDetailPanel === 'function') closeDetailPanel();
-                checkManageBacSyncWhenOpening();
+                refreshManageBacPendingCount();
                 return;
             }
         });
@@ -324,29 +323,6 @@ function openManageBacPendingConfirmation() {
     window.location.href = '../settings/managebac-sync.html';
 }
 
-async function checkManageBacSyncWhenOpening() {
-    try {
-        await refreshManageBacPendingCount();
-        const config = await TimeWhereManageBac.getManageBacIcsConfig(TimeWhereDB);
-        if (!config?.link) return;
-        if (TimeWhereManageBac.isManageBacSyncFresh(config, new Date(), 6)) return;
-        await syncManageBacFromSidebar({ force: false, openPending: false });
-    } catch (error) {
-        showToast(`ManageBac 同步检查失败：${error.message}`, 'error');
-    }
-}
-
-function runTaskArrangeInBackground() {
-    if (!window.TimeWhereScheduling?.maybeRunTaskArrange || !window.TimeWhereDB) return;
-    window.TimeWhereScheduling.maybeRunTaskArrange(TimeWhereDB)
-        .then(async result => {
-            if (result?.ran && result.arranged > 0) {
-                await TaskApp.refresh();
-            }
-        })
-        .catch(error => console.warn('[Tasks] Task Arrange skipped:', error));
-}
-
 async function syncManageBacFromSidebar({ force = false, openPending = false } = {}) {
     try {
         setManageBacSidebarSyncState(true);
@@ -363,19 +339,26 @@ async function syncManageBacFromSidebar({ force = false, openPending = false } =
         const icsText = await TimeWhereManageBac.fetchIcsText(config.link);
         const result = await TimeWhereManageBac.syncManageBacIcs(TimeWhereDB, icsText, config.link, { confirmLinkChange: true });
         const pendingRows = await TimeWhereManageBac.savePendingEventMappings(TimeWhereDB, result.pending_event_mappings || []);
-        sessionStorage.setItem('timewhere_managebac_pending_event_mappings', JSON.stringify({
+        await TimeWhereDB.setSetting('management_review_pending', {
+            source: 'managebac_manual',
             saved_at: new Date().toISOString(),
-            pending_event_mappings: pendingRows,
-            status: result.status,
-            events: result.events,
-            created: result.created,
-            updated: result.updated,
-            deleted: result.deleted,
-            skipped: result.skipped
-        }));
+            created_at: new Date().toISOString(),
+            arrange_changes: [],
+            arrange_summary: null,
+            managebac_pending_event_mappings: pendingRows,
+            managebac_summary: {
+                status: result.status,
+                events: result.events || 0,
+                created: result.created || 0,
+                updated: result.updated || 0,
+                deleted: result.deleted || 0,
+                skipped: result.skipped || 0
+            },
+            managebac_error: null
+        });
         await refreshManageBacPendingCount();
 
-        if (pendingRows.length && openPending) {
+        if (openPending) {
             openManageBacPendingConfirmation();
             return;
         }

@@ -112,6 +112,15 @@ interface Task {
 
 Task Date Arrange 可更新未完成任务的本地 `start_date`，并根据 `due_date` 将 `priority` 升级到 `important` 或 `urgent`。Arrange 不应降低用户已经设置得更高的 `priority`，也不应处理 `progress='completed'` 的任务。Arrange 写入必须通过 preview / 用户确认流程触发，不能在页面打开时静默修改任务。
 
+统一管理检查使用 `settings` 表保存本地 pending 状态：
+
+| Setting key | 用途 |
+|-------------|------|
+| `management_review_pending` | Dashboard / manual ManageBac sync 生成的待确认状态，包含 Arrange preview changes、ManageBac pending event mappings、source、created_at。存在未完成 pending 时应恢复确认页继续处理。 |
+| `management_review_last_checked_at` | Dashboard 六小时管理检查的最近完成时间。只有没有待确认项、确认导入完成、或全部跳过完成后才更新。 |
+
+Popup、Calendar、Planner 页面打开不得写入这些 key 触发六小时自动检查；Planner `my ManageBac` 手动同步可以写入 `management_review_pending`，但只包含 ManageBac 待确认项，不包含 Arrange changes。
+
 **优先级映射**（v4 ↔ v2 兼容）：
 
 | v4 (progress) | v2 (status) | v4 (priority) | v2 (priority) |
@@ -299,7 +308,7 @@ interface ManageBacTaskSource {
 2. ManageBac HTML 学科配置导入只保存 `Subject in ManageBac` 到已有内部 `Subject` / `Plan` 的映射，不修改学科 Plan。
 3. ManageBac ICS 同步前必须已有 ManageBac 学科映射。
 4. 每个 ManageBac 事件转换为 `tasks` 表记录，通过 `plan_id` 归属到对应 planner Plan，并标记为 ManageBac 来源任务。
-5. Planner 的 `My Tasks -> MyManageBac` 是 ManageBac 来源 Task 的聚合查看入口和手动同步入口；它不是学科 Plan。Task 仍通过 `plan_id` 归属于映射后的学科 Plan 或 `Other School Plan`。
+5. Planner 的 `My Tasks -> my ManageBac` 是 ManageBac 来源 Task 的聚合查看入口和手动同步入口；它不是学科 Plan。Task 仍通过 `plan_id` 归属于映射后的学科 Plan 或 `Other School Plan`。
 6. 链接不变时，再次同步只更新 ManageBac 来源任务，不创建重复任务。
 7. 同步 UI 不提供本地 `.ics` 文件选择；用户只能配置 / 修改 ManageBac 订阅链接。
 8. ICS 中删除或消失的事件应从本地 ManageBac 来源任务中移除或标记为已取消；具体策略由实现 spec 明确。

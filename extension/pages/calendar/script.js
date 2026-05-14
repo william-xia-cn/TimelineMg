@@ -32,19 +32,6 @@ async function initApp() {
         }
     }
     render();
-    runTaskArrangeInBackground();
-}
-
-function runTaskArrangeInBackground() {
-    if (!window.TimeWhereScheduling?.maybeRunTaskArrange || !window.TimeWhereDB) return;
-    window.TimeWhereScheduling.maybeRunTaskArrange(TimeWhereDB)
-        .then(result => {
-            if (result?.ran && result.arranged > 0) {
-                return render();
-            }
-            return null;
-        })
-        .catch(error => console.warn('[Calendar] Task Arrange skipped:', error));
 }
 
 async function render() {

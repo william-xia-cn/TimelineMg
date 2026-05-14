@@ -259,14 +259,17 @@ async function run() {
     assert('Settings Plan UI exposes inline ManageBac sync button', settingsHtml.includes('id="settingsSyncManageBacBtn"'));
     assert('Settings page loads ManageBac shared module before script', settingsHtml.indexOf('shared/js/managebac.js') > -1 && settingsHtml.indexOf('shared/js/managebac.js') < settingsHtml.indexOf('script.js'));
     assert('Settings page has no separate sync ManageBac event row label', !settingsHtml.includes('同步 ManageBac 事件'));
-    assert('Settings sync opens independent ManageBac confirmation page', settingsScript.includes('managebac-sync.html') && settingsScript.includes('pending_event_mappings'));
+    assert('Settings sync opens unified management confirmation page', settingsScript.includes('managebac-sync.html') && settingsScript.includes('management_review_pending'));
     assert('Settings sync no longer routes to mapping page hash', !settingsScript.includes('managebac.html#pending-events'));
     assert('ManageBac mapping page no longer owns ICS link input', !managebacHtml.includes('id="managebacIcsLinkInput"'));
     assert('ManageBac mapping page no longer owns direct sync button', !managebacHtml.includes('id="syncManageBacBtn"'));
     assert('ManageBac mapping page script has no stale direct sync DOM references', !/saveManageBacIcsLinkBtn|syncManageBacBtn|managebacIcsLinkInput/.test(managebacPageScript));
     assert('ManageBac mapping page script has no obsolete direct sync handlers', !/handleSaveManageBacIcsLink|handleManageBacSync|loadManageBacSyncConfig/.test(managebacPageScript));
     assert('ManageBac mapping page has no pending event confirmation UI', !/pendingEventMappings|savePendingEventMappingsBtn|添加确认的任务/.test(managebacHtml + managebacPageScript));
-    assert('ManageBac sync page owns pending event confirmation UI', managebacSyncHtml.includes('id="pendingEventMappings"') && managebacSyncHtml.includes('添加确认的任务'));
+    assert('Management review page owns Arrange and ManageBac confirmation UI', managebacSyncHtml.includes('id="pendingArrangeChanges"')
+        && managebacSyncHtml.includes('id="pendingEventMappings"')
+        && managebacSyncHtml.includes('确认并导入选中项')
+        && managebacSyncHtml.includes('全部跳过并完成'));
     assert('ManageBac sync page has no subject mapping file input', !/managebacFileInput|saveManageBacMappingsBtn|mappingPreview/.test(managebacSyncHtml + managebacSyncScript));
     assert('ManageBac sync UI has no local ICS file input', !/accept=["'][^"']*\.ics/i.test(managebacSyncHtml));
     assert('Planner sidebar uses visible my ManageBac label', tasksHtml.includes('my ManageBac') && !tasksHtml.includes('>MyManageBac<'));
@@ -275,20 +278,22 @@ async function run() {
     assert('Planner sidebar pending count button is present for persisted pending rows', tasksHtml.includes('id="managebacPendingCountBtn"'));
     assert('Planner sidebar my ManageBac has no raw sync text label', !/sync\s*my ManageBac/i.test(tasksHtml));
     assert('Planner sync opens independent confirmation page', tasksScript.includes('../settings/managebac-sync.html'));
-    assert('Planner sync does not auto-create new tasks and uses pending confirmation persistence', tasksScript.includes('savePendingEventMappings')
-        && tasksScript.includes('pending_event_mappings')
+    assert('Planner sync does not auto-create new tasks and uses management review persistence', tasksScript.includes('savePendingEventMappings')
+        && tasksScript.includes('management_review_pending')
         && !tasksScript.includes('applyPendingEventOverrides: true'));
     assert('Planner sync no-link message points to Settings Plan link', tasksScript.includes('Settings → Plan → ManageBac 链接'));
-    assert('Planner opening my ManageBac runs a non-blocking 6-hour stale check', tasksScript.includes('checkManageBacSyncWhenOpening()')
-        && tasksScript.includes('isManageBacSyncFresh(config, new Date(), 6)')
-        && tasksScript.includes('force: false'));
+    assert('Planner opening my ManageBac no longer runs automatic stale sync', !tasksScript.includes('checkManageBacSyncWhenOpening()')
+        && !tasksScript.includes('force: false'));
     assert('Planner manual sidebar sync forces fetch and can open confirmation page', tasksScript.includes("closest('#sidebarSyncManageBacBtn')")
         && tasksScript.includes('force: true')
         && tasksScript.includes('openPending: true'));
     assert('Planner pending count click opens confirmation without fetching again', tasksScript.includes("closest('#managebacPendingCountBtn')")
         && tasksScript.includes('openManageBacPendingConfirmation()'));
-    assert('ManageBac sync page reads persisted pending mappings from settings first', managebacSyncScript.includes('getPendingEventMappings(TimeWhereDB)')
-        && managebacSyncScript.indexOf('getPendingEventMappings(TimeWhereDB)') < managebacSyncScript.indexOf('sessionStorage.getItem'));
+    assert('Management review page reads unified pending review from settings first', managebacSyncScript.includes('management_review_pending')
+        && managebacSyncScript.includes('restoreManagementReviewPending'));
+    assert('Management review page can apply or skip the full pending review', managebacSyncScript.includes('handleConfirmManagementReview')
+        && managebacSyncScript.includes('handleSkipManagementReview')
+        && managebacSyncScript.includes('clearManagementReviewPending'));
     assert('Task detail no longer has a separate ManageBac detail renderer', !/renderManageBacReadOnlyDetail|ManageBac Task/.test(taskDetailScript));
     assert('Task detail uses one layout with ManageBac source badge', taskDetailScript.includes('source-badge') && taskDetailScript.includes('ManageBac'));
     assert('Task detail marks ManageBac source fields readonly', taskDetailScript.includes('data-readonly-source="true"') && taskDetailScript.includes('readonly'));

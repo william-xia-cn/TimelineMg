@@ -13,6 +13,7 @@ const focusScript = fs.readFileSync(path.join(root, 'extension', 'pages', 'focus
 const popupHtml = fs.readFileSync(path.join(root, 'extension', 'popup', 'popup.html'), 'utf8');
 const popupCss = fs.readFileSync(path.join(root, 'extension', 'popup', 'popup.css'), 'utf8');
 const popupScript = fs.readFileSync(path.join(root, 'extension', 'popup', 'popup.js'), 'utf8');
+const calendarScript = fs.readFileSync(path.join(root, 'extension', 'pages', 'calendar', 'script.js'), 'utf8');
 
 let passed = 0;
 let failed = 0;
@@ -64,6 +65,17 @@ assert('Focus action runner prevents duplicate clicks', focusScript.includes('da
     && focusScript.includes('control.disabled = true')
     && focusScript.includes('control.disabled = false'));
 assert('Focus no longer exports handlers for inline events', !/window\.(startTaskNow|pauseTask|completeTaskNow|deferTask|toggleWeekTask|openAddTaskModal|saveNewTask)/.test(focusScript));
+assert('Dashboard owns unified six-hour management review trigger', focusHtml.includes('../../shared/js/managebac.js')
+    && focusScript.includes('runManagementReviewCheck()')
+    && focusScript.includes('management_review_pending')
+    && focusScript.includes('management_review_last_checked_at')
+    && focusScript.includes('managebac-sync.html?source=dashboard_auto'));
+assert('Dashboard management review previews Arrange without direct confirm/apply', focusScript.includes('TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false })')
+    && !focusScript.includes('maybeRunTaskArrange'));
+assert('Popup and Calendar do not run automatic Arrange on open', !popupScript.includes('maybeRunTaskArrange')
+    && !popupScript.includes('runTaskArrangeInBackground')
+    && !calendarScript.includes('maybeRunTaskArrange')
+    && !calendarScript.includes('runTaskArrangeInBackground'));
 assert('Focus layout has four independent top-level board columns', /<section class="board-column column-now"/.test(focusHtml)
     && /<section class="board-column column-calendar/.test(focusHtml)
     && /<section class="board-column column-week"/.test(focusHtml)

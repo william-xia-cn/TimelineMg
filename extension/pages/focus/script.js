@@ -4,6 +4,9 @@
 // ============================================================
 
 const PX_PER_HOUR = 40;
+const MANAGEMENT_REVIEW_PENDING_KEY = 'management_review_pending';
+const MANAGEMENT_REVIEW_LAST_CHECKED_KEY = 'management_review_last_checked_at';
+const MANAGEMENT_REVIEW_INTERVAL_HOURS = 6;
 
 function formatDateISO(date) {
     const y = date.getFullYear();
@@ -34,19 +37,104 @@ async function initApp() {
         console.error('initDefaultContainers failed:', e);
     }
     await loadDashboardData();
-    runTaskArrangeInBackground();
+    runManagementReviewCheck();
 }
 
-function runTaskArrangeInBackground() {
-    if (!window.TimeWhereScheduling?.maybeRunTaskArrange || !window.TimeWhereDB) return;
-    window.TimeWhereScheduling.maybeRunTaskArrange(TimeWhereDB)
-        .then(result => {
-            if (result?.ran && result.arranged > 0) {
-                return loadDashboardData();
+function managementReviewHasWork(pending) {
+    return !!pending
+        && (
+            (Array.isArray(pending.arrange_changes) && pending.arrange_changes.length > 0) ||
+            (Array.isArray(pending.managebac_pending_event_mappings) && pending.managebac_pending_event_mappings.length > 0) ||
+            !!pending.managebac_error
+        );
+}
+
+function openManagementReviewPage() {
+    window.location.href = '../settings/managebac-sync.html?source=dashboard_auto';
+}
+
+async function fetchManageBacPreviewForManagementReview() {
+    if (typeof TimeWhereManageBac === 'undefined') {
+        return { rows: [], summary: null, error: null };
+    }
+
+    const mappings = await TimeWhereDB.getSetting(TimeWhereManageBac.SETTINGS_MAPPING_KEY);
+    const activeMappingCount = (mappings || []).filter(row => row?.plan_id).length;
+    if (!activeMappingCount) {
+        return { rows: [], summary: { status: 'skipped', reason: 'mapping_required' }, error: null };
+    }
+
+    const config = await TimeWhereManageBac.getManageBacIcsConfig(TimeWhereDB);
+    if (!config?.link) {
+        return { rows: [], summary: { status: 'skipped', reason: 'link_required' }, error: null };
+    }
+
+    const icsText = await TimeWhereManageBac.fetchIcsText(config.link);
+    const result = await TimeWhereManageBac.syncManageBacIcs(TimeWhereDB, icsText, config.link, { confirmLinkChange: true });
+    const rows = await TimeWhereManageBac.savePendingEventMappings(TimeWhereDB, result.pending_event_mappings || []);
+    return {
+        rows,
+        summary: {
+            status: result.status,
+            events: result.events || 0,
+            updated: result.updated || 0,
+            deleted: result.deleted || 0,
+            skipped: result.skipped || 0
+        },
+        error: null
+    };
+}
+
+async function runManagementReviewCheck() {
+    if (!window.TimeWhereScheduling?.arrangeTasks || !window.TimeWhereDB) return;
+    try {
+        const existing = await TimeWhereDB.getSetting(MANAGEMENT_REVIEW_PENDING_KEY);
+        if (managementReviewHasWork(existing)) {
+            openManagementReviewPage();
+            return;
+        }
+
+        const now = new Date();
+        const last = await TimeWhereDB.getSetting(MANAGEMENT_REVIEW_LAST_CHECKED_KEY);
+        if (last) {
+            const elapsedMs = now.getTime() - new Date(last).getTime();
+            if (elapsedMs >= 0 && elapsedMs < MANAGEMENT_REVIEW_INTERVAL_HOURS * 3600000) {
+                return;
             }
-            return null;
-        })
-        .catch(error => console.warn('[Focus] Task Arrange skipped:', error));
+        }
+
+        const arrangePreview = await TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false });
+        let managebacPreview = { rows: [], summary: null, error: null };
+        try {
+            managebacPreview = await fetchManageBacPreviewForManagementReview();
+        } catch (error) {
+            managebacPreview = {
+                rows: [],
+                summary: null,
+                error: error.message || String(error)
+            };
+        }
+
+        const pending = {
+            source: 'dashboard_auto',
+            created_at: now.toISOString(),
+            arrange_changes: arrangePreview.changes || [],
+            arrange_summary: arrangePreview.summary || null,
+            managebac_pending_event_mappings: managebacPreview.rows || [],
+            managebac_summary: managebacPreview.summary,
+            managebac_error: managebacPreview.error
+        };
+
+        if (!managementReviewHasWork(pending)) {
+            await TimeWhereDB.setSetting(MANAGEMENT_REVIEW_LAST_CHECKED_KEY, now.toISOString());
+            return;
+        }
+
+        await TimeWhereDB.setSetting(MANAGEMENT_REVIEW_PENDING_KEY, pending);
+        openManagementReviewPage();
+    } catch (error) {
+        console.warn('[Focus] Management review check skipped:', error);
+    }
 }
 
 async function loadDashboardData() {

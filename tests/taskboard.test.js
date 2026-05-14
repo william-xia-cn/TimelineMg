@@ -326,12 +326,12 @@ assert('Planner sidebar owns ManageBac sync and pending count controls', tasksHt
     && tasksHtml.includes('id="managebacPendingCountBtn"')
     && /sidebarSyncManageBacBtn[\s\S]*sync[\s\S]*同步/.test(tasksHtml));
 
-assert('Planner my ManageBac stale check uses six-hour freshness window', scriptJs.includes('isManageBacSyncFresh(config, new Date(), 6)')
-    && scriptJs.includes('checkManageBacSyncWhenOpening()'));
+assert('Planner my ManageBac opening no longer runs six-hour automatic sync', !scriptJs.includes('checkManageBacSyncWhenOpening()')
+    && scriptJs.includes('refreshManageBacPendingCount()'));
 
 assert('Planner manual ManageBac sync forces refresh and persists pending rows', scriptJs.includes('force: true')
     && scriptJs.includes('savePendingEventMappings')
-    && scriptJs.includes('pending_event_mappings'));
+    && scriptJs.includes('management_review_pending'));
 
 assert('Planner supports opening task detail from task_id URL parameter', scriptJs.includes('function getInitialTaskIdFromUrl')
     && scriptJs.includes("new URLSearchParams(window.location.search).get('task_id')")

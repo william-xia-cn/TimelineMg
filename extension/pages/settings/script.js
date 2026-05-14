@@ -4,7 +4,7 @@
  * 日期: 2026-04-02
  */
 
-const MANAGEBAC_PENDING_EVENTS_SESSION_KEY = 'timewhere_managebac_pending_event_mappings';
+const MANAGEMENT_REVIEW_PENDING_KEY = 'management_review_pending';
 let settingsManageBacSyncInProgress = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -210,16 +210,22 @@ async function handleSettingsManageBacSync() {
         setSettingsManageBacStatus('正在解析 ManageBac 新增事件…', 'info');
         const result = await TimeWhereManageBac.syncManageBacIcs(TimeWhereDB, icsText, config.link, { confirmLinkChange: true });
         const pendingRows = await TimeWhereManageBac.savePendingEventMappings(TimeWhereDB, result.pending_event_mappings || []);
-        sessionStorage.setItem(MANAGEBAC_PENDING_EVENTS_SESSION_KEY, JSON.stringify({
-            saved_at: new Date().toISOString(),
-            pending_event_mappings: pendingRows,
-            status: result.status,
-            events: result.events,
-            created: result.created,
-            updated: result.updated,
-            deleted: result.deleted,
-            skipped: result.skipped
-        }));
+        await TimeWhereDB.setSetting(MANAGEMENT_REVIEW_PENDING_KEY, {
+            source: 'managebac_manual',
+            created_at: new Date().toISOString(),
+            arrange_changes: [],
+            arrange_summary: null,
+            managebac_pending_event_mappings: pendingRows,
+            managebac_summary: {
+                status: result.status,
+                events: result.events || 0,
+                created: result.created || 0,
+                updated: result.updated || 0,
+                deleted: result.deleted || 0,
+                skipped: result.skipped || 0
+            },
+            managebac_error: null
+        });
         window.location.href = 'managebac-sync.html';
     } catch (error) {
         setSettingsManageBacStatus(`同步失败：${error.message}`, 'error');

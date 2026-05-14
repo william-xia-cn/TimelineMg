@@ -1,28 +1,55 @@
 /**
- * ManageBac event sync confirmation page.
+ * Management review confirmation page.
+ * Combines Task Date Arrange review and ManageBac new-event confirmation.
  */
+const MANAGEMENT_REVIEW_PENDING_KEY = 'management_review_pending';
+const MANAGEMENT_REVIEW_LAST_CHECKED_KEY = 'management_review_last_checked_at';
+const LEGACY_MANAGEBAC_PENDING_EVENTS_SESSION_KEY = 'timewhere_managebac_pending_event_mappings';
+
+let managebacPlans = [];
+let managebacReady = false;
+let reviewInProgress = false;
+let reviewCompleted = false;
+let managementPending = null;
+let currentArrangeRows = [];
+let currentPendingEventRows = [];
+
 document.addEventListener('DOMContentLoaded', async () => {
-    setupManageBacSyncEvents();
+    setupManagementReviewEvents();
     try {
         await TimeWhereDB.initDefaultSettings();
         await loadManageBacSyncPrecondition();
-        await restorePendingEventMappings();
+        await restoreManagementReviewPending();
     } catch (error) {
         setManageBacSyncStatus(`页面初始化失败：${error.message}`, 'error');
     }
 });
 
-const MANAGEBAC_PENDING_EVENTS_SESSION_KEY = 'timewhere_managebac_pending_event_mappings';
-let managebacPlans = [];
-let managebacReady = false;
-let syncInProgress = false;
-let currentPendingEventRows = [];
-
-function setupManageBacSyncEvents() {
-    document.getElementById('backBtn')?.addEventListener('click', () => {
+function setupManagementReviewEvents() {
+    document.getElementById('backBtn')?.addEventListener('click', (event) => {
+        if (isReviewBlocking()) {
+            event.preventDefault();
+            setManageBacSyncStatus('请先确认导入或全部跳过，完成本轮管理检查。', 'error');
+            return;
+        }
         window.location.href = 'settings.html';
     });
-    document.getElementById('savePendingEventMappingsBtn')?.addEventListener('click', handleSavePendingEventMappings);
+    document.getElementById('savePendingEventMappingsBtn')?.addEventListener('click', handleConfirmManagementReview);
+    document.getElementById('skipManagementReviewBtn')?.addEventListener('click', handleSkipManagementReview);
+
+    window.addEventListener('beforeunload', (event) => {
+        if (!isReviewBlocking()) return;
+        event.preventDefault();
+        event.returnValue = '';
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!isReviewBlocking()) return;
+        const link = event.target.closest('a.nav-item');
+        if (!link) return;
+        event.preventDefault();
+        setManageBacSyncStatus('请先确认导入或全部跳过，完成本轮管理检查。', 'error');
+    }, true);
 }
 
 async function loadManageBacSyncPrecondition() {
@@ -31,22 +58,33 @@ async function loadManageBacSyncPrecondition() {
     const mappings = await TimeWhereDB.getSetting(TimeWhereManageBac.SETTINGS_MAPPING_KEY);
     const activeMappingCount = (mappings || []).filter(row => row?.plan_id).length;
     managebacReady = precondition.ok && activeMappingCount > 0;
-    if (!precondition.ok) {
-        setManageBacSyncStatus('请先导入 MatrixView 并完成学科 Plan 初始化，再同步 ManageBac 事件。', 'error');
-    } else if (!activeMappingCount) {
-        setManageBacSyncStatus('请先配置 ManageBac 学科映射，再同步新增事件。', 'error');
-    }
-    updateManageBacSyncControls();
 }
 
-function setSyncInProgress(inProgress, message = '') {
-    syncInProgress = inProgress;
-    updateManageBacSyncControls();
+function hasReviewWork(pending) {
+    return !!pending
+        && (
+            (Array.isArray(pending.arrange_changes) && pending.arrange_changes.length > 0) ||
+            (Array.isArray(pending.managebac_pending_event_mappings) && pending.managebac_pending_event_mappings.length > 0) ||
+            !!pending.managebac_error
+        );
+}
+
+function isReviewBlocking() {
+    return !reviewCompleted && hasReviewWork(managementPending);
+}
+
+function setReviewInProgress(inProgress, message = '') {
+    reviewInProgress = inProgress;
+    updateManagementReviewControls();
     if (message) setManageBacSyncStatus(message, 'info');
 }
 
-function updateManageBacSyncControls() {
-    document.getElementById('savePendingEventMappingsBtn')?.toggleAttribute('disabled', !managebacReady || syncInProgress || !currentPendingEventRows.length);
+function updateManagementReviewControls() {
+    const hasWork = currentArrangeRows.length > 0 || currentPendingEventRows.length > 0 || !!managementPending?.managebac_error;
+    const canApply = !reviewInProgress && hasWork;
+    document.getElementById('savePendingEventMappingsBtn')?.toggleAttribute('disabled', !canApply);
+    document.getElementById('skipManagementReviewBtn')?.toggleAttribute('disabled', !canApply);
+    document.getElementById('backBtn')?.toggleAttribute('disabled', isReviewBlocking());
 }
 
 function setManageBacSyncStatus(message, type = 'info') {
@@ -56,13 +94,13 @@ function setManageBacSyncStatus(message, type = 'info') {
     status.dataset.type = type;
 }
 
-function renderPendingEventMappings(rows) {
-    const target = document.getElementById('pendingEventMappings');
+function renderArrangeChanges(rows) {
+    const target = document.getElementById('pendingArrangeChanges');
     if (!target) return;
     if (!rows.length) {
         target.className = 'managebac-empty';
-        target.textContent = '没有需要确认的新 ManageBac 事件';
-        updateManageBacSyncControls();
+        target.textContent = '没有需要确认的任务日期 / 优先级调整';
+        updateManagementReviewControls();
         return;
     }
 
@@ -71,6 +109,58 @@ function renderPendingEventMappings(rows) {
         <table class="managebac-table">
             <thead>
                 <tr>
+                    <th class="managebac-check-cell">应用</th>
+                    <th>Task</th>
+                    <th>当前日期</th>
+                    <th>建议日期</th>
+                    <th>当前优先级</th>
+                    <th>建议优先级</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${rows.map((row, index) => {
+                    const task = row.task || {};
+                    const updates = row.updates || {};
+                    return `
+                        <tr>
+                            <td class="managebac-check-cell">
+                                <input type="checkbox" class="arrange-change-checkbox" data-index="${index}" checked>
+                            </td>
+                            <td>
+                                <strong>${TimeWhereManageBac.escapeHTML(task.title || task.name || row.task_id || 'Untitled task')}</strong>
+                                ${task.source === 'managebac' ? '<div class="managebac-change-note">ManageBac 来源任务</div>' : ''}
+                            </td>
+                            <td>${TimeWhereManageBac.escapeHTML(task.start_date || '未设置')}</td>
+                            <td>${TimeWhereManageBac.escapeHTML(updates.start_date || row.start_date || task.start_date || '不变')}</td>
+                            <td>${TimeWhereManageBac.escapeHTML(task.priority || 'medium')}</td>
+                            <td>${TimeWhereManageBac.escapeHTML(updates.priority || row.priority || task.priority || '不变')}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+    `;
+    updateManagementReviewControls();
+}
+
+function renderPendingEventMappings(rows) {
+    const target = document.getElementById('pendingEventMappings');
+    if (!target) return;
+    if (!rows.length) {
+        target.className = 'managebac-empty';
+        target.textContent = managementPending?.managebac_error
+            ? `ManageBac 同步失败：${managementPending.managebac_error}`
+            : '没有需要确认的新 ManageBac 事件';
+        updateManagementReviewControls();
+        return;
+    }
+
+    target.className = 'managebac-table-wrap';
+    target.innerHTML = `
+        <table class="managebac-table">
+            <thead>
+                <tr>
+                    <th class="managebac-check-cell">应用</th>
                     <th>Due</th>
                     <th>Summary</th>
                     <th>Description</th>
@@ -81,6 +171,9 @@ function renderPendingEventMappings(rows) {
             <tbody>
                 ${rows.map((row, index) => `
                     <tr>
+                        <td class="managebac-check-cell">
+                            <input type="checkbox" class="managebac-event-checkbox" data-index="${index}" checked>
+                        </td>
                         <td>${TimeWhereManageBac.escapeHTML(row.due_date)}</td>
                         <td>${TimeWhereManageBac.escapeHTML(row.summary)}</td>
                         <td>${TimeWhereManageBac.escapeHTML(row.description)}</td>
@@ -100,85 +193,158 @@ function renderPendingEventMappings(rows) {
             </tbody>
         </table>
     `;
-    updateManageBacSyncControls();
+    updateManagementReviewControls();
 }
 
-async function restorePendingEventMappings() {
-    const persistedRows = await TimeWhereManageBac.getPendingEventMappings(TimeWhereDB);
-    if (persistedRows.length) {
-        currentPendingEventRows = persistedRows;
-        renderPendingEventMappings(currentPendingEventRows);
-        setManageBacSyncStatus(`${currentPendingEventRows.length} 个新增事件等待确认添加`, 'error');
-        return;
-    }
+async function restoreManagementReviewPending() {
+    managementPending = await TimeWhereDB.getSetting(MANAGEMENT_REVIEW_PENDING_KEY);
 
-    const raw = sessionStorage.getItem(MANAGEBAC_PENDING_EVENTS_SESSION_KEY);
-    if (!raw) {
-        renderPendingEventMappings([]);
-        return;
-    }
-    sessionStorage.removeItem(MANAGEBAC_PENDING_EVENTS_SESSION_KEY);
-    try {
-        const payload = JSON.parse(raw);
-        currentPendingEventRows = Array.isArray(payload.pending_event_mappings)
-            ? payload.pending_event_mappings
-            : [];
-        currentPendingEventRows = await TimeWhereManageBac.savePendingEventMappings(TimeWhereDB, currentPendingEventRows);
-        renderPendingEventMappings(currentPendingEventRows);
-        if (currentPendingEventRows.length) {
-            setManageBacSyncStatus(
-                `同步完成：${currentPendingEventRows.length} 个新增事件等待确认添加；已更新 ${payload.updated || 0} 个已有任务`,
-                'error'
-            );
-        } else {
-            setManageBacSyncStatus(
-                `同步完成：没有需要确认的新事件；已更新 ${payload.updated || 0} 个已有任务`,
-                'success'
-            );
+    if (!managementPending) {
+        const persistedRows = await TimeWhereManageBac.getPendingEventMappings(TimeWhereDB);
+        const legacyPayload = readLegacySessionPayload();
+        const legacyRows = persistedRows.length
+            ? persistedRows
+            : (legacyPayload?.pending_event_mappings || []);
+        if (legacyRows.length) {
+            managementPending = {
+                source: 'managebac_manual',
+                created_at: new Date().toISOString(),
+                arrange_changes: [],
+                arrange_summary: null,
+                managebac_pending_event_mappings: await TimeWhereManageBac.savePendingEventMappings(TimeWhereDB, legacyRows),
+                managebac_summary: legacyPayload || null,
+                managebac_error: null
+            };
+            await TimeWhereDB.setSetting(MANAGEMENT_REVIEW_PENDING_KEY, managementPending);
         }
-    } catch (error) {
-        setManageBacSyncStatus(`读取新增事件确认列表失败：${error.message}`, 'error');
+    }
+
+    currentArrangeRows = Array.isArray(managementPending?.arrange_changes)
+        ? managementPending.arrange_changes
+        : [];
+    currentPendingEventRows = Array.isArray(managementPending?.managebac_pending_event_mappings)
+        ? managementPending.managebac_pending_event_mappings
+        : [];
+
+    renderArrangeChanges(currentArrangeRows);
+    renderPendingEventMappings(currentPendingEventRows);
+
+    if (!hasReviewWork(managementPending)) {
+        reviewCompleted = true;
+        await clearManagementReviewPending({ updateLastChecked: false });
+        setManageBacSyncStatus('没有需要确认的任务调整或 ManageBac 新事件。', 'success');
+        return;
+    }
+
+    const arrangeCount = currentArrangeRows.length;
+    const eventCount = currentPendingEventRows.length;
+    const errorText = managementPending?.managebac_error ? '；ManageBac 同步失败，请处理或跳过本轮' : '';
+    setManageBacSyncStatus(`待确认：${arrangeCount} 个 Arrange task，${eventCount} 个 ManageBac 新事件${errorText}`, managementPending?.managebac_error ? 'error' : 'info');
+    updateManagementReviewControls();
+}
+
+function readLegacySessionPayload() {
+    const raw = sessionStorage.getItem(LEGACY_MANAGEBAC_PENDING_EVENTS_SESSION_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(LEGACY_MANAGEBAC_PENDING_EVENTS_SESSION_KEY);
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return null;
     }
 }
 
-async function handleSavePendingEventMappings() {
-    if (!managebacReady || syncInProgress || !currentPendingEventRows.length) return;
-    const rows = currentPendingEventRows.map((row, index) => {
+function getSelectedArrangeChanges() {
+    return currentArrangeRows.filter((row, index) => {
+        const checkbox = document.querySelector(`.arrange-change-checkbox[data-index="${index}"]`);
+        return checkbox?.checked === true;
+    });
+}
+
+function getSelectedManageBacRows() {
+    return currentPendingEventRows.map((row, index) => {
+        const checkbox = document.querySelector(`.managebac-event-checkbox[data-index="${index}"]`);
         const select = document.querySelector(`.managebac-event-plan-select[data-index="${index}"]`);
+        if (checkbox?.checked !== true) return null;
         const planId = select?.value || '';
+        if (!planId) return null;
         const plan = managebacPlans.find(item => String(item.id) === String(planId));
+        if (!plan) return null;
         return {
             event_uid: row.event_uid,
             plan_id: planId,
-            subject: plan ? (plan.subject || plan.name) : '',
-            subject_in_managebac: plan ? (plan.subject || plan.name) : ''
+            subject: plan.subject || plan.name,
+            subject_in_managebac: plan.subject || plan.name
         };
-    });
-    const selectedCount = rows.filter(row => row.plan_id).length;
+    }).filter(Boolean);
+}
 
-    setSyncInProgress(true, `正在添加 ${selectedCount} 个确认任务…`);
+async function applyArrangeChanges(rows) {
+    let applied = 0;
+    for (const row of rows) {
+        if (!row?.task_id || !row.updates || Object.keys(row.updates).length === 0) continue;
+        await TimeWhereDB.updateTask(row.task_id, row.updates);
+        applied++;
+    }
+    return applied;
+}
+
+async function applyManageBacSelections(rows) {
+    if (!rows.length) return { created: 0, updated: 0 };
+    await TimeWhereManageBac.saveEventSubjectOverrides(TimeWhereDB, rows, managebacPlans);
+    const config = await TimeWhereManageBac.getManageBacIcsConfig(TimeWhereDB);
+    if (!config?.link) {
+        throw new Error('请先保存 ManageBac ICS link。');
+    }
+    const icsText = await TimeWhereManageBac.fetchIcsText(config.link);
+    return await TimeWhereManageBac.syncManageBacIcs(TimeWhereDB, icsText, config.link, {
+        confirmLinkChange: true,
+        applyPendingEventOverrides: true
+    });
+}
+
+async function clearManagementReviewPending({ updateLastChecked }) {
+    await TimeWhereDB.setSetting(MANAGEMENT_REVIEW_PENDING_KEY, null);
+    await TimeWhereManageBac.clearPendingEventMappings(TimeWhereDB);
+    currentArrangeRows = [];
+    currentPendingEventRows = [];
+    managementPending = null;
+    renderArrangeChanges([]);
+    renderPendingEventMappings([]);
+    if (updateLastChecked) {
+        await TimeWhereDB.setSetting(MANAGEMENT_REVIEW_LAST_CHECKED_KEY, new Date().toISOString());
+    }
+}
+
+async function handleConfirmManagementReview() {
+    if (reviewInProgress || !hasReviewWork(managementPending)) return;
+    const selectedArrange = getSelectedArrangeChanges();
+    const selectedManageBac = getSelectedManageBacRows();
+
+    setReviewInProgress(true, `正在导入：${selectedArrange.length} 个任务调整，${selectedManageBac.length} 个 ManageBac 任务…`);
     try {
-        const saved = await TimeWhereManageBac.saveEventSubjectOverrides(TimeWhereDB, rows, managebacPlans);
-        currentPendingEventRows = await TimeWhereManageBac.clearPendingEventMappings(TimeWhereDB);
-        renderPendingEventMappings([]);
-        const config = await TimeWhereManageBac.getManageBacIcsConfig(TimeWhereDB);
-        if (!config?.link) {
-            setManageBacSyncStatus('添加失败：请先保存 ManageBac ICS link。', 'error');
-            return saved;
-        }
-        const icsText = await TimeWhereManageBac.fetchIcsText(config.link);
-        const result = await TimeWhereManageBac.syncManageBacIcs(TimeWhereDB, icsText, config.link, {
-            confirmLinkChange: true,
-            applyPendingEventOverrides: true
-        });
-        currentPendingEventRows = await TimeWhereManageBac.savePendingEventMappings(TimeWhereDB, result.pending_event_mappings || []);
-        renderPendingEventMappings(currentPendingEventRows);
-        setManageBacSyncStatus(`已添加 ${result.created} 个任务；仍有 ${currentPendingEventRows.length} 个新增事件未添加`, currentPendingEventRows.length ? 'error' : 'success');
-        return result;
+        const arranged = await applyArrangeChanges(selectedArrange);
+        const managebacResult = await applyManageBacSelections(selectedManageBac);
+        reviewCompleted = true;
+        await clearManagementReviewPending({ updateLastChecked: true });
+        setManageBacSyncStatus(`完成：已应用 ${arranged} 个任务调整；新增 ${managebacResult.created || 0} 个 ManageBac 任务。`, 'success');
     } catch (error) {
-        setManageBacSyncStatus(`保存新增事件学科失败：${error.message}`, 'error');
-        return null;
+        setManageBacSyncStatus(`导入失败：${error.message}`, 'error');
     } finally {
-        setSyncInProgress(false);
+        setReviewInProgress(false);
+    }
+}
+
+async function handleSkipManagementReview() {
+    if (reviewInProgress || !hasReviewWork(managementPending)) return;
+    setReviewInProgress(true, '正在跳过本轮待确认项…');
+    try {
+        reviewCompleted = true;
+        await clearManagementReviewPending({ updateLastChecked: true });
+        setManageBacSyncStatus('已跳过本轮任务调整和 ManageBac 新事件。', 'success');
+    } catch (error) {
+        setManageBacSyncStatus(`跳过失败：${error.message}`, 'error');
+    } finally {
+        setReviewInProgress(false);
     }
 }

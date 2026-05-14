@@ -119,6 +119,33 @@
     min-width: 220px;
 }
 
+.management-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.management-actions .managebac-save-btn {
+    margin-top: 0;
+}
+
+.managebac-check-cell {
+    text-align: center;
+    width: 56px;
+}
+
+.managebac-check-cell input {
+    inline-size: 18px;
+    block-size: 18px;
+}
+
+.managebac-change-note {
+    color: var(--text-sub);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
 .managebac-save-btn {
     margin-top: 16px;
 }
