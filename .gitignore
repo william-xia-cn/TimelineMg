@@ -21,3 +21,11 @@ build/
 
 # Local/private calendar imports
 *.ics
+!tests/fixtures/*.ics
+
+# Local/private school export samples
+/ManageBac _ My Classes.mhtml
+/My Schedule.mhtml
+/My Schedule.pdf
+/my schedule.md
+/myData*.mime
