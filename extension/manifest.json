@@ -14,6 +14,9 @@
     "tabs",
     "unlimitedStorage"
   ],
+  "host_permissions": [
+    "https://keystoneacademy.managebac.cn/student/events/*"
+  ],
   "action": {
     "default_popup": "popup/popup.html",
     "default_title": "TimeWhere"

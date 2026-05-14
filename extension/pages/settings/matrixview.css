@@ -1,0 +1,303 @@
+.matrixview-container {
+    max-width: 1100px;
+}
+
+.matrixview-content {
+    max-height: calc(100vh - 130px);
+}
+
+.matrixview-import-panel {
+    background: var(--card-bg);
+    border: 1px solid white;
+    border-radius: var(--radius-lg);
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 16px 20px;
+}
+
+.matrixview-import-panel input[type="file"] {
+    width: 100%;
+    padding: 8px 0;
+}
+
+.matrixview-import-btn {
+    width: auto;
+    margin-top: 0;
+    padding: 10px 24px;
+}
+
+.matrixview-status {
+    grid-column: 1 / -1;
+    color: var(--text-sub);
+    font-size: 13px;
+}
+
+.matrixview-tabs {
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid var(--border-stroke);
+    margin-bottom: 16px;
+}
+
+.matrixview-tab {
+    border: none;
+    background: transparent;
+    color: var(--text-sub);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 10px 4px;
+    border-bottom: 3px solid transparent;
+}
+
+.matrixview-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.matrixview-tab-panel {
+    display: none;
+}
+
+.matrixview-tab-panel.active {
+    display: block;
+}
+
+.matrixview-table-wrap {
+    overflow: auto;
+    background: var(--card-bg);
+    border: 1px solid white;
+    border-radius: var(--radius-lg);
+}
+
+.matrixview-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 720px;
+}
+
+.matrixview-table th,
+.matrixview-table td {
+    border-bottom: 1px solid var(--border-stroke);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+    font-size: 13px;
+}
+
+.matrixview-table th {
+    color: var(--text-sub);
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
+.matrixview-table tr:last-child td {
+    border-bottom: none;
+}
+
+.matrixview-period {
+    min-width: 180px;
+}
+
+.matrixview-subject-input {
+    width: 180px;
+}
+
+.matrixview-meeting {
+    color: var(--text-sub);
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.matrixview-empty {
+    color: var(--text-sub);
+    background: var(--card-bg);
+    border: 1px dashed var(--border-stroke);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    text-align: center;
+}
+
+.matrixview-save-btn {
+    margin-top: 16px;
+}
+
+.matrixview-modal-backdrop {
+    align-items: center;
+    background: rgba(15, 23, 42, 0.48);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    padding: 24px;
+    position: fixed;
+    z-index: 1000;
+}
+
+.matrixview-modal-backdrop[hidden] {
+    display: none;
+}
+
+.matrixview-modal {
+    background: #f8fbff;
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    border-radius: 20px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+    color: var(--text-main);
+    max-height: min(760px, calc(100vh - 48px));
+    max-width: 760px;
+    overflow: auto;
+    padding: 24px;
+    width: min(760px, 100%);
+}
+
+.matrixview-modal-header {
+    align-items: flex-start;
+    display: flex;
+    gap: 16px;
+    justify-content: space-between;
+}
+
+.matrixview-modal-kicker {
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    margin: 0 0 6px;
+    text-transform: uppercase;
+}
+
+.matrixview-modal h2 {
+    font-size: 24px;
+    line-height: 1.2;
+    margin: 0;
+}
+
+.matrixview-modal-close {
+    align-items: center;
+    background: rgba(99, 116, 139, 0.12);
+    border: none;
+    border-radius: 12px;
+    color: var(--text-sub);
+    cursor: pointer;
+    display: inline-flex;
+    height: 40px;
+    justify-content: center;
+    width: 40px;
+}
+
+.matrixview-warning-panel {
+    align-items: flex-start;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 12px;
+    color: #9a3412;
+    display: flex;
+    gap: 10px;
+    margin: 20px 0;
+    padding: 12px 14px;
+}
+
+.matrixview-warning-panel p {
+    margin: 0;
+}
+
+.matrixview-confirm-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.matrixview-confirm-card {
+    background: white;
+    border: 1px solid var(--border-stroke);
+    border-radius: 12px;
+    min-width: 0;
+    padding: 14px;
+}
+
+.matrixview-confirm-card.danger {
+    border-color: #fecaca;
+}
+
+.matrixview-confirm-card h3 {
+    font-size: 13px;
+    margin: 0 0 10px;
+}
+
+.matrixview-pill-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 220px;
+    overflow: auto;
+}
+
+.matrixview-pill {
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 999px;
+    color: #3730a3;
+    font-size: 12px;
+    line-height: 1.25;
+    padding: 6px 9px;
+}
+
+.matrixview-pill.empty {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    color: var(--text-sub);
+}
+
+.matrixview-confirm-card.danger .matrixview-pill:not(.empty) {
+    background: #fff1f2;
+    border-color: #fecdd3;
+    color: #be123c;
+}
+
+.matrixview-modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 22px;
+}
+
+.matrixview-secondary-btn,
+.matrixview-danger-btn {
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 800;
+    min-height: 44px;
+    padding: 0 18px;
+}
+
+.matrixview-secondary-btn {
+    background: #e0f7ff;
+    color: #0f5f73;
+}
+
+.matrixview-danger-btn {
+    background: #0f7c8c;
+    color: white;
+}
+
+@media (max-width: 720px) {
+    .matrixview-import-panel {
+        grid-template-columns: 1fr;
+    }
+
+    .matrixview-import-btn {
+        width: 100%;
+    }
+
+    .matrixview-confirm-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .matrixview-modal-actions {
+        flex-direction: column-reverse;
+    }
+}

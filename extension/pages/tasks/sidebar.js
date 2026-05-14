@@ -23,7 +23,7 @@ function renderSidebar() {
         const iconChar = plan.icon_char || plan.name.charAt(0);
 
         html += `
-            <a href="#" class="context-item plan-link ${isActive ? 'active' : ''}" data-plan-id="${plan.id}">
+            <a href="#" class="context-item plan-link ${isActive ? 'active' : ''}" data-plan-id="${plan.id}" draggable="true">
                 <div class="subject-icon" style="background:${bgColor}">${escapeHTML(iconChar)}</div>
                 ${escapeHTML(plan.name)}
                 <button class="plan-menu-btn" data-plan-id="${plan.id}" title="Plan options">
@@ -37,6 +37,7 @@ function renderSidebar() {
     }
 
     container.innerHTML = html;
+    setupPlanReorderHandlers(container);
 }
 
 // ========== Plan Selection ==========
@@ -118,6 +119,9 @@ function showCreatePlanDialog() {
 function showPlanContextMenu(planId, anchorEl) {
     const plan = TaskApp.plans.find(p => p.id === planId);
     if (!plan) return;
+    const planIndex = TaskApp.plans.findIndex(p => p.id === planId);
+    const isFirst = planIndex <= 0;
+    const isLast = planIndex === TaskApp.plans.length - 1;
 
     // Remove existing menu
     closePlanContextMenu();
@@ -126,6 +130,11 @@ function showPlanContextMenu(planId, anchorEl) {
     const menu = document.createElement('div');
     menu.className = 'plan-context-menu';
     menu.innerHTML = `
+        <button class="ctx-menu-item" data-action="move_top" ${isFirst ? 'disabled' : ''}><span class="material-symbols-outlined">vertical_align_top</span> Move top</button>
+        <button class="ctx-menu-item" data-action="move_up" ${isFirst ? 'disabled' : ''}><span class="material-symbols-outlined">arrow_upward</span> Move up</button>
+        <button class="ctx-menu-item" data-action="move_down" ${isLast ? 'disabled' : ''}><span class="material-symbols-outlined">arrow_downward</span> Move down</button>
+        <button class="ctx-menu-item" data-action="move_bottom" ${isLast ? 'disabled' : ''}><span class="material-symbols-outlined">vertical_align_bottom</span> Move bottom</button>
+        <div class="ctx-menu-divider"></div>
         <button class="ctx-menu-item" data-action="rename"><span class="material-symbols-outlined">edit</span> Rename</button>
         <button class="ctx-menu-item" data-action="buckets"><span class="material-symbols-outlined">view_column</span> Manage buckets</button>
         <button class="ctx-menu-item" data-action="labels"><span class="material-symbols-outlined">label</span> Manage labels</button>
@@ -139,10 +148,23 @@ function showPlanContextMenu(planId, anchorEl) {
     menu.addEventListener('click', async (e) => {
         const item = e.target.closest('.ctx-menu-item');
         if (!item) return;
+        if (item.disabled) return;
         const action = item.dataset.action;
         closePlanContextMenu();
 
         switch (action) {
+            case 'move_top':
+                await movePlanToSidebarEdge(plan.id, 'top');
+                break;
+            case 'move_up':
+                await movePlanInSidebar(plan.id, -1);
+                break;
+            case 'move_down':
+                await movePlanInSidebar(plan.id, 1);
+                break;
+            case 'move_bottom':
+                await movePlanToSidebarEdge(plan.id, 'bottom');
+                break;
             case 'rename':
                 showRenamePlanDialog(plan);
                 break;
@@ -173,6 +195,98 @@ function closePlanContextMenuOnOutsideClick(e) {
     if (!e.target.closest('.plan-context-menu')) {
         closePlanContextMenu();
     }
+}
+
+// ========== Plan Reorder ==========
+
+function setupPlanReorderHandlers(container) {
+    if (container.dataset.reorderBound === 'true') return;
+    container.dataset.reorderBound = 'true';
+
+    container.addEventListener('dragstart', (e) => {
+        const link = e.target.closest('.plan-link');
+        if (!link || e.target.closest('.plan-menu-btn')) {
+            e.preventDefault();
+            return;
+        }
+        link.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', link.dataset.planId);
+    });
+
+    container.addEventListener('dragover', (e) => {
+        const link = e.target.closest('.plan-link');
+        if (!link) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        document.querySelectorAll('.plan-link.drag-over').forEach(el => el.classList.remove('drag-over'));
+        link.classList.add('drag-over');
+    });
+
+    container.addEventListener('dragleave', (e) => {
+        const link = e.target.closest('.plan-link');
+        if (link) link.classList.remove('drag-over');
+    });
+
+    container.addEventListener('drop', async (e) => {
+        const target = e.target.closest('.plan-link');
+        const sourceId = parseInt(e.dataTransfer.getData('text/plain'), 10);
+        const targetId = target ? parseInt(target.dataset.planId, 10) : null;
+        const rect = target ? target.getBoundingClientRect() : null;
+        const insertAfter = rect ? e.clientY > rect.top + rect.height / 2 : false;
+        clearPlanDragState();
+        if (!sourceId || !targetId || sourceId === targetId) return;
+        await reorderPlanNearTarget(sourceId, targetId, insertAfter);
+    });
+
+    container.addEventListener('dragend', clearPlanDragState);
+}
+
+function clearPlanDragState() {
+    document.querySelectorAll('.plan-link.dragging, .plan-link.drag-over').forEach(el => {
+        el.classList.remove('dragging', 'drag-over');
+    });
+}
+
+async function reorderPlanNearTarget(sourceId, targetId, insertAfter = false) {
+    const plans = [...TaskApp.plans];
+    const sourceIndex = plans.findIndex(plan => plan.id === sourceId);
+    const targetIndex = plans.findIndex(plan => plan.id === targetId);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    const [moved] = plans.splice(sourceIndex, 1);
+    const adjustedTargetIndex = plans.findIndex(plan => plan.id === targetId);
+    plans.splice(adjustedTargetIndex + (insertAfter ? 1 : 0), 0, moved);
+    await persistPlanOrder(plans.map(plan => plan.id));
+}
+
+async function movePlanInSidebar(planId, direction) {
+    const plans = [...TaskApp.plans];
+    const index = plans.findIndex(plan => plan.id === planId);
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= plans.length) return;
+    [plans[index], plans[targetIndex]] = [plans[targetIndex], plans[index]];
+    await persistPlanOrder(plans.map(plan => plan.id));
+}
+
+async function movePlanToSidebarEdge(planId, edge) {
+    const plans = [...TaskApp.plans];
+    const index = plans.findIndex(plan => plan.id === planId);
+    if (index < 0) return;
+    const [moved] = plans.splice(index, 1);
+    if (edge === 'top') {
+        plans.unshift(moved);
+    } else {
+        plans.push(moved);
+    }
+    await persistPlanOrder(plans.map(plan => plan.id));
+}
+
+async function persistPlanOrder(orderedIds) {
+    await TimeWhereDB.reorderPlans(orderedIds);
+    await TaskApp.loadPlans();
+    renderSidebar();
+    showToast('Plan order updated', 'success');
 }
 
 // ========== Rename Plan ==========

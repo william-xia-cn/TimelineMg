@@ -1,0 +1,38 @@
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="sanitized-boundary"
+
+--sanitized-boundary
+Content-Type: application/vnd.sif.studentrecordexchange+xml; charset=UTF-8
+
+<?xml version="1.0" encoding="UTF-8"?>
+<StudentRecordExchange xmlns="http://www.sifassociation.org/datamodel/na/4.x">
+  <StudentRecordExchangeRecord>
+    <StudentPersonalData>
+      <Name>
+        <LastName>Anon</LastName>
+      </Name>
+    </StudentPersonalData>
+    <AcademicRecord>
+      <SchoolCourseInfoData>
+        <CourseCode>MTH101</CourseCode>
+        <CourseTitle>Mathematics HL</CourseTitle>
+        <MarkingPeriods>
+          <MarkingPeriod>
+            <Code>Q4</Code>
+          </MarkingPeriod>
+        </MarkingPeriods>
+      </SchoolCourseInfoData>
+      <SchoolCourseInfoData>
+        <CourseCode>ENG201</CourseCode>
+        <CourseTitle>English HL</CourseTitle>
+        <MarkingPeriods>
+          <MarkingPeriod>
+            <Code>Q4</Code>
+          </MarkingPeriod>
+        </MarkingPeriods>
+      </SchoolCourseInfoData>
+    </AcademicRecord>
+  </StudentRecordExchangeRecord>
+</StudentRecordExchange>
+
+--sanitized-boundary--

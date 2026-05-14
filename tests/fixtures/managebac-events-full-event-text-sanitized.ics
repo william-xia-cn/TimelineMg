@@ -1,0 +1,25 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//TimeWhere Sanitized Fixture//ManageBac Full Event Text ICS//EN
+BEGIN:VEVENT
+UID:mb-full-event-english-1@example.invalid
+DTSTAMP:20260513T010000Z
+LAST-MODIFIED:20260513T010000Z
+SUMMARY:Essay Draft
+DESCRIPTION:Draft comparative paragraph.
+X-MANAGEBAC-COURSE:English Language Acquisition Phase 5
+DUE;VALUE=DATE:20260520
+LOCATION:Room 1359
+URL:https://example.invalid/managebac/event/full-event-english
+END:VEVENT
+BEGIN:VEVENT
+UID:mb-full-event-disabled-1@example.invalid
+DTSTAMP:20260513T010000Z
+SUMMARY:Community Reflection
+DESCRIPTION:Reflection paragraph.
+X-MANAGEBAC-COURSE:Community Time
+DUE;VALUE=DATE:20260522
+LOCATION:Room 1000
+URL:https://example.invalid/managebac/event/full-event-disabled
+END:VEVENT
+END:VCALENDAR

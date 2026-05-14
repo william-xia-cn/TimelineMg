@@ -1,0 +1,7 @@
+My Schedule Matrix
+School Year 25-26 S2 Q4
+
+Math: Analysis and Approaches HL MAA001 Ma, Yun 1471 A1,C2,E3,H4
+English HL Language and Literature ENG201 Stone, Alex 2204 A3,D1,E1,G2
+Theory of Knowledge TOK001 Lee, Morgan 3102 B2,D4,F3,H1
+Computer Science HL CSC401 Chen, Riley LAB2 C1,E2,G3,H4

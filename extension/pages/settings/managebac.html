@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeWhere - ManageBac Mapping</title>
+    <link rel="stylesheet" href="../../shared/styles/fonts.css">
+    <link rel="stylesheet" href="../../shared/styles/icons.css">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="managebac.css">
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon"><span class="material-symbols-outlined">change_history</span></div>
+            </div>
+            <nav class="nav-menu">
+                <a href="../focus/focus.html" class="nav-item" title="仪表盘"><span class="material-symbols-outlined">grid_view</span></a>
+                <a href="../tasks/tasks.html" class="nav-item" title="任务"><span class="material-symbols-outlined">task</span></a>
+                <a href="../calendar/calendar.html" class="nav-item" title="日历"><span class="material-symbols-outlined">calendar_today</span></a>
+                <a href="#" class="nav-item" title="更多"><span class="material-symbols-outlined">apps</span></a>
+            </nav>
+            <div class="sidebar-bottom">
+                <a href="settings.html" class="nav-item active" title="设置"><span class="material-symbols-outlined">settings</span></a>
+                <img src="../../shared/images/avatar-default.png" alt="Avatar" class="user-avatar">
+            </div>
+        </aside>
+
+        <main class="main-wrapper">
+            <div class="settings-container managebac-container">
+                <header class="header">
+                    <div class="header-left">
+                        <button class="back-btn" id="backBtn" title="返回设置">
+                            <span class="material-symbols-outlined">arrow_back</span>
+                        </button>
+                        <h1>ManageBac 学科映射</h1>
+                    </div>
+                </header>
+
+                <div class="content custom-scrollbar managebac-content">
+                    <section class="section">
+                        <h2 class="section-title">
+                            <span class="material-symbols-outlined">rule</span> 前置条件
+                        </h2>
+                        <div class="managebac-status-card" id="preconditionCard">
+                            <span class="material-symbols-outlined">hourglass_empty</span>
+                            <span id="preconditionStatus">正在检查 MatrixView Plan 初始化状态…</span>
+                        </div>
+                    </section>
+
+                    <section class="section">
+                        <h2 class="section-title">
+                            <span class="material-symbols-outlined">upload_file</span> 本地 ManageBac HTML
+                        </h2>
+                        <div class="managebac-import-panel">
+                            <input type="file" id="managebacFileInput" accept=".html,.htm">
+                            <button class="import-btn managebac-import-btn" id="managebacPreviewBtn">读取预览</button>
+                            <button class="action-btn" id="managebacResetBtn" type="button">重新选择</button>
+                            <span class="managebac-status" id="managebacStatus">尚未读取 ManageBac 学科配置</span>
+                        </div>
+                    </section>
+
+                    <section class="section">
+                        <h2 class="section-title">
+                            <span class="material-symbols-outlined">account_tree</span> 映射预览
+                        </h2>
+                        <div id="mappingPreview" class="managebac-empty">读取 HTML 后显示 ManageBac 学科映射</div>
+                        <button class="import-btn managebac-save-btn" id="saveManageBacMappingsBtn" disabled>保存 ManageBac 学科映射</button>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="../../shared/js/icons.js"></script>
+    <script src="../../shared/js/dexie.js"></script>
+    <script src="../../shared/js/db.js"></script>
+    <script src="../../shared/js/appearance.js"></script>
+    <script src="../../shared/js/managebac.js"></script>
+    <script src="managebac.js"></script>
+</body>
+</html>

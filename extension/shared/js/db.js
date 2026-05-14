@@ -6,6 +6,11 @@
 
 const db = new Dexie('TimeWhere');
 
+const SUBJECT_DEFAULT_BUCKETS = ['上课', '作业', '单元测试', '阶段考试'];
+const OTHER_SCHOOL_PLAN_NAME = 'Other School Plan';
+const OTHER_SCHOOL_DEFAULT_BUCKETS = ['事项', '活动', '申请', '其他'];
+const LEGACY_DEFAULT_BUCKETS = ['Homework', 'Test', 'IA / EE', 'Notes', 'Review', 'Project', 'Other'];
+
 // --- Schema v2 (original) ---
 db.version(2).stores({
     settings: 'key',
@@ -111,7 +116,13 @@ const TimeWhereDB = {
 
     // ========== Plans ==========
     async getPlans() {
-        return await db.plans.orderBy('created_at').toArray();
+        const plans = await db.plans.toArray();
+        return plans.sort((a, b) => {
+            const aOrder = Number.isFinite(a.sort_order) ? a.sort_order : Number.MAX_SAFE_INTEGER;
+            const bOrder = Number.isFinite(b.sort_order) ? b.sort_order : Number.MAX_SAFE_INTEGER;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return (a.created_at || '').localeCompare(b.created_at || '');
+        });
     },
 
     async getPlanById(id) {
@@ -119,8 +130,11 @@ const TimeWhereDB = {
     },
 
     async ensureDefaultPlan() {
-        let plan = await db.plans.orderBy('created_at').first();
-        if (plan) return plan;
+        let plan = (await this.getPlans())[0];
+        if (plan) {
+            await this.ensureBucketTemplatesForExistingPlans();
+            return plan;
+        }
 
         plan = await this.addPlan({
             name: 'My Tasks',
@@ -128,29 +142,24 @@ const TimeWhereDB = {
             icon_char: '✓'
         });
 
-        const defaultBuckets = [
-            ['Homework', 0],
-            ['Test', 1],
-            ['IA / EE', 2],
-            ['Notes', 3],
-            ['Review', 4],
-            ['Project', 5],
-            ['Other', 6]
-        ];
-        for (const [name, sort_order] of defaultBuckets) {
-            await this.addBucket({ plan_id: plan.id, name, sort_order });
-        }
+        await this.ensureBucketTemplateForPlan(plan.id, SUBJECT_DEFAULT_BUCKETS);
 
         return plan;
     },
 
     async addPlan(plan) {
         const now = this.getNowISO();
+        const existing = await this.getPlans();
+        const baseSortOrder = existing.reduce((max, item, index) => {
+            const order = Number.isFinite(item.sort_order) ? item.sort_order : index;
+            return Math.max(max, order);
+        }, -1) + 1;
         const newPlan = {
             name: plan.name || 'New Plan',
             color: plan.color || '#2b56e3',
             icon_char: plan.icon_char || (plan.name ? plan.name.charAt(0) : 'P'),
             subject: plan.subject || null,
+            sort_order: plan.sort_order ?? baseSortOrder,
             created_at: now,
             updated_at: now
         };
@@ -172,6 +181,14 @@ const TimeWhereDB = {
         await db.plans.delete(id);
     },
 
+    async reorderPlans(orderedIds) {
+        const now = this.getNowISO();
+        for (let i = 0; i < orderedIds.length; i++) {
+            await db.plans.update(orderedIds[i], { sort_order: i, updated_at: now });
+        }
+        return await this.getPlans();
+    },
+
     // ========== Buckets ==========
     async getBucketsByPlan(planId) {
         return await db.buckets.where('plan_id').equals(planId).sortBy('sort_order');
@@ -190,6 +207,74 @@ const TimeWhereDB = {
         };
         const id = await db.buckets.add(newBucket);
         return { ...newBucket, id };
+    },
+
+    async ensureBucketTemplateForPlan(planId, bucketNames) {
+        const existing = await this.getBucketsByPlan(planId);
+        const existingNames = new Set(existing.map(bucket => bucket.name));
+        const created = [];
+        const baseSortOrder = existing.reduce((max, bucket) => Math.max(max, bucket.sort_order ?? -1), -1) + 1;
+
+        for (const name of bucketNames) {
+            if (existingNames.has(name)) continue;
+            const bucket = await this.addBucket({
+                plan_id: planId,
+                name,
+                sort_order: baseSortOrder + created.length
+            });
+            created.push(bucket);
+            existingNames.add(name);
+        }
+
+        return created;
+    },
+
+    async ensureBucketTemplatesForExistingPlans() {
+        const plans = await this.getPlans();
+        const result = [];
+
+        for (const plan of plans) {
+            const buckets = await this.getBucketsByPlan(plan.id);
+            const bucketNames = new Set(buckets.map(bucket => bucket.name));
+            const hasLegacyDefaults = LEGACY_DEFAULT_BUCKETS.some(name => bucketNames.has(name));
+            let template = null;
+
+            if (plan.name === OTHER_SCHOOL_PLAN_NAME) {
+                template = OTHER_SCHOOL_DEFAULT_BUCKETS;
+            } else if (plan.name === 'My Tasks' || plan.subject || hasLegacyDefaults) {
+                template = SUBJECT_DEFAULT_BUCKETS;
+            }
+
+            if (!template) continue;
+
+            const created = await this.ensureBucketTemplateForPlan(plan.id, template);
+            const removed = await this.deleteEmptyLegacyBucketsForPlan(plan.id);
+            result.push({
+                plan_id: plan.id,
+                plan_name: plan.name,
+                created_count: created.length,
+                created_names: created.map(bucket => bucket.name),
+                removed_empty_legacy_count: removed.length,
+                removed_empty_legacy_names: removed.map(bucket => bucket.name)
+            });
+        }
+
+        return result;
+    },
+
+    async deleteEmptyLegacyBucketsForPlan(planId) {
+        const buckets = await this.getBucketsByPlan(planId);
+        const removed = [];
+
+        for (const bucket of buckets) {
+            if (!LEGACY_DEFAULT_BUCKETS.includes(bucket.name)) continue;
+            const taskCount = await db.tasks.where('bucket_id').equals(bucket.id).count();
+            if (taskCount > 0) continue;
+            await db.buckets.delete(bucket.id);
+            removed.push(bucket);
+        }
+
+        return removed;
     },
 
     async updateBucket(id, data) {
@@ -320,7 +405,29 @@ const TimeWhereDB = {
         return task;
     },
 
-    async addTask(task) {
+    isManageBacSourceTask(task) {
+        return !!task && (
+            task.source === 'managebac' ||
+            task.source_type === 'managebac_ics' ||
+            (task.readonly === true && !!task.managebac_subject)
+        );
+    },
+
+    isManageBacLocalStatusUpdate(data = {}) {
+        const allowedFields = new Set(['progress', 'completed_at', 'status', 'start_date', 'priority']);
+        const fields = Object.keys(data || {});
+        return fields.length > 0 && fields.every(field => allowedFields.has(field));
+    },
+
+    assertTaskWritable(task, options = {}, data = null) {
+        if (this.isManageBacSourceTask(task) && !options.allowManageBacSync) {
+            if (data && this.isManageBacLocalStatusUpdate(data)) return;
+            throw new Error('ManageBac source content is read-only. Local progress updates are allowed.');
+        }
+    },
+
+    async addTask(task, options = {}) {
+        this.assertTaskWritable(task, options);
         const now = this.getNowISO();
         const plan = task.plan_id ? await db.plans.get(task.plan_id) : await this.ensureDefaultPlan();
         const planId = task.plan_id || plan.id;
@@ -349,6 +456,14 @@ const TimeWhereDB = {
             deferred_until: task.deferred_until || null,
             completed_at: null,
             google_task_id: null,
+            source: task.source || null,
+            source_type: task.source_type || null,
+            source_uid: task.source_uid || null,
+            source_updated_at: task.source_updated_at || null,
+            source_url: task.source_url || null,
+            managebac_subject: task.managebac_subject || null,
+            readonly: task.readonly === true,
+            synced_at: task.synced_at || null,
             created_at: now,
             updated_at: now
         };
@@ -358,7 +473,9 @@ const TimeWhereDB = {
         return newTask;
     },
 
-    async updateTask(id, data) {
+    async updateTask(id, data, options = {}) {
+        const existingTask = await db.tasks.get(id);
+        this.assertTaskWritable(existingTask, options, data);
         const updateData = {
             ...data,
             updated_at: this.getNowISO()
@@ -383,8 +500,9 @@ const TimeWhereDB = {
         return updatedTask;
     },
 
-    async deleteTask(id) {
+    async deleteTask(id, options = {}) {
         const task = await db.tasks.get(id);
+        this.assertTaskWritable(task, options);
         await db.tasks.delete(id);
         await this.addSyncLog('task', 'delete', task);
     },
@@ -526,10 +644,17 @@ const TimeWhereDB = {
             id: this.generateId(),
             title: event.title || '新事件',
             date: event.date || this.formatDateISO(new Date()),
-            time_start: event.time_start || '09:00',
-            time_end: event.time_end || '10:00',
+            time_start: event.time_start ?? '09:00',
+            time_end: event.time_end ?? '10:00',
             color: event.color || '#4A90D9',
             description: event.description || null,
+            repeat: event.repeat || 'none',
+            repeat_days: event.repeat_days ?? null,
+            monthly_week: event.monthly_week ?? null,
+            monthly_dow: event.monthly_dow ?? null,
+            yearly_month: event.yearly_month ?? null,
+            yearly_dom: event.yearly_dom ?? null,
+            once_date: event.once_date ?? null,
             source: event.source || 'manual',
             container_id: event.container_id || null,
             google_calendar_event_id: null,
@@ -692,7 +817,10 @@ const TimeWhereDB = {
                 defensive_threshold: 24,
                 heal_time: '23:00',
                 default_duration: 45,
-                default_priority: 'medium'
+                default_priority: 'medium',
+                appearance_background: 'calm',
+                appearance_avatar: 'default',
+                task_arrange_last_run_at: null
             };
             
             for (const [key, value] of Object.entries(defaults)) {
@@ -701,6 +829,8 @@ const TimeWhereDB = {
                     await db.settings.put({ key: key, value: value });
                 }
             }
+
+            await this.ensureBucketTemplatesForExistingPlans();
             
             return defaults;
         } catch(e) {

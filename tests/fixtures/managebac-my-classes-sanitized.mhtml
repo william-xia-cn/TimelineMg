@@ -1,0 +1,41 @@
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="----TimeWhereSanitizedManageBacClasses"
+
+------TimeWhereSanitizedManageBacClasses
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+=3C!DOCTYPE html=3E
+=3Chtml=3E
+=3Cbody=3E
+=3Cmain=3E
+=3Cdiv class=3D"accordion" id=3D"classes-accordion"=3E
+=3Cdiv class=3D"accordion-item collapse px-4 py-3" data-controller=3D"helpers--request" id=3D"sanitized-placeholder"=3E=3C/div=3E
+=3Cdiv class=3D"accordion" id=3D"accordion-sanitized-one"=3E
+=3Cdiv class=3D"f-tile f-tile--inline f-tile--elevated f-tile--nowrap-suffix f-class-tile"=3E
+=3Cdiv class=3D"f-tile__icon"=3E=3Cimg alt=3D"" class=3D"sebo-icon icon-48" src=3D"https://example.invalid/assets/subject.png"=3E=3C/div=3E
+=3Cdiv class=3D"f-tile__body"=3E
+=3Cp class=3D"f-tile__title h5"=3E=3Ca class=3D"f-tile__title-link link-dark" href=3D"https://example.invalid/classes/1001"=3EEnglish Language Acquisition Phase 5=3Cspan=3E =3C/span=3E=3C/a=3E=3C/p=3E
+=3Cdiv class=3D"f-tile__description color-secondary hstack gap-2 flex-wrap"=3E=3Cspan=3ERoom: 1359=3C/span=3E=3C/div=3E
+=3C/div=3E
+=3Cdiv class=3D"f-tile__suffix hstack gap-3 flex-wrap"=3E
+=3Ca class=3D"user-popover" aria-label=3D"Teacher, English One" data-controller=3D"popover"=3E=3Cdiv class=3D"f-avatar f-avatar--regular f-avatar--empty"=3E=3C/div=3E=3C/a=3E
+=3C/div=3E
+=3C/div=3E
+=3C/div=3E
+=3Cdiv class=3D"accordion" id=3D"accordion-sanitized-two"=3E
+=3Cdiv class=3D"f-tile f-tile--inline f-tile--elevated f-tile--nowrap-suffix f-class-tile"=3E
+=3Cdiv class=3D"f-tile__body"=3E
+=3Cp class=3D"f-tile__title h5"=3E=3Ca class=3D"f-tile__title-link link-dark" href=3D"https://example.invalid/classes/1002"=3EMathematics Analysis HL=3C/a=3E=3C/p=3E
+=3Cdiv class=3D"f-tile__description color-secondary hstack gap-2 flex-wrap"=3E=3Cspan=3ERoom 1535=3C/span=3E=3C/div=3E
+=3C/div=3E
+=3Cdiv class=3D"f-tile__suffix hstack gap-3 flex-wrap"=3E
+=3Ca class=3D"user-popover" aria-label=3D"Teacher, Math One" data-controller=3D"popover"=3E=3Cdiv class=3D"f-avatar f-avatar--regular f-avatar--empty"=3E=3C/div=3E=3C/a=3E
+=3C/div=3E
+=3C/div=3E
+=3C/div=3E
+=3C/main=3E
+=3C/body=3E
+=3C/html=3E
+
+------TimeWhereSanitizedManageBacClasses--

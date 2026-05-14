@@ -21,7 +21,46 @@ async function initializeOnFirstInstall() {
     }
 }
 
+function isAllowedManageBacIcsUrl(rawUrl) {
+    try {
+        const url = new URL(rawUrl);
+        const host = url.hostname.toLowerCase();
+        const isManageBacHost = host === 'managebac.com' ||
+            host.endsWith('.managebac.com') ||
+            host === 'managebac.cn' ||
+            host.endsWith('.managebac.cn');
+        return url.protocol === 'https:' &&
+            isManageBacHost &&
+            /\/student\/events\//i.test(url.pathname);
+    } catch (_) {
+        return false;
+    }
+}
+
+async function fetchManageBacIcs(url) {
+    if (!isAllowedManageBacIcsUrl(url)) {
+        throw new Error('Unsupported ManageBac ICS subscription host or path');
+    }
+    let response;
+    try {
+        response = await fetch(url, { cache: 'no-store' });
+    } catch (_) {
+        throw new Error('无法读取 ManageBac ICS link，请检查链接是否有效、网络是否可访问。');
+    }
+    if (!response.ok) {
+        throw new Error(`ICS request failed: HTTP ${response.status}`);
+    }
+    return await response.text();
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message?.type === 'TIMEWHERE_MANAGEBAC_FETCH_ICS') {
+        fetchManageBacIcs(message.url)
+            .then(text => sendResponse({ ok: true, text }))
+            .catch(error => sendResponse({ ok: false, error: error.message }));
+        return true;
+    }
+
     if (message.action === 'getStatus') {
         sendResponse({ status: 'ok', timestamp: new Date().toISOString() });
     }

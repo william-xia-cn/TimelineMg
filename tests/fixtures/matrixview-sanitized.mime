@@ -1,0 +1,59 @@
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="timewhere-test-boundary"
+
+Student Address: 123 Private Road
+Phone: +1 555 0100
+Account ID: private-account-123
+Demographic: private demographic value
+
+--timewhere-test-boundary
+Content-Type: text/html; charset=UTF-8
+
+<html>
+<body>
+<table>
+    <tr>
+        <th>A-H Day</th>
+        <th>Period</th>
+        <th>Terms</th>
+        <th>Course</th>
+        <th>Teacher</th>
+        <th>Room</th>
+    </tr>
+    <tr>
+        <td>A</td>
+        <td>1</td>
+        <td>25-26 S2 Q4</td>
+        <td>Math: Analysis and Approaches HL</td>
+        <td>Ma, Yun</td>
+        <td>1471</td>
+    </tr>
+    <tr>
+        <td>B</td>
+        <td>3</td>
+        <td>25-26 S2 Q4</td>
+        <td>English HL Language and Literature</td>
+        <td>Stone, Alex</td>
+        <td>2204</td>
+    </tr>
+    <tr>
+        <td>C</td>
+        <td>5</td>
+        <td>25-26 S2 Q4</td>
+        <td>Theory of Knowledge</td>
+        <td>Lee, Morgan</td>
+        <td>3102</td>
+    </tr>
+    <tr>
+        <td>D</td>
+        <td>2</td>
+        <td>25-26 S2 Q4</td>
+        <td>Computer Science HL</td>
+        <td>Chen, Riley</td>
+        <td>Lab 2</td>
+    </tr>
+</table>
+</body>
+</html>
+
+--timewhere-test-boundary--

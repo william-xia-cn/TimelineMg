@@ -4,12 +4,19 @@
  * 日期: 2026-04-02
  */
 
+const MANAGEBAC_PENDING_EVENTS_SESSION_KEY = 'timewhere_managebac_pending_event_mappings';
+let settingsManageBacSyncInProgress = false;
+
 document.addEventListener('DOMContentLoaded', async () => {
-    await initDatabase();
-    await checkAndShowWizard();
-    await loadSettings();
     setupEventListeners();
-    checkReturnFromInit();
+    try {
+        await initDatabase();
+        await checkAndShowWizard();
+        await loadSettings();
+        checkReturnFromInit();
+    } catch (error) {
+        showToast(`设置页初始化失败：${error.message}`, 'error');
+    }
 });
 
 async function checkReturnFromInit() {
@@ -54,6 +61,15 @@ async function loadSettings() {
     document.getElementById('tomatoDuration').value = settings.pomodoro_work || 25;
     document.getElementById('defaultDuration').value = settings.default_duration || 45;
     document.getElementById('defaultPriority').value = settings.default_priority || 'medium';
+    document.getElementById('appearanceBackground').value = settings.appearance_background || 'calm';
+    document.getElementById('appearanceAvatar').value = settings.appearance_avatar || 'default';
+    if (typeof TimeWhereAppearance !== 'undefined') {
+        TimeWhereAppearance.applyValues({
+            background: document.getElementById('appearanceBackground').value,
+            avatar: document.getElementById('appearanceAvatar').value
+        });
+    }
+    await loadSettingsManageBacLink();
 }
 
 function setupEventListeners() {
@@ -63,8 +79,153 @@ function setupEventListeners() {
     document.getElementById('importJsonBtn')?.addEventListener('click', () => document.getElementById('importJsonInput')?.click());
     document.getElementById('importJsonInput')?.addEventListener('change', importData);
     document.getElementById('resetSettingsBtn')?.addEventListener('click', resetSettings);
+    document.getElementById('importMatrixViewBtn')?.addEventListener('click', () => {
+        window.location.href = 'matrixview.html';
+    });
+    document.getElementById('configureManageBacBtn')?.addEventListener('click', () => {
+        window.location.href = 'managebac.html';
+    });
+    document.getElementById('settingsSaveManageBacIcsLinkBtn')?.addEventListener('click', handleSettingsSaveManageBacIcsLink);
+    document.getElementById('settingsSyncManageBacBtn')?.addEventListener('click', handleSettingsManageBacSync);
+    document.getElementById('appearanceBackground')?.addEventListener('change', previewAppearanceSettings);
+    document.getElementById('appearanceAvatar')?.addEventListener('change', previewAppearanceSettings);
     setupWizardEvents();
     setupImportEvents();
+}
+
+function previewAppearanceSettings() {
+    if (typeof TimeWhereAppearance === 'undefined') return;
+    TimeWhereAppearance.applyValues({
+        background: document.getElementById('appearanceBackground')?.value || 'calm',
+        avatar: document.getElementById('appearanceAvatar')?.value || 'default'
+    });
+}
+
+async function loadSettingsManageBacLink() {
+    if (typeof TimeWhereManageBac === 'undefined') return;
+    const config = await TimeWhereManageBac.getManageBacIcsConfig(TimeWhereDB);
+    const input = document.getElementById('settingsManageBacIcsLinkInput');
+    if (input && config?.link) input.value = config.link;
+    if (config?.last_synced_at) {
+        setSettingsManageBacStatus(`已配置；上次同步 ${config.last_task_count || 0} 个任务`, 'success');
+    } else if (config?.link) {
+        setSettingsManageBacStatus('已配置；尚未同步', 'info');
+    } else {
+        setSettingsManageBacStatus('未配置 ManageBac 链接', 'info');
+    }
+    updateSettingsManageBacControls();
+}
+
+function updateSettingsManageBacControls() {
+    const disabled = settingsManageBacSyncInProgress || typeof TimeWhereManageBac === 'undefined';
+    document.getElementById('settingsManageBacIcsLinkInput')?.toggleAttribute('disabled', disabled);
+    document.getElementById('settingsSaveManageBacIcsLinkBtn')?.toggleAttribute('disabled', disabled);
+    document.getElementById('settingsSyncManageBacBtn')?.toggleAttribute('disabled', disabled);
+}
+
+function setSettingsManageBacStatus(message, type = 'info') {
+    const status = document.getElementById('settingsManageBacSyncStatus');
+    if (!status) return;
+    status.textContent = message;
+    status.dataset.type = type;
+}
+
+function setSettingsManageBacSyncInProgress(inProgress, message = '') {
+    settingsManageBacSyncInProgress = inProgress;
+    updateSettingsManageBacControls();
+    if (message) setSettingsManageBacStatus(message, 'info');
+}
+
+async function handleSettingsSaveManageBacIcsLink() {
+    if (typeof TimeWhereManageBac === 'undefined') {
+        setSettingsManageBacStatus('ManageBac 模块未加载', 'error');
+        return;
+    }
+    const link = document.getElementById('settingsManageBacIcsLinkInput')?.value?.trim() || '';
+    if (!link) {
+        setSettingsManageBacStatus('未配置：请填写 ManageBac 链接。', 'error');
+        return;
+    }
+
+    setSettingsManageBacSyncInProgress(true, '正在保存 ManageBac 链接…');
+    try {
+        const result = await TimeWhereManageBac.saveManageBacIcsLink(TimeWhereDB, link, {
+            confirmLinkChange: () => window.confirm(
+                'ManageBac 链接已改变。保存新链接后，后续同步会按新 ICS 源更新本地 ManageBac source tasks，并删除旧源中已消失的 ManageBac source tasks。是否继续？'
+            )
+        });
+        if (result.status === 'blocked') {
+            setSettingsManageBacStatus('已取消：ManageBac 链接改变但未确认。', 'info');
+            return;
+        }
+        setSettingsManageBacStatus('已保存 ManageBac 链接；可点击同步读取新增事件', 'success');
+    } catch (error) {
+        setSettingsManageBacStatus(`保存失败：${error.message}`, 'error');
+    } finally {
+        setSettingsManageBacSyncInProgress(false);
+    }
+}
+
+async function handleSettingsManageBacSync() {
+    if (typeof TimeWhereManageBac === 'undefined') {
+        setSettingsManageBacStatus('ManageBac 模块未加载', 'error');
+        return;
+    }
+
+    const mappings = await TimeWhereDB.getSetting(TimeWhereManageBac.SETTINGS_MAPPING_KEY);
+    const activeMappingCount = (mappings || []).filter(row => row?.plan_id).length;
+    if (!activeMappingCount) {
+        setSettingsManageBacStatus('请先配置 ManageBac 学科映射，再同步新增事件。', 'error');
+        return;
+    }
+
+    const link = document.getElementById('settingsManageBacIcsLinkInput')?.value?.trim() || '';
+    let config = await TimeWhereManageBac.getManageBacIcsConfig(TimeWhereDB);
+    if (!config?.link && !link) {
+        setSettingsManageBacStatus('未配置：请先填写并保存 ManageBac 链接。', 'error');
+        return;
+    }
+
+    setSettingsManageBacSyncInProgress(true, '正在读取 ManageBac ICS…');
+    try {
+        if (link && (!config?.link || TimeWhereManageBac.normalizeIcsLink(link) !== TimeWhereManageBac.normalizeIcsLink(config.link))) {
+            const saveResult = await TimeWhereManageBac.saveManageBacIcsLink(TimeWhereDB, link, {
+                confirmLinkChange: () => window.confirm(
+                    'ManageBac 链接已改变。保存并同步新链接会按新 ICS 源更新本地 ManageBac source tasks，并删除旧源中已消失的 ManageBac source tasks。是否继续？'
+                )
+            });
+            if (saveResult.status === 'blocked') {
+                setSettingsManageBacStatus('已取消：ManageBac 链接改变但未确认。', 'info');
+                return;
+            }
+            config = saveResult.config;
+        }
+
+        if (!config?.link) {
+            setSettingsManageBacStatus('未配置：请先保存 ManageBac 链接。', 'error');
+            return;
+        }
+
+        const icsText = await TimeWhereManageBac.fetchIcsText(config.link);
+        setSettingsManageBacStatus('正在解析 ManageBac 新增事件…', 'info');
+        const result = await TimeWhereManageBac.syncManageBacIcs(TimeWhereDB, icsText, config.link, { confirmLinkChange: true });
+        const pendingRows = await TimeWhereManageBac.savePendingEventMappings(TimeWhereDB, result.pending_event_mappings || []);
+        sessionStorage.setItem(MANAGEBAC_PENDING_EVENTS_SESSION_KEY, JSON.stringify({
+            saved_at: new Date().toISOString(),
+            pending_event_mappings: pendingRows,
+            status: result.status,
+            events: result.events,
+            created: result.created,
+            updated: result.updated,
+            deleted: result.deleted,
+            skipped: result.skipped
+        }));
+        window.location.href = 'managebac-sync.html';
+    } catch (error) {
+        setSettingsManageBacStatus(`同步失败：${error.message}`, 'error');
+    } finally {
+        setSettingsManageBacSyncInProgress(false);
+    }
 }
 
 function setupImportEvents() {
@@ -268,11 +429,20 @@ async function saveSettings() {
         start_week_on: parseInt(document.getElementById('weekStartsOn').value),
         pomodoro_work: parseInt(document.getElementById('tomatoDuration').value),
         default_duration: parseInt(document.getElementById('defaultDuration').value) || 45,
-        default_priority: document.getElementById('defaultPriority').value || 'medium'
+        default_priority: document.getElementById('defaultPriority').value || 'medium',
+        appearance_background: document.getElementById('appearanceBackground').value || 'calm',
+        appearance_avatar: document.getElementById('appearanceAvatar').value || 'default'
     };
 
     for (const [key, value] of Object.entries(settings)) {
         await TimeWhereDB.setSetting(key, value);
+    }
+
+    if (typeof TimeWhereAppearance !== 'undefined') {
+        await TimeWhereAppearance.save({
+            background: settings.appearance_background,
+            avatar: settings.appearance_avatar
+        });
     }
 
     showToast('设置已保存', 'success');

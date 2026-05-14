@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeWhere - ManageBac Sync</title>
+    <link rel="stylesheet" href="../../shared/styles/fonts.css">
+    <link rel="stylesheet" href="../../shared/styles/icons.css">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="managebac.css">
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon"><span class="material-symbols-outlined">change_history</span></div>
+            </div>
+            <nav class="nav-menu">
+                <a href="../focus/focus.html" class="nav-item" title="仪表盘"><span class="material-symbols-outlined">grid_view</span></a>
+                <a href="../tasks/tasks.html" class="nav-item" title="任务"><span class="material-symbols-outlined">task</span></a>
+                <a href="../calendar/calendar.html" class="nav-item" title="日历"><span class="material-symbols-outlined">calendar_today</span></a>
+                <a href="#" class="nav-item" title="更多"><span class="material-symbols-outlined">apps</span></a>
+            </nav>
+            <div class="sidebar-bottom">
+                <a href="settings.html" class="nav-item active" title="设置"><span class="material-symbols-outlined">settings</span></a>
+                <img src="../../shared/images/avatar-default.png" alt="Avatar" class="user-avatar">
+            </div>
+        </aside>
+
+        <main class="main-wrapper">
+            <div class="settings-container managebac-container">
+                <header class="header">
+                    <div class="header-left">
+                        <button class="back-btn" id="backBtn" title="返回设置">
+                            <span class="material-symbols-outlined">arrow_back</span>
+                        </button>
+                        <h1>ManageBac 事件同步</h1>
+                    </div>
+                </header>
+
+                <div class="content custom-scrollbar managebac-content">
+                    <section class="section">
+                        <h2 class="section-title">
+                            <span class="material-symbols-outlined">rule_settings</span> 新增任务确认
+                        </h2>
+                        <span class="managebac-status" id="managebacSyncStatus">请从 Settings → Plan 的 ManageBac 链接点击同步</span>
+                        <div id="pendingEventMappings" class="managebac-empty">同步后显示需要确认的新 ManageBac 事件</div>
+                        <button class="import-btn managebac-save-btn" id="savePendingEventMappingsBtn" disabled>添加确认的任务</button>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="../../shared/js/icons.js"></script>
+    <script src="../../shared/js/dexie.js"></script>
+    <script src="../../shared/js/db.js"></script>
+    <script src="../../shared/js/appearance.js"></script>
+    <script src="../../shared/js/managebac.js"></script>
+    <script src="managebac-sync.js"></script>
+</body>
+</html>

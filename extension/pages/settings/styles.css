@@ -35,7 +35,7 @@
 }
 
 body {
-    background: url('../../shared/images/bg.jpg') center/cover no-repeat fixed;
+    background: var(--timewhere-bg-image, url('../../shared/images/bg.jpg')) center/cover no-repeat fixed;
     color: var(--text-main);
     height: 100vh;
     overflow: hidden;
@@ -292,6 +292,44 @@ select, input[type="number"], input[type="text"] {
     font-size: 14px;
     outline: none;
     transition: var(--transition);
+}
+
+.inline-link-control {
+    display: grid;
+    grid-template-columns: minmax(240px, 1fr) auto auto;
+    gap: 8px;
+    align-items: center;
+    min-width: min(620px, 58vw);
+}
+
+.inline-link-control input[type="url"] {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-stroke);
+    background: white;
+    font-size: 14px;
+    outline: none;
+    transition: var(--transition);
+}
+
+.compact-status-row {
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+@media (max-width: 900px) {
+    .inline-link-control {
+        grid-template-columns: 1fr;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .setting-row:has(.inline-link-control) {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 12px;
+    }
 }
 
 select:focus, input:focus {

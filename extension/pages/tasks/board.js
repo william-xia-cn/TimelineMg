@@ -118,7 +118,28 @@ function groupTasks(tasks, groupBy) {
         }
     }
 
+    for (const colData of grouped.values()) {
+        colData.tasks = sortTasksByDueDate(colData.tasks);
+    }
+
     return grouped;
+}
+
+function sortTasksByDueDate(tasks) {
+    return [...(tasks || [])].sort((a, b) => {
+        if (a.due_date && b.due_date) {
+            const dueCompare = a.due_date.localeCompare(b.due_date);
+            if (dueCompare !== 0) return dueCompare;
+        } else if (a.due_date) {
+            return -1;
+        } else if (b.due_date) {
+            return 1;
+        }
+
+        const titleCompare = String(a.title || '').localeCompare(String(b.title || ''));
+        if (titleCompare !== 0) return titleCompare;
+        return String(a.id || '').localeCompare(String(b.id || ''));
+    });
 }
 
 // ========== Priority Helpers ==========
@@ -132,9 +153,18 @@ const PRIORITY_CONFIG = {
 
 // ========== Card Rendering ==========
 
+function getTaskPlanName(task) {
+    if (!task?.plan_id) return '';
+    const plans = TaskApp.plans || [];
+    const plan = plans.find(p => String(p.id) === String(task.plan_id));
+    return plan?.name || task.subject || '';
+}
+
 function createTaskCardHTML(task) {
     const bucketName = TaskApp.getBucketName(task.bucket_id);
     const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
+    const isSourceReadOnly = TimeWhereManageBac?.isManageBacTask(task);
+    const planName = isSourceReadOnly ? getTaskPlanName(task) : '';
 
     // Labels dots
     let labelsHTML = '';
@@ -198,9 +228,17 @@ function createTaskCardHTML(task) {
     };
     const progressIcon = progressIcons[task.progress] || progressIcons.not_started;
     const progressClass = task.progress === 'completed' ? 'progress-done' : '';
+    if (isSourceReadOnly) {
+        const planBadgeText = planName || 'No plan';
+        statusBadges += `<span class="task-status-badge status-plan">${escapeHTML(planBadgeText)}</span>`;
+    }
+    const sourceIconHTML = isSourceReadOnly
+        ? `<span class="task-source-icon task-source-managebac" title="ManageBac"><img src="../../shared/images/managebac-icon.png" alt="ManageBac"></span>`
+        : '';
 
     return `
-        <div class="task-card ${progressClass}" data-task-id="${task.id}">
+        <div class="task-card ${progressClass} ${isSourceReadOnly ? 'has-source-icon' : ''}" data-task-id="${task.id}">
+            ${sourceIconHTML}
             ${labelsHTML}
             <div class="task-card-header">
                 <button class="task-progress-btn ${progressClass}" data-task-id="${task.id}" title="Toggle progress">
@@ -227,10 +265,19 @@ function createTaskCardHTML(task) {
 function renderColumnHTML(colData) {
     const { title, icon, tasks } = colData;
     const count = tasks.length;
+    const isPlannerColumn = true;
+    const canManageBucket = TaskApp.groupBy === 'bucket'
+        && TaskApp.viewMode === 'plan'
+        && colData.bucketId;
 
     const iconHTML = icon
         ? `<span class="material-symbols-outlined">${icon}</span>`
         : '';
+    const addTaskHTML = `
+        <button class="col-add-task ${isPlannerColumn ? 'planner-add-task' : ''}" title="Add task">
+            <span class="material-symbols-outlined">add</span>
+            ${isPlannerColumn ? '<span>添加任务</span>' : ''}
+        </button>`;
 
     let bodyHTML;
     if (count === 0) {
@@ -244,19 +291,22 @@ function renderColumnHTML(colData) {
     }
 
     return `
-        <div class="kanban-column" data-column-key="${colData.key}">
-            <div class="column-header">
+        <div class="kanban-column ${isPlannerColumn ? 'planner-column' : ''}" data-column-key="${colData.key}" ${colData.bucketId ? `data-bucket-id="${colData.bucketId}"` : ''}>
+            <div class="column-header ${isPlannerColumn ? 'planner-column-header' : ''}">
                 <div class="column-title">
                     ${iconHTML}
-                    <h3>${escapeHTML(title)}</h3>
+                    <h3 data-column-title>${escapeHTML(title)}</h3>
                     <span class="column-count">${count}</span>
                 </div>
                 <div class="col-actions">
-                    <button class="col-add-task" title="Add task">
-                        <span class="material-symbols-outlined">add</span>
-                    </button>
+                    ${canManageBucket ? `
+                    <button class="bucket-menu-btn" data-bucket-id="${colData.bucketId}" title="Bucket options">
+                        <span class="material-symbols-outlined">more_horiz</span>
+                    </button>` : ''}
+                    ${isPlannerColumn ? '' : addTaskHTML}
                 </div>
             </div>
+            ${isPlannerColumn ? `<div class="planner-add-row">${addTaskHTML}</div>` : ''}
             <div class="column-body custom-scrollbar">
                 ${bodyHTML}
             </div>
@@ -345,6 +395,7 @@ function createTaskListRowHTML(task) {
         completed: 'check_circle'
     };
     const progressIcon = progressIcons[task.progress] || progressIcons.not_started;
+    const isSourceReadOnly = TimeWhereManageBac?.isManageBacTask(task);
 
     return `
         <div class="task-list-row" data-task-id="${task.id}">
@@ -358,6 +409,7 @@ function createTaskListRowHTML(task) {
                 </div>
                 <div class="task-list-meta">
                     ${bucketName ? `<span class="task-list-bucket">${escapeHTML(bucketName)}</span>` : ''}
+                    ${isSourceReadOnly ? '<span class="task-list-bucket">ManageBac</span>' : ''}
                     ${dueHTML}
                 </div>
             </div>
@@ -369,6 +421,7 @@ function renderBoard() {
     const boardEl = document.getElementById('kanbanBoard');
     const listEl = document.getElementById('taskListView');
     if (!boardEl || !listEl) return;
+    normalizeTaskBoardGroupBy();
 
     if (TaskApp.currentView === 'list') {
         boardEl.style.display = 'none';
@@ -379,6 +432,15 @@ function renderBoard() {
         listEl.style.display = 'none';
         renderKanbanBoard();
     }
+}
+
+function isBucketGroupingAllowed() {
+    return TaskApp.viewMode === 'plan' && !!TaskApp.currentPlanId;
+}
+
+function normalizeTaskBoardGroupBy() {
+    if (TaskApp.groupBy !== 'bucket' || isBucketGroupingAllowed()) return;
+    TaskApp.groupBy = TaskApp.viewMode === 'my_day' ? 'progress' : 'due_date';
 }
 
 function updateBoardHeader() {
@@ -416,8 +478,10 @@ function updateBoardHeader() {
 // ========== Quick Add ==========
 
 function showQuickAdd(columnEl) {
-    // Don't create multiple quick-add inputs
-    if (columnEl.querySelector('.quick-add-input')) return;
+    if (TaskApp.viewMode === 'my_managebac') {
+        showToast('my ManageBac 是 ManageBac 来源任务视图，不能手动新增任务。', 'error');
+        return;
+    }
 
     // In cross-plan views, need to pick a plan. Use the first one.
     let planId = TaskApp.currentPlanId;
@@ -429,48 +493,217 @@ function showQuickAdd(columnEl) {
         return;
     }
 
-    const columnBody = columnEl.querySelector('.column-body');
+    // Don't create multiple quick-add forms
+    if (columnEl.querySelector('.quick-add-form') || columnEl.dataset.quickAddOpening === 'true') return;
+    columnEl.dataset.quickAddOpening = 'true';
+
+    renderQuickAddForm(columnEl, planId)
+        .catch(error => {
+            console.error('[Tasks] Quick add failed to open:', error);
+            showToast('打开快速新增失败', 'error');
+        })
+        .finally(() => {
+            delete columnEl.dataset.quickAddOpening;
+        });
+}
+
+// ========== Bucket Column Management ==========
+
+function showBucketColumnMenu(button) {
+    const bucketId = parseInt(button.dataset.bucketId, 10);
+    if (!bucketId) return;
+
+    const existing = document.querySelector('.bucket-column-menu');
+    if (existing) {
+        existing.remove();
+        if (existing.dataset.bucketId === String(bucketId)) return;
+    }
+
+    const rect = button.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.className = 'bucket-column-menu';
+    menu.dataset.bucketId = String(bucketId);
+    menu.innerHTML = `
+        <button type="button" class="bucket-column-menu-item" data-bucket-action="rename" data-bucket-id="${bucketId}">重命名</button>
+        <button type="button" class="bucket-column-menu-item danger" data-bucket-action="delete" data-bucket-id="${bucketId}">删除</button>`;
+    menu.style.top = `${rect.bottom + 6}px`;
+    menu.style.left = `${Math.min(rect.left, window.innerWidth - 180)}px`;
+    document.body.appendChild(menu);
+
+    setTimeout(() => {
+        document.addEventListener('click', closeBucketColumnMenuOnOutside);
+    }, 0);
+}
+
+function closeBucketColumnMenuOnOutside(e) {
+    if (e.target.closest('.bucket-column-menu') || e.target.closest('.bucket-menu-btn')) return;
+    closeBucketColumnMenu();
+}
+
+function closeBucketColumnMenu() {
+    document.querySelector('.bucket-column-menu')?.remove();
+    document.removeEventListener('click', closeBucketColumnMenuOnOutside);
+}
+
+async function renameBucketColumn(bucketId) {
+    closeBucketColumnMenu();
+    const column = document.querySelector(`.kanban-column[data-bucket-id="${bucketId}"]`);
+    const titleEl = column?.querySelector('[data-column-title]');
+    if (!column || !titleEl) return;
+
+    const oldName = titleEl.textContent.trim();
     const input = document.createElement('input');
     input.type = 'text';
-    input.className = 'quick-add-input';
-    input.placeholder = 'Task name...';
-
-    columnBody.insertBefore(input, columnBody.firstChild);
+    input.className = 'bucket-title-input';
+    input.value = oldName;
+    titleEl.replaceWith(input);
     input.focus();
+    input.select();
 
-    const handleCreate = async () => {
-        const title = input.value.trim();
-        if (!title) {
-            input.remove();
+    let finished = false;
+    const finish = async (save) => {
+        if (finished) return;
+        finished = true;
+        const nextName = input.value.trim();
+        if (!save) {
+            input.replaceWith(titleEl);
             return;
         }
-
-        // 从 settings 读取默认时长和优先级
-        const settingsData = await TimeWhereDB.getSettings();
-        const defaultDuration = settingsData.default_duration || 45;
-        const defaultPriority = settingsData.default_priority || 'medium';
-
-        // Determine default values based on current groupBy and column
-        const colKey = columnEl.dataset.columnKey;
-        const defaults = getQuickAddDefaults(colKey);
-
-        await TimeWhereDB.addTask({
-            title,
-            plan_id: planId,
-            duration: defaultDuration,
-            priority: defaults.priority || defaultPriority,
-            ...defaults
-        });
-
-        input.remove();
-        await TaskApp.refresh();
+        if (!nextName) {
+            showToast('Bucket 名称不能为空', 'error');
+            input.replaceWith(titleEl);
+            return;
+        }
+        if (nextName !== oldName) {
+            await TimeWhereDB.updateBucket(bucketId, { name: nextName });
+            await TaskApp.refresh();
+        } else {
+            input.replaceWith(titleEl);
+        }
     };
 
     input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') handleCreate();
-        if (e.key === 'Escape') input.remove();
+        if (e.key === 'Enter') finish(true);
+        if (e.key === 'Escape') finish(false);
     });
-    input.addEventListener('blur', handleCreate);
+    input.addEventListener('blur', () => finish(true));
+}
+
+function confirmDeleteBucketColumn(bucketId) {
+    closeBucketColumnMenu();
+    const bucket = (TaskApp.currentPlanBuckets || []).find(item => item.id === bucketId);
+    const bucketName = bucket?.name || 'Bucket';
+
+    showDialog({
+        title: '删除 Bucket',
+        content: `
+            <p>删除 Bucket「${escapeHTML(bucketName)}」？</p>
+            <p class="text-muted">该 Bucket 下的任务不会被删除，会变为 No bucket。</p>`,
+        confirmText: '删除',
+        confirmDanger: true,
+        onConfirm: async () => {
+            await TimeWhereDB.deleteBucket(bucketId);
+            await TaskApp.refresh();
+            showToast('Bucket 已删除，任务已保留', 'success');
+            return true;
+        }
+    });
+}
+
+async function renderQuickAddForm(columnEl, planId) {
+    const columnBody = columnEl.querySelector('.column-body');
+    const colKey = columnEl.dataset.columnKey;
+    const defaults = getQuickAddDefaults(colKey);
+    const fieldConfig = getQuickAddFieldConfig(TaskApp.groupBy, defaults);
+    const buckets = fieldConfig.showBucketSelect ? await getQuickAddBuckets(planId) : [];
+
+    const form = document.createElement('div');
+    form.className = 'quick-add-form';
+    form.innerHTML = `
+        <input type="text" class="quick-add-input quick-add-title" data-field="title" placeholder="Task name..." autocomplete="off">
+        ${fieldConfig.showStartDate ? `
+            <label class="quick-add-field">
+                <span>Start</span>
+                <input type="date" class="quick-add-date" data-field="start_date">
+            </label>` : ''}
+        ${fieldConfig.showDueDate ? `
+            <label class="quick-add-field">
+                <span>Due <strong>*</strong></span>
+                <input type="date" class="quick-add-date" data-field="due_date" required>
+            </label>` : ''}
+        ${fieldConfig.showBucketSelect ? `
+            <label class="quick-add-field">
+                <span>Bucket</span>
+                <select class="quick-add-select" data-field="bucket_id">
+                    ${renderQuickAddBucketOptions(buckets, defaults.bucket_id)}
+                </select>
+            </label>` : ''}
+        <div class="quick-add-error" role="alert" hidden></div>
+        <div class="quick-add-actions">
+            <button type="button" class="quick-add-submit" data-quick-action="create">Add</button>
+            <button type="button" class="quick-add-cancel" data-quick-action="cancel">Cancel</button>
+        </div>`;
+
+    columnBody.insertBefore(form, columnBody.firstChild);
+    const titleInput = form.querySelector('[data-field="title"]');
+    titleInput.focus();
+
+    const handleCreate = async () => {
+        const title = titleInput.value.trim();
+        if (!title) {
+            showQuickAddError(form, '请输入任务名称');
+            return;
+        }
+
+        const submitBtn = form.querySelector('[data-quick-action="create"]');
+        try {
+            submitBtn.disabled = true;
+            clearQuickAddError(form);
+
+            // 从 settings 读取默认时长和优先级
+            const settingsData = await TimeWhereDB.getSettings();
+            const defaultDuration = settingsData.default_duration || 45;
+            const defaultPriority = settingsData.default_priority || 'medium';
+
+            const payload = {
+                ...defaults,
+                title,
+                plan_id: planId,
+                duration: defaultDuration,
+                priority: defaults.priority || defaultPriority
+            };
+
+            const dueInput = form.querySelector('[data-field="due_date"]');
+            if (dueInput) payload.due_date = dueInput.value || null;
+
+            const startInput = form.querySelector('[data-field="start_date"]');
+            if (startInput) payload.start_date = startInput.value || null;
+
+            const bucketSelect = form.querySelector('[data-field="bucket_id"]');
+            if (bucketSelect) {
+                payload.bucket_id = bucketSelect.value ? parseInt(bucketSelect.value, 10) : null;
+            }
+
+            await TimeWhereDB.addTask(normalizeManualTaskPayload(payload));
+
+            form.remove();
+            await TaskApp.refresh();
+        } catch (error) {
+            showQuickAddError(form, error.message || '新增任务失败');
+            submitBtn.disabled = false;
+        }
+    };
+
+    form.addEventListener('click', (e) => {
+        const action = e.target.closest('[data-quick-action]')?.dataset.quickAction;
+        if (action === 'create') handleCreate();
+        if (action === 'cancel') form.remove();
+    });
+
+    form.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleCreate();
+        if (e.key === 'Escape') form.remove();
+    });
 }
 
 function getQuickAddDefaults(columnKey) {
@@ -505,6 +738,56 @@ function getQuickAddDefaults(columnKey) {
     }
 
     return defaults;
+}
+
+function getQuickAddFieldConfig(groupBy, defaults = {}) {
+    return {
+        showStartDate: groupBy !== 'due_date',
+        showDueDate: groupBy !== 'due_date' || !defaults.due_date,
+        showBucketSelect: groupBy === 'due_date' || groupBy !== 'bucket'
+    };
+}
+
+function normalizeManualTaskPayload(task) {
+    if (!task.due_date) {
+        throw new Error('请选择截止日期');
+    }
+    return {
+        ...task,
+        start_date: task.start_date || task.due_date
+    };
+}
+
+async function getQuickAddBuckets(planId) {
+    if (TaskApp.currentPlanId === planId) return TaskApp.currentPlanBuckets || [];
+    if (typeof TimeWhereDB.getBucketsByPlan === 'function') {
+        return await TimeWhereDB.getBucketsByPlan(planId);
+    }
+    return [];
+}
+
+function renderQuickAddBucketOptions(buckets, selectedBucketId) {
+    return [
+        `<option value="">No bucket</option>`,
+        ...(buckets || []).map(bucket => {
+            const selected = bucket.id === selectedBucketId ? 'selected' : '';
+            return `<option value="${bucket.id}" ${selected}>${escapeHTML(bucket.name)}</option>`;
+        })
+    ].join('');
+}
+
+function showQuickAddError(form, message) {
+    const errorEl = form.querySelector('.quick-add-error');
+    if (!errorEl) return;
+    errorEl.textContent = message;
+    errorEl.hidden = false;
+}
+
+function clearQuickAddError(form) {
+    const errorEl = form.querySelector('.quick-add-error');
+    if (!errorEl) return;
+    errorEl.textContent = '';
+    errorEl.hidden = true;
 }
 
 // ========== Task Progress Toggle ==========

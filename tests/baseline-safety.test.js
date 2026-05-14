@@ -64,6 +64,63 @@ assert('extension/shared/js/test-events.html removed from package tree',
 assert('manual DB event test utility lives under tests/manual',
     fs.existsSync(path.join(root, 'tests/manual/test-events.html')));
 
+const iconJs = read('extension/shared/js/icons.js');
+const iconObjectMatch = iconJs.match(/const ICONS = \{([\s\S]*?)\n\};/);
+const iconNames = new Set();
+if (iconObjectMatch) {
+    for (const match of iconObjectMatch[1].matchAll(/['"]([a-z0-9_]+)['"]\s*:/g)) {
+        iconNames.add(match[1]);
+    }
+}
+
+const materialIconFiles = listFiles(extensionDir, ['.html', '.js']);
+const missingIconRefs = [];
+for (const file of materialIconFiles) {
+    const content = fs.readFileSync(file, 'utf8');
+    for (const match of content.matchAll(/<(?:span|i)\b[^>]*class=["'][^"']*\bmaterial-symbols-outlined\b[^"']*["'][^>]*>([\s\S]*?)<\/(?:span|i)>/g)) {
+        const iconName = match[1].replace(/<[^>]+>/g, '').trim();
+        if (!iconName || iconName.includes('$') || iconName.includes('{')) continue;
+        if (!iconNames.has(iconName)) {
+            missingIconRefs.push(`${path.relative(root, file)}:${iconName}`);
+        }
+    }
+}
+assert('all static material-symbols-outlined icon names have local SVG mappings', missingIconRefs.length === 0);
+
+const requiredAppearanceAssets = [
+    'bg.jpg',
+    'bg-calm.jpg',
+    'bg-focus.jpg',
+    'bg-morning.jpg',
+    'bg-evening.jpg',
+    'managebac-icon.png',
+    'avatar-default.png',
+    'avatar-student.png',
+    'avatar-school.png',
+    'avatar-focus.png'
+];
+assert('appearance image asset set exists locally',
+    requiredAppearanceAssets.every(name => fs.existsSync(path.join(root, 'extension/shared/images', name))));
+
+const appearanceJs = read('extension/shared/js/appearance.js');
+assert('appearance preferences read and write persisted settings',
+    appearanceJs.includes("SETTINGS_BACKGROUND_KEY: 'appearance_background'")
+    && appearanceJs.includes("SETTINGS_AVATAR_KEY: 'appearance_avatar'")
+    && appearanceJs.includes('TimeWhereDB.getSetting')
+    && appearanceJs.includes('TimeWhereDB.setSetting'));
+
+const appearancePages = [
+    'extension/pages/focus/focus.html',
+    'extension/pages/calendar/calendar.html',
+    'extension/pages/tasks/tasks.html',
+    'extension/pages/settings/settings.html',
+    'extension/pages/settings/matrixview.html',
+    'extension/pages/settings/managebac.html',
+    'extension/pages/settings/managebac-sync.html'
+];
+assert('main extension pages load shared appearance preferences',
+    appearancePages.every(file => read(file).includes('../../shared/js/appearance.js')));
+
 console.log('\n' + '='.repeat(48));
 console.log(`Total: ${passed + failed} checks   PASS ${passed}   ${failed > 0 ? 'FAIL' : 'PASS'} ${failed}`);
 if (failed > 0) process.exit(1);

@@ -100,6 +100,30 @@
                                         <span style="font-size: 13px; color: var(--text-sub);">分钟</span>
                                     </div>
                                 </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">背景图片</span>
+                                        <span class="setting-desc">选择本地固定背景，保存后各页面保持一致</span>
+                                    </div>
+                                    <select id="appearanceBackground">
+                                        <option value="calm">Calm Blue</option>
+                                        <option value="focus">Focus Teal</option>
+                                        <option value="morning">Morning Light</option>
+                                        <option value="evening">Evening Violet</option>
+                                    </select>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">头像图片</span>
+                                        <span class="setting-desc">选择本地头像样式，不随刷新变化</span>
+                                    </div>
+                                    <select id="appearanceAvatar">
+                                        <option value="default">TimeWhere</option>
+                                        <option value="student">Student</option>
+                                        <option value="school">School</option>
+                                        <option value="focus">Focus</option>
+                                    </select>
+                                </div>
                             </div>
                         </section>
 
@@ -130,7 +154,7 @@
                                         <span class="file-name" id="selectedFileName"></span>
                                     </div>
                                     <button class="import-btn" id="importBtn" disabled>导入</button>
-                                    <p class="import-hint">导入的课表将作为单次日程事件添加到日历（不影响时间容器）</p>
+                                    <p class="import-hint">导入的课表将作为日程事件添加到日历（不影响时间容器）</p>
                                 </div>
                                 <!-- 配置时间容器 -->
                                 <div class="setting-row">
@@ -150,6 +174,45 @@
                                     <button class="action-btn" id="addContainerBtn">
                                         <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;">add</span> 添加容器
                                     </button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Plan 设置 -->
+                        <section class="section" id="planSection">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">folder</span> Plan
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">导入 MatrixView 课表</span>
+                                        <span class="setting-desc">从本地 PowerSchool MatrixView MHTML/HTML 初始化学科 Plan</span>
+                                    </div>
+                                    <button class="action-btn" id="importMatrixViewBtn">导入</button>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">配置 ManageBac 学科映射</span>
+                                        <span class="setting-desc">从本地 ManageBac HTML 文件映射到已有学科 Plan</span>
+                                    </div>
+                                    <button class="action-btn" id="configureManageBacBtn">配置</button>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">ManageBac 链接</span>
+                                        <span class="setting-desc">保存 webcal/ICS 订阅链接；同步后确认新增事件再添加任务</span>
+                                    </div>
+                                    <div class="setting-control inline-link-control">
+                                        <input type="url" id="settingsManageBacIcsLinkInput" placeholder="webcal:// 或 https://">
+                                        <button class="action-btn" id="settingsSaveManageBacIcsLinkBtn" type="button">保存</button>
+                                        <button class="action-btn" id="settingsSyncManageBacBtn" type="button">同步</button>
+                                    </div>
+                                </div>
+                                <div class="setting-row compact-status-row">
+                                    <div class="setting-info">
+                                        <span class="setting-desc" id="settingsManageBacSyncStatus">未配置 ManageBac 链接</span>
+                                    </div>
                                 </div>
                             </div>
                         </section>
@@ -370,9 +433,11 @@
     <script src="../../shared/js/dexie.js"></script>
     <!-- Database -->
     <script src="../../shared/js/db.js"></script>
+    <script src="../../shared/js/appearance.js"></script>
     <!-- Scheduling -->
     <script src="../../shared/js/scheduling.js"></script>
     <script src="../../shared/js/ics.js"></script>
+    <script src="../../shared/js/managebac.js"></script>
     <!-- Settings Script -->
     <script src="script.js"></script>
 </body>

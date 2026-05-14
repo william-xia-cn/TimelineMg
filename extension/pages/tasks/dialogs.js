@@ -326,7 +326,7 @@ function showFilterPanel() {
     });
 
     // Apply
-    panel.querySelector('#filterApply').addEventListener('click', () => {
+    panel.querySelector('#filterApply').addEventListener('click', async () => {
         // Read priority checkboxes
         TaskApp.filters.priority = Array.from(panel.querySelectorAll('[data-filter="priority"]:checked')).map(cb => cb.value);
         // Read progress checkboxes
@@ -338,13 +338,15 @@ function showFilterPanel() {
         TaskApp.filters.labels = Array.from(panel.querySelectorAll('.filter-label-chip.selected')).map(c => parseInt(c.dataset.labelId));
 
         panel.remove();
+        await TaskApp.saveCurrentViewPreferences();
         TaskApp.renderBoard();
     });
 
     // Clear
-    panel.querySelector('#filterClear').addEventListener('click', () => {
+    panel.querySelector('#filterClear').addEventListener('click', async () => {
         TaskApp.clearFilters();
         panel.remove();
+        await TaskApp.saveCurrentViewPreferences();
         TaskApp.renderBoard();
     });
 
@@ -369,7 +371,10 @@ function showGroupByMenu() {
     const existing = document.querySelector('.groupby-menu');
     if (existing) { existing.remove(); return; }
 
-    const options = Object.entries(GROUP_BY_CONFIG).map(([key, cfg]) => {
+    normalizeTaskBoardGroupBy();
+    const options = Object.entries(GROUP_BY_CONFIG)
+        .filter(([key]) => key !== 'bucket' || isBucketGroupingAllowed())
+        .map(([key, cfg]) => {
         const isActive = TaskApp.groupBy === key;
         return `<button class="groupby-option ${isActive ? 'active' : ''}" data-groupby="${key}">${cfg.label}</button>`;
     }).join('');
@@ -382,11 +387,13 @@ function showGroupByMenu() {
     menu.style.right = (window.innerWidth - rect.right) + 'px';
     document.body.appendChild(menu);
 
-    menu.addEventListener('click', (e) => {
+    menu.addEventListener('click', async (e) => {
         const opt = e.target.closest('.groupby-option');
         if (!opt) return;
+        if (opt.dataset.groupby === 'bucket' && !isBucketGroupingAllowed()) return;
         TaskApp.groupBy = opt.dataset.groupby;
         menu.remove();
+        await TaskApp.saveCurrentViewPreferences();
         TaskApp.renderBoard();
     });
 

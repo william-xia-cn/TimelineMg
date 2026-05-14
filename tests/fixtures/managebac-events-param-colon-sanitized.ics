@@ -1,0 +1,11 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//TimeWhere Sanitized Fixture//ManageBac Param Colon ICS//EN
+BEGIN:VEVENT
+UID:mb-param-colon-english-1@example.invalid
+DTSTAMP:20260513T010000Z
+SUMMARY:Essay Draft
+DESCRIPTION;ALTREP="CID:course-body-1":English Language Acquisition Phase 5 assignment notes
+DUE;VALUE=DATE:20260520
+END:VEVENT
+END:VCALENDAR

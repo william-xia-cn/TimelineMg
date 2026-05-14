@@ -19,7 +19,10 @@
                 <div class="logo-icon"><span class="material-symbols-outlined">change_history</span></div>
                 <span class="app-name">TimeWhere</span>
             </div>
-            <div class="current-time" id="currentTime">--:--</div>
+            <div class="task-summary" id="taskSummary" aria-label="今日任务统计">
+                <span class="summary-chip"><span>今日完成</span><strong id="todayCompletedCount">0</strong></span>
+                <span class="summary-chip"><span>今日待办</span><strong id="todayPendingCount">0</strong></span>
+            </div>
         </header>
 
         <!-- 当前任务区 -->
@@ -28,40 +31,11 @@
                 <span class="material-symbols-outlined">play_circle</span>
                 <span>当前任务</span>
             </div>
-            <div class="task-card">
+            <div class="task-list" id="currentTaskList">
                 <div class="task-placeholder">
                     <span class="material-symbols-outlined">add_circle</span>
-                    <span>暂无进行中的任务</span>
+                    <span>暂无待办任务</span>
                 </div>
-            </div>
-        </section>
-
-        <!-- 快捷操作区 -->
-        <section class="quick-actions">
-                <button class="action-btn" id="btnStart">
-                    <span class="material-symbols-outlined">play_arrow</span>
-                    <span>开始</span>
-                </button>
-                <button class="action-btn primary" id="btnComplete">
-                    <span class="material-symbols-outlined">check</span>
-                    <span>完成</span>
-                </button>
-                <button class="action-btn" id="btnDelay">
-                    <span class="material-symbols-outlined">schedule</span>
-                    <span>延后</span>
-                </button>
-        </section>
-
-        <!-- 统计概览 -->
-        <section class="stats-section">
-            <div class="stat-card">
-                <span class="stat-num">0</span>
-                <span class="stat-label">今日完成</span>
-            </div>
-            <div class="stat-divider"></div>
-            <div class="stat-card">
-                <span class="stat-num">0</span>
-                <span class="stat-label">待办任务</span>
             </div>
         </section>
 

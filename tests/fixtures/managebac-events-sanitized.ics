@@ -1,0 +1,32 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//TimeWhere Sanitized Fixture//ManageBac ICS//EN
+BEGIN:VEVENT
+UID:mb-english-essay-1@example.invalid
+DTSTAMP:20260513T010000Z
+LAST-MODIFIED:20260513T010000Z
+SUMMARY:English Language Acquisition Phase 5: Essay Draft
+DESCRIPTION:Draft comparative paragraph for class.
+DUE;VALUE=DATE:20260520
+LOCATION:Room 1359
+URL:https://example.invalid/managebac/event/english-essay
+END:VEVENT
+BEGIN:VEVENT
+UID:mb-math-problem-1@example.invalid
+DTSTAMP:20260513T010000Z
+LAST-MODIFIED:20260513T010000Z
+SUMMARY:Mathematics Analysis HL: Problem Set
+DESCRIPTION:Complete the sanitized problem set.
+DUE;VALUE=DATE:20260521
+LOCATION:Room 1535
+URL:https://example.invalid/managebac/event/math-problem
+END:VEVENT
+BEGIN:VEVENT
+UID:mb-unmapped-counseling-1@example.invalid
+DTSTAMP:20260513T010000Z
+SUMMARY:College Counseling: Reflection
+DESCRIPTION:This row is intentionally unmapped in tests.
+DUE;VALUE=DATE:20260522
+LOCATION:Room 1000
+END:VEVENT
+END:VCALENDAR

@@ -41,6 +41,14 @@
                 <nav class="context-menu">
                     <a href="#" class="context-item" id="navMyDay"><span class="material-symbols-outlined">wb_sunny</span> My day</a>
                     <a href="#" class="context-item" id="navMyTasks"><span class="material-symbols-outlined">assignment</span> My Tasks</a>
+                    <div class="context-item managebac-nav-item" id="navMyManageBac" role="button" tabindex="0">
+                        <span class="material-symbols-outlined">event_note</span>
+                        <span class="managebac-nav-label">my ManageBac</span>
+                        <button class="managebac-sidebar-sync" id="sidebarSyncManageBacBtn" type="button">
+                            <span class="material-symbols-outlined">sync</span> 同步
+                        </button>
+                        <button class="managebac-pending-count" id="managebacPendingCountBtn" type="button" style="display:none">0</button>
+                    </div>
 
                     <div class="menu-divider"></div>
                     <div class="section-title">PLANS <span class="material-symbols-outlined">expand_more</span></div>
@@ -59,6 +67,13 @@
                     <span class="bc-sep">/</span>
                     <span class="bc-current">Tasks</span>
                 </div>
+            </header>
+
+            <nav class="view-tabs">
+                <div class="view-tab-buttons">
+                    <button class="btn-tab active" data-view="board">Board</button>
+                    <button class="btn-tab" data-view="list">List</button>
+                </div>
                 <div class="header-actions">
                     <div class="search-bar">
                         <span class="material-symbols-outlined">search</span>
@@ -67,11 +82,6 @@
                     <button class="icon-btn" id="btnFilter"><span class="material-symbols-outlined">filter_list</span> Filter</button>
                     <button class="icon-btn" id="btnGroupBy"><span class="material-symbols-outlined">group_work</span> Group by: Due date</button>
                 </div>
-            </header>
-
-            <nav class="view-tabs">
-                <button class="btn-tab active" data-view="board">Board</button>
-                <button class="btn-tab" data-view="list">List</button>
             </nav>
 
             <section id="kanbanBoard" class="kanban-board custom-scrollbar">
@@ -108,6 +118,9 @@
     <script src="../../shared/js/icons.js"></script>
     <script src="../../shared/js/dexie.js"></script>
     <script src="../../shared/js/db.js"></script>
+    <script src="../../shared/js/appearance.js"></script>
+    <script src="../../shared/js/managebac.js"></script>
+    <script src="../../shared/js/scheduling.js"></script>
     <script src="state.js"></script>
     <script src="board.js"></script>
     <script src="sidebar.js"></script>

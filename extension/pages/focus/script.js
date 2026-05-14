@@ -1,6 +1,6 @@
 // ============================================================
 // Focus Dashboard — script.js
-// 4 列数据加载：当下任务 | 日历 | 本周进度 | 消息流
+// 4 列数据加载：当前任务 | 日历 | 本周进度 | 消息流
 // ============================================================
 
 const PX_PER_HOUR = 40;
@@ -34,7 +34,19 @@ async function initApp() {
         console.error('initDefaultContainers failed:', e);
     }
     await loadDashboardData();
-    await initPomodoro();
+    runTaskArrangeInBackground();
+}
+
+function runTaskArrangeInBackground() {
+    if (!window.TimeWhereScheduling?.maybeRunTaskArrange || !window.TimeWhereDB) return;
+    window.TimeWhereScheduling.maybeRunTaskArrange(TimeWhereDB)
+        .then(result => {
+            if (result?.ran && result.arranged > 0) {
+                return loadDashboardData();
+            }
+            return null;
+        })
+        .catch(error => console.warn('[Focus] Task Arrange skipped:', error));
 }
 
 async function loadDashboardData() {
@@ -99,6 +111,15 @@ function darkenColor(hex, amount) {
     return `#${Math.round(r).toString(16).padStart(2, '0')}${Math.round(g).toString(16).padStart(2, '0')}${Math.round(b).toString(16).padStart(2, '0')}`;
 }
 
+function formatTime(timeStr) {
+    const [h, m] = String(timeStr || '').split(':').map(Number);
+    if (Number.isNaN(h)) return '';
+    const minute = m > 0 ? String(m).padStart(2, '0') : '';
+    if (h < 12) return `上午${h}点${minute}`;
+    if (h === 12) return `下午12点${minute}`;
+    return `下午${h - 12}点${minute}`;
+}
+
 function getWeekBounds() {
     const now = new Date();
     const day = now.getDay(); // 0=Sun
@@ -121,7 +142,7 @@ function getWeekBounds() {
 const WEEKDAY_NAMES = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
 // ============================================================
-// 第 1 列：当下任务
+// 第 1 列：当前任务
 // ============================================================
 
 async function loadTaskColumn() {
@@ -170,7 +191,7 @@ async function loadTaskColumn() {
             <div class="empty-state">
                 <span class="material-symbols-outlined" style="font-size: 48px;">check_circle</span>
                 <p>${settle.activeContainer ? '当前容器无任务' : '暂无待办任务'}</p>
-                <button class="add-task-btn" onclick="openAddTaskModal()">
+                <button class="add-task-btn" data-action="add-task">
                     <span class="material-symbols-outlined">add</span> 添加任务
                 </button>
             </div>`;
@@ -212,6 +233,7 @@ function createTaskCard(task, opts = {}) {
     const durationText = `${task.duration || 45}min`;
     const dueDate = task.due_date || task.deadline;
     const deadlineText = dueDate ? formatDate(dueDate) : '';
+    const isManageBacSource = TimeWhereDB.isManageBacSourceTask?.(task) === true;
 
     const dotClass = isInProgress ? 'pulsing' : 'pending';
 
@@ -223,17 +245,21 @@ function createTaskCard(task, opts = {}) {
 
     // 操作按钮
     const progressBtns = isInProgress
-        ? `<button class="btn-micro" onclick="pauseTask('${taskId}')">暂停</button>
-           <button class="btn-micro primary" onclick="completeTaskNow('${taskId}')">完成</button>`
-        : `<button class="btn-micro primary" onclick="startTaskNow('${taskId}')">开始</button>
-           <button class="btn-micro" onclick="completeTaskNow('${taskId}')">完成</button>`;
+        ? `<button class="btn-micro" data-action="pause" data-task-id="${taskId}">暂停</button>
+           <button class="btn-micro primary" data-action="complete" data-task-id="${taskId}">完成</button>`
+        : `<button class="btn-micro primary" data-action="start" data-task-id="${taskId}">开始</button>
+           <button class="btn-micro" data-action="complete" data-task-id="${taskId}">完成</button>`;
 
-    const deferHtml = `
+    const deferHtml = isManageBacSource ? `
         <div class="defer-row">
             <span class="defer-label">延后</span>
-            <button class="btn-defer" onclick="deferTask('${taskId}', 1)">1天</button>
-            <button class="btn-defer" onclick="deferTask('${taskId}', 3)">3天</button>
-            <button class="btn-defer" onclick="deferTask('${taskId}', 7)">7天</button>
+            <span class="defer-blocked-text">ManageBac 来源任务不能延后</span>
+        </div>` : `
+        <div class="defer-row">
+            <span class="defer-label">延后</span>
+            <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="1">1天</button>
+            <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="3">3天</button>
+            <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="7">7天</button>
         </div>`;
 
     return `
@@ -262,31 +288,55 @@ function createTaskCard(task, opts = {}) {
 }
 
 async function startTaskNow(taskId) {
-    await TimeWhereDB.startTask(taskId);
-    await loadDashboardData();
-    showToast('任务已开始', 'info');
+    try {
+        await TimeWhereDB.updateTask(taskId, { progress: 'in_progress' });
+        await loadDashboardData();
+        showToast('任务已开始', 'info');
+    } catch (error) {
+        showToast(`开始任务失败：${error.message}`, 'error');
+    }
 }
 
 async function pauseTask(taskId) {
-    await TimeWhereDB.updateTask(taskId, { progress: 'not_started' });
-    await loadDashboardData();
-    showToast('任务已暂停', 'info');
+    try {
+        await TimeWhereDB.updateTask(taskId, { progress: 'not_started' });
+        await loadDashboardData();
+        showToast('任务已暂停', 'info');
+    } catch (error) {
+        showToast(`暂停任务失败：${error.message}`, 'error');
+    }
 }
 
 async function completeTaskNow(taskId) {
-    await TimeWhereDB.completeTask(taskId);
-    await loadDashboardData();
-    showToast('任务已完成！', 'success');
+    try {
+        await TimeWhereDB.updateTask(taskId, {
+            progress: 'completed',
+            completed_at: new Date().toISOString()
+        });
+        await loadDashboardData();
+        showToast('任务已完成！', 'success');
+    } catch (error) {
+        showToast(`完成任务失败：${error.message}`, 'error');
+    }
 }
 
 async function deferTask(taskId, days) {
-    const today = new Date();
-    const target = new Date(today);
-    target.setDate(today.getDate() + days);
-    const targetStr = formatDateISO(target);
-    await TimeWhereDB.updateTask(taskId, { start_date: targetStr });
-    await loadDashboardData();
-    showToast(`任务已延后 ${days} 天`, 'info');
+    try {
+        const task = await TimeWhereDB.getTaskById(taskId);
+        if (TimeWhereDB.isManageBacSourceTask?.(task)) {
+            showToast('ManageBac 来源任务不能延后', 'error');
+            return;
+        }
+        const today = new Date();
+        const target = new Date(today);
+        target.setDate(today.getDate() + days);
+        const targetStr = formatDateISO(target);
+        await TimeWhereDB.updateTask(taskId, { start_date: targetStr });
+        await loadDashboardData();
+        showToast(`任务已延后 ${days} 天`, 'info');
+    } catch (error) {
+        showToast(`延后任务失败：${error.message}`, 'error');
+    }
 }
 
 // ============================================================
@@ -320,13 +370,14 @@ async function loadCalendarColumn() {
     // 加载数据
     const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
     const dbEvents = (await TimeWhereDB.getEventsByDateRange(todayStr, tomorrowStr)) || [];
+    const allTasks = (await TimeWhereDB.getAllTasks()) || [];
 
     // 渲染两天
     const todayCol = document.getElementById('gcal-today');
     const tomorrowCol = document.getElementById('gcal-tomorrow');
 
-    if (todayCol) renderDayColumn(todayCol, today, todayStr, allContainers, dbEvents, true);
-    if (tomorrowCol) renderDayColumn(tomorrowCol, tomorrow, tomorrowStr, allContainers, dbEvents, false);
+    if (todayCol) renderDayColumn(todayCol, today, todayStr, allContainers, dbEvents, allTasks, true);
+    if (tomorrowCol) renderDayColumn(tomorrowCol, tomorrow, tomorrowStr, allContainers, dbEvents, allTasks, false);
 
     // 自动滚动到当前时间附近
     const gcalBody = document.querySelector('.gcal-body');
@@ -337,7 +388,7 @@ async function loadCalendarColumn() {
     }
 }
 
-function renderDayColumn(col, dateObj, dateStr, allContainers, allDbEvents, isToday) {
+function renderDayColumn(col, dateObj, dateStr, allContainers, allDbEvents, allTasks, isToday) {
     col.innerHTML = '';
 
     const dayOfWeek = dateObj.getDay();
@@ -349,18 +400,31 @@ function renderDayColumn(col, dateObj, dateStr, allContainers, allDbEvents, isTo
     const overriddenIds = new Set(dayEvents.filter(e => e.source === 'container_override').map(e => e.container_id));
     const skippedIds = new Set(dayEvents.filter(e => e.source === 'container_skip').map(e => e.container_id));
 
-    // 容器 → 事件格式
-    const containerEvents = allContainers
+    const dayContainers = allContainers
         .filter(c => {
             if (skippedIds.has(c.id) || overriddenIds.has(c.id)) return false;
             return containerAppliesToDate(c, dateObj, dateStr, dayOfWeek, isWeekday, isWeekend);
-        })
+        });
+
+    const dayReferenceTime = isToday
+        ? new Date()
+        : new Date(`${dateStr}T12:00:00`);
+    const dayTaskPool = buildDailyTaskPool(allTasks, dayReferenceTime);
+    const settle = dailySettle(dayTaskPool, dayContainers, dayReferenceTime);
+
+    // 容器 → 事件格式
+    const containerEvents = dayContainers
         .map(c => ({
             title: c.name,
             time_start: c.time_start,
             time_end: c.time_end,
             color: c.color || '#4A90D9',
-            isContainer: true
+            type: 'container',
+            source: 'container',
+            id: c.id,
+            layer: getContainerLayer(c),
+            isContainer: true,
+            tasks: settle.result.get(c.id)?.tasks || []
         }));
 
     // 普通事件（非 skip）
@@ -371,6 +435,9 @@ function renderDayColumn(col, dateObj, dateStr, allContainers, allDbEvents, isTo
             time_start: e.time_start,
             time_end: e.time_end,
             color: e.color || '#3b82f6',
+            type: 'event',
+            source: e.source || 'manual',
+            id: e.id,
             isContainer: false
         }));
 
@@ -388,11 +455,7 @@ function renderDayColumn(col, dateObj, dateStr, allContainers, allDbEvents, isTo
         const top = startMin * (PX_PER_HOUR / 60);
         const height = Math.max(durationMin * (PX_PER_HOUR / 60), 16);
 
-        const div = document.createElement('div');
-        div.className = 'gcal-event';
-        div.style.cssText = `top: ${top}px; height: ${height}px; background-color: ${item.color}; border-left: 3px solid ${darkenColor(item.color, 0.3)};`;
-        if (item.isContainer) div.style.opacity = '0.7';
-        div.innerHTML = `<h4>${escapeHTML(item.title)}</h4><span>${escapeHTML(item.time_start)} - ${escapeHTML(item.time_end)}</span>`;
+        const div = createFocusCalendarCard(item, top, height);
         col.appendChild(div);
     });
 
@@ -415,6 +478,45 @@ function renderDayColumn(col, dateObj, dateStr, allContainers, allDbEvents, isTo
         empty.innerHTML = '<p style="font-size: 12px; color: #94a3b8;">暂无日程</p>';
         col.appendChild(empty);
     }
+}
+
+function createFocusCalendarCard(item, top, height) {
+    const div = document.createElement('div');
+    const color = item.color || '#4A90D9';
+    const source = item.source || (item.isContainer ? 'container' : 'manual');
+    const layer = item.layer ?? 2;
+    div.className = 'gcal-event';
+    div.dataset.type = item.type || (item.isContainer ? 'container' : 'event');
+    if (item.id) div.dataset.id = String(item.id);
+    div.dataset.source = source;
+    div.style.top = `${top}px`;
+    div.style.height = `${height}px`;
+
+    if (source === 'container') {
+        div.dataset.layer = String(layer);
+        if (layer === 1) {
+            div.className = 'gcal-event layer-1';
+            div.style.backgroundColor = color + '40';
+            div.style.border = `2px dashed ${darkenColor(color, 0.15)}`;
+            div.style.color = darkenColor(color, 0.35);
+        } else {
+            div.className = 'gcal-event layer-2';
+            div.style.backgroundColor = color + '25';
+            div.style.border = `2px dashed ${color}`;
+            div.style.color = darkenColor(color, 0.35);
+        }
+    } else if (source === 'manual') {
+        div.style.backgroundColor = color;
+        div.style.borderLeft = '3px solid rgba(255,255,255,0.4)';
+    } else {
+        div.style.backgroundColor = color;
+        div.style.borderLeft = `3px solid ${darkenColor(color, 0.3)}`;
+    }
+
+    const startTime = formatTime(item.time_start);
+    const endTime = formatTime(item.time_end);
+    div.innerHTML = `<h4>${escapeHTML(item.title)}</h4><span>${escapeHTML(startTime)} - ${escapeHTML(endTime)}</span>${item.isContainer ? renderContainerTasks(item.tasks) : ''}`;
+    return div;
 }
 
 function updateCurrentTimeLine() {
@@ -488,25 +590,31 @@ async function loadWeeklyProgress() {
         return;
     }
 
-    taskList.innerHTML = weekTasks.map(task => {
-        const checked = task.progress === 'completed' ? ' checked' : '';
-        const completedClass = task.progress === 'completed' ? ' completed-text' : '';
-        return `
-            <label class="simple-task-item">
-                <input type="checkbox"${checked} onchange="toggleWeekTask('${escapeAttribute(task.id)}', this.checked)">
-                <span class="custom-chk"></span>
-                <div class="task-desc${completedClass}">${escapeHTML(task.title || '无标题')}</div>
-            </label>`;
-    }).join('');
+    taskList.innerHTML = weekTasks.map(task => `
+        <button class="simple-task-item week-task-link" data-action="open-task-detail" data-task-id="${escapeAttribute(task.id)}">
+            <span class="material-symbols-outlined">open_in_new</span>
+            <div class="task-desc">${escapeHTML(task.title || '无标题')}</div>
+        </button>`).join('');
 }
 
-async function toggleWeekTask(taskId, checked) {
-    if (checked) {
-        await TimeWhereDB.completeTask(taskId);
-    } else {
-        await TimeWhereDB.updateTask(taskId, { progress: 'not_started' });
-    }
-    await loadDashboardData();
+function openTaskDetailInPlanner(taskId) {
+    if (!taskId) return;
+    window.location.href = `../tasks/tasks.html?task_id=${encodeURIComponent(taskId)}`;
+}
+
+function renderContainerTasks(tasks) {
+    if (!tasks || tasks.length === 0) return '';
+    return `<div class="container-tasks">` + tasks.map(task => {
+        const pLabel = priorityLabel(task.priority);
+        const pCls = priorityClass(task.priority);
+        const timedMark = task.schedule_time ? `<span class="task-timed">${escapeHTML(task.schedule_time)}</span>` : '';
+        return `<div class="container-task-item">
+            <span class="task-priority-dot ${pCls}" title="${escapeAttribute(pLabel)}"></span>
+            <span class="task-item-title">${escapeHTML(task.title || '无标题')}</span>
+            <span class="task-item-dur">${task.duration || 45}m</span>
+            ${timedMark}
+        </div>`;
+    }).join('') + `</div>`;
 }
 
 // ============================================================
@@ -689,14 +797,8 @@ function setupEventListeners() {
         });
     });
 
-    document.querySelectorAll('.add-task-btn').forEach(btn => {
-        btn.addEventListener('click', openAddTaskModal);
-    });
-
-    const pomoToggle = document.getElementById('pomoToggle');
-    const pomoReset = document.getElementById('pomoReset');
-    if (pomoToggle) pomoToggle.addEventListener('click', togglePomodoro);
-    if (pomoReset) pomoReset.addEventListener('click', resetPomodoro);
+    document.addEventListener('click', handleFocusDelegatedClick);
+    document.addEventListener('change', handleFocusDelegatedChange);
 
     // Habit check buttons (delegated)
     const feedColumn = document.querySelector('.column-feed');
@@ -713,6 +815,62 @@ function setupEventListeners() {
     }
 }
 
+async function runFocusAction(control, action) {
+    if (control?.dataset?.busy === 'true') return;
+    if (control) {
+        control.dataset.busy = 'true';
+        control.disabled = true;
+    }
+    try {
+        await action();
+    } catch (error) {
+        showToast(`操作失败：${error.message}`, 'error');
+    } finally {
+        if (control && document.body.contains(control)) {
+            control.dataset.busy = 'false';
+            control.disabled = false;
+        }
+    }
+}
+
+function handleFocusDelegatedClick(e) {
+    const actionEl = e.target.closest('[data-action]');
+    if (!actionEl) return;
+
+    const { action, taskId } = actionEl.dataset;
+    if (action === 'add-task') {
+        e.preventDefault();
+        openAddTaskModal();
+        return;
+    }
+    if (action === 'open-task-detail') {
+        e.preventDefault();
+        openTaskDetailInPlanner(taskId);
+        return;
+    }
+    if (action === 'close-modal') {
+        e.preventDefault();
+        closeAddTaskModal();
+        return;
+    }
+    if (action === 'save-modal') {
+        e.preventDefault();
+        runFocusAction(actionEl, saveNewTask);
+        return;
+    }
+    if (['start', 'pause', 'complete', 'defer'].includes(action)) {
+        e.preventDefault();
+        runFocusAction(actionEl, async () => {
+            if (action === 'start') await startTaskNow(taskId);
+            if (action === 'pause') await pauseTask(taskId);
+            if (action === 'complete') await completeTaskNow(taskId);
+            if (action === 'defer') await deferTask(taskId, parseInt(actionEl.dataset.days || '1', 10));
+        });
+    }
+}
+
+function handleFocusDelegatedChange() {}
+
 function openAddTaskModal() {
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
@@ -721,7 +879,7 @@ function openAddTaskModal() {
         <div class="modal-content">
             <div class="modal-header">
                 <h3>添加任务</h3>
-                <button class="modal-close" onclick="closeAddTaskModal()">
+                <button class="modal-close" data-action="close-modal">
                     <span class="material-symbols-outlined">close</span>
                 </button>
             </div>
@@ -761,12 +919,12 @@ function openAddTaskModal() {
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeAddTaskModal()">取消</button>
-                <button class="btn-primary" onclick="saveNewTask()">保存</button>
+                <button class="btn-secondary" data-action="close-modal">取消</button>
+                <button class="btn-primary" data-action="save-modal">保存</button>
             </div>
         </div>`;
     document.body.appendChild(modal);
-    setTimeout(() => document.getElementById('taskTitle').focus(), 100);
+    setTimeout(() => document.getElementById('taskTitle')?.focus(), 100);
 }
 
 function closeAddTaskModal() {
@@ -775,30 +933,33 @@ function closeAddTaskModal() {
 }
 
 async function saveNewTask() {
-    const title = document.getElementById('taskTitle').value.trim();
-    const priority = document.getElementById('taskPriority').value;
-    const deadline = document.getElementById('taskDeadline').value;
-    const duration = parseInt(document.getElementById('taskDuration').value);
-    const bucket = document.getElementById('taskBucket').value;
+    try {
+        const title = document.getElementById('taskTitle').value.trim();
+        const priority = document.getElementById('taskPriority').value;
+        const deadline = document.getElementById('taskDeadline').value;
+        const duration = parseInt(document.getElementById('taskDuration').value);
 
-    if (!title) {
-        showToast('请输入任务标题', 'error');
-        return;
+        if (!title) {
+            showToast('请输入任务标题', 'error');
+            return;
+        }
+
+        const todayStr = formatDateISO(new Date());
+        await TimeWhereDB.addTask({
+            title,
+            priority,
+            due_date: deadline || null,
+            start_date: todayStr,
+            duration: duration || 30,
+            progress: 'not_started'
+        });
+
+        closeAddTaskModal();
+        await loadDashboardData();
+        showToast('任务已添加', 'success');
+    } catch (error) {
+        showToast(`添加任务失败：${error.message}`, 'error');
     }
-
-    const todayStr = formatDateISO(new Date());
-    await TimeWhereDB.addTask({
-        title,
-        priority,
-        due_date: deadline || null,
-        start_date: todayStr,
-        duration: duration || 30,
-        progress: 'not_started'
-    });
-
-    closeAddTaskModal();
-    await loadDashboardData();
-    showToast('任务已添加', 'success');
 }
 
 // ============================================================
@@ -830,132 +991,3 @@ async function completeHabitNow(habitId) {
         showToast('操作失败：' + e.message, 'error');
     }
 }
-
-// ============================================================
-// Pomodoro Timer
-// ============================================================
-
-let pomoState = {
-    mode: 'work',
-    remaining: 25 * 60,
-    isRunning: false,
-    completedSessions: 0,
-    intervalId: null
-};
-
-let pomoSettings = {
-    work: 25,
-    break: 5,
-    longBreak: 15,
-    interval: 4
-};
-
-async function initPomodoro() {
-    const settings = await TimeWhereDB.getSettings();
-    pomoSettings.work = settings.pomodoro_work || 25;
-    pomoSettings.break = settings.pomodoro_break || 5;
-    pomoSettings.longBreak = settings.pomodoro_long_break || 15;
-    pomoSettings.interval = settings.pomodoro_interval || 4;
-
-    pomoState.remaining = pomoSettings.work * 60;
-    renderPomodoro();
-
-    const widget = document.getElementById('pomodoroWidget');
-    if (widget) widget.style.display = 'flex';
-}
-
-function renderPomodoro() {
-    const timeEl = document.getElementById('pomoTime');
-    const modeEl = document.getElementById('pomoMode');
-    const toggleBtn = document.getElementById('pomoToggle');
-
-    if (!timeEl) return;
-
-    const m = Math.floor(pomoState.remaining / 60).toString().padStart(2, '0');
-    const s = (pomoState.remaining % 60).toString().padStart(2, '0');
-    timeEl.textContent = `${m}:${s}`;
-
-    const modeLabels = { work: '专注中', break: '短休息', longBreak: '长休息' };
-    modeEl.textContent = modeLabels[pomoState.mode] || '准备开始';
-
-    if (toggleBtn) {
-        toggleBtn.textContent = pomoState.isRunning ? '暂停' : '开始';
-        toggleBtn.classList.toggle('active', pomoState.isRunning);
-    }
-}
-
-function startPomodoro() {
-    if (pomoState.isRunning) return;
-    pomoState.isRunning = true;
-    renderPomodoro();
-    pomoState.intervalId = setInterval(tickPomodoro, 1000);
-}
-
-function pausePomodoro() {
-    pomoState.isRunning = false;
-    if (pomoState.intervalId) {
-        clearInterval(pomoState.intervalId);
-        pomoState.intervalId = null;
-    }
-    renderPomodoro();
-}
-
-function togglePomodoro() {
-    if (pomoState.isRunning) {
-        pausePomodoro();
-    } else {
-        startPomodoro();
-    }
-}
-
-function resetPomodoro() {
-    pausePomodoro();
-    pomoState.mode = 'work';
-    pomoState.remaining = pomoSettings.work * 60;
-    renderPomodoro();
-}
-
-function tickPomodoro() {
-    pomoState.remaining--;
-    if (pomoState.remaining <= 0) {
-        completePomodoroSession();
-    } else {
-        renderPomodoro();
-    }
-}
-
-function completePomodoroSession() {
-    pausePomodoro();
-
-    if (pomoState.mode === 'work') {
-        pomoState.completedSessions++;
-        if (pomoState.completedSessions % pomoSettings.interval === 0) {
-            pomoState.mode = 'longBreak';
-            pomoState.remaining = pomoSettings.longBreak * 60;
-            showToast('专注完成！进入长休息', 'success');
-        } else {
-            pomoState.mode = 'break';
-            pomoState.remaining = pomoSettings.break * 60;
-            showToast('专注完成！休息一下吧', 'success');
-        }
-    } else {
-        pomoState.mode = 'work';
-        pomoState.remaining = pomoSettings.work * 60;
-        showToast('休息结束！继续专注', 'info');
-    }
-    renderPomodoro();
-}
-
-// ============================================================
-// Window exports (for inline onclick handlers)
-// ============================================================
-
-window.startTaskNow = startTaskNow;
-window.pauseTask = pauseTask;
-window.completeTaskNow = completeTaskNow;
-window.deferTask = deferTask;
-window.completeHabitNow = completeHabitNow;
-window.toggleWeekTask = toggleWeekTask;
-window.openAddTaskModal = openAddTaskModal;
-window.closeAddTaskModal = closeAddTaskModal;
-window.saveNewTask = saveNewTask;

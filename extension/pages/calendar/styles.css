@@ -38,7 +38,7 @@
 }
 
 body {
-    background: url('../../shared/images/bg.jpg') center/cover no-repeat;
+    background: var(--timewhere-bg-image, url('../../shared/images/bg.jpg')) center/cover no-repeat;
     color: var(--text-main);
     overflow: hidden;
     height: 100vh;
@@ -424,11 +424,13 @@ body::before {
     grid-template-columns: repeat(7, 1fr);
     position: relative;
     z-index: 3;
+    min-height: calc(17 * 40px);
 }
 
 .day-col {
     position: relative;
     border-right: 1px solid var(--border-stroke);
+    min-height: calc(17 * 40px);
 }
 .day-col:last-child { border-right: none; }
 
@@ -460,7 +462,9 @@ body::before {
 .gcal-event h4 { font-size: 11px; margin-bottom: 2px; line-height: 1.2;}
 .gcal-event span { font-size: 9px; opacity: 0.9; }
 
-/* Layer 2（自由时间）文字颜色继承父容器 */
+/* 时间容器文字颜色继承父容器，和普通日程事件的白字实色模板区分 */
+.gcal-event.layer-1 h4,
+.gcal-event.layer-1 span,
 .gcal-event.layer-2 h4,
 .gcal-event.layer-2 span { opacity: 1; }
 
@@ -668,6 +672,7 @@ body::before {
     border-radius: var(--radius-lg);
     text-align: center;
     padding: 32px;
+    pointer-events: none;
 }
 .calendar-empty-state h3 {
     font-size: 18px;
@@ -1010,6 +1015,23 @@ body::before {
     filter: brightness(1.1);
 }
 
+.month-event.month-container {
+    border-left: 3px solid rgba(255,255,255,0.65);
+}
+
+.month-event.month-container.layer-1 {
+    font-weight: 600;
+    opacity: 0.9;
+    border: 1px dashed rgba(255,255,255,0.85);
+    border-left-width: 3px;
+}
+
+.month-event.month-container.layer-2 {
+    opacity: 0.82;
+    border: 1px dashed rgba(255,255,255,0.75);
+    border-left-width: 3px;
+}
+
 .month-more {
     font-size: 10px;
     color: var(--text-sub);
@@ -1243,7 +1265,7 @@ body::before {
     background: #dc2626;
 }
 
-/* Modal: type toggle (容器 / 单次事件) */
+/* Modal: type toggle (容器 / 日程事件) */
 .type-toggle {
     display: flex;
     background: var(--bg-app);
@@ -1268,6 +1290,23 @@ body::before {
     background: white;
     color: var(--text-main);
     box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.type-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.75;
+}
+
+.type-readonly {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 10px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border-stroke);
+    border-radius: var(--radius-sm);
+    background: var(--bg-app);
+    color: var(--text-sub);
+    font-size: 13px;
+    font-weight: 500;
 }
 
 /* Modal: form select */
@@ -1342,6 +1381,15 @@ body::before {
     border-color: var(--accent);
     background: var(--accent);
     color: white;
+}
+.scope-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+.scope-hint {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-sub);
 }
 
 /* Modal: delete group with dropdown */

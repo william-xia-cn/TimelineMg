@@ -10,6 +10,18 @@ function formatDateISO(date) {
     return `${y}-${m}-${d}`;
 }
 
+const {
+    dailySettle,
+    buildDailyTaskPool,
+    containerAppliesToDate,
+    getDeferredStartDate,
+    maybeRunTaskArrange,
+    priorityLabel,
+    priorityClass,
+    escapeHTML,
+    escapeAttribute
+} = TimeWhereScheduling;
+
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         await initApp();
@@ -17,123 +29,157 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.warn('App init error:', e);
     }
     setupEventListeners();
-    startTimeUpdate();
 });
 
 async function initApp() {
     try {
-        if (typeof TimeWhereDB !== 'undefined') {
-            await TimeWhereDB.initDefaultSettings();
-        } else {
+        if (typeof TimeWhereDB === 'undefined') {
             console.warn('TimeWhereDB not ready');
             return;
         }
+        await TimeWhereDB.initDefaultSettings();
     } catch(e) {
         console.warn('Settings init skipped:', e);
     }
-    
-    try {
-        await loadCurrentTask();
-    } catch(e) {
-        console.warn('loadCurrentTask error:', e);
-    }
-    
-    try {
-        await loadStats();
-    } catch(e) {
-        console.warn('loadStats error:', e);
-    }
+
+    await reloadPopup();
+    runTaskArrangeInBackground();
 }
 
-async function loadCurrentTask() {
+function runTaskArrangeInBackground() {
+    if (typeof maybeRunTaskArrange !== 'function' || typeof TimeWhereDB === 'undefined') return;
+    maybeRunTaskArrange(TimeWhereDB)
+        .then(result => {
+            if (result?.ran && result.arranged > 0) {
+                return reloadPopup();
+            }
+            return null;
+        })
+        .catch(error => console.warn('[Popup] Task Arrange skipped:', error));
+}
+
+async function reloadPopup() {
+    await Promise.all([
+        loadCurrentTasks(),
+        loadHeaderCounts()
+    ]);
+}
+
+async function loadCurrentTasks() {
     if (typeof TimeWhereDB === 'undefined' || typeof TimeWhereScheduling === 'undefined') {
         renderNoTask();
         return;
     }
 
-    const { task, activeContainer } = await getCurrentTaskProjection();
-
-    if (!document.querySelector('.task-card')) return;
-
-    if (task) {
-        renderCurrentTask(task, activeContainer);
+    const { currentTasks } = await getTodayTaskProjection();
+    if (currentTasks.length > 0) {
+        renderCurrentTaskList(currentTasks);
     } else {
         renderNoTask();
     }
 }
 
-async function getCurrentTaskProjection() {
+async function getTodayTaskProjection() {
     const now = new Date();
     const todayStr = formatDateISO(now);
     const dayOfWeek = now.getDay();
     const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
     const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-    // 构建今日任务池
     const allTasks = await TimeWhereDB.getAllTasks();
-    const taskPool = TimeWhereScheduling.buildDailyTaskPool(allTasks, now);
+    const taskPool = buildDailyTaskPool(allTasks, now);
 
-    // 获取今日生效容器
     const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
     const todayContainers = allContainers.filter(c =>
-        TimeWhereScheduling.containerAppliesToDate(c, now, todayStr, dayOfWeek, isWeekday, isWeekend)
+        containerAppliesToDate(c, now, todayStr, dayOfWeek, isWeekday, isWeekend)
     );
 
-    // Daily Settle
-    const { currentTasks, activeContainer, sortedPool } = TimeWhereScheduling.dailySettle(taskPool, todayContainers, now);
-    const task = currentTasks[0] || sortedPool[0] || null;
-    return { task, activeContainer };
+    const settle = dailySettle(taskPool, todayContainers, now);
+    const currentTasks = settle.currentTasks || [];
+    return { currentTasks, taskPool, todayContainers };
 }
 
-function renderCurrentTask(task, activeContainer) {
-    const taskCard = document.querySelector('.task-card');
-    if (!taskCard) return;
+function renderCurrentTaskList(tasks) {
+    const taskList = document.getElementById('currentTaskList');
+    if (!taskList) return;
 
-    const escapeHTML = TimeWhereScheduling.escapeHTML;
-    const containerLabel = activeContainer
-        ? `<span class="container-name">${escapeHTML(activeContainer.name)}</span>`
-        : '';
+    const inProgressIndex = tasks.findIndex(task => task.progress === 'in_progress');
+    const expandedIndex = inProgressIndex >= 0 ? inProgressIndex : 0;
+    taskList.innerHTML = tasks.map((task, index) => renderCurrentTaskCard(task, index, expandedIndex)).join('');
+    requestAnimationFrame(() => ensureExpandedTaskVisible(taskList.querySelector('.popup-task-card[open]')));
+}
+
+function renderCurrentTaskCard(task, index, expandedIndex = 0) {
+    const isInProgress = task.progress === 'in_progress';
+    const isManageBacSource = TimeWhereDB.isManageBacSourceTask?.(task) === true;
     const dueStr = task.due_date || task.deadline;
+    const todayStr = formatDateISO(new Date());
+    const isOverdue = dueStr && dueStr < todayStr;
+    const isDueToday = dueStr === todayStr;
+    const isTimed = !!task.schedule_time;
+    const pLabel = priorityLabel(task.priority);
+    const pCls = priorityClass(task.priority);
+    const taskId = escapeAttribute(task.id);
+    const isExpanded = index === expandedIndex;
 
-    taskCard.innerHTML = `
-        <div class="current-task-info">
-            <div class="task-title-row">
-                <span class="status-dot pulsing"></span>
-                <span class="task-title">${escapeHTML(task.title || '无标题任务')}</span>
-            </div>
-            <div class="task-meta">
-                <span class="priority-badge ${getPriorityClass(task.priority)}">${TimeWhereScheduling.priorityLabel(task.priority)}</span>
-                ${task.duration ? `<span class="duration">${task.duration}分钟</span>` : ''}
-                ${containerLabel}
-            </div>
-            ${dueStr ? `<div class="deadline">截止: ${formatDate(dueStr)}</div>` : ''}
-        </div>
-    `;
+    const progressBtns = isInProgress
+        ? `<button class="btn-micro" data-action="pause" data-task-id="${taskId}">暂停</button>
+           <button class="btn-micro primary" data-action="complete" data-task-id="${taskId}">完成</button>`
+        : `<button class="btn-micro primary" data-action="start" data-task-id="${taskId}">开始</button>
+           <button class="btn-micro" data-action="complete" data-task-id="${taskId}">完成</button>`;
 
-    updateActionButtons(task);
+    const deferHtml = isManageBacSource ? `
+        <div class="defer-row">
+            <span class="defer-label">延后</span>
+            <span class="defer-blocked-text">ManageBac 来源任务不能延后</span>
+        </div>` : `
+        <div class="defer-row">
+            <span class="defer-label">延后</span>
+            <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="1">1天</button>
+            <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="3">3天</button>
+            <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="7">7天</button>
+        </div>`;
+
+    const tags = [
+        isOverdue ? `<span class="task-tag danger">逾期</span>` : '',
+        isDueToday ? `<span class="task-tag today">今天</span>` : '',
+        isTimed ? `<span class="task-tag timed">${escapeHTML(task.schedule_time)}</span>` : ''
+    ].filter(Boolean).join('');
+
+    return `
+        <details class="task-card popup-task-card" ${isExpanded ? 'open' : ''}>
+            <summary class="task-card-summary">
+                <div class="task-title-row">
+                    <span class="status-dot ${isInProgress ? 'pulsing' : 'pending'}"></span>
+                    <span class="task-title">${escapeHTML(task.title || '无标题任务')}</span>
+                </div>
+                <span class="material-symbols-outlined expand-icon">expand_more</span>
+            </summary>
+            <div class="current-task-info">
+                ${task.notes ? `<div class="task-notes">${escapeHTML(task.notes)}</div>` : ''}
+                <div class="task-meta">
+                    <span class="priority-badge ${pCls}">${escapeHTML(pLabel)}</span>
+                    <span class="duration">${task.duration || 45}分钟</span>
+                    ${dueStr ? `<span class="deadline">截止: ${formatDate(dueStr)}</span>` : ''}
+                </div>
+                ${tags ? `<div class="task-tags">${tags}</div>` : ''}
+                <div class="task-actions">${progressBtns}</div>
+                ${deferHtml}
+            </div>
+        </details>`;
 }
 
 function renderNoTask() {
-    const taskCard = document.querySelector('.task-card');
-    if (!taskCard) return;
-    
-    taskCard.innerHTML = `
-        <div class="task-placeholder">
-            <span class="material-symbols-outlined" style="font-size: 24px;">add_circle</span>
-            <span>暂无进行中的任务</span>
-        </div>
-    `;
-    
-    updateActionButtons(null);
-}
+    const taskList = document.getElementById('currentTaskList');
+    if (!taskList) return;
 
-function getPriorityClass(priority) {
-    const map = {
-        'P1': 'priority-high',
-        'P2': 'priority-medium',
-        'P3': 'priority-low'
-    };
-    return map[priority] || 'priority-low';
+    taskList.innerHTML = `
+        <div class="task-card task-empty-card">
+            <div class="task-placeholder">
+                <span class="material-symbols-outlined" style="font-size: 24px;">add_circle</span>
+                <span>暂无待办任务</span>
+            </div>
+        </div>`;
 }
 
 function formatDate(dateStr) {
@@ -141,82 +187,43 @@ function formatDate(dateStr) {
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
+
     const todayStr = formatDateISO(today);
     const tomorrowStr = formatDateISO(tomorrow);
-    
+
     if (dateStr === todayStr) return '今天';
     if (dateStr === tomorrowStr) return '明天';
-    
+
     return `${date.getMonth() + 1}/${date.getDate()}`;
 }
 
-function updateActionButtons(task) {
-    const btnStart = document.getElementById('btnStart');
-    const btnComplete = document.getElementById('btnComplete');
-    const btnDelay = document.getElementById('btnDelay');
-    
-    if (task) {
-        btnStart.querySelector('span').textContent = '继续';
-        btnComplete.style.display = 'flex';
-        btnDelay.style.display = 'flex';
-    } else {
-        btnStart.querySelector('span').textContent = '开始';
-        btnComplete.style.display = 'none';
-        btnDelay.style.display = 'none';
-    }
-}
+async function loadHeaderCounts() {
+    if (typeof TimeWhereDB === 'undefined' || typeof TimeWhereScheduling === 'undefined') return;
 
-async function loadStats() {
-    if (typeof TimeWhereDB === 'undefined') return;
-    
     const completedToday = await TimeWhereDB.getTodayCompletedCount();
-    const pendingCount = await TimeWhereDB.getPendingCount();
-    
-    const statNums = document.querySelectorAll('.stat-num');
-    if (statNums[0]) statNums[0].textContent = completedToday;
-    if (statNums[1]) statNums[1].textContent = pendingCount;
+    const { taskPool } = await getTodayTaskProjection();
+    const todayPendingCount = taskPool.length;
+
+    const completedEl = document.getElementById('todayCompletedCount');
+    const pendingEl = document.getElementById('todayPendingCount');
+    if (completedEl) completedEl.textContent = String(completedToday);
+    if (pendingEl) pendingEl.textContent = String(todayPendingCount);
 }
 
 function setupEventListeners() {
-    // 快捷操作按钮
-    const actionButtons = document.querySelectorAll('.action-btn');
-    actionButtons.forEach(btn => {
-        btn.addEventListener('click', async () => {
-            btn.classList.add('clicked');
-            setTimeout(() => btn.classList.remove('clicked'), 150);
+    const taskList = document.getElementById('currentTaskList');
+    if (taskList) {
+        taskList.addEventListener('click', handleTaskActionClick);
+        taskList.addEventListener('toggle', handleTaskCardToggle, true);
+    }
 
-            const { task } = await getCurrentTaskProjection();
-
-            if (btn.id === 'btnStart' && task) {
-                await TimeWhereDB.startTask(task.id);
-                showToast('任务已开始', 'info');
-                await loadCurrentTask();
-                await loadStats();
-            } else if (btn.id === 'btnComplete' && task) {
-                await TimeWhereDB.completeTask(task.id);
-                showToast('任务完成！', 'success');
-                await loadCurrentTask();
-                await loadStats();
-            } else if (btn.id === 'btnDelay' && task) {
-                const nextStartDate = TimeWhereScheduling.getDeferredStartDate(1, new Date());
-                await TimeWhereDB.updateTask(task.id, { start_date: nextStartDate });
-                showToast('任务已延后1天', 'info');
-                await loadCurrentTask();
-                await loadStats();
-            }
-        });
-    });
-    
-    // 底部按钮 - 设置
     const btnSettings = document.getElementById('btnSettings');
     if (btnSettings) {
         btnSettings.addEventListener('click', function() {
             chrome.runtime.openOptionsPage();
         });
     }
-    
-    // 底部按钮 - 打开完整页面
+
     const btnOpenFull = document.getElementById('btnOpenFull');
     if (btnOpenFull) {
         btnOpenFull.addEventListener('click', function() {
@@ -225,18 +232,80 @@ function setupEventListeners() {
     }
 }
 
-function startTimeUpdate() {
-    function updateTime() {
-        const now = new Date();
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const timeEl = document.getElementById('currentTime');
-        if (timeEl) {
-            timeEl.textContent = `${hours}:${minutes}`;
+function handleTaskCardToggle(event) {
+    const card = event.target.closest?.('.popup-task-card');
+    if (!card || !card.open) return;
+    const taskList = document.getElementById('currentTaskList');
+    taskList?.querySelectorAll('.popup-task-card[open]').forEach(other => {
+        if (other !== card) other.open = false;
+    });
+    requestAnimationFrame(() => ensureExpandedTaskVisible(card));
+}
+
+function ensureExpandedTaskVisible(card) {
+    if (!card) return;
+    card.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+async function handleTaskActionClick(event) {
+    const actionEl = event.target.closest('[data-action]');
+    if (!actionEl) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    await runPopupAction(actionEl, async () => {
+        const { action, taskId } = actionEl.dataset;
+        if (action === 'start') await startTask(taskId);
+        if (action === 'pause') await pauseTask(taskId);
+        if (action === 'complete') await completeTask(taskId);
+        if (action === 'defer') await deferTask(taskId, parseInt(actionEl.dataset.days || '1', 10));
+    });
+}
+
+async function runPopupAction(control, action) {
+    if (control?.dataset?.busy === 'true') return;
+    control.dataset.busy = 'true';
+    control.disabled = true;
+    try {
+        await action();
+        await reloadPopup();
+    } catch (error) {
+        showToast(`操作失败：${error.message}`, 'error');
+    } finally {
+        if (document.body.contains(control)) {
+            control.dataset.busy = 'false';
+            control.disabled = false;
         }
     }
-    updateTime();
-    setInterval(updateTime, 1000);
+}
+
+async function startTask(taskId) {
+    await TimeWhereDB.updateTask(taskId, { progress: 'in_progress' });
+    showToast('任务已开始', 'info');
+}
+
+async function pauseTask(taskId) {
+    await TimeWhereDB.updateTask(taskId, { progress: 'not_started' });
+    showToast('任务已暂停', 'info');
+}
+
+async function completeTask(taskId) {
+    await TimeWhereDB.updateTask(taskId, {
+        progress: 'completed',
+        completed_at: new Date().toISOString()
+    });
+    showToast('任务完成！', 'success');
+}
+
+async function deferTask(taskId, days) {
+    const task = await TimeWhereDB.getTaskById(taskId);
+    if (TimeWhereDB.isManageBacSourceTask?.(task)) {
+        showToast('ManageBac 来源任务不能延后', 'error');
+        return;
+    }
+    const nextStartDate = getDeferredStartDate(days, new Date());
+    await TimeWhereDB.updateTask(taskId, { start_date: nextStartDate });
+    showToast(`任务已延后 ${days} 天`, 'info');
 }
 
 function showToast(message, type = 'info') {
@@ -244,7 +313,7 @@ function showToast(message, type = 'info') {
     toast.className = `toast toast-${type}`;
     toast.textContent = message;
     document.body.appendChild(toast);
-    
+
     setTimeout(() => toast.classList.add('show'), 10);
     setTimeout(() => {
         toast.classList.remove('show');

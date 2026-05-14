@@ -1,0 +1,48 @@
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="----TimeWhereSanitizedManageBacLeftNav"
+
+------TimeWhereSanitizedManageBacLeftNav
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
+
+=3C!DOCTYPE html=3E
+=3Chtml=3E
+=3Cbody=3E
+=3Cnav class=3D"f-menu"=3E
+=3Ca class=3D"f-menu__link f-menu__nav-link active"=3EMy Classes=3C/a=3E
+=3Cdiv class=3D"f-menu__submenu"=3E
+=3Ca class=3D"f-menu__link f-menu__submenu-link" href=3D"https://example.invalid/student/classes/2001"=3EEnglish Language Acquisition Phase 5=3C/a=3E
+=3Ca class=3D"f-menu__link f-menu__submenu-link" href=3D"https://example.invalid/student/classes/2002"=3EMathematics Analysis HL=3C/a=3E
+=3Ca class=3D"f-menu__link f-menu__submenu-link" href=3D"https://example.invalid/student/classes/2003"=3ESciences Biology 9=3C/a=3E
+=3Ca class=3D"f-menu__link f-menu__submenu-link" href=3D"https://example.invalid/student/classes/2004"=3ESciences Chemistry 9=3C/a=3E
+=3Ca class=3D"f-menu__link f-menu__submenu-link" href=3D"https://example.invalid/student/classes/2005"=3ESciences Physics 9=3C/a=3E
+=3Ca class=3D"f-menu__link f-menu__submenu-link" href=3D"https://example.invalid/student/classes/2006"=3EChinese Language and Literature 9=3C/a=3E
+=3Ca class=3D"f-menu__link f-menu__submenu-link" href=3D"https://example.invalid/student/classes/2007"=3EChinese Civilization 9=3C/a=3E
+=3Ca class=3D"f-menu__link f-menu__submenu-link" href=3D"https://example.invalid/student/classes/2008"=3EDesign 9=3C/a=3E
+=3Ca class=3D"f-menu__link f-menu__submenu-link" href=3D"https://example.invalid/student/classes/2009"=3EIndividuals and Societies 9=3C/a=3E
+=3Ca class=3D"f-menu__link f-menu__submenu-link" href=3D"https://example.invalid/student/classes/2010"=3EMusic 9=3C/a=3E
+=3Ca class=3D"f-menu__link f-menu__submenu-link" href=3D"https://example.invalid/student/classes/2011"=3EPhysical and Health Education 9=3C/a=3E
+=3Ca class=3D"f-menu__link f-menu__submenu-link" href=3D"https://example.invalid/student/classes/2012"=3EAdvisory 9=3C/a=3E
+=3Ca class=3D"f-menu__link f-menu__submenu-link" href=3D"https://example.invalid/student/classes/2013"=3ECommunity Time=3C/a=3E
+=3Ca class=3D"f-menu__link f-menu__submenu-link active" href=3D"https://example.invalid/student/classes/my"=3EMy Classes=3C/a=3E
+=3C/div=3E
+=3C/nav=3E
+
+=3Cmain=3E
+=3Cdiv class=3D"accordion" id=3D"classes-page-one"=3E
+=3Cdiv class=3D"f-tile f-tile--inline f-tile--elevated f-class-tile"=3E=3Cp class=3D"f-tile__title h5"=3E=3Ca class=3D"f-tile__title-link link-dark" href=3D"https://example.invalid/student/classes/2001"=3EEnglish Language Acquisition Phase 5=3C/a=3E=3C/p=3E=3Cspan=3ERoom: 1359=3C/span=3E=3Ca class=3D"user-popover" aria-label=3D"Teacher, English One"=3E=3C/a=3E=3C/div=3E
+=3Cdiv class=3D"f-tile f-tile--inline f-tile--elevated f-class-tile"=3E=3Cp class=3D"f-tile__title h5"=3E=3Ca class=3D"f-tile__title-link link-dark" href=3D"https://example.invalid/student/classes/2002"=3EMathematics Analysis HL=3C/a=3E=3C/p=3E=3Cspan=3ERoom: 1535=3C/span=3E=3Ca class=3D"user-popover" aria-label=3D"Teacher, Math One"=3E=3C/a=3E=3C/div=3E
+=3Cdiv class=3D"f-tile f-tile--inline f-tile--elevated f-class-tile"=3E=3Cp class=3D"f-tile__title h5"=3E=3Ca class=3D"f-tile__title-link link-dark" href=3D"https://example.invalid/student/classes/2003"=3ESciences Biology 9=3C/a=3E=3C/p=3E=3C/div=3E
+=3Cdiv class=3D"f-tile f-tile--inline f-tile--elevated f-class-tile"=3E=3Cp class=3D"f-tile__title h5"=3E=3Ca class=3D"f-tile__title-link link-dark" href=3D"https://example.invalid/student/classes/2004"=3ESciences Chemistry 9=3C/a=3E=3C/p=3E=3C/div=3E
+=3Cdiv class=3D"f-tile f-tile--inline f-tile--elevated f-class-tile"=3E=3Cp class=3D"f-tile__title h5"=3E=3Ca class=3D"f-tile__title-link link-dark" href=3D"https://example.invalid/student/classes/2005"=3ESciences Physics 9=3C/a=3E=3C/p=3E=3C/div=3E
+=3Cdiv class=3D"f-tile f-tile--inline f-tile--elevated f-class-tile"=3E=3Cp class=3D"f-tile__title h5"=3E=3Ca class=3D"f-tile__title-link link-dark" href=3D"https://example.invalid/student/classes/2006"=3EChinese Language and Literature 9=3C/a=3E=3C/p=3E=3C/div=3E
+=3Cdiv class=3D"f-tile f-tile--inline f-tile--elevated f-class-tile"=3E=3Cp class=3D"f-tile__title h5"=3E=3Ca class=3D"f-tile__title-link link-dark" href=3D"https://example.invalid/student/classes/2007"=3EChinese Civilization 9=3C/a=3E=3C/p=3E=3C/div=3E
+=3Cdiv class=3D"f-tile f-tile--inline f-tile--elevated f-class-tile"=3E=3Cp class=3D"f-tile__title h5"=3E=3Ca class=3D"f-tile__title-link link-dark" href=3D"https://example.invalid/student/classes/2008"=3EDesign 9=3C/a=3E=3C/p=3E=3C/div=3E
+=3Cdiv class=3D"f-tile f-tile--inline f-tile--elevated f-class-tile"=3E=3Cp class=3D"f-tile__title h5"=3E=3Ca class=3D"f-tile__title-link link-dark" href=3D"https://example.invalid/student/classes/2009"=3EIndividuals and Societies 9=3C/a=3E=3C/p=3E=3C/div=3E
+=3Cdiv class=3D"f-tile f-tile--inline f-tile--elevated f-class-tile"=3E=3Cp class=3D"f-tile__title h5"=3E=3Ca class=3D"f-tile__title-link link-dark" href=3D"https://example.invalid/student/classes/2010"=3EMusic 9=3C/a=3E=3C/p=3E=3C/div=3E
+=3C/div=3E
+=3C/main=3E
+=3C/body=3E
+=3C/html=3E
+
+------TimeWhereSanitizedManageBacLeftNav--

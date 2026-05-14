@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeWhere - MatrixView Import</title>
+    <link rel="stylesheet" href="../../shared/styles/fonts.css">
+    <link rel="stylesheet" href="../../shared/styles/icons.css">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="matrixview.css">
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon"><span class="material-symbols-outlined">change_history</span></div>
+            </div>
+            <nav class="nav-menu">
+                <a href="../focus/focus.html" class="nav-item" title="仪表盘"><span class="material-symbols-outlined">grid_view</span></a>
+                <a href="../tasks/tasks.html" class="nav-item" title="任务"><span class="material-symbols-outlined">task</span></a>
+                <a href="../calendar/calendar.html" class="nav-item" title="日历"><span class="material-symbols-outlined">calendar_today</span></a>
+                <a href="#" class="nav-item" title="更多"><span class="material-symbols-outlined">apps</span></a>
+            </nav>
+            <div class="sidebar-bottom">
+                <a href="settings.html" class="nav-item active" title="设置"><span class="material-symbols-outlined">settings</span></a>
+                <img src="../../shared/images/avatar-default.png" alt="Avatar" class="user-avatar">
+            </div>
+        </aside>
+
+        <main class="main-wrapper">
+            <div class="settings-container matrixview-container">
+                <header class="header">
+                    <div class="header-left">
+                        <button class="back-btn" id="backBtn" title="返回设置">
+                            <span class="material-symbols-outlined">arrow_back</span>
+                        </button>
+                        <h1>MatrixView 导入</h1>
+                    </div>
+                </header>
+
+                <div class="content custom-scrollbar matrixview-content">
+                    <section class="section">
+                        <h2 class="section-title">
+                            <span class="material-symbols-outlined">upload_file</span> 本地文件
+                        </h2>
+                        <div class="matrixview-import-panel">
+                            <input type="file" id="matrixFileInput" accept=".mhtml,.mht,.html,.htm">
+                            <button class="import-btn matrixview-import-btn" id="matrixImportBtn">导入</button>
+                            <span class="matrixview-status" id="matrixStatus">尚未导入 MatrixView 课表</span>
+                        </div>
+                    </section>
+
+                    <section class="section matrixview-preview-section">
+                        <div class="matrixview-tabs" role="tablist">
+                            <button class="matrixview-tab active" id="tabDay" data-tab="day" type="button">View By A-H Day</button>
+                            <button class="matrixview-tab" id="tabSubject" data-tab="subject" type="button">View By Subject</button>
+                        </div>
+
+                        <div class="matrixview-tab-panel active" id="dayPanel" role="tabpanel" aria-labelledby="tabDay">
+                            <div id="dayPreview" class="matrixview-empty">导入后显示 A-H Day 预览</div>
+                        </div>
+
+                        <div class="matrixview-tab-panel" id="subjectPanel" role="tabpanel" aria-labelledby="tabSubject">
+                            <div id="subjectPreview" class="matrixview-empty">导入后显示学科预览</div>
+                            <button class="import-btn matrixview-save-btn" id="savePlansBtn" disabled>保存并初始化学科 Plan 数据</button>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="matrixview-modal-backdrop" id="planConfirmModal" hidden>
+        <div class="matrixview-modal" role="dialog" aria-modal="true" aria-labelledby="planConfirmTitle">
+            <div class="matrixview-modal-header">
+                <div>
+                    <p class="matrixview-modal-kicker">Plan 初始化确认</p>
+                    <h2 id="planConfirmTitle">确认重建学科 Plan</h2>
+                </div>
+                <button class="matrixview-modal-close" id="planConfirmCloseBtn" type="button" title="关闭">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <div class="matrixview-warning-panel">
+                <span class="material-symbols-outlined">warning</span>
+                <p>被删除的旧学科 Plan 下 tasks / buckets / labels 会被删除。取消不会修改数据库。</p>
+            </div>
+
+            <div class="matrixview-confirm-grid">
+                <section class="matrixview-confirm-card danger">
+                    <h3>将删除/重建</h3>
+                    <div id="confirmDeleteList" class="matrixview-pill-list"></div>
+                </section>
+                <section class="matrixview-confirm-card">
+                    <h3>将保留</h3>
+                    <div id="confirmPreserveList" class="matrixview-pill-list"></div>
+                </section>
+                <section class="matrixview-confirm-card">
+                    <h3>保持不动</h3>
+                    <div id="confirmUncertainList" class="matrixview-pill-list"></div>
+                </section>
+            </div>
+
+            <div class="matrixview-modal-actions">
+                <button class="matrixview-secondary-btn" id="planConfirmCancelBtn" type="button">取消</button>
+                <button class="matrixview-danger-btn" id="planConfirmOkBtn" type="button">确认初始化</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../../shared/js/icons.js"></script>
+    <script src="../../shared/js/dexie.js"></script>
+    <script src="../../shared/js/db.js"></script>
+    <script src="../../shared/js/appearance.js"></script>
+    <script src="../../shared/js/matrixview.js"></script>
+    <script src="matrixview.js"></script>
+</body>
+</html>

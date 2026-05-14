@@ -32,6 +32,19 @@ async function initApp() {
         }
     }
     render();
+    runTaskArrangeInBackground();
+}
+
+function runTaskArrangeInBackground() {
+    if (!window.TimeWhereScheduling?.maybeRunTaskArrange || !window.TimeWhereDB) return;
+    window.TimeWhereScheduling.maybeRunTaskArrange(TimeWhereDB)
+        .then(result => {
+            if (result?.ran && result.arranged > 0) {
+                return render();
+            }
+            return null;
+        })
+        .catch(error => console.warn('[Calendar] Task Arrange skipped:', error));
 }
 
 async function render() {
@@ -50,9 +63,9 @@ async function checkCalendarEmptyState() {
     const monthView = document.getElementById('monthView');
     if (!emptyEl) return;
 
-    // CSP-safe click handler (replaces inline onclick)
-    emptyEl.onclick = () => { window.location.href = '../settings/settings.html'; };
-    emptyEl.style.cursor = 'pointer';
+    // Empty guide should not intercept blank-grid creation clicks.
+    emptyEl.onclick = null;
+    emptyEl.style.cursor = 'default';
 
     const containers = await TimeWhereDB.getContainers({ enabled: true });
     const events = await TimeWhereDB.db.events.count();
@@ -102,7 +115,8 @@ async function renderAlldayRow(dates) {
 
     const weekStart = formatDateISO(dates[0]);
     const weekEnd   = formatDateISO(dates[dates.length - 1]);
-    const dbEvents  = (await TimeWhereDB.getEventsByDateRange(weekStart, weekEnd)) || [];
+    const allDbEvents = (await TimeWhereDB.getEvents()) || [];
+    const dbEvents  = expandEventsForDateRange(allDbEvents, weekStart, weekEnd);
 
     dates.forEach(date => {
         const wrapper = document.createElement('div');
@@ -177,10 +191,97 @@ function renderTimeAxis() {
     lines.innerHTML = hours.map(() => `<div class="grid-line" style="height: ${TIME_RANGE.pxPerHour}px;"></div>`).join('');
 }
 
+function getWeekDateFromIndex(index) {
+    const startOfWeek = getStartOfWeek(currentDate);
+    const date = new Date(startOfWeek);
+    date.setDate(date.getDate() + index);
+    return formatDateISO(date);
+}
+
+function getCreateSlotFromPointer(clientY, columnEl) {
+    if (!columnEl) return null;
+    const rect = columnEl.getBoundingClientRect();
+    const body = columnEl.closest('.calendar-body');
+    const clickY = clientY - rect.top + (body?.scrollTop || 0);
+    const hour = TIME_RANGE.startHour + Math.floor(clickY / TIME_RANGE.pxPerHour);
+    const minute = Math.round(((clickY % TIME_RANGE.pxPerHour) / TIME_RANGE.pxPerHour) * 60 / 15) * 15;
+
+    if (hour < TIME_RANGE.startHour || hour > TIME_RANGE.endHour) return null;
+
+    const normalizedMinute = Math.min(Math.max(minute, 0), 45);
+    const timeStart = `${String(Math.min(hour, TIME_RANGE.endHour)).padStart(2, '0')}:${String(normalizedMinute).padStart(2, '0')}`;
+    const endHour = normalizedMinute + 60 >= 60 ? hour + 1 : hour;
+    const endMin  = (normalizedMinute + 60) % 60;
+    const timeEnd = `${String(Math.min(endHour, 23)).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+    return { timeStart, timeEnd };
+}
+
+function getWeekColumnFromPointer(clientX) {
+    const columns = [...document.querySelectorAll('#weekColumns .day-col')];
+    if (!columns.length) return null;
+    const direct = columns.find(col => {
+        const rect = col.getBoundingClientRect();
+        return clientX >= rect.left && clientX <= rect.right;
+    });
+    if (direct) return direct;
+
+    const layer = document.getElementById('weekColumns');
+    const rect = layer?.getBoundingClientRect();
+    if (!rect || clientX < rect.left || clientX > rect.right) return null;
+    const index = Math.min(columns.length - 1, Math.max(0, Math.floor((clientX - rect.left) / (rect.width / columns.length))));
+    return columns[index] || null;
+}
+
+function openCreateModalFromWeekPointer(clientX, clientY, preferredColumn = null) {
+    const col = preferredColumn || getWeekColumnFromPointer(clientX);
+    if (!col?.dataset?.date) return false;
+    const slot = getCreateSlotFromPointer(clientY, col);
+    if (!slot) return false;
+    openCreateModal(col.dataset.date, slot.timeStart, slot.timeEnd);
+    return true;
+}
+
 // 调度相关函数从 shared/js/scheduling.js 导入
 const { containerAppliesToDate, _nthWeekdayOfMonth,
         dailySettle, buildDailyTaskPool, getContainerLayer, priorityLabel, priorityClass,
         escapeHTML, escapeAttribute } = window.TimeWhereScheduling;
+
+function eventAppliesToDate(event, dateObj, dateStr) {
+    if (!event) return false;
+    if (event.source === 'container_override' || event.source === 'container_skip') {
+        return event.date === dateStr;
+    }
+    const repeat = event.repeat || 'none';
+    if (repeat === 'none') return event.date === dateStr;
+    if (repeat === 'once') return (event.once_date || event.date) === dateStr;
+    if (event.date && dateStr < event.date) return false;
+
+    const dayOfWeek = dateObj.getDay();
+    const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    return containerAppliesToDate(event, dateObj, dateStr, dayOfWeek, isWeekday, isWeekend);
+}
+
+function expandEventsForDateRange(events, startDate, endDate) {
+    const expanded = [];
+    const cursor = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T00:00:00');
+    while (cursor <= end) {
+        const dateStr = formatDateISO(cursor);
+        (events || []).forEach(event => {
+            if (eventAppliesToDate(event, cursor, dateStr)) {
+                expanded.push({
+                    ...event,
+                    occurrence_date: dateStr,
+                    original_date: event.date,
+                    date: dateStr
+                });
+            }
+        });
+        cursor.setDate(cursor.getDate() + 1);
+    }
+    return expanded;
+}
 
 async function renderWeekColumns(dates) {
     const container = document.getElementById('weekColumns');
@@ -191,7 +292,8 @@ async function renderWeekColumns(dates) {
     const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
     const weekStart = formatDateISO(dates[0]);
     const weekEnd = formatDateISO(dates[6]);
-    const dbEvents = (await TimeWhereDB.getEventsByDateRange(weekStart, weekEnd)) || [];
+    const allDbEvents = (await TimeWhereDB.getEvents()) || [];
+    const dbEvents = expandEventsForDateRange(allDbEvents, weekStart, weekEnd);
 
     // 加载任务，用于 Daily Settle
     const allTasks = (await TimeWhereDB.getAllTasks()) || [];
@@ -243,7 +345,7 @@ async function renderWeekColumns(dates) {
             type: 'event',
             id: e.id,
             source: e.source || 'manual'
-        }));
+        })).filter(e => e.time_start && e.time_end);
 
         const allItems = [...containerEvents, ...dateEvents].sort((a, b) =>
             a.time_start.localeCompare(b.time_start)
@@ -309,11 +411,13 @@ function createEventCard(item) {
     event.style.height = `${Math.max(Math.min(height, maxTop - top), 20)}px`;
 
     if (source === 'container') {
+        event.dataset.layer = String(layer);
         if (layer === 1) {
-            // 学习时间 — 实色背景 + 深色左边框
+            // 学习时间 — 中等蓝色底 + 虚线边框，区别于普通日程事件的实色卡片
             event.className = 'gcal-event layer-1';
-            event.style.backgroundColor = color;
-            event.style.borderLeft = `3px solid ${darkenColor(color, 0.3)}`;
+            event.style.backgroundColor = color + '40'; // ~25% 透明
+            event.style.border = `2px dashed ${darkenColor(color, 0.15)}`;
+            event.style.color = darkenColor(color, 0.35);
         } else {
             // 自由时间 — 浅色背景 + 虚线边框
             event.className = 'gcal-event layer-2';
@@ -546,7 +650,8 @@ async function renderMonthEvents() {
     const visEnd = formatDateISO(new Date(startDate.getTime() + (totalDays - 1) * 86400000));
 
     const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
-    const dbEvents = (await TimeWhereDB.getEventsByDateRange(visStart, visEnd)) || [];
+    const allDbEvents = (await TimeWhereDB.getEvents()) || [];
+    const dbEvents = expandEventsForDateRange(allDbEvents, visStart, visEnd);
     const cells = document.querySelectorAll('.month-cell');
 
     for (let i = 0; i < totalDays && i < cells.length; i++) {
@@ -568,17 +673,26 @@ async function renderMonthEvents() {
         const containerItems = allContainers
             .filter(c => !skippedIds.has(c.id) && !overriddenIds.has(c.id))
             .filter(c => containerAppliesToDate(c, date, dateStr, dayOfWeek, isWeekday, isWeekend))
-            .map(c => ({ type: 'container', id: c.id, title: c.name, color: c.color, time_start: c.time_start, time_end: c.time_end }));
+            .map(c => ({
+                type: 'container',
+                source: 'container',
+                id: c.id,
+                title: c.name,
+                color: c.color,
+                time_start: c.time_start,
+                time_end: c.time_end,
+                layer: getContainerLayer(c)
+            }));
 
         // Override events replace their container on this date
         const overrideItems = dayOverrides
             .filter(e => e.source === 'container_override')
-            .map(e => ({ type: 'event', id: e.id, title: e.title, color: e.color, time_start: e.time_start, time_end: e.time_end }));
+            .map(e => ({ type: 'event', source: 'container_override', id: e.id, title: e.title, color: e.color, time_start: e.time_start, time_end: e.time_end }));
 
         // Regular manual/timetable events (skip skip/override source events from display)
         const eventItems = dbEvents
             .filter(e => e.date === dateStr && e.source !== 'container_override' && e.source !== 'container_skip')
-            .map(e => ({ type: 'event', id: e.id, title: e.title, color: e.color, time_start: e.time_start, time_end: e.time_end }));
+            .map(e => ({ type: 'event', source: e.source || 'manual', id: e.id, title: e.title, color: e.color, time_start: e.time_start, time_end: e.time_end }));
 
         const allItems = [...containerItems, ...overrideItems, ...eventItems]
             .sort((a, b) => (a.time_start || '').localeCompare(b.time_start || ''));
@@ -589,7 +703,7 @@ async function renderMonthEvents() {
 
         displayItems.forEach(ev => {
             const eventEl = document.createElement('div');
-            eventEl.className = 'month-event';
+            eventEl.className = getMonthItemClass(ev);
             eventEl.style.backgroundColor = ev.color || '#4A90D9';
             eventEl.textContent = ev.title;
             eventEl.title = ev.time_start && ev.time_end
@@ -597,6 +711,8 @@ async function renderMonthEvents() {
                 : ev.title;
             eventEl.dataset.type = ev.type;
             eventEl.dataset.id = String(ev.id);
+            if (ev.source) eventEl.dataset.source = ev.source;
+            if (ev.type === 'container') eventEl.dataset.layer = String(ev.layer ?? 2);
             cells[i].appendChild(eventEl);
         });
 
@@ -607,6 +723,14 @@ async function renderMonthEvents() {
             cells[i].appendChild(more);
         }
     }
+}
+
+function getMonthItemClass(item) {
+    if (item?.type === 'container' && item?.source === 'container') {
+        const layer = item.layer ?? 2;
+        return `month-event month-container layer-${layer}`;
+    }
+    return 'month-event';
 }
 
 function navigate(direction) {
@@ -641,7 +765,8 @@ async function _checkOverlap(date, timeStart, timeEnd, excludeId) {
     const conflicts = [];
 
     // Check DB events
-    const dayEvents = (await TimeWhereDB.getEvents({ date })) || [];
+    const allEvents = (await TimeWhereDB.getEvents()) || [];
+    const dayEvents = expandEventsForDateRange(allEvents, date, date);
     for (const e of dayEvents) {
         if (String(e.id) === String(excludeId)) continue;
         if (!e.time_start || !e.time_end) continue;
@@ -745,22 +870,16 @@ function setupCalendar() {
         }
 
         const col = e.target.closest('.day-col');
-        if (!col) return;
+        if (openCreateModalFromWeekPointer(e.clientX, e.clientY, col)) {
+            e.stopPropagation();
+        }
+    });
 
-        const rect = col.getBoundingClientRect();
-        const clickY = e.clientY - rect.top + col.closest('.calendar-body').scrollTop;
-        const hour = TIME_RANGE.startHour + Math.floor(clickY / TIME_RANGE.pxPerHour);
-        const minute = Math.round(((clickY % TIME_RANGE.pxPerHour) / TIME_RANGE.pxPerHour) * 60 / 15) * 15;
-
-        if (hour < TIME_RANGE.startHour || hour > TIME_RANGE.endHour) return;
-
-        const date = col.dataset.date;
-        const timeStart = `${String(Math.min(hour, TIME_RANGE.endHour)).padStart(2, '0')}:${String(Math.min(minute, 45)).padStart(2, '0')}`;
-        const endHour = minute + 60 >= 60 ? hour + 1 : hour;
-        const endMin  = (minute + 60) % 60;
-        const timeEnd = `${String(Math.min(endHour, 23)).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
-
-        openCreateModal(date, timeStart, timeEnd);
+    document.querySelector('#weekView .calendar-body')?.addEventListener('click', (e) => {
+        if (e.target.closest('.gcal-event') || e.target.closest('#weekColumns')) return;
+        if (openCreateModalFromWeekPointer(e.clientX, e.clientY)) {
+            e.stopPropagation();
+        }
     });
 
     // Hover tooltip
@@ -852,10 +971,7 @@ function setupCalendar() {
         const grid = wrapper?.parentElement;
         if (!grid) return;
         const idx = [...grid.children].indexOf(wrapper);
-        const startOfWeek = getStartOfWeek(currentDate);
-        const date = new Date(startOfWeek);
-        date.setDate(date.getDate() + idx);
-        openEditModal(type, id, formatDateISO(date));
+        openEditModal(type, id, getWeekDateFromIndex(idx));
     });
 
     document.getElementById('monthGrid')?.addEventListener('click', (e) => {
@@ -945,7 +1061,7 @@ function handleICSUpload(event) {
 
 async function importICS(content) {
     const events = TimeWhereICS.parseICSToEvents(content);
-    showToast(`解析到 ${events.length} 个事件`, 'info');
+    showToast(`解析到 ${events.length} 个日程事件`, 'info');
 
     let imported = 0;
     for (const ev of events) {
@@ -1049,6 +1165,23 @@ function _repeatLabel(c) {
     return map[c.repeat] || c.repeat;
 }
 
+function buildRepeatControlHTML(refDate, current = {}, fallbackRepeat = 'none') {
+    const repeat = current?.repeat || fallbackRepeat;
+    const repeatDays = current?.repeat_days || [];
+    const customDisplay = repeat === 'custom' ? '' : 'display:none';
+    const dayLabels = ['日','一','二','三','四','五','六'];
+    const dayBtns = [0,1,2,3,4,5,6].map(d =>
+        `<button class="day-btn${repeatDays.includes(d) ? ' active' : ''}" data-day="${d}">${dayLabels[d]}</button>`
+    ).join('');
+    const repeatOpts = buildRepeatOptions(refDate, { ...current, repeat });
+    return `
+        <div class="form-group">
+            <label>重复</label>
+            <select id="modalRepeat">${repeatOpts}</select>
+            <div class="custom-days" id="customDays" style="${customDisplay}">${dayBtns}</div>
+        </div>`;
+}
+
 let _modal = { mode: null, type: 'container', id: null, date: null };
 
 function openCreateModal(date, timeStart, timeEnd) {
@@ -1079,8 +1212,11 @@ async function _renderModal({ date, timeStart, timeEnd }) {
     const typeToggle = isCreate ? `
         <div class="type-toggle" id="modalTypeToggle">
             <button class="type-btn ${isContainer ? 'active' : ''}" data-type="container">时间容器</button>
-            <button class="type-btn ${!isContainer ? 'active' : ''}" data-type="event">单次事件</button>
-        </div>` : '';
+            <button class="type-btn ${!isContainer ? 'active' : ''}" data-type="event">日程事件</button>
+        </div>` : `
+        <div class="type-readonly" id="modalTypeReadonly">
+            类型：${isContainer ? '时间容器' : '日程事件'}
+        </div>`;
 
     const colorSwatches = MODAL_COLORS.map(c => {
         const cur = data?.color || '#4A90D9';
@@ -1091,14 +1227,8 @@ async function _renderModal({ date, timeStart, timeEnd }) {
 
     if (isContainer) {
         const refDate = _modal.date || date || formatDateISO(new Date());
-        const repeat = data?.repeat || 'weekday';
-        const repeatDays = data?.repeat_days || [];
-        const customDisplay = repeat === 'custom' ? '' : 'display:none';
-        const dayLabels = ['日','一','二','三','四','五','六'];
-        const dayBtns = [0,1,2,3,4,5,6].map(d =>
-            `<button class="day-btn${repeatDays.includes(d) ? ' active' : ''}" data-day="${d}">${dayLabels[d]}</button>`
-        ).join('');
-        const repeatOpts = buildRepeatOptions(refDate, data || { repeat: 'weekday' });
+        const repeatControls = buildRepeatControlHTML(refDate, data || {}, 'weekday');
+        const selectedLayer = data ? getContainerLayer(data) : 1;
 
         bodyHTML += `
             <div class="form-group">
@@ -1115,11 +1245,7 @@ async function _renderModal({ date, timeStart, timeEnd }) {
                     <input type="time" id="modalEnd" value="${escapeAttribute(data?.time_end || timeEnd || '10:00')}">
                 </div>
             </div>
-            <div class="form-group">
-                <label>重复</label>
-                <select id="modalRepeat">${repeatOpts}</select>
-                <div class="custom-days" id="customDays" style="${customDisplay}">${dayBtns}</div>
-            </div>
+            ${repeatControls}
             <div class="form-group">
                 <label>颜色</label>
                 <div class="color-picker" id="modalColorPicker">${colorSwatches}</div>
@@ -1127,8 +1253,8 @@ async function _renderModal({ date, timeStart, timeEnd }) {
             <div class="form-group">
                 <label>类型</label>
                 <div class="layer-toggle" id="layerToggle">
-                    <button class="layer-btn${(data?.layer ?? 1) === 1 ? ' active' : ''}" data-layer="1">学习时间</button>
-                    <button class="layer-btn${(data?.layer ?? 1) === 2 ? ' active' : ''}" data-layer="2">自由时间</button>
+                    <button class="layer-btn${selectedLayer === 1 ? ' active' : ''}" data-layer="1">学习时间</button>
+                    <button class="layer-btn${selectedLayer === 2 ? ' active' : ''}" data-layer="2">自由时间</button>
                 </div>
             </div>
             ${!isCreate ? `
@@ -1142,10 +1268,12 @@ async function _renderModal({ date, timeStart, timeEnd }) {
     } else {
         const isAllDay = data ? (!data.time_start && !data.time_end) : false;
         const timeRowDisplay = isAllDay ? 'display:none' : '';
+        const refDate = data?.date || date || _modal.date || formatDateISO(new Date());
+        const repeatControls = buildRepeatControlHTML(refDate, data || {}, 'none');
         bodyHTML += `
             <div class="form-group">
                 <label>标题</label>
-                <input type="text" id="modalName" value="${escapeAttribute(data?.title || '')}" placeholder="输入事件标题">
+                <input type="text" id="modalName" value="${escapeAttribute(data?.title || '')}" placeholder="输入日程事件标题">
             </div>
             <div class="form-group">
                 <label>日期</label>
@@ -1167,10 +1295,20 @@ async function _renderModal({ date, timeStart, timeEnd }) {
                     <input type="time" id="modalEnd" value="${escapeAttribute(data?.time_end || timeEnd || '10:00')}">
                 </div>
             </div>
+            ${repeatControls}
             <div class="form-group">
                 <label>颜色</label>
                 <div class="color-picker" id="modalColorPicker">${colorSwatches}</div>
-            </div>`;
+            </div>
+            ${!isCreate ? `
+            <div class="scope-row" id="scopeRow">
+                <label>修改范围</label>
+                <div class="scope-toggle">
+                    <button class="scope-btn active" data-scope="all">修改全部</button>
+                    <button class="scope-btn" data-scope="once" disabled title="日程事件暂不支持仅修改此次">仅修改此次</button>
+                </div>
+                <p class="scope-hint">日程事件当前仅支持修改全部。</p>
+            </div>` : ''}`;
     }
 
     document.getElementById('calModalBody').innerHTML = bodyHTML;
@@ -1214,6 +1352,7 @@ function _bindModalEvents() {
     document.getElementById('modalTypeToggle')?.addEventListener('click', e => {
         const btn = e.target.closest('.type-btn');
         if (!btn) return;
+        if (_modal.mode === 'edit' || btn.disabled) return;
         _modal.type = btn.dataset.type;
         _renderModal({
             date: _modal.date,
@@ -1312,26 +1451,30 @@ function _getModalValues() {
 }
 
 function _repeatPayload(v) {
-    // Returns the repeat-related fields to persist in the container
+    // Returns the repeat-related fields to persist in containers and schedule events.
     switch (v.repeat) {
         case 'weekly':
             return { repeat: 'weekly', repeat_days: [isNaN(v.weeklyDay) ? 1 : v.weeklyDay],
-                     monthly_week: null, monthly_dow: null, yearly_month: null, yearly_dom: null };
+                     monthly_week: null, monthly_dow: null, yearly_month: null, yearly_dom: null, once_date: null };
         case 'monthly_nth':
             return { repeat: 'monthly_nth', repeat_days: null,
                      monthly_week: isNaN(v.monthlyNth) ? 1 : v.monthlyNth,
                      monthly_dow: isNaN(v.monthlyDow) ? 0 : v.monthlyDow,
-                     yearly_month: null, yearly_dom: null };
+                     yearly_month: null, yearly_dom: null, once_date: null };
         case 'yearly':
             return { repeat: 'yearly', repeat_days: null, monthly_week: null, monthly_dow: null,
                      yearly_month: isNaN(v.yearlyMonth) ? 1 : v.yearlyMonth,
-                     yearly_dom: isNaN(v.yearlyDom) ? 1 : v.yearlyDom };
+                     yearly_dom: isNaN(v.yearlyDom) ? 1 : v.yearlyDom, once_date: null };
         case 'custom':
             return { repeat: 'custom', repeat_days: v.repeatDays,
-                     monthly_week: null, monthly_dow: null, yearly_month: null, yearly_dom: null };
+                     monthly_week: null, monthly_dow: null, yearly_month: null, yearly_dom: null, once_date: null };
+        case 'once':
+            return { repeat: 'once', repeat_days: null,
+                     monthly_week: null, monthly_dow: null, yearly_month: null, yearly_dom: null,
+                     once_date: v.date || _modal.date || null };
         default:
             return { repeat: v.repeat, repeat_days: null,
-                     monthly_week: null, monthly_dow: null, yearly_month: null, yearly_dom: null };
+                     monthly_week: null, monthly_dow: null, yearly_month: null, yearly_dom: null, once_date: null };
     }
 }
 
@@ -1369,9 +1512,10 @@ async function _saveModal() {
                 title: v.name, date: v.date,
                 time_start: v.allDay ? null : v.start,
                 time_end:   v.allDay ? null : v.end,
-                color: v.color, source: 'manual'
+                color: v.color, source: 'manual',
+                ..._repeatPayload(v)
             });
-            showToast('事件已创建', 'success');
+            showToast('日程事件已创建', 'success');
         }
     } else {
         if (_modal.type === 'container') {
@@ -1397,9 +1541,10 @@ async function _saveModal() {
                 title: v.name, date: v.date || _modal.date,
                 time_start: v.allDay ? null : v.start,
                 time_end:   v.allDay ? null : v.end,
-                color: v.color
+                color: v.color,
+                ..._repeatPayload(v)
             });
-            showToast('事件已更新', 'success');
+            showToast('日程事件已更新', 'success');
         }
     }
     closeCalModal();
@@ -1429,11 +1574,11 @@ async function _deleteContainerAll() {
 }
 
 async function _deleteEvent() {
-    if (!confirm('确定要删除这个事件吗？')) return;
+    if (!confirm('确定要删除这个日程事件吗？')) return;
     await TimeWhereDB.deleteEvent(_modal.id);
     closeCalModal();
     render();
-    showToast('事件已删除', 'success');
+    showToast('日程事件已删除', 'success');
 }
 
 function closeCalModal() {
@@ -1443,4 +1588,16 @@ function closeCalModal() {
 function getRepeatLabel(repeat) {
     const map = { daily: '每天', weekday: '工作日', weekend: '周末', custom: '指定星期', once: '仅一次' };
     return map[repeat] || repeat;
+}
+
+if (typeof window !== 'undefined') {
+    window.TimeWhereCalendarTest = {
+        eventAppliesToDate,
+        expandEventsForDateRange,
+        buildRepeatOptions,
+        buildRepeatControlHTML,
+        getMonthItemClass,
+        _repeatPayload,
+        _repeatLabel
+    };
 }

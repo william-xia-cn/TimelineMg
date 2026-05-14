@@ -33,23 +33,12 @@
         <!-- 主体看板布局 -->
         <main class="board-layout">
             
-            <!-- 第1列：当下任务 -->
+            <!-- 第1列：当前任务 -->
             <section class="board-column column-now">
                 <div class="column-header">
-                    <h2>当下任务</h2>
+                    <h2>当前任务</h2>
                     <div style="display:flex;align-items:center;gap:6px;">
                         <span class="badge red">进行中</span>
-                    </div>
-                </div>
-                <div id="pomodoroWidget" class="pomodoro-widget" style="display:none;">
-                    <div class="pomo-info">
-                        <span class="material-symbols-outlined">timer</span>
-                        <span class="pomo-time" id="pomoTime">25:00</span>
-                        <span class="pomo-mode" id="pomoMode">准备开始</span>
-                    </div>
-                    <div class="pomo-controls">
-                        <button class="pomo-btn" id="pomoToggle">开始</button>
-                        <button class="pomo-btn secondary" id="pomoReset">重置</button>
                     </div>
                 </div>
                 <div class="column-content custom-scrollbar">
@@ -125,7 +114,7 @@
                 </div>
             </section>
 
-            <!-- 第4列：本周 -->
+            <!-- 第4列：本周进度 -->
             <section class="board-column column-week">
                 <div class="column-header">
                     <h2>本周进度</h2>
@@ -158,12 +147,12 @@
                         <div class="simple-task-list">
                             <!-- JS 动态填充 -->
                         </div>
-                        <button class="add-task-btn"><span class="material-symbols-outlined">add</span> 添加周任务</button>
+                        <button class="add-task-btn" data-action="add-task"><span class="material-symbols-outlined">add</span> 添加周任务</button>
                     </div>
                 </div>
             </section>
 
-            <!-- 第5列：当下消息流 / 提醒事项 -->
+            <!-- 第5列：消息流 -->
             <section class="board-column column-feed">
                 <div class="column-header">
                     <h2>消息流 & 提醒</h2>
@@ -182,6 +171,7 @@
     <script src="../../shared/js/dexie.js"></script>
     <!-- Database -->
     <script src="../../shared/js/db.js"></script>
+    <script src="../../shared/js/appearance.js"></script>
     <!-- Scheduling -->
     <script src="../../shared/js/scheduling.js"></script>
     <!-- Page Script -->
