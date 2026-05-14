@@ -4,7 +4,7 @@
 **日期**: 2026-04-14  
 **状态**: Internal MVP accepted; baseline stabilized for local-first MVP. Not public release ready.
 
-> Current baseline note (2026-05-12): TimeWhere is a local-first Chrome extension MVP. Google Sync/OAuth, Arrange advancement, reminder notifications, ManageBac subscription, Chrome Web Store submission, and public release are out of current scope unless Product Owner explicitly approves them.
+> Current baseline note (2026-05-15): TimeWhere is a local-first Chrome extension MVP. Task Date Arrange is approved for current baseline stabilization with preview / user-confirmed writes only. ManageBac ICS import is an extension-side source import using a saved link plus manual/user-confirmed sync; it is not a cloud sync backend. Google Sync/OAuth, background alarm automation, reminder notifications, Chrome Web Store submission, and public release are out of current scope unless Product Owner explicitly approves them.
 
 ---
 
@@ -14,7 +14,7 @@
 |------|------|------|
 | 客户端 | Chrome Extension (Manifest V3) | 主要运行环境 |
 | 存储 | **IndexedDB + Dexie.js** | 本地数据存储（统一存储） |
-| 后端同步 | None in current MVP | `sync.js` remains a local-first stub |
+| 后端同步 | None in current MVP | `sync.js` remains a local-first stub; ManageBac ICS uses an extension-side fetch/import relay, not a cloud backend |
 | 通知 | UI/icon only in current MVP | System reminder notifications are future scope |
 | 图标 | SVG 内联 | 完全离线支持 |
 | 字体/图标 | Local CSS/assets only | Extension pages do not load Google Fonts remotely |
@@ -355,4 +355,4 @@ Future sync work, if approved, must be re-specified before implementation.
 
 ---
 
-**最后更新**: 2026-05-12 (v2.3 baseline cleanup)
+**最后更新**: 2026-05-15 (baseline stabilization docs sync)

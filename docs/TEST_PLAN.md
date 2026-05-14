@@ -2,7 +2,7 @@
 
 > 版本：v1.0  
 > 覆盖范围：scheduling.js 单元测试、baseline-safety 静态检查、所有模块静态分析、手动验证检查表。
-> 当前基线：Internal MVP accepted / local-first MVP。Google Sync、Arrange、系统通知、ManageBac 订阅、Chrome Web Store/public release 不属于当前测试目标。
+> 当前基线：Internal MVP accepted / local-first MVP。Task Date Arrange 已进入 baseline stabilization 测试目标，要求 preview / 用户确认后才写入。Google Sync、background alarm、系统通知、Chrome Web Store/public release 不属于当前测试目标。
 
 ---
 
@@ -255,23 +255,23 @@
 6. 设置 schedule_time = 20:00
 7. ✅ 卡片显示 "⏰ 20:00" 标签
 
-### MV-03 Focus Dashboard 当下任务
+### MV-03 Focus Dashboard 当前任务
 1. 确保 19:00 有容器（学习时间 18:30-21:30）
 2. 系统时间在容器内
-3. ✅ 当下任务列显示容器名
+3. ✅ 当前任务列显示容器名
 4. ✅ 任务按优先级排序
 
 ### MV-04 Calendar 容器渲染
 1. 打开 Calendar 周视图
-2. ✅ 学习时间容器：实色背景
-3. ✅ 自由时间容器：浅色+虚线边框
+2. ✅ 学习时间容器：沿用旧时间容器实色显示样式
+3. ✅ 自由时间容器：浅色 + 虚线边框显示样式
 4. ✅ 容器内显示分配的任务列表
 5. 点击容器 → 编辑 dialog
 6. ✅ layer 选择字段存在，显示正确值
 
 ### MV-05 Popup 当前任务
 1. 打开 Popup
-2. ✅ 显示 Daily Settle 的当下任务（而非 in_progress）
+2. ✅ 显示 Daily Settle 的当前任务列表（而非 in_progress）
 3. ✅ 显示容器名（如"学习时间"）
 4. 点击"完成" → ✅ 任务标记完成，显示更新
 
@@ -285,8 +285,8 @@
 7. 点"删除"
 8. ✅ 容器从列表移除
 
-### MV-07 Settings 调度参数
-1. 调度区块 → 修改默认时长为 30
+### MV-07 Settings 任务默认值
+1. Settings → 任务默认值 → 修改默认任务时长为 30
 2. 保存设置
 3. Task Board 快速创建新任务
 4. ✅ duration = 30
@@ -304,4 +304,4 @@
 - `node tests/scheduling.test.js`
 - `node tests/baseline-safety.test.js`
 
-**最后更新**: 2026-05-12 (v1.0 baseline cleanup)
+**最后更新**: 2026-05-15 (baseline stabilization test sync)

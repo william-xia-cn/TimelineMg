@@ -122,8 +122,10 @@
 | Calendar 页面 | 周视图显示 | ☐ |
 | Settings 页面 | 初始化向导 | ☐ |
 | Settings 页面 | 保存设置 | ☐ |
-| Google 授权 | OAuth 登录流程（future only; not current MVP） | ☐ |
-| 同步功能 | 数据同步（如果已实现） | ☐ |
+| Settings 页面 | 本地 JSON 导入/导出 | ☐ |
+| Settings 页面 | 本地 `.ics` 文件导入 | ☐ |
+| Google 授权 | OAuth 登录流程（future only; not current MVP; do not execute for current stage） | N/A |
+| 同步功能 | 数据同步（future only; current `sync.js` is a local-first stub） | N/A |
 
 ### 5.2 兼容性测试
 

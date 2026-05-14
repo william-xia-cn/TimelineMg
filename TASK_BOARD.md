@@ -31,6 +31,15 @@
 
 ## NEXT
 
+- [ ] Build&Test takes ownership of Product&Project Mg's accidental `extension/shared/js/icons.js` hotfix diff using `docs/handoffs/outbox/HANDOFF-ICON-HOTFIX-001.md`.
+- [x] Build&Test completed MatrixView correction pass; Product&Project Mg accepted implementation with private sample hygiene required before commit: `docs/handoffs/outbox/REVIEW-MATRIXVIEW-IMPORT-PLAN-001.md`.
+- [x] Build&Test completed MatrixView PDF input correction; Product&Project Mg accepted day reconstruction with private sample hygiene required before commit.
+- [x] Build&Test completed MatrixView MHTML visible input cleanup; Product&Project Mg accepted implementation with private sample hygiene required before commit: `docs/handoffs/outbox/REVIEW-MATRIXVIEW-IMPORT-PLAN-001.md`.
+- [x] ManageBac Phase 1 subject mapping configuration completed and accepted by Product&Project Mg; no ICS/task sync/MyManageBac/release work performed.
+- [x] ManageBac Phase 2 task sync and `MyManageBac` source view completed and accepted by Product&Project Mg; real remote webcal/https link still needs manual validation because extension permissions/CORS may constrain direct fetch.
+- [x] ManageBac real My Classes MHTML left-navigation parser compatibility pass completed and accepted; real sample now parses to 13 subject records without committing private sample content.
+- [x] Build&Test updated ManageBac task sync to use one saved remote subscription link only: local `.ics` file choice removed, extension-context remote fetch fixed through background relay, and host permission narrowed to Keystone ManageBac events path.
+- [x] Build&Test changed ManageBac ICS sync so new events are not auto-created; sync now surfaces pending event mappings for user confirmation, and existing ManageBac source tasks continue to update by UID. Product&Project Mg accepted tests; real UI confirmation pass remains user-side validation.
 - [x] Build&Test completed local-first MVP implementation readiness pass using `docs/handoffs/outbox/HANDOFF-BUILDMVP-001.md`.
 - [x] Product&Project Mg reviewed Build&Test conformance in `docs/handoffs/outbox/REVIEW-BUILDMVP-001.md`.
 - [x] releaseMg completed Internal MVP acceptance and recorded NOT READY result in `docs/release/RELEASE_GATE_REPORT_INTERNAL_MVP_2026-05-11.md`.
@@ -60,7 +69,7 @@
 - [x] Product&Project Mg records Phase 2A recheck receipt in `docs/handoffs/outbox/REVIEW-RELEASE-BASELINE-P2A-RECHECK-001.md`.
 - [x] Product&Project Mg creates docs cleanup handoff: `docs/handoffs/outbox/HANDOFF-DOCS-BASELINE-CLEANUP-001.md`.
 - [x] Product&Project Mg performs documentation baseline cleanup in `docs/handoffs/outbox/REVIEW-DOCS-BASELINE-CLEANUP-001.md`.
-- [ ] Product Owner selects next work package.
+- [ ] Build&Test implements Task Board manual task creation and quick-add due-date rules from D-016.
 
 ## LATER
 
@@ -80,6 +89,7 @@
 | Documentation baseline drift | CLOSED | Product docs now align to current local-first MVP baseline and mark future/out-of-scope features clearly. |
 | REL-MVP-BLOCKER-001: Focus Dashboard Dexie SchemaError | CLOSED | releaseMg MV-01 recheck passed; Focus Dashboard first-load console smoke captured no errors after Build&Test fix. |
 | Audit no-edit boundary | Product&Project Mg / Build&Test | During Project Baseline Audit, do not modify code or tests without explicit Product Owner approval. |
+| Product&Project Mg product-code boundary deviation | Build&Test / Product&Project Mg | Build&Test must review and take ownership of the current `extension/shared/js/icons.js` hotfix diff before it is treated as accepted implementation work. |
 
 ## Completed
 
