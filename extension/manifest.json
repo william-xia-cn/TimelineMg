@@ -36,8 +36,16 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["shared/**/*", "popup/**/*", "pages/**/*", "fonts/**/*"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "shared/**/*",
+        "popup/**/*",
+        "pages/**/*",
+        "fonts/**/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
-  ]
+  ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAz1ngukDhzj7f95Yce3/CoXHATpjaqVZ1Tj+MutcHTDCHFWQ4iTE2PBOfH673FhO7Lo1pnJ3oIFIlHP20QwWuVpn3HvOiP1SlOqP3nchQo7AlAT0kByaqmYWO0SERRK0Hb3VC4rxTQY+wHSUqrRwAUDl8T+gJqjz2Duh2RGAs0+vGU1B4FASjbTqSI3JizlzVuXNqH+XPlxErt0S5PVDCSANt6vU6x4H/yqiOH1aHC24ZhpKSfT9oNWGDOpLgj9VCAtHNaPzktD8BkdC8P/9un09zPUmeXO+gRbQuQ8JIJMJ1sRaSZfw4v1NTmWjUHkaZHvcqyCi7udlOc+Z760IX5QIDAQAB"
 }

@@ -719,6 +719,8 @@ Google 数据同步是可选的数据持久化与跨终端能力，不是 TimeWh
 产品边界：
 
 - UI 名称使用 `Google 数据同步`，不使用“登录后使用”语义。
+- OAuth client ID 只用于识别 TimeWhere 扩展应用；每个用户授权自己的 Google 账号。
+- 同步数据写入当前用户自己的 Google Drive `appDataFolder`，开发者不托管用户数据。
 - IndexedDB 是运行时主库；同步层只复制数据。
 - 未连接 / 离线 / 授权失败 / token 过期时，本地功能继续工作。
 - 第一版云端存储使用 Google Drive `appDataFolder`。

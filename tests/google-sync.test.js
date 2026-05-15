@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const GoogleSync = require('../extension/shared/js/google-sync.js');
 
 let passed = 0;
@@ -22,6 +23,15 @@ function assert(desc, condition) {
 
 function assertEqual(desc, got, expected) {
     assert(`${desc} (expected ${JSON.stringify(expected)}, got ${JSON.stringify(got)})`, JSON.stringify(got) === JSON.stringify(expected));
+}
+
+function extensionIdFromManifestKey(manifestKey) {
+    const der = Buffer.from(manifestKey, 'base64');
+    const hash = crypto.createHash('sha256').update(der).digest();
+    return Array.from(hash.subarray(0, 16)).map(byte => {
+        const hex = byte.toString(16).padStart(2, '0');
+        return [...hex].map(ch => String.fromCharCode('a'.charCodeAt(0) + parseInt(ch, 16))).join('');
+    }).join('');
 }
 
 class FakeTable {
@@ -198,6 +208,8 @@ async function run() {
     assert('manifest includes Chrome identity permission', manifestJson.permissions.includes('identity'));
     assert('manifest includes OAuth2 placeholder client id', /YOUR_GOOGLE_OAUTH_CLIENT_ID/.test(manifestJson.oauth2?.client_id || ''));
     assert('manifest only requests Drive appDataFolder scope', manifestJson.oauth2?.scopes?.length === 1 && manifestJson.oauth2.scopes[0] === 'https://www.googleapis.com/auth/drive.appdata');
+    assert('manifest includes fixed development public key', typeof manifestJson.key === 'string' && manifestJson.key.length > 300);
+    assertEqual('manifest key derives expected development extension ID', extensionIdFromManifestKey(manifestJson.key), 'ogdjmelmfkfahppahhkkggdejjainbnd');
     assert('manifest includes narrow Drive API host permission', manifestJson.host_permissions.includes('https://www.googleapis.com/drive/v3/*'));
     assert('manifest includes narrow Drive upload host permission', manifestJson.host_permissions.includes('https://www.googleapis.com/upload/drive/v3/*'));
 

@@ -17,11 +17,14 @@
 
 ### 1.2 创建 OAuth 2.0 客户端（Google 数据同步）
 
+Google OAuth client 是 TimeWhere 这个扩展应用的身份标识，不是开发者账号的数据存储位置。用户授权后，TimeWhere 读写的是该用户自己的 Google Drive `appDataFolder`；开发者不拥有、不托管、不读取用户同步数据。
+
 1. 进入 **APIs & Services** → **Credentials**
 2. 点击 **Create Credentials** → **OAuth client ID**
 3. 选择 **Chrome Extension** 类型
 4. 填写信息：
    - Name: `TimeWhere OAuth`
+   - Application ID / Extension ID: 使用当前固定开发 ID `ogdjmelmfkfahppahhkkggdejjainbnd`
    - **不要填写重定向 URI**（Chrome 扩展类型自动识别）
 5. 保存生成的 `CLIENT_ID`（格式：`[xxx].apps.googleusercontent.com`）
 
@@ -48,19 +51,25 @@
 
 真实授权 smoke 前，需要在 Google Cloud Console 创建 Chrome Extension OAuth client，并把 `client_id` 替换为真实值。没有真实 client ID 时，TimeWhere 应显示 `未配置`，本地功能不受影响。
 
-### 2.2 添加 key 字段
+### 2.2 固定开发扩展 ID
 
-为确保扩展 ID 固定，需要添加 `key` 字段：
+为确保开发期 OAuth client 稳定，需要在 `manifest.json` 中保留 `key` 字段。`key` 是公钥，可提交；对应私钥必须保存在 repo 外，不能提交。
 
-1. 打包扩展（见下文）
-2. 在开发者后台获取 public key
-3. 添加到 manifest.json：
+当前固定开发扩展 ID：
+
+```text
+ogdjmelmfkfahppahhkkggdejjainbnd
+```
+
+`manifest.json` 已包含：
 
 ```json
 {
-  "key": "YOUR_PUBLIC_KEY_HERE"
+  "key": "<public key>"
 }
 ```
+
+如果未来重新生成 key，扩展 ID 会改变，必须同步重建 Google Cloud Chrome Extension OAuth client。
 
 ---
 

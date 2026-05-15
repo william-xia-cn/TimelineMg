@@ -19,6 +19,10 @@ build/
 # Logs
 *.log
 
+# Local private keys
+*.pem
+*.key
+
 # Local/private calendar imports
 *.ics
 !tests/fixtures/*.ics

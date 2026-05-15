@@ -623,7 +623,7 @@ Current Settings page implementation:
 
 ## 7. Sync State 同步状态（D-019 planned）
 
-当前 Internal MVP 不执行远程同步。D-019 已批准下一阶段 Google 数据同步方向：TimeWhere 仍然 local-first，Google 账号是可选同步配置，只用于云端持久化和跨终端双向同步。本地 IndexedDB 仍是运行时主数据库；Google Drive `appDataFolder` 保存同步副本。
+当前 Internal MVP 不执行远程同步。D-019 已批准下一阶段 Google 数据同步方向：TimeWhere 仍然 local-first，Google 账号是可选同步配置，只用于云端持久化和跨终端双向同步。本地 IndexedDB 仍是运行时主数据库；Google Drive `appDataFolder` 保存同步副本。OAuth client ID 只标识 TimeWhere 扩展应用；同步副本属于当前授权用户自己的 Google Drive，不属于开发者账号。
 
 第一阶段同步不使用 Google Tasks / Google Calendar API，不引入服务器端账号系统，不把 Google 账号作为使用 TimeWhere 的前置条件。
 

@@ -43,6 +43,7 @@
 - [x] Unified six-hour management review flow implemented and committed: Dashboard entry previews Task Date Arrange + ManageBac new events, opens a full confirmation page, and writes only selected user-confirmed items. Popup / Calendar / Planner no longer run distributed automatic checks.
 - [x] Product Owner confirmed Google data sync product definition: TimeWhere remains fully local-first without Google; Google account is optional and used only for cloud persistence and cross-device sync.
 - [x] Build&Test completed Google data sync v0.1 foundation: auth adapter, local snapshot export/import, Drive `appDataFolder` adapter, Settings UI, manual backup/restore, and preview-first conflict confirmation. Product&Project Mg review passed with real OAuth smoke blocked by missing OAuth client ID.
+- [x] Development extension ID fixed through manifest public key for Google OAuth testing: `ogdjmelmfkfahppahhkkggdejjainbnd`. The corresponding private key is local-only and must not be committed.
 - [x] Build&Test completed local-first MVP implementation readiness pass using `docs/handoffs/outbox/HANDOFF-BUILDMVP-001.md`.
 - [x] Product&Project Mg reviewed Build&Test conformance in `docs/handoffs/outbox/REVIEW-BUILDMVP-001.md`.
 - [x] releaseMg completed Internal MVP acceptance and recorded NOT READY result in `docs/release/RELEASE_GATE_REPORT_INTERNAL_MVP_2026-05-11.md`.
@@ -76,7 +77,7 @@
 
 ## LATER
 
-- [ ] Configure real Google OAuth client ID/scopes and run Google data sync real-auth smoke when Product Owner is ready.
+- [ ] Create Google Cloud Chrome Extension OAuth client for fixed extension ID `ogdjmelmfkfahppahhkkggdejjainbnd`, replace manifest placeholder client ID, and run Google data sync real-auth smoke.
 - [ ] Add feature specs only when scope/risk requires durable boundaries.
 - [ ] Create formal handoffs only for cross-session, release, privacy/security, high-risk, or Product Owner-requested work.
 

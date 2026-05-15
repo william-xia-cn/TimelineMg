@@ -272,6 +272,7 @@ D-019 defines the next Google data sync direction:
 - Google account configuration is optional and must not become a product login requirement.
 - Google sync is only for durable cloud storage and cross-device data synchronization.
 - The first cloud storage target is Google Drive `appDataFolder`.
+- OAuth client ID identifies the TimeWhere extension application only; synced data is stored in the current user's own Google Drive `appDataFolder`, not in a developer-owned backend.
 - First implementation should start with manual bidirectional sync and conflict confirmation.
 - ManageBac ICS link must be included in synced settings because Product Owner requires cross-device retention.
 - Google email/account display is deferred to a later implementation step.
