@@ -41,6 +41,7 @@
 - [x] Build&Test updated ManageBac task sync to use one saved remote subscription link only: local `.ics` file choice removed, extension-context remote fetch fixed through background relay, and host permission narrowed to Keystone ManageBac events path.
 - [x] Build&Test changed ManageBac ICS sync so new events are not auto-created; sync now surfaces pending event mappings for user confirmation, and existing ManageBac source tasks continue to update by UID. Product&Project Mg accepted tests; real UI confirmation pass remains user-side validation.
 - [x] Unified six-hour management review flow implemented and committed: Dashboard entry previews Task Date Arrange + ManageBac new events, opens a full confirmation page, and writes only selected user-confirmed items. Popup / Calendar / Planner no longer run distributed automatic checks.
+- [x] Product Owner confirmed Google data sync product definition: TimeWhere remains fully local-first without Google; Google account is optional and used only for cloud persistence and cross-device sync.
 - [x] Build&Test completed local-first MVP implementation readiness pass using `docs/handoffs/outbox/HANDOFF-BUILDMVP-001.md`.
 - [x] Product&Project Mg reviewed Build&Test conformance in `docs/handoffs/outbox/REVIEW-BUILDMVP-001.md`.
 - [x] releaseMg completed Internal MVP acceptance and recorded NOT READY result in `docs/release/RELEASE_GATE_REPORT_INTERNAL_MVP_2026-05-11.md`.
@@ -74,6 +75,7 @@
 
 ## LATER
 
+- [ ] Create Google data sync Build&Test package after D-019 docs alignment: auth-only spike, snapshot export/import, Drive `appDataFolder`, bidirectional sync, conflict confirmation.
 - [ ] Add feature specs only when scope/risk requires durable boundaries.
 - [ ] Create formal handoffs only for cross-session, release, privacy/security, high-risk, or Product Owner-requested work.
 

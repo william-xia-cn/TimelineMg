@@ -4,9 +4,9 @@
 
 - **Project**: TimeWhere
 - **Version**: package / extension release version `0.1.0`; design-doc version `v2.3`
-- **Stage**: Baseline Stabilized; awaiting next Product Owner planning
+- **Stage**: Baseline Stabilized; Google data sync planning approved by D-019
 - **Active release/deployment target**: Internal MVP acceptance approved by Product Owner; Phase 1, Phase 2A, and documentation baseline cleanup are complete.
-- **Current constraint**: No new product code/test work, public release, tag, push, merge, deploy, publish, upload, submit, or Chrome Web Store submission is approved until Product Owner chooses the next work package.
+- **Current constraint**: Google data sync is the next planning direction. Product code/test implementation, public release, tag, merge, deploy, publish, upload, submit, or Chrome Web Store submission still require explicit Product Owner approval for the concrete work package.
 
 ## Collaboration Model
 
@@ -72,13 +72,14 @@ Escalate to external advisor for:
 - Minimal Popup.
 - `scheduling.js` unit tests.
 - Manual MVP validation checklist.
+- Google data sync product/design planning per D-019: optional account configuration for cloud persistence and cross-device sync; TimeWhere remains fully usable without Google.
 
 ### Out Of Scope
 
 - Release, publish, upload, deploy, merge, tag, or submit actions without explicit Product Owner approval.
 - Recording secrets, OAuth client secrets, cookies, tokens, private account data, or private user identifiers in repository documents.
 - Changing product scope, data model, sync behavior, privacy posture, or release standards without Product Owner decision.
-- Google Sync implementation.
+- Google Sync implementation before a concrete Build&Test package is approved.
 - Background alarm based Arrange automation; current Task Date Arrange is checked from Dashboard entry only, previews changes, and writes only through the unified management confirmation page after user confirmation.
 - Automatic priority downgrade; current Task Date Arrange may only upgrade priority according to D-017.
 - Defense / squeezing rules.
@@ -111,6 +112,7 @@ Escalate to external advisor for:
 | Daily Settle task-pool inconsistency | CLOSED | Product&Project Mg | Build&Test centralized task-pool filtering with `TimeWhereScheduling.buildDailyTaskPool()`; Product&Project Mg review passed; releaseMg narrow recheck returned PASS. |
 | Phase 2A safety hardening | CLOSED | Product&Project Mg | Build&Test completed Phase 2A; Product&Project Mg review passed; releaseMg narrow recheck returned PASS_WITH_MANUAL_EVIDENCE. |
 | Documentation baseline drift | CLOSED | Product&Project Mg | Product docs now distinguish current local-first MVP baseline from future/out-of-scope Google Sync, Arrange, notifications, ManageBac, CWS, and public release work. |
+| Google data sync scope creep | OPEN | Product&Project Mg / Build&Test | D-019 approves optional Google data sync planning only. Do not turn Google account into a product login requirement; local IndexedDB remains the runtime source of truth. |
 
 ## Current Evidence
 

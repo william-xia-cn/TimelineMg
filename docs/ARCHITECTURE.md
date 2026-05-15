@@ -4,7 +4,7 @@
 **日期**: 2026-04-14  
 **状态**: Internal MVP accepted; baseline stabilized for local-first MVP. Not public release ready.
 
-> Current baseline note (2026-05-15): TimeWhere is a local-first Chrome extension MVP. Task Date Arrange is approved for current baseline stabilization with preview / user-confirmed writes only. ManageBac ICS import is an extension-side source import using a saved link plus manual/user-confirmed sync; it is not a cloud sync backend. Google Sync/OAuth, background alarm automation, reminder notifications, Chrome Web Store submission, and public release are out of current scope unless Product Owner explicitly approves them.
+> Current baseline note (2026-05-15): TimeWhere is a local-first Chrome extension MVP. Task Date Arrange is approved for current baseline stabilization with preview / user-confirmed writes only. ManageBac ICS import is an extension-side source import using a saved link plus manual/user-confirmed sync; it is not a cloud sync backend. D-019 approves the next Google data sync planning direction: optional Google account configuration for durable cloud storage and cross-device sync, while all core features remain fully usable without Google. Google sync implementation, background alarm automation, reminder notifications, Chrome Web Store submission, and public release still require explicit Product Owner approval for the concrete work package.
 
 ---
 
@@ -14,7 +14,7 @@
 |------|------|------|
 | 客户端 | Chrome Extension (Manifest V3) | 主要运行环境 |
 | 存储 | **IndexedDB + Dexie.js** | 本地数据存储（统一存储） |
-| 后端同步 | None in current MVP | `sync.js` remains a local-first stub; ManageBac ICS uses an extension-side fetch/import relay, not a cloud backend |
+| 后端同步 | None in current runtime baseline | `sync.js` remains a local-first stub; D-019 plans optional Google Drive `appDataFolder` sync as the next work package |
 | 通知 | UI/icon only in current MVP | System reminder notifications are future scope |
 | 图标 | SVG 内联 | 完全离线支持 |
 | 字体/图标 | Local CSS/assets only | Extension pages do not load Google Fonts remotely |
@@ -39,8 +39,8 @@
 │  └────────────────────────┬────────────────────────────┘  │
 │                           │                                │
 │  ┌────────────────────────▼────────────────────────────┐  │
-│  │             Future Sync Boundary (stubbed)           │  │
-│  │   - Google/OAuth sync is out of current MVP scope    │  │
+│  │     Future Google Data Sync Boundary (D-019 planned) │  │
+│  │   - Optional Drive appDataFolder replica, not login  │  │
 │  └────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -252,13 +252,30 @@ const TimeWhereDB = {
 
 **注意**：`updateTask()` 内置双向同步 — `progress` ↔ `status`, `due_date` ↔ `deadline`。
 
-### 7.2 Sync Boundary (sync.js stub)
+### 7.2 Sync Boundary (D-019 planned; current code stub)
 
 ```javascript
 // shared/js/sync.js
 // Current MVP behavior: return out_of_scope_for_mvp.
-// Do not enable OAuth, Google Tasks, or Google Calendar without Product Owner approval.
+// D-019 approves optional Google data sync planning.
+// Do not enable implementation until a concrete Build&Test package is approved.
 ```
+
+Current runtime behavior remains local-first:
+
+- IndexedDB is the runtime source of truth.
+- `sync.js` is still a compatibility stub in the current code baseline.
+- ManageBac ICS import uses an extension-side saved-link fetch/import path; it is not a cloud sync backend.
+
+D-019 defines the next Google data sync direction:
+
+- Google account configuration is optional and must not become a product login requirement.
+- Google sync is only for durable cloud storage and cross-device data synchronization.
+- The first cloud storage target is Google Drive `appDataFolder`.
+- First implementation should start with manual bidirectional sync and conflict confirmation.
+- ManageBac ICS link must be included in synced settings because Product Owner requires cross-device retention.
+- Google email/account display is deferred to a later implementation step.
+- Google Calendar / Google Tasks integration is not part of the first Google data sync stage.
 
 ---
 

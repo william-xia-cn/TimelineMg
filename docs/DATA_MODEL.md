@@ -621,9 +621,11 @@ Current Settings page implementation:
 
 ---
 
-## 7. Sync State 同步状态（future only）
+## 7. Sync State 同步状态（D-019 planned）
 
-当前 Internal MVP 不执行远程同步。`sync_log` 可作为本地 audit plumbing 保留，但 Google Sync / OAuth / remote conflict handling 未启用。
+当前 Internal MVP 不执行远程同步。D-019 已批准下一阶段 Google 数据同步方向：TimeWhere 仍然 local-first，Google 账号是可选同步配置，只用于云端持久化和跨终端双向同步。本地 IndexedDB 仍是运行时主数据库；Google Drive `appDataFolder` 保存同步副本。
+
+第一阶段同步不使用 Google Tasks / Google Calendar API，不引入服务器端账号系统，不把 Google 账号作为使用 TimeWhere 的前置条件。
 
 ### 6.1 模型定义
 
@@ -654,6 +656,57 @@ interface Conflict {
   resolution?: 'local' | 'remote' | 'merged';
 }
 ```
+
+### 7.2 Planned Google sync metadata
+
+后续可同步实体应具备本地同步元数据。该设计不要求立即迁移历史数据，但实现同步前必须有兼容填充策略。
+
+```typescript
+interface SyncMetadata {
+  sync_updated_at?: string;
+  sync_deleted_at?: string | null;
+  sync_version?: number;
+  sync_device_id?: string;
+  sync_status?: 'local' | 'synced' | 'conflict' | 'error';
+}
+```
+
+同步范围：
+
+- `plans`
+- `buckets`
+- `labels`
+- `tasks`
+- `containers`
+- `events`
+- `habits`
+- selected `settings`
+
+必须同步的 settings：
+
+- Google sync metadata/state.
+- MatrixView subject mappings.
+- ManageBac subject mappings.
+- ManageBac ICS link, because Product Owner requires cross-device persistence for that configuration.
+
+不得同步或不得明文进入 repo/test fixture：
+
+- OAuth access token / refresh token.
+- raw private import files.
+- temporary pending UI states unless specifically required for sync recovery.
+- screenshots, emails, account identifiers, or unredacted private sample data.
+
+### 7.3 Planned cloud snapshot shape
+
+Google Drive `appDataFolder` 中建议保存：
+
+```text
+timewhere-sync-manifest.json
+timewhere-snapshot-v1.json
+timewhere-changes-v1.jsonl  // optional later optimization
+```
+
+第一版建议先以 snapshot 双向同步为主，再决定是否启用增量 changelog。
 
 ---
 
@@ -754,9 +807,9 @@ interface Conflict {
 | 日视图 | 单日详细时间轴视图 |
 | 多日事件 | 跨多天事件的连续渲染 |
 | 时区支持 | 存储 UTC、按用户时区显示 |
-| Google Sync | Future only; current `sync.js` is an explicit local-first stub. |
+| Google 数据同步 | D-019 planned; current `sync.js` remains an explicit local-first stub until a concrete implementation package is approved. |
 | ManageBac 自动同步 | Future only; current ManageBac follow-up supports saved subscription-link configuration, manual sync, and user-confirmed task creation. |
 
 ---
 
-**最后更新**: 2026-05-15 (Task Date Arrange / ManageBac boundary sync)
+**最后更新**: 2026-05-15 (Task Date Arrange / ManageBac / Google data sync boundary)

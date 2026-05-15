@@ -5,7 +5,7 @@
 **日期**: 2026-04-14  
 **状态**: Internal MVP accepted; baseline stabilized for local-first MVP. Not public release ready.
 
-> Current baseline note (2026-05-15): Local-first MVP is accepted. Task Date Arrange is approved for current baseline stabilization with preview / user-confirmed writes only. Google Sync/OAuth, background alarm automation, reminder notifications, Chrome Web Store submission, and public release remain future/out-of-current-scope unless Product Owner explicitly approves them.
+> Current baseline note (2026-05-15): Local-first MVP is accepted. Task Date Arrange is approved for current baseline stabilization with preview / user-confirmed writes only. D-019 approves Google data sync planning as the next direction, but code implementation has not started. Background alarm automation, reminder notifications, Chrome Web Store submission, and public release remain future/out-of-current-scope unless Product Owner explicitly approves them.
 
 ---
 
@@ -16,7 +16,7 @@ TimeWhere 是一款面向 IB 学生的时间管理与任务规划工具，采用
 ### 核心理念
 
 - **自动调度 + 用户自主**: 系统按规则排序并建议任务执行顺序，用户保有最终决定权
-- **本地优先**: 当前 MVP 数据存储在本地 IndexedDB。云端同步是未来范围，当前未启用。
+- **本地优先**: 当前运行基线数据存储在本地 IndexedDB。D-019 已批准可选 Google 数据同步规划，但本地功能不能依赖 Google 账号。
 - **聚焦当下**: 时间维度层层展开（当下 → 今日/明日 → 本周 → 外部），减少决策负担
 
 ---
@@ -227,9 +227,27 @@ tables: settings | plans | buckets | labels | tasks | containers | habits | even
 
 当前 Internal MVP 不实现 Google Sync / OAuth / Calendar API。`extension/shared/js/sync.js` 是 local-first MVP stub，保留旧调用兼容，但会返回 out-of-scope 结果并确保 Google 连接状态为 false。
 
-### 3.3 未来同步方向（非当前实现）
+### 3.3 Google 数据同步方向（D-019，规划已批准，代码未开始）
 
-Google Tasks / Google Calendar 双向同步属于未来版本范围。任何 OAuth、远程 API、后台 alarm、通知权限或 Chrome Web Store 相关工作，都需要 Product Owner 重新批准。
+TimeWhere 是独立 local-first 控件，不依赖 Google 账号即可完整使用全部核心功能。Google 账号配置仅用于数据持久化云端存储和跨终端双向同步，不是产品登录门槛，也不决定本地功能权限。
+
+设计原则：
+
+- IndexedDB 仍是运行时主数据库；所有页面继续读写本地 DB。
+- Google 云端数据是同步副本，不是在线数据库。
+- 未连接、离线、授权失败或 token 失效时，本地功能继续工作。
+- UI 命名为 `Google 数据同步`，避免表达成“登录后才能使用”。
+- 第一版云端存储使用 Google Drive `appDataFolder`。
+- 第一版同步从手动双向同步和冲突确认开始，不引入 background alarm。
+- ManageBac ICS link 需要随数据同步，因为 Product Owner 明确要求跨终端保留该配置。
+- Google email / account display 后续实现，不作为第一版同步能力的必要条件。
+
+不属于 Google 数据同步第一阶段：
+
+- Google Calendar / Google Tasks 功能集成。
+- 多用户共享或服务器端账号系统。
+- Chrome Web Store / public release。
+- 后台 alarm 自动同步。
 
 ---
 
@@ -402,7 +420,7 @@ extension/
         ├── dexie.js           # Dexie.js 库
         ├── db.js              # IndexedDB 存储层 (TimeWhereDB)
         ├── icons.js           # Material Symbols
-        └── sync.js            # Local-first MVP stub; Google Sync future only
+        └── sync.js            # Local-first MVP stub; D-019 Google data sync planned
 ```
 
 ### 5.2 模块功能
@@ -413,7 +431,7 @@ extension/
 | **Task Board** | 任务 CRUD、看板视图 | P1 |
 | **Container Config** | 时间容器配置 | P1 |
 | **Settings** | 初始化向导、本地偏好、容器管理、ICS/JSON 导入导出 | P1 |
-| **Google Sync** | Future only; current `sync.js` returns out_of_scope_for_mvp | P2+ |
+| **Google 数据同步** | D-019 planned; current `sync.js` returns out_of_scope_for_mvp until a concrete implementation package is approved | P2+ |
 | **Reminder** | 提醒通知 | P3 |
 
 ---
@@ -441,11 +459,14 @@ extension/
 - [ ] 容器 defense/squeezing 规则
 - [x] 截止日逼近 → priority 只升级不降级
 
-### Phase 4: Google Sync (future only, not current MVP)
+### Phase 4: Google 数据同步（D-019 planned）
 
-- [ ] OAuth2 授权
-- [ ] Future-only 初始化导入 (Google → 本地)
-- [ ] Future-only 定时同步 (本地 → Google)
+- [ ] D-019 文档落地：local-first + optional Google data sync。
+- [ ] Auth-only spike：Chrome Identity / OAuth token 获取，Settings 显示连接状态，不做数据同步。
+- [ ] Snapshot export/import：定义 canonical JSON，本地导出 / 恢复。
+- [ ] Drive `appDataFolder` 手动备份 / 恢复。
+- [ ] 双向同步 v1：本地与云端 snapshot 合并，冲突进入确认页。
+- [ ] 自动触发策略：后续再评估 Dashboard / Settings 入口检查；不做 background alarm。
 
 ---
 
@@ -474,7 +495,7 @@ extension/
 - 日视图
 - 多日跨天事件渲染
 - 时区支持
-- Google Sync 实际对接（OAuth2 + Tasks/Calendar API; future only）
+- Google 数据同步实际对接（OAuth2 + Drive appDataFolder; D-019 planned, Google Tasks/Calendar API 不属于第一阶段）
 - ManageBac background / automatic ICS sync（future only; current follow-up supports saved link configuration, manual sync, and user-confirmed task creation）
 
 ---
