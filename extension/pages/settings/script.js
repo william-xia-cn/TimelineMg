@@ -6,6 +6,8 @@
 
 const MANAGEMENT_REVIEW_PENDING_KEY = 'management_review_pending';
 let settingsManageBacSyncInProgress = false;
+let googleSyncInProgress = false;
+let googleSyncPreviewState = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
@@ -70,6 +72,7 @@ async function loadSettings() {
         });
     }
     await loadSettingsManageBacLink();
+    await loadGoogleSyncStatus();
 }
 
 function setupEventListeners() {
@@ -87,6 +90,11 @@ function setupEventListeners() {
     });
     document.getElementById('settingsSaveManageBacIcsLinkBtn')?.addEventListener('click', handleSettingsSaveManageBacIcsLink);
     document.getElementById('settingsSyncManageBacBtn')?.addEventListener('click', handleSettingsManageBacSync);
+    document.getElementById('connectGoogleSyncBtn')?.addEventListener('click', handleConnectGoogleSync);
+    document.getElementById('syncGoogleNowBtn')?.addEventListener('click', handleGoogleSyncNow);
+    document.getElementById('restoreGoogleSyncBtn')?.addEventListener('click', handleRestoreGoogleSync);
+    document.getElementById('uploadGoogleSyncBtn')?.addEventListener('click', handleUploadGoogleSync);
+    document.getElementById('disconnectGoogleSyncBtn')?.addEventListener('click', handleDisconnectGoogleSync);
     document.getElementById('appearanceBackground')?.addEventListener('change', previewAppearanceSettings);
     document.getElementById('appearanceAvatar')?.addEventListener('change', previewAppearanceSettings);
     setupWizardEvents();
@@ -231,6 +239,320 @@ async function handleSettingsManageBacSync() {
         setSettingsManageBacStatus(`同步失败：${error.message}`, 'error');
     } finally {
         setSettingsManageBacSyncInProgress(false);
+    }
+}
+
+function getGoogleSyncApi() {
+    if (typeof TimeWhereGoogleSync === 'undefined') {
+        throw new Error('Google 数据同步模块未加载');
+    }
+    return TimeWhereGoogleSync;
+}
+
+function createGoogleSyncRuntime() {
+    const api = getGoogleSyncApi();
+    const authAdapter = api.createChromeIdentityAuthAdapter(typeof chrome !== 'undefined' ? chrome : null);
+    const driveClient = api.createDriveAppDataClient({ authAdapter });
+    return { api, authAdapter, driveClient };
+}
+
+function setGoogleSyncStatus(message, status = 'not_configured') {
+    const el = document.getElementById('googleSyncStatus');
+    if (!el) return;
+    el.textContent = message;
+    el.dataset.status = status;
+}
+
+function updateGoogleSyncControls() {
+    const disabled = googleSyncInProgress || typeof TimeWhereGoogleSync === 'undefined';
+    [
+        'connectGoogleSyncBtn',
+        'syncGoogleNowBtn',
+        'restoreGoogleSyncBtn',
+        'uploadGoogleSyncBtn',
+        'disconnectGoogleSyncBtn'
+    ].forEach(id => document.getElementById(id)?.toggleAttribute('disabled', disabled));
+}
+
+function setGoogleSyncInProgress(inProgress, message = '') {
+    googleSyncInProgress = inProgress;
+    updateGoogleSyncControls();
+    if (message) setGoogleSyncStatus(message, 'syncing');
+}
+
+async function loadGoogleSyncStatus() {
+    if (typeof TimeWhereGoogleSync === 'undefined') {
+        setGoogleSyncStatus('未配置', 'not_configured');
+        updateGoogleSyncControls();
+        return;
+    }
+    const state = await TimeWhereGoogleSync.getGoogleSyncState(TimeWhereDB);
+    if (state?.status === 'connected') {
+        setGoogleSyncStatus('已连接', 'connected');
+    } else if (state?.status === 'conflict') {
+        setGoogleSyncStatus('有冲突', 'conflict');
+    } else if (state?.status === 'failed') {
+        setGoogleSyncStatus('失败', 'failed');
+    } else {
+        setGoogleSyncStatus('未配置', 'not_configured');
+    }
+    updateGoogleSyncControls();
+}
+
+async function handleConnectGoogleSync() {
+    setGoogleSyncInProgress(true, '正在连接 Google 同步…');
+    try {
+        const { api, authAdapter } = createGoogleSyncRuntime();
+        const result = await authAdapter.connect();
+        if (result.status === 'not_configured') {
+            await api.saveGoogleSyncState(TimeWhereDB, {
+                status: 'not_configured',
+                reason: result.reason || 'oauth_client_id_missing'
+            });
+            setGoogleSyncStatus('未配置', 'not_configured');
+            showToast('Google OAuth client ID 未配置；本地功能不受影响。', 'info');
+            return;
+        }
+        await api.saveGoogleSyncState(TimeWhereDB, { status: 'connected', connected_at: new Date().toISOString() });
+        setGoogleSyncStatus('已连接', 'connected');
+        showToast('Google 数据同步已连接', 'success');
+    } catch (error) {
+        await markGoogleSyncFailed(error);
+    } finally {
+        setGoogleSyncInProgress(false);
+    }
+}
+
+async function handleUploadGoogleSync() {
+    setGoogleSyncInProgress(true, '正在上传本设备数据…');
+    try {
+        const { api, driveClient } = createGoogleSyncRuntime();
+        const result = await api.backupToDrive(TimeWhereDB, driveClient);
+        if (result.status === 'not_configured') {
+            await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: result.reason });
+            setGoogleSyncStatus('未配置', 'not_configured');
+            showToast('Google OAuth client ID 未配置，无法上传到 Drive。', 'info');
+            return;
+        }
+        hideGoogleSyncPreview();
+        setGoogleSyncStatus('已连接', 'connected');
+        showToast('已上传本设备数据到 Google appDataFolder', 'success');
+    } catch (error) {
+        await markGoogleSyncFailed(error);
+    } finally {
+        setGoogleSyncInProgress(false);
+    }
+}
+
+async function handleGoogleSyncNow() {
+    setGoogleSyncInProgress(true, '正在计算本地 / 云端差异…');
+    try {
+        const { api, driveClient } = createGoogleSyncRuntime();
+        const localSnapshot = await api.buildSnapshot(TimeWhereDB);
+        const cloudSnapshot = await api.loadCloudSnapshot(driveClient);
+        if (cloudSnapshot?.status === 'not_configured') {
+            await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: cloudSnapshot.reason });
+            setGoogleSyncStatus('未配置', 'not_configured');
+            showToast('Google OAuth client ID 未配置；无法读取云端快照。', 'info');
+            return;
+        }
+        if (!cloudSnapshot) {
+            hideGoogleSyncPreview();
+            setGoogleSyncStatus('已连接', 'connected');
+            showToast('云端暂无 TimeWhere 快照，可先上传本设备数据。', 'info');
+            return;
+        }
+        const preview = api.computeSyncPreview(localSnapshot, cloudSnapshot);
+        googleSyncPreviewState = { preview, localSnapshot, cloudSnapshot };
+        renderGoogleSyncPreview(preview);
+        await api.saveGoogleSyncState(TimeWhereDB, {
+            status: preview.status === 'has_changes' ? 'conflict' : 'connected',
+            last_preview_at: new Date().toISOString()
+        });
+        setGoogleSyncStatus(preview.status === 'has_changes' ? '有冲突' : '已连接', preview.status === 'has_changes' ? 'conflict' : 'connected');
+    } catch (error) {
+        await markGoogleSyncFailed(error);
+    } finally {
+        setGoogleSyncInProgress(false);
+    }
+}
+
+async function handleRestoreGoogleSync() {
+    setGoogleSyncInProgress(true, '正在读取 Google 快照…');
+    try {
+        const { api, driveClient } = createGoogleSyncRuntime();
+        const localSnapshot = await api.buildSnapshot(TimeWhereDB);
+        const cloudSnapshot = await api.loadCloudSnapshot(driveClient);
+        if (cloudSnapshot?.status === 'not_configured') {
+            await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: cloudSnapshot.reason });
+            setGoogleSyncStatus('未配置', 'not_configured');
+            showToast('Google OAuth client ID 未配置；无法从 Google 恢复。', 'info');
+            return;
+        }
+        if (!cloudSnapshot) {
+            hideGoogleSyncPreview();
+            showToast('云端暂无 TimeWhere 快照。', 'info');
+            return;
+        }
+        const preview = api.computeSyncPreview(localSnapshot, cloudSnapshot);
+        googleSyncPreviewState = { preview, localSnapshot, cloudSnapshot };
+        renderGoogleSyncPreview(preview, 'cloud');
+        await api.saveGoogleSyncState(TimeWhereDB, { status: preview.status === 'has_changes' ? 'conflict' : 'connected' });
+        setGoogleSyncStatus(preview.status === 'has_changes' ? '有冲突' : '已连接', preview.status === 'has_changes' ? 'conflict' : 'connected');
+    } catch (error) {
+        await markGoogleSyncFailed(error);
+    } finally {
+        setGoogleSyncInProgress(false);
+    }
+}
+
+async function handleDisconnectGoogleSync() {
+    setGoogleSyncInProgress(true, '正在断开 Google 同步…');
+    try {
+        const { api, authAdapter } = createGoogleSyncRuntime();
+        await authAdapter.disconnect();
+        await api.saveGoogleSyncState(TimeWhereDB, {
+            status: 'not_configured',
+            disconnected_at: new Date().toISOString()
+        });
+        hideGoogleSyncPreview();
+        setGoogleSyncStatus('未配置', 'not_configured');
+        showToast('已断开 Google 数据同步。本地数据保留。', 'success');
+    } catch (error) {
+        await markGoogleSyncFailed(error);
+    } finally {
+        setGoogleSyncInProgress(false);
+    }
+}
+
+async function markGoogleSyncFailed(error) {
+    try {
+        if (typeof TimeWhereGoogleSync !== 'undefined') {
+            await TimeWhereGoogleSync.saveGoogleSyncState(TimeWhereDB, {
+                status: 'failed',
+                last_error: error.message
+            });
+        }
+    } catch (_) {
+        // Status write failure should not hide the original sync error.
+    }
+    setGoogleSyncStatus('失败', 'failed');
+    showToast(`Google 数据同步失败：${error.message}`, 'error');
+}
+
+function escapeGoogleSyncText(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
+function summarizeGoogleSyncChange(change) {
+    const label = change.item_type === 'setting'
+        ? `设置：${change.id}`
+        : `${change.table} / ${change.id}`;
+    const typeText = {
+        local_only: '仅本地存在',
+        cloud_only: '仅云端存在',
+        conflict: '双端内容不同'
+    }[change.change_type] || change.change_type;
+    return { label, typeText };
+}
+
+function renderGoogleSyncPreview(preview, defaultChoice = 'skip') {
+    const container = document.getElementById('googleSyncPreview');
+    if (!container) return;
+    if (!preview.changes.length) {
+        container.hidden = false;
+        container.innerHTML = `
+            <h3>Google 数据同步确认</h3>
+            <p class="setting-desc">本地和云端快照一致，无需处理。</p>
+        `;
+        return;
+    }
+    const rows = preview.changes.map(change => {
+        const summary = summarizeGoogleSyncChange(change);
+        const selected = change.change_type === 'cloud_only' && defaultChoice === 'cloud' ? 'cloud' : defaultChoice;
+        return `
+            <div class="google-sync-preview-row" data-sync-change-key="${escapeGoogleSyncText(change.key)}">
+                <div class="google-sync-preview-meta">
+                    <span class="google-sync-preview-title">${escapeGoogleSyncText(summary.label)}</span>
+                    <span class="google-sync-preview-desc">${escapeGoogleSyncText(summary.typeText)}</span>
+                </div>
+                <select class="google-sync-choice" data-change-key="${escapeGoogleSyncText(change.key)}">
+                    <option value="skip" ${selected === 'skip' ? 'selected' : ''}>跳过</option>
+                    <option value="local" ${selected === 'local' ? 'selected' : ''}>使用本地</option>
+                    <option value="cloud" ${selected === 'cloud' ? 'selected' : ''}>使用云端</option>
+                </select>
+            </div>
+        `;
+    }).join('');
+    container.hidden = false;
+    container.innerHTML = `
+        <h3>Google 数据同步确认</h3>
+        <p class="setting-desc">发现 ${preview.changes.length} 项差异；确认前不会写入 IndexedDB。</p>
+        <div class="google-sync-preview-list">${rows}</div>
+        <div class="google-sync-preview-actions">
+            <button class="action-btn" id="skipGoogleSyncPreviewBtn" type="button">全部跳过</button>
+            <button class="action-btn" id="applyGoogleSyncPreviewBtn" type="button">确认同步选中项</button>
+        </div>
+    `;
+    document.getElementById('skipGoogleSyncPreviewBtn')?.addEventListener('click', hideGoogleSyncPreview);
+    document.getElementById('applyGoogleSyncPreviewBtn')?.addEventListener('click', handleApplyGoogleSyncPreview);
+}
+
+function hideGoogleSyncPreview() {
+    googleSyncPreviewState = null;
+    const container = document.getElementById('googleSyncPreview');
+    if (!container) return;
+    container.hidden = true;
+    container.innerHTML = '';
+}
+
+async function handleApplyGoogleSyncPreview() {
+    if (!googleSyncPreviewState?.preview) {
+        showToast('没有可应用的同步预览', 'error');
+        return;
+    }
+    setGoogleSyncInProgress(true, '正在应用已确认的云端变更…');
+    try {
+        const { api, driveClient } = createGoogleSyncRuntime();
+        const choices = {};
+        document.querySelectorAll('#googleSyncPreview .google-sync-choice').forEach(select => {
+            choices[select.dataset.changeKey] = select.value;
+        });
+        const result = await api.applyCloudChoicesToLocal(TimeWhereDB, googleSyncPreviewState.preview, choices);
+        const localAfterApply = await api.buildSnapshot(TimeWhereDB);
+        const uploadSnapshot = api.buildUploadSnapshotFromChoices(
+            localAfterApply,
+            googleSyncPreviewState.cloudSnapshot,
+            googleSyncPreviewState.preview,
+            choices
+        );
+        const uploadManifest = api.createManifest(uploadSnapshot);
+        const uploadResult = await driveClient.uploadJsonFile(api.SNAPSHOT_FILE_NAME, uploadSnapshot);
+        if (uploadResult?.status === 'not_configured') {
+            setGoogleSyncStatus('未配置', 'not_configured');
+            showToast(`已应用 ${result.applied_count} 项云端变更；Google OAuth 未配置，未上传合并快照。`, 'info');
+            return;
+        }
+        await driveClient.uploadJsonFile(api.MANIFEST_FILE_NAME, uploadManifest);
+        await api.saveGoogleSyncState(TimeWhereDB, {
+            status: 'connected',
+            last_apply_at: new Date().toISOString(),
+            last_apply_count: result.applied_count,
+            last_snapshot_exported_at: uploadSnapshot.exported_at
+        });
+        hideGoogleSyncPreview();
+        setGoogleSyncStatus('已连接', 'connected');
+        showToast(`已应用 ${result.applied_count} 项云端变更，并已上传确认后的同步快照。`, 'success');
+    } catch (error) {
+        await markGoogleSyncFailed(error);
+    } finally {
+        setGoogleSyncInProgress(false);
     }
 }
 

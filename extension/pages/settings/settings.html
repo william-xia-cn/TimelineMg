@@ -217,6 +217,36 @@
                             </div>
                         </section>
 
+                        <!-- Google 数据同步 -->
+                        <section class="section" id="googleSyncSection">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">sync</span> Google 数据同步
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">状态</span>
+                                        <span class="setting-desc">不连接 Google 也可以完整使用 TimeWhere；Google 仅用于云端备份和跨设备同步</span>
+                                    </div>
+                                    <span class="google-sync-status" id="googleSyncStatus" data-status="not_configured">未配置</span>
+                                </div>
+                                <div class="setting-row google-sync-actions-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">同步操作</span>
+                                        <span class="setting-desc">同步前会先预览本地 / 云端差异，不会静默覆盖 IndexedDB</span>
+                                    </div>
+                                    <div class="setting-control google-sync-actions">
+                                        <button class="action-btn" id="connectGoogleSyncBtn" type="button">连接 Google 同步</button>
+                                        <button class="action-btn" id="syncGoogleNowBtn" type="button">立即同步</button>
+                                        <button class="action-btn" id="restoreGoogleSyncBtn" type="button">从 Google 恢复</button>
+                                        <button class="action-btn" id="uploadGoogleSyncBtn" type="button">上传本设备数据</button>
+                                        <button class="action-btn danger" id="disconnectGoogleSyncBtn" type="button">断开同步</button>
+                                    </div>
+                                </div>
+                                <div class="google-sync-preview" id="googleSyncPreview" hidden></div>
+                            </div>
+                        </section>
+
                         <!-- 任务设置 -->
                         <section class="section" id="taskSection" style="display: none;">
                             <h2 class="section-title">
@@ -438,6 +468,7 @@
     <script src="../../shared/js/scheduling.js"></script>
     <script src="../../shared/js/ics.js"></script>
     <script src="../../shared/js/managebac.js"></script>
+    <script src="../../shared/js/google-sync.js"></script>
     <!-- Settings Script -->
     <script src="script.js"></script>
 </body>
