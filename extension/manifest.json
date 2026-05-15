@@ -21,7 +21,7 @@
     "https://www.googleapis.com/upload/drive/v3/*"
   ],
   "oauth2": {
-    "client_id": "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+    "client_id": "541406150907-rj6d6npl4dnoqcfiaol68tqh8chbpdpg.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/drive.appdata"
     ]

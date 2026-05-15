@@ -206,7 +206,8 @@ async function run() {
 
     const manifestJson = JSON.parse(read('extension/manifest.json'));
     assert('manifest includes Chrome identity permission', manifestJson.permissions.includes('identity'));
-    assert('manifest includes OAuth2 placeholder client id', /YOUR_GOOGLE_OAUTH_CLIENT_ID/.test(manifestJson.oauth2?.client_id || ''));
+    assert('manifest OAuth2 client id is configured', /^[0-9a-z-]+\.apps\.googleusercontent\.com$/.test(manifestJson.oauth2?.client_id || ''));
+    assert('manifest OAuth2 client id placeholder removed', !/YOUR_GOOGLE_OAUTH_CLIENT_ID/.test(manifestJson.oauth2?.client_id || ''));
     assert('manifest only requests Drive appDataFolder scope', manifestJson.oauth2?.scopes?.length === 1 && manifestJson.oauth2.scopes[0] === 'https://www.googleapis.com/auth/drive.appdata');
     assert('manifest includes fixed development public key', typeof manifestJson.key === 'string' && manifestJson.key.length > 300);
     assertEqual('manifest key derives expected development extension ID', extensionIdFromManifestKey(manifestJson.key), 'ogdjmelmfkfahppahhkkggdejjainbnd');
