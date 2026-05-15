@@ -114,6 +114,38 @@ const TimeWhereDB = {
         return `${y}-${m}-${d}`;
     },
 
+    getGoogleSyncApi() {
+        return typeof globalThis !== 'undefined' ? globalThis.TimeWhereGoogleSync : null;
+    },
+
+    async markGoogleSyncDirty(table, id, record, options = {}) {
+        if (options.skipGoogleSync) return;
+        const api = this.getGoogleSyncApi();
+        if (!api?.markEntityDirty) return;
+        try {
+            await api.markEntityDirty(this, table, id, record, options);
+            if (api.schedulePageAutoSync) {
+                api.schedulePageAutoSync(this, { debounce_ms: 30 * 1000 });
+            }
+        } catch (error) {
+            console.warn('Google sync dirty marker failed:', error);
+        }
+    },
+
+    async markGoogleSyncDeleted(table, id, record, options = {}) {
+        if (options.skipGoogleSync) return;
+        const api = this.getGoogleSyncApi();
+        if (!api?.markEntityDeleted) return;
+        try {
+            await api.markEntityDeleted(this, table, id, record, options);
+            if (api.schedulePageAutoSync) {
+                api.schedulePageAutoSync(this, { debounce_ms: 30 * 1000 });
+            }
+        } catch (error) {
+            console.warn('Google sync tombstone marker failed:', error);
+        }
+    },
+
     // ========== Plans ==========
     async getPlans() {
         const plans = await db.plans.toArray();
@@ -164,27 +196,41 @@ const TimeWhereDB = {
             updated_at: now
         };
         const id = await db.plans.add(newPlan);
-        return { ...newPlan, id };
+        const created = { ...newPlan, id };
+        await this.markGoogleSyncDirty('plans', id, created);
+        return created;
     },
 
     async updatePlan(id, data) {
         const updateData = { ...data, updated_at: this.getNowISO() };
         await db.plans.update(id, updateData);
-        return await db.plans.get(id);
+        const updated = await db.plans.get(id);
+        await this.markGoogleSyncDirty('plans', id, updated);
+        return updated;
     },
 
     async deletePlan(id) {
         // Cascade: delete buckets, labels, and tasks belonging to this plan
+        const plan = await db.plans.get(id);
+        const buckets = await db.buckets.where('plan_id').equals(id).toArray();
+        const labels = await db.labels.where('plan_id').equals(id).toArray();
+        const tasks = await db.tasks.where('plan_id').equals(id).toArray();
+        for (const bucket of buckets) await this.markGoogleSyncDeleted('buckets', bucket.id, bucket);
+        for (const label of labels) await this.markGoogleSyncDeleted('labels', label.id, label);
+        for (const task of tasks) await this.markGoogleSyncDeleted('tasks', task.id, task);
         await db.buckets.where('plan_id').equals(id).delete();
         await db.labels.where('plan_id').equals(id).delete();
         await db.tasks.where('plan_id').equals(id).delete();
         await db.plans.delete(id);
+        await this.markGoogleSyncDeleted('plans', id, plan);
     },
 
     async reorderPlans(orderedIds) {
         const now = this.getNowISO();
         for (let i = 0; i < orderedIds.length; i++) {
             await db.plans.update(orderedIds[i], { sort_order: i, updated_at: now });
+            const updated = await db.plans.get(orderedIds[i]);
+            await this.markGoogleSyncDirty('plans', orderedIds[i], updated);
         }
         return await this.getPlans();
     },
@@ -206,7 +252,9 @@ const TimeWhereDB = {
             created_at: this.getNowISO()
         };
         const id = await db.buckets.add(newBucket);
-        return { ...newBucket, id };
+        const created = { ...newBucket, id };
+        await this.markGoogleSyncDirty('buckets', id, created);
+        return created;
     },
 
     async ensureBucketTemplateForPlan(planId, bucketNames) {
@@ -270,6 +318,7 @@ const TimeWhereDB = {
             if (!LEGACY_DEFAULT_BUCKETS.includes(bucket.name)) continue;
             const taskCount = await db.tasks.where('bucket_id').equals(bucket.id).count();
             if (taskCount > 0) continue;
+            await this.markGoogleSyncDeleted('buckets', bucket.id, bucket);
             await db.buckets.delete(bucket.id);
             removed.push(bucket);
         }
@@ -279,7 +328,9 @@ const TimeWhereDB = {
 
     async updateBucket(id, data) {
         await db.buckets.update(id, data);
-        return await db.buckets.get(id);
+        const updated = await db.buckets.get(id);
+        await this.markGoogleSyncDirty('buckets', id, updated);
+        return updated;
     },
 
     async deleteBucket(id) {
@@ -287,13 +338,19 @@ const TimeWhereDB = {
         const tasks = await db.tasks.where('bucket_id').equals(id).toArray();
         for (const t of tasks) {
             await db.tasks.update(t.id, { bucket_id: null });
+            const updatedTask = await db.tasks.get(t.id);
+            await this.markGoogleSyncDirty('tasks', t.id, updatedTask);
         }
+        const bucket = await db.buckets.get(id);
         await db.buckets.delete(id);
+        await this.markGoogleSyncDeleted('buckets', id, bucket);
     },
 
     async reorderBuckets(planId, orderedIds) {
         for (let i = 0; i < orderedIds.length; i++) {
             await db.buckets.update(orderedIds[i], { sort_order: i });
+            const updated = await db.buckets.get(orderedIds[i]);
+            await this.markGoogleSyncDirty('buckets', orderedIds[i], updated);
         }
     },
 
@@ -314,12 +371,16 @@ const TimeWhereDB = {
             created_at: this.getNowISO()
         };
         const id = await db.labels.add(newLabel);
-        return { ...newLabel, id };
+        const created = { ...newLabel, id };
+        await this.markGoogleSyncDirty('labels', id, created);
+        return created;
     },
 
     async updateLabel(id, data) {
         await db.labels.update(id, data);
-        return await db.labels.get(id);
+        const updated = await db.labels.get(id);
+        await this.markGoogleSyncDirty('labels', id, updated);
+        return updated;
     },
 
     async deleteLabel(id) {
@@ -329,9 +390,13 @@ const TimeWhereDB = {
             if (t.labels && t.labels.includes(id)) {
                 const newLabels = t.labels.filter(lid => lid !== id);
                 await db.tasks.update(t.id, { labels: newLabels });
+                const updatedTask = await db.tasks.get(t.id);
+                await this.markGoogleSyncDirty('tasks', t.id, updatedTask);
             }
         }
+        const label = await db.labels.get(id);
         await db.labels.delete(id);
+        await this.markGoogleSyncDeleted('labels', id, label);
     },
 
     // ========== Tasks ==========
@@ -470,6 +535,7 @@ const TimeWhereDB = {
 
         await db.tasks.add(newTask);
         await this.addSyncLog('task', 'create', newTask);
+        await this.markGoogleSyncDirty('tasks', newTask.id, newTask, options);
         return newTask;
     },
 
@@ -497,6 +563,7 @@ const TimeWhereDB = {
         await db.tasks.update(id, updateData);
         const updatedTask = await db.tasks.get(id);
         await this.addSyncLog('task', 'update', updatedTask);
+        await this.markGoogleSyncDirty('tasks', id, updatedTask, options);
         return updatedTask;
     },
 
@@ -505,6 +572,7 @@ const TimeWhereDB = {
         this.assertTaskWritable(task, options);
         await db.tasks.delete(id);
         await this.addSyncLog('task', 'delete', task);
+        await this.markGoogleSyncDeleted('tasks', id, task, options);
     },
 
     async completeTask(id) {
@@ -589,6 +657,7 @@ const TimeWhereDB = {
         
         await db.containers.add(newContainer);
         await this.addSyncLog('container', 'create', newContainer);
+        await this.markGoogleSyncDirty('containers', newContainer.id, newContainer);
         return newContainer;
     },
 
@@ -601,6 +670,7 @@ const TimeWhereDB = {
         await db.containers.update(id, updateData);
         const updatedContainer = await db.containers.get(id);
         await this.addSyncLog('container', 'update', updatedContainer);
+        await this.markGoogleSyncDirty('containers', id, updatedContainer);
         return updatedContainer;
     },
 
@@ -608,6 +678,7 @@ const TimeWhereDB = {
         const container = await db.containers.get(id);
         await db.containers.delete(id);
         await this.addSyncLog('container', 'delete', container);
+        await this.markGoogleSyncDeleted('containers', id, container);
     },
 
     async toggleContainerEnabled(id) {
@@ -664,6 +735,7 @@ const TimeWhereDB = {
         
         await db.events.add(newEvent);
         await this.addSyncLog('event', 'create', newEvent);
+        await this.markGoogleSyncDirty('events', newEvent.id, newEvent);
         return newEvent;
     },
 
@@ -676,6 +748,7 @@ const TimeWhereDB = {
         await db.events.update(id, updateData);
         const updatedEvent = await db.events.get(id);
         await this.addSyncLog('event', 'update', updatedEvent);
+        await this.markGoogleSyncDirty('events', id, updatedEvent);
         return updatedEvent;
     },
 
@@ -683,6 +756,7 @@ const TimeWhereDB = {
         const event = await db.events.get(id);
         await db.events.delete(id);
         await this.addSyncLog('event', 'delete', event);
+        await this.markGoogleSyncDeleted('events', id, event);
     },
 
     // ========== Habits ==========
@@ -716,6 +790,7 @@ const TimeWhereDB = {
         };
         
         await db.habits.add(newHabit);
+        await this.markGoogleSyncDirty('habits', newHabit.id, newHabit);
         return newHabit;
     },
 
@@ -726,7 +801,9 @@ const TimeWhereDB = {
         };
         
         await db.habits.update(id, updateData);
-        return await db.habits.get(id);
+        const updated = await db.habits.get(id);
+        await this.markGoogleSyncDirty('habits', id, updated);
+        return updated;
     },
 
     async completeHabit(id) {
@@ -782,6 +859,9 @@ const TimeWhereDB = {
 
     async setSetting(key, value) {
         await db.settings.put({ key: key, value: value });
+        if (this.getGoogleSyncApi()?.SELECTED_SETTING_KEYS?.includes(key)) {
+            await this.markGoogleSyncDirty('settings', key, { key, value });
+        }
     },
 
     async getSettings() {

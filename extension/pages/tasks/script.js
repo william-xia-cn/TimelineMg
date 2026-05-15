@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateSidebarActiveState('my_tasks');
             openDetailPanel(initialTaskId);
         }
+        runGoogleSyncCheck();
     } catch (err) {
         console.error('[Tasks] Init failed:', err);
     }
@@ -246,6 +247,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 });
+
+function runGoogleSyncCheck() {
+    if (typeof TimeWhereGoogleSync === 'undefined' || typeof TimeWhereDB === 'undefined') return;
+    TimeWhereGoogleSync.runPageAutoSync(TimeWhereDB).catch(error => {
+        console.warn('Google auto sync check failed:', error);
+    });
+}
 
 // ========== Helpers ==========
 

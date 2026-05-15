@@ -45,6 +45,7 @@
 - [x] Build&Test completed Google data sync v0.1 foundation: auth adapter, local snapshot export/import, Drive `appDataFolder` adapter, Settings UI, manual backup/restore, and preview-first conflict confirmation. Product&Project Mg review passed with real OAuth smoke blocked by missing OAuth client ID.
 - [x] Development extension ID fixed through manifest public key for Google OAuth testing: `ogdjmelmfkfahppahhkkggdejjainbnd`. The corresponding private key is local-only and must not be committed.
 - [x] Google Cloud project and Chrome Extension OAuth client created for the fixed development extension ID; Google Drive API enabled; manifest now uses the configured OAuth client ID with Drive `appDataFolder` scope only.
+- [x] Google data sync v1 implemented: Drive `appDataFolder` `timewhere-sync-v1.json`, record-level bidirectional merge, tombstones, non-blocking conflicts, page-open throttled sync, save debounce, and dangerous upload/restore confirmation.
 - [x] Build&Test completed local-first MVP implementation readiness pass using `docs/handoffs/outbox/HANDOFF-BUILDMVP-001.md`.
 - [x] Product&Project Mg reviewed Build&Test conformance in `docs/handoffs/outbox/REVIEW-BUILDMVP-001.md`.
 - [x] releaseMg completed Internal MVP acceptance and recorded NOT READY result in `docs/release/RELEASE_GATE_REPORT_INTERNAL_MVP_2026-05-11.md`.
@@ -78,7 +79,7 @@
 
 ## LATER
 
-- [ ] Reload the unpacked extension with the fixed ID and run Google data sync real-auth smoke.
+- [ ] Reload the unpacked extension with the fixed ID and run Google data sync v1 real-auth smoke against a test Google account.
 - [ ] Add feature specs only when scope/risk requires durable boundaries.
 - [ ] Create formal handoffs only for cross-session, release, privacy/security, high-risk, or Product Owner-requested work.
 

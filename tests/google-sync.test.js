@@ -85,6 +85,12 @@ class FakeDB {
             matrixview_subject_mappings: [{ subject: 'English', subject_in_matrixview: 'English HL' }],
             managebac_subject_mappings: [{ subject: 'English', subject_in_managebac: 'English HL', plan_id: 1 }],
             managebac_ics_config: { link: 'webcal://example.invalid/student/events/token/redacted.ics' },
+            appearance_background: 'calm',
+            appearance_avatar: 'default',
+            theme: 'light',
+            start_week_on: 1,
+            default_duration: 45,
+            default_priority: 'medium',
             google_sync_state: { status: 'connected' },
             access_token: 'secret-access-token',
             refresh_token: 'secret-refresh-token',
@@ -102,6 +108,55 @@ class FakeDB {
     async getSettings() { return { ...this.settings }; }
     async getSetting(key) { return this.settings[key] ?? null; }
     async setSetting(key, value) { this.settings[key] = value; }
+}
+
+function makeEntity(table, id, record, overrides = {}) {
+    const key = `${table}:${id}`;
+    const cleanRecord = { ...record, id };
+    const hash = GoogleSync.hashValue(cleanRecord);
+    return {
+        key,
+        table,
+        id: String(id),
+        record: cleanRecord,
+        hash,
+        updated_at: overrides.updated_at || '2026-05-15T00:00:00.000Z',
+        dirty: overrides.dirty ?? false,
+        last_synced_hash: overrides.last_synced_hash ?? hash,
+        source_device_id: overrides.source_device_id || 'device-a'
+    };
+}
+
+function makeSyncDoc(entities = {}, tombstones = {}, cloudUpdatedAt = '2026-05-15T00:00:00.000Z') {
+    return {
+        schema: GoogleSync.SYNC_SCHEMA,
+        version: 1,
+        app: 'TimeWhere',
+        cloud_updated_at: cloudUpdatedAt,
+        devices: { 'device-a': { device_id: 'device-a', last_seen_at: cloudUpdatedAt } },
+        entities,
+        tombstones,
+        manifest: {
+            entity_count: Object.keys(entities).length,
+            tombstone_count: Object.keys(tombstones).length
+        }
+    };
+}
+
+function makeDriveClient(initialDoc = null) {
+    const state = { doc: initialDoc, uploads: [] };
+    return {
+        state,
+        async downloadJsonFile(name) {
+            if (name === GoogleSync.SYNC_FILE_NAME) return state.doc ? JSON.parse(JSON.stringify(state.doc)) : null;
+            return null;
+        },
+        async uploadJsonFile(name, json) {
+            state.uploads.push({ name, json: JSON.parse(JSON.stringify(json)) });
+            if (name === GoogleSync.SYNC_FILE_NAME) state.doc = JSON.parse(JSON.stringify(json));
+            return { id: 'sync-file', name };
+        }
+    };
 }
 
 function read(relPath) {
@@ -128,7 +183,9 @@ async function run() {
     assert('snapshot includes MatrixView subject mappings', Array.isArray(snapshot.data.settings.matrixview_subject_mappings));
     assert('snapshot includes ManageBac subject mappings', Array.isArray(snapshot.data.settings.managebac_subject_mappings));
     assert('snapshot includes ManageBac ICS config', snapshot.data.settings.managebac_ics_config?.link?.includes('example.invalid'));
-    assert('snapshot includes Google sync metadata state', snapshot.data.settings.google_sync_state?.status === 'connected');
+    assert('snapshot includes approved appearance settings', snapshot.data.settings.appearance_background === 'calm' && snapshot.data.settings.appearance_avatar === 'default');
+    assert('snapshot includes approved task default settings', snapshot.data.settings.default_duration === 45 && snapshot.data.settings.default_priority === 'medium');
+    assert('snapshot excludes Google sync runtime state', !('google_sync_state' in snapshot.data.settings));
     assert('snapshot excludes OAuth access token', !('access_token' in snapshot.data.settings));
     assert('snapshot excludes OAuth refresh token', !('refresh_token' in snapshot.data.settings));
     assert('snapshot excludes Google email display', !('google_email' in snapshot.data.settings));
@@ -192,8 +249,71 @@ async function run() {
     assert('upload snapshot preserves skipped cloud-only record in cloud copy', uploadSnapshot.data.tasks.some(task => task.id === 'task-cloud'));
     assert('upload snapshot keeps confirmed cloud record', uploadSnapshot.data.tasks.some(task => task.id === 'task-1' && task.title === 'Cloud Essay'));
 
+    const localOnlyEntity = makeEntity('tasks', 'local-only', { title: 'Local only' }, { dirty: true, last_synced_hash: null });
+    const localOnlyPlan = GoogleSync.planSyncMerge(makeSyncDoc({ [localOnlyEntity.key]: localOnlyEntity }), makeSyncDoc({}));
+    assert('sync v1 local-only dirty record uploads automatically', localOnlyPlan.upload_keys.includes('tasks:local-only') && localOnlyPlan.conflicts.length === 0);
+
+    const cloudOnlyEntity = makeEntity('tasks', 'cloud-only', { title: 'Cloud only' });
+    const cloudOnlyPlan = GoogleSync.planSyncMerge(makeSyncDoc({}), makeSyncDoc({ [cloudOnlyEntity.key]: cloudOnlyEntity }));
+    assert('sync v1 cloud-only record applies locally', cloudOnlyPlan.apply_local.some(change => change.key === 'tasks:cloud-only' && change.action === 'put_local'));
+
+    const baseRecord = { title: 'Essay' };
+    const baseHash = GoogleSync.hashValue({ ...baseRecord, id: 'same-task' });
+    const localConflict = makeEntity('tasks', 'same-task', { title: 'Local edit' }, { dirty: true, last_synced_hash: baseHash });
+    const cloudConflict = makeEntity('tasks', 'same-task', { title: 'Cloud edit' }, { dirty: false, last_synced_hash: baseHash });
+    const conflictPlan = GoogleSync.planSyncMerge(makeSyncDoc({ [localConflict.key]: localConflict }), makeSyncDoc({ [cloudConflict.key]: cloudConflict }));
+    assert('sync v1 local/cloud same record conflict does not auto write', conflictPlan.conflicts.length === 1 && conflictPlan.apply_local.length === 0 && conflictPlan.upload_keys.length === 0);
+
+    const firstSyncLocal = makeEntity('tasks', 'first-sync', { title: 'Local first sync' }, { dirty: true, last_synced_hash: null });
+    const firstSyncCloud = makeEntity('tasks', 'first-sync', { title: 'Cloud first sync' }, { dirty: false, last_synced_hash: null });
+    const firstSyncConflictPlan = GoogleSync.planSyncMerge(makeSyncDoc({ [firstSyncLocal.key]: firstSyncLocal }), makeSyncDoc({ [firstSyncCloud.key]: firstSyncCloud }));
+    assert('sync v1 first sync same key mismatch creates conflict', firstSyncConflictPlan.conflicts.length === 1 && firstSyncConflictPlan.conflicts[0].key === 'tasks:first-sync');
+
+    const deletedEntity = makeEntity('tasks', 'deleted-task', { title: 'Deleted remotely' });
+    const cloudDeletePlan = GoogleSync.planSyncMerge(
+        makeSyncDoc({ [deletedEntity.key]: { ...deletedEntity, dirty: false } }),
+        makeSyncDoc({}, { [deletedEntity.key]: { table: 'tasks', id: 'deleted-task', deleted_at: '2026-05-15T01:00:00.000Z', last_synced_hash: deletedEntity.hash } })
+    );
+    assert('sync v1 cloud tombstone deletes clean local record', cloudDeletePlan.apply_local.some(change => change.key === 'tasks:deleted-task' && change.action === 'delete_local'));
+
+    const localDeletePlan = GoogleSync.planSyncMerge(
+        makeSyncDoc({}, { [deletedEntity.key]: { table: 'tasks', id: 'deleted-task', deleted_at: '2026-05-15T01:00:00.000Z', last_synced_hash: deletedEntity.hash } }),
+        makeSyncDoc({ [deletedEntity.key]: deletedEntity })
+    );
+    assert('sync v1 local tombstone uploads delete when cloud unchanged', localDeletePlan.upload_tombstones.includes('tasks:deleted-task'));
+
+    const remoteUpdatedAfterDelete = makeEntity('tasks', 'deleted-task', { title: 'Remote changed' }, { last_synced_hash: deletedEntity.hash });
+    const deleteConflictPlan = GoogleSync.planSyncMerge(
+        makeSyncDoc({}, { [deletedEntity.key]: { table: 'tasks', id: 'deleted-task', deleted_at: '2026-05-15T01:00:00.000Z', last_synced_hash: deletedEntity.hash } }),
+        makeSyncDoc({ [deletedEntity.key]: remoteUpdatedAfterDelete })
+    );
+    assert('sync v1 tombstone versus remote update creates conflict', deleteConflictPlan.conflicts.some(conflict => conflict.conflict_type === 'delete_vs_remote_update'));
+
+    const dirtyDb = new FakeDB();
+    await GoogleSync.markEntityDirty(dirtyDb, 'tasks', 'task-1', { id: 'task-1', title: 'Essay' }, { device_id: 'device-a' });
+    const driveForAuto = makeDriveClient(makeSyncDoc({}, {}, '2026-05-15T00:00:00.000Z'));
+    const autoResult = await GoogleSync.runAutoSync(dirtyDb, driveForAuto, { device_id: 'device-a' });
+    assert('sync v1 auto sync uploads dirty local record', autoResult.status === 'synced' && driveForAuto.state.uploads.some(upload => upload.name === GoogleSync.SYNC_FILE_NAME));
+
+    const raceDrive = makeDriveClient(makeSyncDoc({}, {}, '2026-05-15T00:00:00.000Z'));
+    let firstDownload = true;
+    const originalDownload = raceDrive.downloadJsonFile;
+    raceDrive.downloadJsonFile = async name => {
+        const value = await originalDownload.call(raceDrive, name);
+        if (name === GoogleSync.SYNC_FILE_NAME && firstDownload) {
+            firstDownload = false;
+            raceDrive.state.doc.cloud_updated_at = '2026-05-15T00:30:00.000Z';
+        }
+        return value;
+    };
+    const raceDb = new FakeDB();
+    await GoogleSync.markEntityDirty(raceDb, 'tasks', 'task-1', { id: 'task-1', title: 'Race edit' }, { device_id: 'device-a' });
+    const raceResult = await GoogleSync.runAutoSync(raceDb, raceDrive, { device_id: 'device-a' });
+    assertEqual('sync v1 detects cloud revision changed before upload', raceResult.status, 'stale_cloud_retry');
+
     const settingsHtml = read('extension/pages/settings/settings.html');
     const settingsScript = read('extension/pages/settings/script.js');
+    const dbScript = read('extension/shared/js/db.js');
     assert('Settings UI contains Google 数据同步 section', settingsHtml.includes('Google 数据同步'));
     assert('Settings UI includes connect button', settingsHtml.includes('connectGoogleSyncBtn') && settingsHtml.includes('连接 Google 同步'));
     assert('Settings UI includes immediate sync button', settingsHtml.includes('syncGoogleNowBtn') && settingsHtml.includes('立即同步'));
@@ -202,7 +322,26 @@ async function run() {
     assert('Settings UI includes disconnect button', settingsHtml.includes('disconnectGoogleSyncBtn') && settingsHtml.includes('断开同步'));
     assert('Settings loads google-sync.js before page script', settingsHtml.indexOf('google-sync.js') > -1 && settingsHtml.indexOf('google-sync.js') < settingsHtml.indexOf('script.js"></script>'));
     assert('Settings sync preview has explicit confirmation handler', settingsScript.includes('handleApplyGoogleSyncPreview') && settingsScript.includes('确认同步选中项'));
-    assert('Settings confirmation uploads merged snapshot after choices', settingsScript.includes('buildUploadSnapshotFromChoices') && settingsScript.includes('uploadJsonFile(api.SNAPSHOT_FILE_NAME'));
+    assert('Settings confirmation supports v1 conflict choices', settingsScript.includes("mode === 'v1_conflicts'") && settingsScript.includes('resolveSyncConflicts'));
+    assert('Settings dangerous upload/restore use v1 force helpers', settingsScript.includes('forceUploadLocalToCloud') && settingsScript.includes('forceRestoreCloudToLocal'));
+    assert('main pages load google-sync.js for page-open sync checks',
+        [
+            'extension/pages/focus/focus.html',
+            'extension/pages/calendar/calendar.html',
+            'extension/pages/tasks/tasks.html',
+            'extension/popup/popup.html'
+        ].every(file => read(file).includes('google-sync.js')));
+    assert('main page scripts call non-blocking Google page sync check',
+        [
+            'extension/pages/focus/script.js',
+            'extension/pages/calendar/script.js',
+            'extension/pages/tasks/script.js',
+            'extension/popup/popup.js'
+        ].every(file => read(file).includes('runPageAutoSync(TimeWhereDB)')));
+    assert('DB write paths mark Google sync dirty metadata', dbScript.includes('markGoogleSyncDirty') && dbScript.includes('markEntityDirty'));
+    assert('DB delete paths mark Google sync tombstones', dbScript.includes('markGoogleSyncDeleted') && dbScript.includes('markEntityDeleted'));
+    assert('DB settings sync is limited to approved selected keys', dbScript.includes('SELECTED_SETTING_KEYS?.includes(key)'));
+    assert('Google sync runtime state is not in selected cloud settings', !GoogleSync.SELECTED_SETTING_KEYS.includes(GoogleSync.GOOGLE_SYNC_STATE_KEY));
 
     const manifestJson = JSON.parse(read('extension/manifest.json'));
     assert('manifest includes Chrome identity permission', manifestJson.permissions.includes('identity'));

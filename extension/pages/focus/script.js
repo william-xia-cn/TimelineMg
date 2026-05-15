@@ -38,6 +38,14 @@ async function initApp() {
     }
     await loadDashboardData();
     runManagementReviewCheck();
+    runGoogleSyncCheck();
+}
+
+async function runGoogleSyncCheck() {
+    if (typeof TimeWhereGoogleSync === 'undefined' || typeof TimeWhereDB === 'undefined') return;
+    TimeWhereGoogleSync.runPageAutoSync(TimeWhereDB).catch(error => {
+        console.warn('Google auto sync check failed:', error);
+    });
 }
 
 function managementReviewHasWork(pending) {

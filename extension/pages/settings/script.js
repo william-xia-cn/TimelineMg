@@ -15,11 +15,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         await initDatabase();
         await checkAndShowWizard();
         await loadSettings();
+        runGoogleSyncCheck();
         checkReturnFromInit();
     } catch (error) {
         showToast(`设置页初始化失败：${error.message}`, 'error');
     }
 });
+
+function runGoogleSyncCheck() {
+    if (typeof TimeWhereGoogleSync === 'undefined' || typeof TimeWhereDB === 'undefined') return;
+    TimeWhereGoogleSync.runPageAutoSync(TimeWhereDB).catch(error => {
+        console.warn('Google auto sync check failed:', error);
+    });
+}
 
 async function checkReturnFromInit() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -290,9 +298,14 @@ async function loadGoogleSyncStatus() {
     if (state?.status === 'connected') {
         setGoogleSyncStatus('已连接', 'connected');
     } else if (state?.status === 'conflict') {
-        setGoogleSyncStatus('有冲突', 'conflict');
+        setGoogleSyncStatus(`有冲突待处理${state.conflict_count ? `（${state.conflict_count}）` : ''}`, 'conflict');
+        await showStoredGoogleSyncConflicts();
     } else if (state?.status === 'failed') {
         setGoogleSyncStatus('失败', 'failed');
+    } else if (state?.status === 'pending_retry') {
+        setGoogleSyncStatus('离线待重试', 'failed');
+    } else if (state?.status === 'syncing') {
+        setGoogleSyncStatus('同步中', 'syncing');
     } else {
         setGoogleSyncStatus('未配置', 'not_configured');
     }
@@ -324,10 +337,13 @@ async function handleConnectGoogleSync() {
 }
 
 async function handleUploadGoogleSync() {
+    if (!window.confirm('这是高级危险操作：将以本设备数据为准覆盖 Google 云端同步副本。继续前请确认其他设备没有未同步的重要修改。是否继续？')) {
+        return;
+    }
     setGoogleSyncInProgress(true, '正在上传本设备数据…');
     try {
         const { api, driveClient } = createGoogleSyncRuntime();
-        const result = await api.backupToDrive(TimeWhereDB, driveClient);
+        const result = await api.forceUploadLocalToCloud(TimeWhereDB, driveClient);
         if (result.status === 'not_configured') {
             await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: result.reason });
             setGoogleSyncStatus('未配置', 'not_configured');
@@ -345,31 +361,25 @@ async function handleUploadGoogleSync() {
 }
 
 async function handleGoogleSyncNow() {
-    setGoogleSyncInProgress(true, '正在计算本地 / 云端差异…');
+    setGoogleSyncInProgress(true, '正在自动合并本地 / 云端数据…');
     try {
         const { api, driveClient } = createGoogleSyncRuntime();
-        const localSnapshot = await api.buildSnapshot(TimeWhereDB);
-        const cloudSnapshot = await api.loadCloudSnapshot(driveClient);
-        if (cloudSnapshot?.status === 'not_configured') {
-            await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: cloudSnapshot.reason });
+        const result = await api.runAutoSync(TimeWhereDB, driveClient, { force: true });
+        if (result?.status === 'not_configured') {
+            await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: result.reason });
             setGoogleSyncStatus('未配置', 'not_configured');
-            showToast('Google OAuth client ID 未配置；无法读取云端快照。', 'info');
+            showToast('Google OAuth client ID 未配置；无法同步。', 'info');
             return;
         }
-        if (!cloudSnapshot) {
-            hideGoogleSyncPreview();
-            setGoogleSyncStatus('已连接', 'connected');
-            showToast('云端暂无 TimeWhere 快照，可先上传本设备数据。', 'info');
+        if (result.status === 'conflict') {
+            renderGoogleSyncConflicts(result.conflicts || []);
+            setGoogleSyncStatus(`有冲突待处理（${result.conflicts.length}）`, 'conflict');
+            showToast(`发现 ${result.conflicts.length} 项同步冲突，请选择处理方式。`, 'info');
             return;
         }
-        const preview = api.computeSyncPreview(localSnapshot, cloudSnapshot);
-        googleSyncPreviewState = { preview, localSnapshot, cloudSnapshot };
-        renderGoogleSyncPreview(preview);
-        await api.saveGoogleSyncState(TimeWhereDB, {
-            status: preview.status === 'has_changes' ? 'conflict' : 'connected',
-            last_preview_at: new Date().toISOString()
-        });
-        setGoogleSyncStatus(preview.status === 'has_changes' ? '有冲突' : '已连接', preview.status === 'has_changes' ? 'conflict' : 'connected');
+        hideGoogleSyncPreview();
+        setGoogleSyncStatus('已连接', 'connected');
+        showToast(result.status === 'up_to_date' ? '本地和云端已是最新。' : 'Google 数据同步完成。', 'success');
     } catch (error) {
         await markGoogleSyncFailed(error);
     } finally {
@@ -378,27 +388,27 @@ async function handleGoogleSyncNow() {
 }
 
 async function handleRestoreGoogleSync() {
+    if (!window.confirm('这是高级危险操作：将以 Google 云端同步副本为准覆盖本地数据。继续前请确认本设备没有未同步的重要修改。是否继续？')) {
+        return;
+    }
     setGoogleSyncInProgress(true, '正在读取 Google 快照…');
     try {
         const { api, driveClient } = createGoogleSyncRuntime();
-        const localSnapshot = await api.buildSnapshot(TimeWhereDB);
-        const cloudSnapshot = await api.loadCloudSnapshot(driveClient);
-        if (cloudSnapshot?.status === 'not_configured') {
-            await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: cloudSnapshot.reason });
+        const result = await api.forceRestoreCloudToLocal(TimeWhereDB, driveClient);
+        if (result?.status === 'not_configured') {
+            await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: result.reason });
             setGoogleSyncStatus('未配置', 'not_configured');
             showToast('Google OAuth client ID 未配置；无法从 Google 恢复。', 'info');
             return;
         }
-        if (!cloudSnapshot) {
+        if (!result || result.status === 'no_cloud_sync_document') {
             hideGoogleSyncPreview();
-            showToast('云端暂无 TimeWhere 快照。', 'info');
+            showToast('云端暂无 TimeWhere 同步数据。', 'info');
             return;
         }
-        const preview = api.computeSyncPreview(localSnapshot, cloudSnapshot);
-        googleSyncPreviewState = { preview, localSnapshot, cloudSnapshot };
-        renderGoogleSyncPreview(preview, 'cloud');
-        await api.saveGoogleSyncState(TimeWhereDB, { status: preview.status === 'has_changes' ? 'conflict' : 'connected' });
-        setGoogleSyncStatus(preview.status === 'has_changes' ? '有冲突' : '已连接', preview.status === 'has_changes' ? 'conflict' : 'connected');
+        hideGoogleSyncPreview();
+        setGoogleSyncStatus('已连接', 'connected');
+        showToast(`已从 Google 恢复 ${result.applied_count || 0} 项。`, 'success');
     } catch (error) {
         await markGoogleSyncFailed(error);
     } finally {
@@ -504,6 +514,65 @@ function renderGoogleSyncPreview(preview, defaultChoice = 'skip') {
     document.getElementById('applyGoogleSyncPreviewBtn')?.addEventListener('click', handleApplyGoogleSyncPreview);
 }
 
+async function showStoredGoogleSyncConflicts() {
+    try {
+        const conflicts = await TimeWhereDB.getSetting('google_sync_conflicts');
+        if (Array.isArray(conflicts) && conflicts.length > 0) {
+            renderGoogleSyncConflicts(conflicts);
+        }
+    } catch (_) {
+        // Conflict display is best-effort; sync status remains visible.
+    }
+}
+
+function summarizeGoogleSyncConflict(conflict) {
+    const label = `${conflict.table || 'record'} / ${conflict.id || ''}`;
+    const typeText = {
+        local_update_vs_remote_update: '本地和云端都修改过',
+        local_update_vs_remote_delete: '本地修改，但云端已删除',
+        delete_vs_remote_update: '本地删除，但云端已修改'
+    }[conflict.conflict_type] || '同步冲突';
+    return { label, typeText };
+}
+
+function renderGoogleSyncConflicts(conflicts) {
+    const container = document.getElementById('googleSyncPreview');
+    if (!container) return;
+    googleSyncPreviewState = { mode: 'v1_conflicts', conflicts };
+    if (!conflicts.length) {
+        hideGoogleSyncPreview();
+        return;
+    }
+    const rows = conflicts.map(conflict => {
+        const summary = summarizeGoogleSyncConflict(conflict);
+        return `
+            <div class="google-sync-preview-row" data-sync-change-key="${escapeGoogleSyncText(conflict.key)}">
+                <div class="google-sync-preview-meta">
+                    <span class="google-sync-preview-title">${escapeGoogleSyncText(summary.label)}</span>
+                    <span class="google-sync-preview-desc">${escapeGoogleSyncText(summary.typeText)}</span>
+                </div>
+                <select class="google-sync-choice" data-change-key="${escapeGoogleSyncText(conflict.key)}">
+                    <option value="skip" selected>跳过</option>
+                    <option value="local">使用本地</option>
+                    <option value="cloud">使用云端</option>
+                </select>
+            </div>
+        `;
+    }).join('');
+    container.hidden = false;
+    container.innerHTML = `
+        <h3>Google 数据同步冲突</h3>
+        <p class="setting-desc">发现 ${conflicts.length} 项冲突；本地功能可继续使用，确认前不会静默覆盖数据。</p>
+        <div class="google-sync-preview-list">${rows}</div>
+        <div class="google-sync-preview-actions">
+            <button class="action-btn" id="skipGoogleSyncPreviewBtn" type="button">全部跳过</button>
+            <button class="action-btn" id="applyGoogleSyncPreviewBtn" type="button">确认同步选中项</button>
+        </div>
+    `;
+    document.getElementById('skipGoogleSyncPreviewBtn')?.addEventListener('click', hideGoogleSyncPreview);
+    document.getElementById('applyGoogleSyncPreviewBtn')?.addEventListener('click', handleApplyGoogleSyncPreview);
+}
+
 function hideGoogleSyncPreview() {
     googleSyncPreviewState = null;
     const container = document.getElementById('googleSyncPreview');
@@ -513,7 +582,7 @@ function hideGoogleSyncPreview() {
 }
 
 async function handleApplyGoogleSyncPreview() {
-    if (!googleSyncPreviewState?.preview) {
+    if (!googleSyncPreviewState?.preview && googleSyncPreviewState?.mode !== 'v1_conflicts') {
         showToast('没有可应用的同步预览', 'error');
         return;
     }
@@ -524,6 +593,19 @@ async function handleApplyGoogleSyncPreview() {
         document.querySelectorAll('#googleSyncPreview .google-sync-choice').forEach(select => {
             choices[select.dataset.changeKey] = select.value;
         });
+        if (googleSyncPreviewState.mode === 'v1_conflicts') {
+            const result = await api.resolveSyncConflicts(TimeWhereDB, driveClient, googleSyncPreviewState.conflicts, choices);
+            if (result.status === 'conflict_remaining') {
+                renderGoogleSyncConflicts((await TimeWhereDB.getSetting('google_sync_conflicts')) || []);
+                setGoogleSyncStatus(`有冲突待处理（${result.remaining_count}）`, 'conflict');
+                showToast(`已处理 ${result.applied_count} 项，仍有 ${result.remaining_count} 项冲突。`, 'info');
+                return;
+            }
+            hideGoogleSyncPreview();
+            setGoogleSyncStatus('已连接', 'connected');
+            showToast(`已处理 ${result.applied_count} 项冲突并完成同步。`, 'success');
+            return;
+        }
         const result = await api.applyCloudChoicesToLocal(TimeWhereDB, googleSyncPreviewState.preview, choices);
         const localAfterApply = await api.buildSnapshot(TimeWhereDB);
         const uploadSnapshot = api.buildUploadSnapshotFromChoices(

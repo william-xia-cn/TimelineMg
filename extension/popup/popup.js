@@ -42,6 +42,14 @@ async function initApp() {
     }
 
     await reloadPopup();
+    runGoogleSyncCheck();
+}
+
+function runGoogleSyncCheck() {
+    if (typeof TimeWhereGoogleSync === 'undefined' || typeof TimeWhereDB === 'undefined') return;
+    TimeWhereGoogleSync.runPageAutoSync(TimeWhereDB).catch(error => {
+        console.warn('Google auto sync check failed:', error);
+    });
 }
 
 async function reloadPopup() {

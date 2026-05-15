@@ -4,7 +4,7 @@
 **日期**: 2026-04-14  
 **状态**: Internal MVP accepted; baseline stabilized for local-first MVP. Not public release ready.
 
-> Current baseline note (2026-05-15): TimeWhere is a local-first Chrome extension MVP. Task Date Arrange is approved for current baseline stabilization with preview / user-confirmed writes only. ManageBac ICS import is an extension-side source import using a saved link plus manual/user-confirmed sync; it is not a cloud sync backend. D-019 approves the next Google data sync planning direction: optional Google account configuration for durable cloud storage and cross-device sync, while all core features remain fully usable without Google. Google sync implementation, background alarm automation, reminder notifications, Chrome Web Store submission, and public release still require explicit Product Owner approval for the concrete work package.
+> Current baseline note (2026-05-15): TimeWhere is a local-first Chrome extension MVP. Task Date Arrange is approved for current baseline stabilization with preview / user-confirmed writes only. ManageBac ICS import is an extension-side source import using a saved link plus manual/user-confirmed sync; it is not a cloud sync backend. D-019/D-020 approve optional Google Drive `appDataFolder` data sync v1 while all core features remain fully usable without Google. Background alarm automation, reminder notifications, Chrome Web Store submission, and public release still require explicit Product Owner approval.
 
 ---
 
@@ -14,7 +14,7 @@
 |------|------|------|
 | 客户端 | Chrome Extension (Manifest V3) | 主要运行环境 |
 | 存储 | **IndexedDB + Dexie.js** | 本地数据存储（统一存储） |
-| 后端同步 | None in current runtime baseline | `sync.js` remains a local-first stub; D-019 plans optional Google Drive `appDataFolder` sync as the next work package |
+| 后端同步 | None | No developer backend; optional Google Drive `appDataFolder` sync v1 runs client-side in the extension |
 | 通知 | UI/icon only in current MVP | System reminder notifications are future scope |
 | 图标 | SVG 内联 | 完全离线支持 |
 | 字体/图标 | Local CSS/assets only | Extension pages do not load Google Fonts remotely |
@@ -39,8 +39,8 @@
 │  └────────────────────────┬────────────────────────────┘  │
 │                           │                                │
 │  ┌────────────────────────▼────────────────────────────┐  │
-│  │     Future Google Data Sync Boundary (D-019 planned) │  │
-│  │   - Optional Drive appDataFolder replica, not login  │  │
+│  │       Optional Google Data Sync v1 (D-019/D-020)     │  │
+│  │   - Drive appDataFolder replica, not product login   │  │
 │  └────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -134,7 +134,8 @@ extension/
 │       ├── dexie.js           # Dexie.js 库（第三方）
 │       ├── db.js              # IndexedDB 存储层 (TimeWhereDB)
 │       ├── icons.js           # Material Symbols 初始化
-│       └── sync.js            # Local-first MVP stub
+│       ├── sync.js            # Legacy Google/Calendar/Tasks stub
+│       └── google-sync.js     # Optional Drive appDataFolder data sync v1
 │
 ├── _locales/                  # 国际化
 │   └── en/
@@ -252,19 +253,22 @@ const TimeWhereDB = {
 
 **注意**：`updateTask()` 内置双向同步 — `progress` ↔ `status`, `due_date` ↔ `deadline`。
 
-### 7.2 Sync Boundary (D-019 planned; current code stub)
+### 7.2 Sync Boundary (D-019 / D-020)
 
 ```javascript
 // shared/js/sync.js
-// Current MVP behavior: return out_of_scope_for_mvp.
-// D-019 approves optional Google data sync planning.
-// Do not enable implementation until a concrete Build&Test package is approved.
+// Legacy Google/Calendar/Tasks path: return out_of_scope_for_mvp.
+
+// shared/js/google-sync.js
+// Current optional data sync implementation:
+// Drive appDataFolder + timewhere-sync-v1.json + conflict confirmation.
 ```
 
 Current runtime behavior remains local-first:
 
 - IndexedDB is the runtime source of truth.
-- `sync.js` is still a compatibility stub in the current code baseline.
+- `sync.js` is still a compatibility stub for legacy Google/Calendar/Tasks calls.
+- `google-sync.js` owns optional Google Drive `appDataFolder` data sync v1.
 - ManageBac ICS import uses an extension-side saved-link fetch/import path; it is not a cloud sync backend.
 
 D-019 defines the next Google data sync direction:
@@ -273,7 +277,8 @@ D-019 defines the next Google data sync direction:
 - Google sync is only for durable cloud storage and cross-device data synchronization.
 - The first cloud storage target is Google Drive `appDataFolder`.
 - OAuth client ID identifies the TimeWhere extension application only; synced data is stored in the current user's own Google Drive `appDataFolder`, not in a developer-owned backend.
-- First implementation should start with manual bidirectional sync and conflict confirmation.
+- Sync v1 is automatic bidirectional sync with throttled page-open checks and save debounce; no background alarm.
+- Conflicts are non-blocking and require user choice; deletes use tombstones.
 - ManageBac ICS link must be included in synced settings because Product Owner requires cross-device retention.
 - Google email/account display is deferred to a later implementation step.
 - Google Calendar / Google Tasks integration is not part of the first Google data sync stage.
@@ -358,7 +363,7 @@ pages/*.html
     ↓
 IndexedDB 'TimeWhere'
 
-Future sync work, if approved, must be re-specified before implementation.
+Future sync expansion beyond Drive `appDataFolder` v1, such as Google Tasks/Calendar integration or background alarms, must be re-specified before implementation.
 ```
 
 ---

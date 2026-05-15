@@ -3,7 +3,7 @@
 **版本**: v2.3  
 **日期**: 2026-04-14
 
-> Current baseline note (2026-05-15): Internal MVP acceptance is approved for a local-first MVP. This document is aligned to D-013: `tasks`, `containers`, `events`, and `habits` use string UUID ids; planner helper records such as `plans`, `buckets`, and `labels` may remain numeric for now. MatrixView import, ManageBac mapping/task-sync, and Task Date Arrange are active baseline stabilization features. Google Sync, background alarm automation, reminder notifications, Chrome Web Store submission, and public release are out of current scope.
+> Current baseline note (2026-05-15): Internal MVP acceptance is approved for a local-first MVP. This document is aligned to D-013: `tasks`, `containers`, `events`, and `habits` use string UUID ids; planner helper records such as `plans`, `buckets`, and `labels` may remain numeric for now. MatrixView import, ManageBac mapping/task-sync, Task Date Arrange, and optional Google data sync v1 are active baseline stabilization features. Background alarm automation, reminder notifications, Chrome Web Store submission, and public release are out of current scope.
 
 ---
 
@@ -621,13 +621,13 @@ Current Settings page implementation:
 
 ---
 
-## 7. Sync State 同步状态（D-019 planned）
+## 7. Sync State 同步状态（D-019 / D-020）
 
-当前 Internal MVP 不执行远程同步。D-019 已批准下一阶段 Google 数据同步方向：TimeWhere 仍然 local-first，Google 账号是可选同步配置，只用于云端持久化和跨终端双向同步。本地 IndexedDB 仍是运行时主数据库；Google Drive `appDataFolder` 保存同步副本。OAuth client ID 只标识 TimeWhere 扩展应用；同步副本属于当前授权用户自己的 Google Drive，不属于开发者账号。
+Google 数据同步 v1 是可选自动双向同步。TimeWhere 仍然 local-first，Google 账号只用于云端持久化和跨终端同步。本地 IndexedDB 仍是运行时主数据库；Google Drive `appDataFolder` 保存同步副本。OAuth client ID 只标识 TimeWhere 扩展应用；同步副本属于当前授权用户自己的 Google Drive，不属于开发者账号。
 
 第一阶段同步不使用 Google Tasks / Google Calendar API，不引入服务器端账号系统，不把 Google 账号作为使用 TimeWhere 的前置条件。
 
-### 6.1 模型定义
+### 7.1 Legacy sync-log model
 
 ```typescript
 interface SyncState {
@@ -657,19 +657,34 @@ interface Conflict {
 }
 ```
 
-### 7.2 Planned Google sync metadata
+### 7.2 Google sync metadata
 
-后续可同步实体应具备本地同步元数据。该设计不要求立即迁移历史数据，但实现同步前必须有兼容填充策略。
+同步 v1 不迁移 Dexie schema；本地同步元数据存放在 `settings`。旧数据首次同步时按当前记录内容 backfill metadata。
 
 ```typescript
 interface SyncMetadata {
-  sync_updated_at?: string;
-  sync_deleted_at?: string | null;
-  sync_version?: number;
-  sync_device_id?: string;
-  sync_status?: 'local' | 'synced' | 'conflict' | 'error';
+  key: string;                 // `${table}:${id}`
+  table: string;
+  id: string;
+  hash: string;
+  dirty: boolean;
+  last_synced_hash?: string | null;
+  last_synced_at?: string;
+  source_device_id?: string | null;
 }
 ```
+
+本地 sync settings：
+
+| Setting key | 用途 |
+|---|---|
+| `google_sync_device_id` | 当前设备稳定 ID。 |
+| `google_sync_meta` | 每个同步实体的 dirty/hash/last synced metadata。 |
+| `google_sync_tombstones` | 删除 tombstone，避免旧设备复活已删除记录。 |
+| `google_sync_last_run_at` | 最近一次同步尝试时间。 |
+| `google_sync_last_success_at` | 最近一次成功同步时间。 |
+| `google_sync_conflicts` | 非阻断冲突列表，供 Settings UI 展示和用户处理。 |
+| `google_sync_pending` | 同步过程临时状态；不得进入云端同步文件。 |
 
 同步范围：
 
@@ -684,29 +699,47 @@ interface SyncMetadata {
 
 必须同步的 settings：
 
-- Google sync metadata/state.
 - MatrixView subject mappings.
 - ManageBac subject mappings.
 - ManageBac ICS link, because Product Owner requires cross-device persistence for that configuration.
+- approved appearance/task default settings: `appearance_background`, `appearance_avatar`, `theme`, `start_week_on`, `default_duration`, `default_priority`.
 
 不得同步或不得明文进入 repo/test fixture：
 
 - OAuth access token / refresh token.
+- Google email / account display.
+- Google sync runtime metadata/state (`google_sync_*`).
 - raw private import files.
-- temporary pending UI states unless specifically required for sync recovery.
+- temporary pending UI states such as `management_review_pending`.
 - screenshots, emails, account identifiers, or unredacted private sample data.
 
-### 7.3 Planned cloud snapshot shape
+### 7.3 Cloud sync document shape
 
-Google Drive `appDataFolder` 中建议保存：
+Google Drive `appDataFolder` 中保存：
 
 ```text
-timewhere-sync-manifest.json
-timewhere-snapshot-v1.json
-timewhere-changes-v1.jsonl  // optional later optimization
+timewhere-sync-v1.json       // automatic bidirectional sync exchange document
+timewhere-snapshot-v1.json   // retained backup/restore compatibility
 ```
 
-第一版建议先以 snapshot 双向同步为主，再决定是否启用增量 changelog。
+`timewhere-sync-v1.json` 结构：
+
+```typescript
+interface GoogleSyncDocumentV1 {
+  schema: 'timewhere-sync-v1';
+  cloud_updated_at: string;
+  devices: Record<string, { device_id: string; last_seen_at: string }>;
+  entities: Record<string, SyncEntity>;
+  tombstones: Record<string, SyncTombstone>;
+  manifest: {
+    entity_count: number;
+    tombstone_count: number;
+    updated_at?: string;
+  };
+}
+```
+
+第一版是 record-level merge，不做字段级 merge。
 
 ---
 
@@ -807,7 +840,7 @@ timewhere-changes-v1.jsonl  // optional later optimization
 | 日视图 | 单日详细时间轴视图 |
 | 多日事件 | 跨多天事件的连续渲染 |
 | 时区支持 | 存储 UTC、按用户时区显示 |
-| Google 数据同步 | D-019 planned; current `sync.js` remains an explicit local-first stub until a concrete implementation package is approved. |
+| Google 数据同步 | D-019 / D-020 active v1; `google-sync.js` owns Drive `appDataFolder` sync. `sync.js` remains a legacy stub for old Google/Calendar/Tasks paths. |
 | ManageBac 自动同步 | Future only; current ManageBac follow-up supports saved subscription-link configuration, manual sync, and user-confirmed task creation. |
 
 ---
