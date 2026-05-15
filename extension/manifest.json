@@ -20,6 +20,12 @@
     "https://www.googleapis.com/drive/v3/*",
     "https://www.googleapis.com/upload/drive/v3/*"
   ],
+  "oauth2": {
+    "client_id": "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/drive.appdata"
+    ]
+  },
   "action": {
     "default_popup": "popup/popup.html",
     "default_title": "TimeWhere"

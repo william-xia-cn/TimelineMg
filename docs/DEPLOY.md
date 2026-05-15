@@ -2,7 +2,7 @@
 
 本文档记录 TimeWhere 扩展从本地开发完成到最终发布上线所需补充和完成的工作。
 
-> Current stage warning (2026-05-12): This document is future release reference only. Product Owner has approved Internal MVP acceptance, not public release. Chrome Web Store submission, public deployment, tag, push, merge, publish, deploy, upload, submit, OAuth setup, and Google Sync are not approved for the current stage.
+> Current stage warning (2026-05-15): This document is future release reference plus Google data sync setup reference. Product Owner has approved D-019 Google data sync planning and v0.1 implementation work, but not public release. Chrome Web Store submission, public deployment, tag, push, merge, publish, deploy, upload, or submit remain unapproved.
 
 ---
 
@@ -13,11 +13,9 @@
 1. 访问 [Google Cloud Console](https://console.cloud.google.com/)
 2. 创建新项目：`TimeWhere`
 3. 启用以下 API：
-   - Google Tasks API
-   - Google Calendar API
-   - Google People API (用于获取用户邮箱)
+   - Google Drive API
 
-### 1.2 创建 OAuth 2.0 客户端（future Google Sync only）
+### 1.2 创建 OAuth 2.0 客户端（Google 数据同步）
 
 1. 进入 **APIs & Services** → **Credentials**
 2. 点击 **Create Credentials** → **OAuth client ID**
@@ -31,22 +29,24 @@
 
 ## 二、配置 Manifest
 
-### 2.1 添加 OAuth 配置（future Google Sync only）
+### 2.1 添加 OAuth 配置（Google 数据同步）
 
-在 `manifest.json` 中添加：
+当前 Google 数据同步只使用 Google Drive `appDataFolder`。不要为第一阶段添加 Google Tasks、Google Calendar 或 email/profile scope。
+
+`manifest.json` 应包含：
 
 ```json
 {
   "oauth2": {
-    "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
+    "client_id": "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com",
     "scopes": [
-      "https://www.googleapis.com/auth/tasks",
-      "https://www.googleapis.com/auth/calendar",
-      "https://www.googleapis.com/auth/userinfo.email"
+      "https://www.googleapis.com/auth/drive.appdata"
     ]
   }
 }
 ```
+
+真实授权 smoke 前，需要在 Google Cloud Console 创建 Chrome Extension OAuth client，并把 `client_id` 替换为真实值。没有真实 client ID 时，TimeWhere 应显示 `未配置`，本地功能不受影响。
 
 ### 2.2 添加 key 字段
 
