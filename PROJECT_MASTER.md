@@ -6,7 +6,7 @@
 - **Version**: package / extension release version `0.1.0`; design-doc version `v2.3`
 - **Stage**: Baseline Stabilized; Google data sync v1 implementation in progress under D-020
 - **Active release/deployment target**: Internal MVP acceptance approved by Product Owner; Phase 1, Phase 2A, and documentation baseline cleanup are complete.
-- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. Public release, tag, merge, deploy, publish, release/artifact upload, submit, Chrome Web Store submission, Google Calendar/Tasks integration, and background alarm automation remain unapproved.
+- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. Public release, tag, merge, deploy, publish, release/artifact upload, submit, Chrome Web Store submission, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
 
 ## Collaboration Model
 
@@ -73,6 +73,7 @@ Escalate to external advisor for:
 - `scheduling.js` unit tests.
 - Manual MVP validation checklist.
 - Google data sync v1 per D-019 / D-020: optional account configuration for cloud persistence and cross-device bidirectional sync; TimeWhere remains fully usable without Google.
+- System task reminders per D-021: local Chrome notifications for explicit `schedule_time` tasks and current Daily Settle container tasks.
 
 ### Out Of Scope
 
@@ -83,7 +84,7 @@ Escalate to external advisor for:
 - Background alarm based Arrange automation; current Task Date Arrange is checked from Dashboard entry only, previews changes, and writes only through the unified management confirmation page after user confirmation.
 - Automatic priority downgrade; current Task Date Arrange may only upgrade priority according to D-017.
 - Defense / squeezing rules.
-- Reminder notification system.
+- Background alarm usage outside local task reminders. D-021 approves alarms only for local task reminder notifications.
 - Background alarm based ManageBac ICS subscription sync. Current ManageBac follow-up supports saved link configuration, Dashboard-entry management checks, manual sync, and user-confirmed task creation only.
 - Chrome Web Store submission.
 

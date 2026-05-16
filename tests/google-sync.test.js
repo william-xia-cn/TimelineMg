@@ -92,6 +92,7 @@ class FakeDB {
             default_duration: 45,
             default_priority: 'medium',
             google_sync_state: { status: 'connected' },
+            google_sync_account_email: 'student@example.invalid',
             access_token: 'secret-access-token',
             refresh_token: 'secret-refresh-token',
             google_email: 'student@example.invalid',
@@ -186,6 +187,7 @@ async function run() {
     assert('snapshot includes approved appearance settings', snapshot.data.settings.appearance_background === 'calm' && snapshot.data.settings.appearance_avatar === 'default');
     assert('snapshot includes approved task default settings', snapshot.data.settings.default_duration === 45 && snapshot.data.settings.default_priority === 'medium');
     assert('snapshot excludes Google sync runtime state', !('google_sync_state' in snapshot.data.settings));
+    assert('snapshot excludes local Google account email display', !('google_sync_account_email' in snapshot.data.settings));
     assert('snapshot excludes OAuth access token', !('access_token' in snapshot.data.settings));
     assert('snapshot excludes OAuth refresh token', !('refresh_token' in snapshot.data.settings));
     assert('snapshot excludes Google email display', !('google_email' in snapshot.data.settings));
@@ -204,6 +206,18 @@ async function run() {
     const auth = GoogleSync.createChromeIdentityAuthAdapter(noOauthChrome);
     const authStatus = await auth.getStatus();
     assertEqual('auth adapter reports not_configured without OAuth client id', authStatus.status, 'not_configured');
+
+    const profileChrome = {
+        runtime: { getManifest: () => ({ oauth2: { client_id: 'mock-client.apps.googleusercontent.com' } }) },
+        identity: {
+            getProfileUserInfo(_options, callback) {
+                callback({ email: 'student@example.invalid' });
+            }
+        }
+    };
+    const profileAuth = GoogleSync.createChromeIdentityAuthAdapter(profileChrome);
+    const profileInfo = await profileAuth.getAccountInfo();
+    assertEqual('auth adapter reads local Google account email for UI only', profileInfo.email, 'student@example.invalid');
 
     const fetchCalls = [];
     const mockFetch = async (url, options = {}) => {
@@ -315,11 +329,29 @@ async function run() {
     const settingsScript = read('extension/pages/settings/script.js');
     const dbScript = read('extension/shared/js/db.js');
     assert('Settings UI contains Google 数据同步 section', settingsHtml.includes('Google 数据同步'));
-    assert('Settings UI includes connect button', settingsHtml.includes('connectGoogleSyncBtn') && settingsHtml.includes('连接 Google 同步'));
-    assert('Settings UI includes immediate sync button', settingsHtml.includes('syncGoogleNowBtn') && settingsHtml.includes('立即同步'));
-    assert('Settings UI includes restore button', settingsHtml.includes('restoreGoogleSyncBtn') && settingsHtml.includes('从 Google 恢复'));
-    assert('Settings UI includes upload button', settingsHtml.includes('uploadGoogleSyncBtn') && settingsHtml.includes('上传本设备数据'));
-    assert('Settings UI includes disconnect button', settingsHtml.includes('disconnectGoogleSyncBtn') && settingsHtml.includes('断开同步'));
+    assert('Settings UI places Google sync after task defaults and before data management',
+        settingsHtml.indexOf('任务默认值') > -1
+        && settingsHtml.indexOf('Google 数据同步') > settingsHtml.indexOf('任务默认值')
+        && settingsHtml.indexOf('数据管理') > settingsHtml.indexOf('Google 数据同步'));
+    assert('Settings UI no longer contains initialization wizard flow',
+        !settingsHtml.includes('wizardView')
+        && !settingsHtml.includes('wizardStep')
+        && !settingsHtml.includes('重新初始化')
+        && !settingsHtml.includes('重新引导')
+        && !settingsScript.includes('setupWizardEvents')
+        && !settingsScript.includes('checkAndShowWizard'));
+    assert('Settings UI contains connection status card', settingsHtml.includes('连接状态') && settingsHtml.includes('googleSyncAccountEmail'));
+    assert('Settings UI contains sync status card', settingsHtml.includes('同步状态') && settingsHtml.includes('googleSyncLastSyncAt'));
+    assert('Settings UI includes connect button', settingsHtml.includes('connectGoogleSyncBtn') && settingsHtml.includes('连接 Google 账户同步'));
+    assert('Settings UI includes manual sync button', settingsHtml.includes('syncGoogleNowBtn') && settingsHtml.includes('手动同步'));
+    assert('Settings UI includes cloud download danger button', settingsHtml.includes('restoreGoogleSyncBtn') && settingsHtml.includes('↓ 下载到本地'));
+    assert('Settings UI includes cloud upload danger button', settingsHtml.includes('uploadGoogleSyncBtn') && settingsHtml.includes('↑ 上传到云端'));
+    assert('Settings UI includes disconnect button', settingsHtml.includes('disconnectGoogleSyncBtn') && settingsHtml.includes('断开连接'));
+    assert('Settings UI includes conflict processing entry', settingsHtml.includes('processGoogleConflictsBtn') && settingsHtml.includes('处理冲突'));
+    assert('Settings UI includes formal dangerous sync modal', settingsHtml.includes('googleSyncDangerModal') && settingsHtml.includes('googleSyncDangerConfirmInput'));
+    assert('Settings UI dangerous modal requires phrase-gated confirmation', settingsScript.includes('updateGoogleSyncDangerConfirmState') && settingsScript.includes("config.phrase"));
+    assert('Google upload/download danger actions open modal instead of window.confirm', settingsScript.includes("openGoogleSyncDangerModal('upload')") && settingsScript.includes("openGoogleSyncDangerModal('restore')"));
+    assert('Google danger modal contains upload and download confirmation phrases', settingsScript.includes("phrase: '上传到云端'") && settingsScript.includes("phrase: '下载到本地'"));
     assert('Settings loads google-sync.js before page script', settingsHtml.indexOf('google-sync.js') > -1 && settingsHtml.indexOf('google-sync.js') < settingsHtml.indexOf('script.js"></script>'));
     assert('Settings sync preview has explicit confirmation handler', settingsScript.includes('handleApplyGoogleSyncPreview') && settingsScript.includes('确认同步选中项'));
     assert('Settings confirmation supports v1 conflict choices', settingsScript.includes("mode === 'v1_conflicts'") && settingsScript.includes('resolveSyncConflicts'));
@@ -342,9 +374,11 @@ async function run() {
     assert('DB delete paths mark Google sync tombstones', dbScript.includes('markGoogleSyncDeleted') && dbScript.includes('markEntityDeleted'));
     assert('DB settings sync is limited to approved selected keys', dbScript.includes('SELECTED_SETTING_KEYS?.includes(key)'));
     assert('Google sync runtime state is not in selected cloud settings', !GoogleSync.SELECTED_SETTING_KEYS.includes(GoogleSync.GOOGLE_SYNC_STATE_KEY));
+    assert('Google account email display key is excluded from cloud settings', GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.GOOGLE_SYNC_ACCOUNT_EMAIL_KEY));
 
     const manifestJson = JSON.parse(read('extension/manifest.json'));
     assert('manifest includes Chrome identity permission', manifestJson.permissions.includes('identity'));
+    assert('manifest includes Chrome identity.email permission for local account display', manifestJson.permissions.includes('identity.email'));
     assert('manifest OAuth2 client id is configured', /^[0-9a-z-]+\.apps\.googleusercontent\.com$/.test(manifestJson.oauth2?.client_id || ''));
     assert('manifest OAuth2 client id placeholder removed', !/YOUR_GOOGLE_OAUTH_CLIENT_ID/.test(manifestJson.oauth2?.client_id || ''));
     assert('manifest only requests Drive appDataFolder scope', manifestJson.oauth2?.scopes?.length === 1 && manifestJson.oauth2.scopes[0] === 'https://www.googleapis.com/auth/drive.appdata');

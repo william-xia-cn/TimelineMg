@@ -3,7 +3,7 @@
 **版本**: v2.3
 **日期**: 2026-04-14
 
-> Current baseline note (2026-05-15): Internal MVP is accepted and baseline-stabilized as a local-first MVP. MatrixView import, ManageBac mapping/task-sync, Task Date Arrange, and optional Google data sync v1 are active baseline stabilization features. Background alarm automation, system reminder notifications, Chrome Web Store submission, and public release are not current-scope features.
+> Current baseline note (2026-05-16): Internal MVP is accepted and baseline-stabilized as a local-first MVP. MatrixView import, ManageBac mapping/task-sync, Task Date Arrange, optional Google data sync v1, and local system task reminders are active baseline stabilization features. Chrome Web Store submission and public release are not current-scope features.
 
 ---
 
@@ -151,7 +151,16 @@ Google Calendar 风格的双日时间轴视图。
 4. 2小时内即将开始的事件
 5. 24小时内已完成任务（绿色记录）
 
-### 1.7 Daily Settle 集成
+### 1.7 系统任务提醒
+
+- 使用 Chrome system notification，不是页面内 toast。
+- 使用 `notifications` / `alarms` 权限，每分钟检查一次本地任务状态。
+- `schedule_time` 任务：开始前 1 分钟提醒；在 `schedule_time` 到 `schedule_time + duration` 范围内，未完成则每 15 分钟提醒一次。
+- 没有 `schedule_time`、但被 Daily Settle 分配到当前时间容器的任务：在当前容器范围内，未完成则每 15 分钟提醒一次。
+- 同一任务同时满足 `schedule_time` 和容器分配时，`schedule_time` 规则优先，避免双重提醒。
+- Settings 提供提醒开关和手动测试提醒；提醒去重状态保存在 `chrome.storage.local`，不写入业务 IndexedDB。
+
+### 1.8 Daily Settle 集成
 
 ```javascript
 // 触发时机
@@ -167,7 +176,7 @@ loadTaskColumn()
   → 渲染 currentTasks
 ```
 
-### 1.8 数据依赖
+### 1.9 数据依赖
 
 - 读取: `tasks`, `containers`, `events`, `plans`（IndexedDB via Dexie.js）
 - 写入: `tasks.progress`, `tasks.start_date`, `tasks.completed_at`
@@ -519,7 +528,7 @@ Settings → Plan → 导入 MatrixView 课表 → [导入]
 │                                                                              │
 │ View By Subject                                                              │
 │ ┌─────────┬──────────────────────────┬────────────┬────────┬──────────────┐ │
-│ │ Subject │ Subject in MatrixView    │ Teacher    │ Room   │ Day / Period │ │
+│ │ Plan 显示名 │ Subject in MatrixView │ Teacher    │ Room   │ Day / Period │ │
 │ ├─────────┼──────────────────────────┼────────────┼────────┼──────────────┤ │
 │ │ Math    │ Math: Analysis & Appro...│ Ma, Yun    │ 1471   │ A1,C2,E3,H4  │ │
 │ │ English │ English B Language...    │ Sears...   │ 1359   │ A3,D1,E1,G2  │ │
@@ -539,10 +548,10 @@ Settings → Plan → 导入 MatrixView 课表 → [导入]
 | TabView | `View By A-H Day`, `View By Subject` |
 | View By A-H Day 固定列 | `Day`, `Terms`, 学年/学期/季度等元数据 |
 | View By A-H Day 矩阵列 | 节次 `1`, `2`, `3`, `4`, `CT`, `DRM` 等 |
-| View By Subject: `Subject` | TimeWhere 内部 Plan / Subject 目标，用户可编辑；默认等于完整 `Subject in MatrixView`，不自动简写；明显不是学科但属于学校事项的行可建议填入 `Other School Plan`；用户清空时表示该课表项不参与 Plan 初始化 |
+| View By Subject: `Plan 显示名` | 用户可编辑的 Plan 显示名称；默认等于完整 `Subject in MatrixView`，用户可手动简化显示名；明显不是学科但属于学校事项的行可建议填入 `Other School Plan`；用户清空时表示该课表项不参与 Plan 更新 |
 | View By Subject: `Subject in MatrixView` | MatrixView 原始课程名称或课程文本，保留外部数据来源，便于核对和追溯 |
 | View By Subject 其他列 | 教师、教室、出现的 A-H Day / Period 列表 |
-| View By Subject 底部操作 | `保存并初始化学科 Plan 数据` |
+| View By Subject 底部操作 | `导入更新学科 Plan`，打开逐项对账确认表 |
 | 课程块内容 | 课程名、课程代码、教师、教室、时间/周期信息 |
 | 视觉 | 保留原始 MatrixView 色块感；高密度表格；横向滚动；不做营销式卡片 |
 
@@ -553,17 +562,21 @@ Settings → Plan → 导入 MatrixView 课表 → [导入]
 - `导入` 点击后不是只生成临时预览；必须把解析出的 MatrixView 课表数据保存到 TimeWhere 本地系统中，作为后续操作的数据来源。
 - 支持的正式输入格式必须覆盖 PowerSchool Matrix View 页面另存的 `.mhtml` / `.html`。PDF 文本抽取结果不可靠，必须明确提示 unsupported 或不可靠，不能保存为正式导入结果，不能用于初始化学科 Plan。`.mime` StudentRecordExchange 不是 MatrixView 课表输入，应明确提示 unsupported。
 - 导入器只能提取课表、课程、教师、教室、Day / Period、Terms 等必要字段，不应保存无关个人身份、地址、电话等隐私字段。
-- `Subject` 是 TimeWhere 内部字段，初始值默认完整复制 `Subject in MatrixView`；系统不得默认自动简写，用户可在界面中手动简化并保存映射。
+- `Plan.subject` 就是权威 `Subject in MatrixView`；系统不得默认自动简写或用 Plan 显示名替代。
+- `Plan.name` 是用户可编辑显示名；用户可在界面中手动简化显示名，但不能改变 `Plan.subject`。
 - 明显不是学科但仍属于学校事项的 MatrixView 行，例如 Community Time、Dorm Checking、Advisory / Homeroom 等，可默认建议映射到 `Other School Plan`，但这只是初始建议值。
-- 用户编辑优先级最高。如果用户把某行 `Subject` 清空，则该 MatrixView 课程/区块只保留导入预览和追溯信息，不参与 Plan 初始化，不创建或更新任何 Plan。
-- `保存并初始化学科 Plan 数据` 点击后应保存 `Subject` 与 `Subject in MatrixView` 的映射，并初始化 planner 模块中与这些 Subject 相关的 Plan 数据。
+- 用户编辑优先级最高。如果用户把某行 `Plan 显示名` 清空，则该 MatrixView 课程/区块只保留导入预览和追溯信息，不参与 Plan 更新，不创建或更新任何 Plan。
+- `导入更新学科 Plan` 点击后应进入逐项对账确认表，用户确认后才保存 `Plan 显示名` 与 `Subject in MatrixView` 的映射，并更新 planner 模块中与这些 `Subject in MatrixView` 相关的 Plan 数据。
+- 对账确认表字段为：选择、旧 Plan、新 Plan 显示名、`SubjectInMatrixView`、建议动作、最终动作。
+- 已匹配学科默认选中，最终动作是更新显示名并保持/恢复启用；新增学科默认选中，取消选中表示不创建；旧课表缺失学科默认选中，最终动作是停用保留，取消选中表示删除该停用 Plan。
+- 删除缺失旧学科 Plan 必须二次确认，并明确提示会级联删除该 Plan 下历史任务、Bucket、Label 关联。
 - 这里的 `Plan` 指 Task Board / planner 模块中的任务组织单元，不是 MatrixView 课表事件或 Calendar 时间容器。
 - `Bucket` 和 `Label` 都从属于具体 `Plan`。`Bucket` 用于 Plan 内任务分类，可以从初始化模板生成，但用户可在每个具体 Plan 内修改、删除、增补和排序。`Label` 当前保留为 Plan 内标签能力，但不做过多产品定义。
-- 初始化 planner Plan 数据的最小结果：先清除旧的学科相关 Plan，再让每个非空且不是 `Other School Plan` 的内部 `Subject` 对应一个 planner `Plan`，`Plan.name` 默认等于 `Subject`，`Plan.subject` 保存同一内部 `Subject`，并创建默认 buckets：`上课`, `作业`, `单元测试`, `阶段考试`。
+- 导入更新 planner Plan 数据的最小结果：每个非空且不是 `Other School Plan` 的 `Subject in MatrixView` 对应一个学科型 planner `Plan`；`Plan.name` 保存用户确认的显示名，`Plan.subject` 保存完整 `Subject in MatrixView`，并创建默认 buckets：`上课`, `作业`, `单元测试`, `阶段考试`。
 - 初始化时还必须确保存在一个名为 `Other School Plan` 的 planner Plan，用于保存未来非学科但仍属于学校相关的任务；该 Plan 不属于学科 Plan，但属于本初始化流程管理，重复点击不得重复创建；其默认 buckets 为：`事项`, `活动`, `申请`, `其他`。
-- 学科相关 Plan 的清理范围：MatrixView 管理的 Plan、有 `plan.subject` 的 Plan、或名称明显匹配学科名称/简称的 Plan。明显非学科用途的 Plan 必须保留，例如 `其它计划`, `大学申请`, `Personal`, `Projects`。
+- 学科相关 Plan 的更新范围：MatrixView 管理的 Plan、有 `plan.subject` 的 Plan、或名称明显匹配学科名称/简称的兼容旧 Plan。当前 MatrixView 中缺失的旧学科 Plan 默认不删除，标记为停用保留；用户可在对账确认中明确选择删除；启用学科 Plan 禁止手工删除，停用学科 Plan 允许用户确认后删除。
 - 对名称无法判断的 Plan，不应自动删除；应提示用户确认是否纳入清理。
-- 初始化 planner Plan 数据必须是幂等操作：重复点击不应重复创建同一 Subject 的 Plan；重复执行后，学科 Plan 集合应与当前 `Subject` / `Subject in MatrixView` 映射一致。
+- 导入更新 planner Plan 数据必须是幂等操作：重复点击不应重复创建同一 `Subject in MatrixView` 的 Plan；重复执行后，学科 Plan 集合应与当前 `Subject in MatrixView` 映射一致。
 - 导入结果应进入本地 IndexedDB，不触发 Google Sync / ManageBac / remote API。
 - 若导入会覆盖已有 `source='timetable'` 事件，必须在 UI 中明确提示并要求确认。
 
@@ -574,7 +587,7 @@ ManageBac 相关能力分成两个独立界面 / 动作：
 1. `配置 ManageBac 学科映射`：从 ManageBac HTML 文件读取学科配置，并映射到已经由 MatrixView 初始化好的 TimeWhere 学科 Plan。
 2. `ManageBac 链接 / 事件同步`：在 Settings → Plan 区块直接配置 / 使用 ManageBac ICS 链接，读取 ManageBac 事件；点击 `[同步]` 后必须打开统一的任务调整与 ManageBac 同步确认页面。新增事件必须先展示确认列表，用户选择 Plan 后才创建 ManageBac 来源 Tasks。
 
-MatrixView 是 TimeWhere 学科 Plan 的来源。ManageBac 学科配置不能创建、删除或重命名 MatrixView 初始化出的学科 Plan，只能建立 `Subject in ManageBac` 到现有 TimeWhere `Subject` / `Plan` 的映射。
+MatrixView 是 TimeWhere 学科 Plan 的来源。ManageBac 学科配置不能创建、删除或重命名 MatrixView 初始化出的学科 Plan，只能建立 `Subject in ManageBac` 到现有 TimeWhere `SubjectInMatrixView` / Plan 的映射。
 
 #### 4.6.1 配置 ManageBac 学科映射
 
@@ -615,8 +628,8 @@ Settings → Plan → 配置 ManageBac 学科映射 → [配置]
 
 映射规则：
 
-- `Subject in ManageBac` 保留 ManageBac 原始课程 / 学科文本，只读。
-- `TimeWhere Subject / Plan` 从已有 MatrixView 学科 Plan 中自动匹配，用户可手动选择调整。
+- `Subject in ManageBac` 保留 ManageBac 原始课程 / 学科文本，只读，只作为来源描述和匹配辅助。
+- `TimeWhere Subject / Plan` 从已有启用 MatrixView 学科 Plan 中自动匹配，用户可手动选择调整。
 - 明显非学科但学校相关的项默认映射到 `Other School Plan`。
 - 用户选择空值表示该 ManageBac 学科 / 来源项不参与后续任务同步。
 - 保存映射只保存配置，不创建、不删除、不重命名学科 Plan，不同步 ICS 任务。
@@ -710,7 +723,7 @@ my ManageBac 视图
 - 已存在的 ManageBac 来源任务按 ICS UID 自动更新，不重复要求确认，也不创建重复任务。
 - 如果用户修改链接，应提示这会切换 ManageBac 数据源，并要求确认如何处理旧链接来源任务。
 - 此功能读取远程 `webcal://` / HTTPS ICS 链接，属于当前 ManageBac follow-up work；实现需要窄范围扩展 extension host permission 或 background fetch relay，并保持真实 token URL 不进入 repo。
-- 不涉及 Google Sync、background alarm、通知系统、CWS 或 public release readiness。
+- 不涉及 Google Sync、ManageBac background alarm、系统任务提醒、CWS 或 public release readiness。
 
 ### 4.7 Google 数据同步（D-019 / D-020）
 

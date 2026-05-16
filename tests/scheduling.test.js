@@ -426,17 +426,21 @@ async function runAsyncChecks() {
         'urgent');
 
     const timetable = [
-        { id:'e1', source:'timetable', title:'English Language', date:'2026-05-16' },
+        { id:'e1', source:'timetable', subject_in_matrixview:'English Language Acquisition Phase 5', title:'English Language', date:'2026-05-16' },
         { id:'e2', source:'timetable', title:'Math Analysis', date:'2026-05-17' }
     ];
     const plan = S.arrangeTaskStartDates([
-        { id:'subject', subject:'English', progress:'not_started', priority:'medium', due_date:'2026-06-01' },
+        { id:'subject', subject:'English Language Acquisition Phase 5', progress:'not_started', priority:'medium', due_date:'2026-06-01' },
         { id:'urgent', subject:'English', progress:'not_started', priority:'medium', due_date:'2026-05-15', start_date:'2026-05-20' },
         { id:'nosubject', progress:'not_started', priority:'medium', due_date:'2026-05-30' },
         { id:'done', subject:'Math', progress:'completed', priority:'urgent', due_date:'2026-05-15' }
     ], timetable, '2026-05-14');
     const byId = new Map(plan.map(row => [row.task_id, row]));
     assert("有 subject 普通任务匹配下一次 timetable 上课日", byId.get('subject').start_date, '2026-05-16');
+    const tolerantMatch = S.arrangeTaskStartDates([
+        { id:'tolerant', subject:'English: Language Acquisition Phase 5', progress:'not_started', priority:'medium', due_date:'2026-06-01' }
+    ], timetable, '2026-05-14');
+    assert("SubjectInMatrixView 标准化后可容错匹配", tolerantMatch[0].start_date, '2026-05-16');
     assert("important/urgent 任务当天排，不查课表", byId.get('urgent').start_date, '2026-05-14');
     assert("important/urgent 任务写入 urgent priority", byId.get('urgent').priority, 'urgent');
     assert("无 subject 任务使用默认 start_date", byId.get('nosubject').start_date, '2026-05-23');
@@ -456,11 +460,14 @@ async function runAsyncChecks() {
         tasks: [
             { id:'a', subject:'Math', progress:'not_started', priority:'medium', due_date:'2026-06-01' },
             { id:'b', source:'managebac', progress:'not_started', priority:'medium', due_date:'2026-05-15', start_date:'2026-05-20' },
+            { id:'inactive', plan_id: 9, subject:'Archived Subject', progress:'not_started', priority:'medium', due_date:'2026-06-01', start_date:'2026-05-22' },
             { id:'c', subject:'Math', progress:'completed', priority:'medium', due_date:'2026-05-15', start_date:'2026-05-20' }
         ],
         events: [{ id:'m1', source:'timetable', title:'Math Analysis', date:'2026-05-18' }],
+        plans: [{ id: 9, name: 'Archived Subject', subject: 'Archived Subject', subject_active: false }],
         async getAllTasks() { return this.tasks.map(t => ({ ...t })); },
         async getEvents() { return this.events.map(e => ({ ...e })); },
+        async getPlans() { return this.plans.map(p => ({ ...p })); },
         async updateTask(id, updates) {
             const task = this.tasks.find(t => t.id === id);
             Object.assign(task, updates);
@@ -492,6 +499,7 @@ async function runAsyncChecks() {
     assert("arrangeTasks subject 任务写入上课日", fakeDb.tasks.find(t => t.id === 'a').start_date, '2026-05-18');
     assert("arrangeTasks ManageBac urgent 写入今天", fakeDb.tasks.find(t => t.id === 'b').start_date, '2026-05-14');
     assert("arrangeTasks 不处理 completed", fakeDb.tasks.find(t => t.id === 'c').start_date, '2026-05-20');
+    assert("arrangeTasks 不处理停用学科 Plan 下任务", fakeDb.tasks.find(t => t.id === 'inactive').start_date, '2026-05-22');
     assertBool("用户确认后写入 last_run_at", !!fakeDb.settings.task_arrange_last_run_at, true);
 
     const fresh = await S.maybeRunTaskArrange(fakeDb, { now: new Date('2026-05-14T12:00:00') });

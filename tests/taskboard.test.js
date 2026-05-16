@@ -108,6 +108,14 @@ assert('quick-add preserves inferred defaults before normalization', boardJs.inc
     && boardJs.includes('priority: defaults.priority || defaultPriority'));
 
 assert('quick-add creation uses normalized manual payload before addTask', /TimeWhereDB\.addTask\(normalizeManualTaskPayload\(payload\)\)/.test(boardJs));
+assert('DB addTask derives subject from selected Plan only', /const subject = plan\?\.subject \|\| null;/.test(dbJs)
+    && !/let subject = task\.subject/.test(dbJs));
+assert('DB updateTask recalculates subject when plan_id changes', dbJs.includes("Object.prototype.hasOwnProperty.call(data, 'plan_id')")
+    && dbJs.includes('updateData.subject = nextPlan?.subject || null'));
+assert('DB blocks deletion of active subject Plans', dbJs.includes('plan?.subject && plan.subject_active !== false')
+    && dbJs.includes('启用学科 Plan 只能通过 MatrixView 导入更新'));
+assert('Plan sidebar disables active subject Plan deletion', sidebarJs.includes('const canDeletePlan = !(plan.subject && plan.subject_active !== false)')
+    && sidebarJs.includes('showDeletePlanDialog(plan)'));
 
 assert('quick-add prevents duplicate forms while async bucket options load', boardJs.includes('dataset.quickAddOpening')
     && boardJs.includes("delete columnEl.dataset.quickAddOpening"));

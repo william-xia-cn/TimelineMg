@@ -191,6 +191,9 @@ const TimeWhereDB = {
             color: plan.color || '#2b56e3',
             icon_char: plan.icon_char || (plan.name ? plan.name.charAt(0) : 'P'),
             subject: plan.subject || null,
+            subject_active: plan.subject ? plan.subject_active !== false : null,
+            matrixview_managed: plan.matrixview_managed === true,
+            source: plan.source || null,
             sort_order: plan.sort_order ?? baseSortOrder,
             created_at: now,
             updated_at: now
@@ -212,6 +215,9 @@ const TimeWhereDB = {
     async deletePlan(id) {
         // Cascade: delete buckets, labels, and tasks belonging to this plan
         const plan = await db.plans.get(id);
+        if (plan?.subject && plan.subject_active !== false) {
+            throw new Error('启用学科 Plan 只能通过 MatrixView 导入更新，不能手动删除。');
+        }
         const buckets = await db.buckets.where('plan_id').equals(id).toArray();
         const labels = await db.labels.where('plan_id').equals(id).toArray();
         const tasks = await db.tasks.where('plan_id').equals(id).toArray();
@@ -496,10 +502,7 @@ const TimeWhereDB = {
         const now = this.getNowISO();
         const plan = task.plan_id ? await db.plans.get(task.plan_id) : await this.ensureDefaultPlan();
         const planId = task.plan_id || plan.id;
-        let subject = task.subject || null;
-        if (!subject && plan) {
-            subject = plan.subject || plan.name || null;
-        }
+        const subject = plan?.subject || null;
         const progressVal = task.progress || 'not_started';
         const newTask = {
             // Use UUID for consistency with existing tasks
@@ -546,6 +549,13 @@ const TimeWhereDB = {
             ...data,
             updated_at: this.getNowISO()
         };
+        if (Object.prototype.hasOwnProperty.call(updateData, 'subject')) {
+            delete updateData.subject;
+        }
+        if (Object.prototype.hasOwnProperty.call(data, 'plan_id')) {
+            const nextPlan = data.plan_id ? await db.plans.get(data.plan_id) : null;
+            updateData.subject = nextPlan?.subject || null;
+        }
         // Bidirectional sync: progress ↔ status
         if (data.progress) {
             updateData.status = data.progress === 'completed' ? 'completed' : (data.progress === 'in_progress' ? 'in_progress' : 'pending');
@@ -714,6 +724,7 @@ const TimeWhereDB = {
         const newEvent = {
             id: this.generateId(),
             title: event.title || '新事件',
+            subject_in_matrixview: event.subject_in_matrixview || event.subject || null,
             date: event.date || this.formatDateISO(new Date()),
             time_start: event.time_start ?? '09:00',
             time_end: event.time_end ?? '10:00',

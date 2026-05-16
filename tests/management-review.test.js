@@ -92,7 +92,8 @@ function createHarness() {
                         summary: 'ManageBac One',
                         description: 'One description',
                         suggested_plan_id: 1,
-                        suggested_subject: 'English'
+                        suggested_subject: 'English',
+                        suggested_subject_in_managebac: 'English Language Acquisition Phase 5'
                     },
                     {
                         event_uid: 'mb-2',
@@ -100,7 +101,8 @@ function createHarness() {
                         summary: 'ManageBac Two',
                         description: 'Two description',
                         suggested_plan_id: 2,
-                        suggested_subject: 'Math'
+                        suggested_subject: 'Math',
+                        suggested_subject_in_managebac: 'Mathematics Analysis HL'
                     }
                 ],
                 managebac_summary: { events: 2 },
@@ -226,7 +228,7 @@ async function run() {
             event_uid: 'mb-1',
             plan_id: '1',
             subject: 'English',
-            subject_in_managebac: 'English'
+            subject_in_managebac: 'English Language Acquisition Phase 5'
         }
     ]);
     assert('confirm calls ManageBac sync with applyPendingEventOverrides', applyHarness.calls.sync === 1

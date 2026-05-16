@@ -149,6 +149,9 @@ assert('Popup expanding one task collapses other tasks and auto-scrolls it into 
     && popupScript.includes('if (other !== card) other.open = false')
     && popupScript.includes('ensureExpandedTaskVisible')
     && popupScript.includes("scrollIntoView({ block: 'nearest'"));
+assert('Dashboard task_id URL opens matching current task card', focusScript.includes("new URLSearchParams(window.location.search).get('task_id')")
+    && focusScript.includes('data-task-card-id')
+    && focusScript.includes("scrollIntoView({ block: 'center'"));
 assert('Popup expanded task cards do not clip core task content', popupCss.includes('.task-list')
     && /task-list[\s\S]*overflow-y:\s*auto/.test(popupCss)
     && /task-list[\s\S]*scroll-behavior:\s*smooth/.test(popupCss)

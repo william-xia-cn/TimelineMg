@@ -24,6 +24,7 @@
     const GOOGLE_SYNC_PENDING_KEY = 'google_sync_pending';
     const GOOGLE_SYNC_LAST_RUN_KEY = 'google_sync_last_run_at';
     const GOOGLE_SYNC_LAST_SUCCESS_KEY = 'google_sync_last_success_at';
+    const GOOGLE_SYNC_ACCOUNT_EMAIL_KEY = 'google_sync_account_email';
     const AUTO_SYNC_THROTTLE_MS = 60 * 1000;
     const SAVE_DEBOUNCE_MS = 30 * 1000;
 
@@ -53,6 +54,7 @@
         'access_token',
         'refresh_token',
         'google_email',
+        GOOGLE_SYNC_ACCOUNT_EMAIL_KEY,
         'management_review_pending',
         'managebac_pending_event_mappings',
         'matrixview_last_import_raw',
@@ -593,6 +595,21 @@
                 const status = await this.getStatus();
                 if (status.status === 'not_configured') return status;
                 return await requestChromeToken(chromeRef, options.interactive === true);
+            },
+            async getAccountInfo() {
+                if (!chromeRef?.identity?.getProfileUserInfo) {
+                    return { email: null };
+                }
+                return new Promise(resolve => {
+                    chromeRef.identity.getProfileUserInfo({ accountStatus: 'ANY' }, info => {
+                        const err = chromeLastError(chromeRef);
+                        if (err) {
+                            resolve({ email: null, error: err });
+                            return;
+                        }
+                        resolve({ email: info?.email || null });
+                    });
+                });
             },
             async disconnect() {
                 if (!chromeRef?.identity?.clearAllCachedAuthTokens) {
@@ -1312,6 +1329,7 @@
         GOOGLE_SYNC_PENDING_KEY,
         GOOGLE_SYNC_LAST_RUN_KEY,
         GOOGLE_SYNC_LAST_SUCCESS_KEY,
+        GOOGLE_SYNC_ACCOUNT_EMAIL_KEY,
         AUTO_SYNC_THROTTLE_MS,
         SAVE_DEBOUNCE_MS,
         SNAPSHOT_TABLES: SNAPSHOT_TABLES.slice(),

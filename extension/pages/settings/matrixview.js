@@ -23,7 +23,10 @@ function setupMatrixViewEvents() {
     document.getElementById('savePlansBtn')?.addEventListener('click', handleSavePlans);
     document.getElementById('planConfirmCloseBtn')?.addEventListener('click', () => closePlanConfirmModal(false));
     document.getElementById('planConfirmCancelBtn')?.addEventListener('click', () => closePlanConfirmModal(false));
-    document.getElementById('planConfirmOkBtn')?.addEventListener('click', () => closePlanConfirmModal(true));
+    document.getElementById('planConfirmOkBtn')?.addEventListener('click', handlePlanConfirmOk);
+    document.getElementById('planDeleteConfirmInput')?.addEventListener('input', updatePlanConfirmState);
+    document.getElementById('planReconcileRows')?.addEventListener('input', handleReconcileInput);
+    document.getElementById('planReconcileRows')?.addEventListener('change', handleReconcileInput);
     document.getElementById('planConfirmModal')?.addEventListener('click', event => {
         if (event.target?.id === 'planConfirmModal') closePlanConfirmModal(false);
     });
@@ -186,7 +189,7 @@ function renderSubjectPreview(courses) {
         <table class="matrixview-table">
             <thead>
                 <tr>
-                    <th>Subject</th>
+                    <th>Plan 显示名</th>
                     <th>Subject in MatrixView</th>
                     <th>Teacher</th>
                     <th>Room</th>
@@ -230,37 +233,43 @@ async function handleSavePlans() {
     const mappings = currentImport.courses.map((course, index) => {
         const input = document.querySelector(`.matrixview-subject-input[data-index="${index}"]`);
         return {
-            subject: input ? input.value.trim() : course.subject,
+            plan_name: input ? input.value.trim() : course.subject,
             subject_in_matrixview: course.subject_in_matrixview
         };
     });
 
     try {
         const preview = await TimeWhereMatrixView.previewSubjectPlanInitialization(TimeWhereDB, mappings);
-        const confirmed = await showPlanConfirmModal(preview);
-        if (!confirmed) {
+        const confirmedRows = await showPlanConfirmModal(preview);
+        if (!confirmedRows) {
             setStatus('已取消初始化，未修改 Plan 数据', 'info');
             return;
         }
 
-        const result = await TimeWhereMatrixView.initializeSubjectPlans(TimeWhereDB, mappings);
+        const result = await TimeWhereMatrixView.initializeSubjectPlans(TimeWhereDB, confirmedRows);
         const uncertain = result.uncertainPlans.length
             ? `；保留 ${result.uncertainPlans.length} 个不确定 Plan`
             : '';
-        setStatus(`已初始化 ${result.createdPlans.length} 个学科 Plan，确保 Other School Plan 存在${uncertain}`, 'success');
+        const changedCount = result.createdPlans.length + result.updatedPlans.length + result.reactivatedPlans.length;
+        const inactiveText = result.deactivatedPlans.length ? `；停用 ${result.deactivatedPlans.length} 个缺失学科 Plan` : '';
+        const deletedText = result.deletedPlans.length ? `；删除 ${result.deletedPlans.length} 个停用学科 Plan` : '';
+        setStatus(`已更新 ${changedCount} 个学科 Plan，确保 Other School Plan 存在${inactiveText}${deletedText}${uncertain}`, 'success');
     } catch (error) {
         setStatus(`初始化失败：${error.message}`, 'error');
     }
 }
 
 let planConfirmResolve = null;
+let planConfirmRows = [];
 
 function showPlanConfirmModal(preview) {
     const modal = document.getElementById('planConfirmModal');
     if (!modal) return Promise.resolve(false);
-    renderPlanConfirmList('confirmDeleteList', preview.deleteRebuildPlanNames);
-    renderPlanConfirmList('confirmPreserveList', preview.preservedPlanNames);
-    renderPlanConfirmList('confirmUncertainList', preview.uncertainPlanNames);
+    planConfirmRows = (preview.rows || []).map(row => ({ ...row }));
+    renderPlanReconcileRows();
+    const deleteInput = document.getElementById('planDeleteConfirmInput');
+    if (deleteInput) deleteInput.value = '';
+    updatePlanConfirmState();
     modal.hidden = false;
     document.getElementById('planConfirmCancelBtn')?.focus();
     return new Promise(resolve => {
@@ -274,21 +283,86 @@ function closePlanConfirmModal(confirmed) {
     if (planConfirmResolve) {
         const resolve = planConfirmResolve;
         planConfirmResolve = null;
-        resolve(confirmed);
+        resolve(confirmed ? planConfirmRows.map(row => ({ ...row })) : false);
     }
 }
 
-function renderPlanConfirmList(targetId, names) {
-    const target = document.getElementById(targetId);
+function renderPlanReconcileRows() {
+    const target = document.getElementById('planReconcileRows');
     if (!target) return;
-    const values = Array.isArray(names) ? names.filter(Boolean) : [];
-    if (!values.length) {
-        target.innerHTML = '<span class="matrixview-pill empty">无</span>';
+    if (!planConfirmRows.length) {
+        target.innerHTML = '<tr><td colspan="6" class="matrixview-reconcile-empty">无可更新学科 Plan</td></tr>';
         return;
     }
-    target.innerHTML = values.map(name => (
-        `<span class="matrixview-pill">${TimeWhereMatrixView.escapeHTML(name)}</span>`
-    )).join('');
+    target.innerHTML = planConfirmRows.map((row, index) => {
+        const isMissing = row.type === 'missing';
+        const disabledName = isMissing ? 'disabled' : '';
+        return `
+            <tr data-type="${TimeWhereMatrixView.escapeAttribute(row.type)}">
+                <td>
+                    <input type="checkbox" class="matrixview-row-select" data-index="${index}" ${row.selected !== false ? 'checked' : ''}>
+                </td>
+                <td>${row.old_plan_name ? TimeWhereMatrixView.escapeHTML(row.old_plan_name) : '<span class="matrixview-muted">空</span>'}</td>
+                <td>
+                    <input
+                        class="matrixview-plan-name-input"
+                        data-index="${index}"
+                        value="${TimeWhereMatrixView.escapeAttribute(row.new_plan_name || '')}"
+                        ${disabledName}
+                    >
+                </td>
+                <td>${TimeWhereMatrixView.escapeHTML(row.subject_in_matrixview)}</td>
+                <td>${TimeWhereMatrixView.escapeHTML(row.suggested_action || '')}</td>
+                <td class="matrixview-final-action">${TimeWhereMatrixView.escapeHTML(getFinalAction(row))}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function handleReconcileInput(event) {
+    const index = Number(event.target?.dataset?.index);
+    if (!Number.isInteger(index) || !planConfirmRows[index]) return;
+    const row = planConfirmRows[index];
+    if (event.target.classList.contains('matrixview-row-select')) {
+        row.selected = event.target.checked;
+        renderPlanReconcileRows();
+    }
+    if (event.target.classList.contains('matrixview-plan-name-input')) {
+        row.new_plan_name = event.target.value.trim();
+    }
+    updatePlanConfirmState();
+}
+
+function getFinalAction(row) {
+    if (row.type === 'missing') return row.selected === false ? '删除' : '停用保留';
+    if (row.type === 'new') return row.selected === false ? '不创建' : '创建';
+    if (row.type === 'matched') return row.selected === false ? '保持不动' : (row.suggested_action || '更新');
+    return row.selected === false ? '跳过' : (row.suggested_action || '');
+}
+
+function hasDeleteRows() {
+    return planConfirmRows.some(row => row.type === 'missing' && row.selected === false);
+}
+
+function updatePlanConfirmState() {
+    const deletePanel = document.getElementById('planDeleteConfirmPanel');
+    const deleteInput = document.getElementById('planDeleteConfirmInput');
+    const okBtn = document.getElementById('planConfirmOkBtn');
+    const requiresDeleteConfirm = hasDeleteRows();
+    if (deletePanel) deletePanel.hidden = !requiresDeleteConfirm;
+    const phraseOk = !requiresDeleteConfirm || deleteInput?.value === '删除停用Plan';
+    const selectedRowsValid = planConfirmRows.every(row => {
+        if (row.selected === false || row.type === 'missing') return true;
+        return Boolean(row.new_plan_name?.trim());
+    });
+    if (okBtn) okBtn.disabled = !phraseOk || !selectedRowsValid;
+}
+
+function handlePlanConfirmOk() {
+    updatePlanConfirmState();
+    const okBtn = document.getElementById('planConfirmOkBtn');
+    if (okBtn?.disabled) return;
+    closePlanConfirmModal(true);
 }
 
 function setStatus(message, type = 'info') {

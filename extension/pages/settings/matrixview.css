@@ -146,10 +146,10 @@
     box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
     color: var(--text-main);
     max-height: min(760px, calc(100vh - 48px));
-    max-width: 760px;
+    max-width: 980px;
     overflow: auto;
     padding: 24px;
-    width: min(760px, 100%);
+    width: min(980px, 100%);
 }
 
 .matrixview-modal-header {
@@ -203,57 +203,74 @@
     margin: 0;
 }
 
-.matrixview-confirm-grid {
-    display: grid;
-    gap: 12px;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.matrixview-confirm-card {
+.matrixview-reconcile-wrap {
     background: white;
     border: 1px solid var(--border-stroke);
     border-radius: 12px;
-    min-width: 0;
-    padding: 14px;
-}
-
-.matrixview-confirm-card.danger {
-    border-color: #fecaca;
-}
-
-.matrixview-confirm-card h3 {
-    font-size: 13px;
-    margin: 0 0 10px;
-}
-
-.matrixview-pill-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    max-height: 220px;
     overflow: auto;
 }
 
-.matrixview-pill {
-    background: #eef2ff;
-    border: 1px solid #c7d2fe;
-    border-radius: 999px;
-    color: #3730a3;
-    font-size: 12px;
-    line-height: 1.25;
-    padding: 6px 9px;
+.matrixview-reconcile-table {
+    border-collapse: collapse;
+    min-width: 820px;
+    width: 100%;
 }
 
-.matrixview-pill.empty {
-    background: #f8fafc;
-    border-color: #e2e8f0;
+.matrixview-reconcile-table th,
+.matrixview-reconcile-table td {
+    border-bottom: 1px solid var(--border-stroke);
+    font-size: 13px;
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.matrixview-reconcile-table th {
+    color: var(--text-sub);
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
+.matrixview-reconcile-table tr:last-child td {
+    border-bottom: none;
+}
+
+.matrixview-reconcile-table tr[data-type="missing"] {
+    background: #fff7ed;
+}
+
+.matrixview-plan-name-input {
+    min-width: 180px;
+    width: 100%;
+}
+
+.matrixview-muted,
+.matrixview-reconcile-empty {
     color: var(--text-sub);
 }
 
-.matrixview-confirm-card.danger .matrixview-pill:not(.empty) {
+.matrixview-delete-confirm {
     background: #fff1f2;
-    border-color: #fecdd3;
-    color: #be123c;
+    border: 1px solid #fecdd3;
+    border-radius: 12px;
+    color: #9f1239;
+    margin-top: 14px;
+    padding: 12px 14px;
+}
+
+.matrixview-delete-confirm p {
+    margin: 0 0 10px;
+}
+
+.matrixview-delete-confirm label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.matrixview-delete-confirm input {
+    width: 100%;
 }
 
 .matrixview-modal-actions {
@@ -291,10 +308,6 @@
 
     .matrixview-import-btn {
         width: 100%;
-    }
-
-    .matrixview-confirm-grid {
-        grid-template-columns: 1fr;
     }
 
     .matrixview-modal-actions {

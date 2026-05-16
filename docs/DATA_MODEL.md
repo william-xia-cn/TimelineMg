@@ -3,7 +3,7 @@
 **版本**: v2.3  
 **日期**: 2026-04-14
 
-> Current baseline note (2026-05-15): Internal MVP acceptance is approved for a local-first MVP. This document is aligned to D-013: `tasks`, `containers`, `events`, and `habits` use string UUID ids; planner helper records such as `plans`, `buckets`, and `labels` may remain numeric for now. MatrixView import, ManageBac mapping/task-sync, Task Date Arrange, and optional Google data sync v1 are active baseline stabilization features. Background alarm automation, reminder notifications, Chrome Web Store submission, and public release are out of current scope.
+> Current baseline note (2026-05-16): Internal MVP acceptance is approved for a local-first MVP. This document is aligned to D-013: `tasks`, `containers`, `events`, and `habits` use string UUID ids; planner helper records such as `plans`, `buckets`, and `labels` may remain numeric for now. MatrixView import, ManageBac mapping/task-sync, Task Date Arrange, optional Google data sync v1, and local system task reminders are active baseline stabilization features. Chrome Web Store submission and public release are out of current scope.
 
 ---
 
@@ -209,24 +209,26 @@ const SUBJECTS = {
 
 `Plan` 是 Task Board / planner 模块中的任务组织单元，不是课表事件、时间容器或 MatrixView 原始记录。
 
-MatrixView 导入中的“初始化学科 Plan 数据”定义为：
+MatrixView 导入中的“导入更新学科 Plan”定义为：
 
-1. 以用户确认后的系统内部 `Subject` 为主键语义，为每个 Subject 创建或更新一个 planner `Plan`。
-2. `Plan.name` 默认等于内部 `Subject`，用于 Task Board 侧边栏、后续计划名称和任务归属。
-3. `Plan.subject` 保存同一个内部 `Subject`，用于任务继承学科、排课、统计和规则匹配。
-4. `Subject in MatrixView` 是外部原始课程文本，应作为映射来源保存，不能替代内部 `Subject`。
-5. 初始化时为每个新建学科 Plan 创建默认 buckets：`上课`, `作业`, `单元测试`, `阶段考试`。
-6. 初始化应重建学科 Plan 集合：清除旧的学科相关 Plan，再按当前 MatrixView Subject 映射创建新的学科 Plan。
-7. 初始化时必须确保存在一个名为 `Other School Plan` 的 planner Plan，用于保存未来非学科但仍属于学校相关的任务，并为该 Plan 创建默认 buckets：`事项`, `活动`, `申请`, `其他`。
-8. 明显非学科用途的 Plan 必须保留，例如 `其它计划`, `大学申请`, `Personal`, `Projects` 等。
-9. 初始化必须幂等：同一个内部 `Subject` 不应重复创建多个 Plan；重复执行后，学科 Plan 集合与 `Other School Plan` 应与当前初始化规则一致。
+1. `Subject in MatrixView` 是学科权威来源；学科型 `Plan.subject` 必须保存完整 `Subject in MatrixView`。
+2. `Plan.name` 是用户可编辑显示名，用于 Task Board 侧边栏、计划名称和视觉呈现；不参与权威匹配。
+3. `Plan.subject` 是稳定学科身份，用于任务继承学科、排课、统计和规则匹配；不随 `Plan.name` 改名。
+4. 初始化时为每个新建学科 Plan 创建默认 buckets：`上课`, `作业`, `单元测试`, `阶段考试`。
+5. MatrixView 更新进入逐项对账确认：匹配学科可更新显示名，新学科可选择创建，缺失旧学科默认停用保留。
+6. 新课表中缺失的旧学科 Plan 默认标记为 `subject_active=false`，保留历史任务；用户在对账确认中明确选择删除时，才沿用 Plan 删除级联规则删除该 Plan 及其历史任务、Bucket、Label 关联。
+7. 重新出现在 MatrixView 中的停用学科 Plan 应恢复为 `subject_active=true`。
+8. 启用学科 Plan 禁止手工删除，只能通过 MatrixView 导入更新；停用学科 Plan 可由用户明确确认后手工删除。
+9. 初始化时必须确保存在一个名为 `Other School Plan` 的 planner Plan，用于保存未来非学科但仍属于学校相关的任务，并为该 Plan 创建默认 buckets：`事项`, `活动`, `申请`, `其他`。
+10. 明显非学科用途的 Plan 必须保留，例如 `其它计划`, `大学申请`, `Personal`, `Projects` 等。
+11. 初始化必须幂等：同一个 `Subject in MatrixView` 不应重复创建多个 Plan；重复执行后，学科 Plan 集合与 `Other School Plan` 应与当前 MatrixView 映射一致。
 
 学科 Plan 清理判定：
 
 | Plan 类型 | 判定 | 初始化处理 |
 |---|---|---|
-| MatrixView 管理的学科 Plan | 有 MatrixView subject mapping 或 `source='matrixview'` 元数据 | 清除后重建 |
-| 普通学科 Plan | `plan.subject` 存在，或 `Plan.name` 明显匹配学科名称/简称，如 `Math`, `English`, `Physics`, `TOK` | 清除后重建 |
+| MatrixView 管理的学科 Plan | 有 `plan.subject`、MatrixView subject mapping 或 `source='matrixview'` 元数据 | 在当前课表中则更新 / 启用；缺失则停用保留 |
+| 普通学科 Plan | `plan.subject` 存在，或 `Plan.name` 明显匹配学科名称/简称，如 `Math`, `English`, `Physics`, `TOK` | 作为兼容旧数据处理；有 `plan.subject` 的缺失学科停用保留 |
 | 学校非学科 Plan | `Plan.name = "Other School Plan"` | 保留或创建；不得重复 |
 | 非学科 Plan | 名称明显与学科无关，如 `其它计划`, `大学申请`, `Personal`, `Projects` | 保留 |
 | 不确定 Plan | 名称无法判断是否学科相关 | 不自动删除；应提示用户确认 |
@@ -236,8 +238,10 @@ MatrixView 导入中的“初始化学科 Plan 数据”定义为：
 ```typescript
 interface Plan {
   id: number;                    // planner helper id, may remain numeric
-  name: string;                  // 默认等于内部 Subject，如 "Math"
-  subject?: string;              // 内部 Subject 简写
+  name: string;                  // 用户可编辑显示名
+  subject?: string;              // 权威 SubjectInMatrixView；非学科 Plan 为 null
+  subject_active?: boolean;       // 学科 Plan 是否仍存在于当前 MatrixView 课表
+  matrixview_managed?: boolean;   // 是否由 MatrixView 导入管理
   color: string;                 // 显示颜色
   icon_char: string;             // 侧边栏图标字符
   created_at: string;
@@ -245,9 +249,10 @@ interface Plan {
 }
 
 interface SubjectMatrixViewMapping {
-  subject: string;               // TimeWhere 内部 Subject 简写
+  subject: string;               // 权威 SubjectInMatrixView；非学科映射可为空
+  plan_name?: string;            // 用户确认的 Plan 显示名
   subject_in_matrixview: string; // MatrixView 原始课程文本
-  plan_id: number;               // 关联 planner Plan
+  plan_id?: number;              // 关联 planner Plan，可由实现保存
   source: 'matrixview';
   updated_at: string;
 }
@@ -576,7 +581,7 @@ interface Habit {
 // Habit 当前参与:
 // 1. 连续天数统计
 // 2. 完成状态记录
-// Reminder notification system is future scope.
+// Reminder notification system ignores habits.
 ```
 
 ---
@@ -609,7 +614,8 @@ interface Settings {
   appearance_background: 'calm' | 'focus' | 'morning' | 'evening';
   appearance_avatar: 'default' | 'student' | 'school' | 'focus';
   
-  // Reminder notification system is out of current MVP scope.
+  // Task reminder notifications use fixed D-021 rules in v1.
+  notification_enabled: boolean;
 }
 ```
 

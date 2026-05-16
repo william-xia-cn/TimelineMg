@@ -8,15 +8,14 @@ const MANAGEMENT_REVIEW_PENDING_KEY = 'management_review_pending';
 let settingsManageBacSyncInProgress = false;
 let googleSyncInProgress = false;
 let googleSyncPreviewState = null;
+let pendingGoogleSyncDangerAction = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
     try {
         await initDatabase();
-        await checkAndShowWizard();
         await loadSettings();
         runGoogleSyncCheck();
-        checkReturnFromInit();
     } catch (error) {
         showToast(`设置页初始化失败：${error.message}`, 'error');
     }
@@ -29,37 +28,9 @@ function runGoogleSyncCheck() {
     });
 }
 
-async function checkReturnFromInit() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const backFromInit = urlParams.get('backfrom') === 'init';
-    
-    if (backFromInit) {
-        localStorage.setItem('wizard_init_container', 'false');
-        localStorage.setItem('wizard_init_timetable', 'false');
-        
-        window.history.replaceState({}, '', window.location.pathname);
-    }
-}
-
 async function initDatabase() {
     if (typeof TimeWhereDB !== 'undefined') {
         await TimeWhereDB.initDefaultSettings();
-    }
-}
-
-async function checkAndShowWizard() {
-    const initialized = await TimeWhereDB.getSetting('initialized');
-    if (!initialized) {
-        // Show wizard for first-time users
-        document.getElementById('settingsView').style.display = 'none';
-        document.getElementById('wizardView').style.display = 'block';
-        document.getElementById('wizardFooter').style.display = 'flex';
-        document.getElementById('saveBtn').style.display = 'none';
-    } else {
-        document.getElementById('settingsView').style.display = 'block';
-        document.getElementById('wizardView').style.display = 'none';
-        document.getElementById('wizardFooter').style.display = 'none';
-        document.getElementById('saveBtn').style.display = 'block';
     }
 }
 
@@ -71,6 +42,7 @@ async function loadSettings() {
     document.getElementById('tomatoDuration').value = settings.pomodoro_work || 25;
     document.getElementById('defaultDuration').value = settings.default_duration || 45;
     document.getElementById('defaultPriority').value = settings.default_priority || 'medium';
+    document.getElementById('notificationEnabled').checked = settings.notification_enabled !== false;
     document.getElementById('appearanceBackground').value = settings.appearance_background || 'calm';
     document.getElementById('appearanceAvatar').value = settings.appearance_avatar || 'default';
     if (typeof TimeWhereAppearance !== 'undefined') {
@@ -85,7 +57,6 @@ async function loadSettings() {
 
 function setupEventListeners() {
     document.getElementById('saveBtn').addEventListener('click', saveSettings);
-    document.getElementById('reinitBtn').addEventListener('click', reinitialize);
     document.getElementById('exportBtn')?.addEventListener('click', exportData);
     document.getElementById('importJsonBtn')?.addEventListener('click', () => document.getElementById('importJsonInput')?.click());
     document.getElementById('importJsonInput')?.addEventListener('change', importData);
@@ -103,9 +74,14 @@ function setupEventListeners() {
     document.getElementById('restoreGoogleSyncBtn')?.addEventListener('click', handleRestoreGoogleSync);
     document.getElementById('uploadGoogleSyncBtn')?.addEventListener('click', handleUploadGoogleSync);
     document.getElementById('disconnectGoogleSyncBtn')?.addEventListener('click', handleDisconnectGoogleSync);
+    document.getElementById('processGoogleConflictsBtn')?.addEventListener('click', showStoredGoogleSyncConflicts);
+    document.getElementById('testNotificationBtn')?.addEventListener('click', handleTestNotification);
+    document.getElementById('closeGoogleSyncDangerModal')?.addEventListener('click', closeGoogleSyncDangerModal);
+    document.getElementById('cancelGoogleSyncDangerBtn')?.addEventListener('click', closeGoogleSyncDangerModal);
+    document.getElementById('confirmGoogleSyncDangerBtn')?.addEventListener('click', confirmGoogleSyncDangerAction);
+    document.getElementById('googleSyncDangerConfirmInput')?.addEventListener('input', updateGoogleSyncDangerConfirmState);
     document.getElementById('appearanceBackground')?.addEventListener('change', previewAppearanceSettings);
     document.getElementById('appearanceAvatar')?.addEventListener('change', previewAppearanceSettings);
-    setupWizardEvents();
     setupImportEvents();
 }
 
@@ -271,6 +247,51 @@ function setGoogleSyncStatus(message, status = 'not_configured') {
     el.dataset.status = status;
 }
 
+function formatGoogleSyncDateTime(value) {
+    if (!value) return '暂无';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '暂无';
+    const pad = number => String(number).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+async function getGoogleSyncAccountEmail() {
+    return await TimeWhereDB.getSetting('google_sync_account_email');
+}
+
+async function updateGoogleSyncAccountDisplay(state = null) {
+    const accountEl = document.getElementById('googleSyncAccountEmail');
+    const connectBtn = document.getElementById('connectGoogleSyncBtn');
+    const disconnectBtn = document.getElementById('disconnectGoogleSyncBtn');
+    const connected = state?.status === 'connected' || state?.status === 'conflict' || state?.status === 'pending_retry' || state?.status === 'failed' || state?.status === 'syncing';
+    const email = connected ? await getGoogleSyncAccountEmail() : null;
+    if (accountEl) {
+        accountEl.textContent = email || (connected ? 'Google 账户' : '');
+    }
+    if (connectBtn) {
+        connectBtn.hidden = connected;
+        connectBtn.textContent = '连接 Google 账户同步';
+    }
+    if (disconnectBtn) {
+        disconnectBtn.hidden = !connected;
+        disconnectBtn.textContent = '断开连接';
+    }
+}
+
+function updateGoogleSyncLastSyncDisplay(state = null) {
+    const el = document.getElementById('googleSyncLastSyncAt');
+    if (!el) return;
+    el.textContent = `最近同步：${formatGoogleSyncDateTime(state?.last_success_at || state?.last_restore_at || state?.last_force_upload_at)}`;
+}
+
+function updateGoogleSyncConflictButton(count = 0) {
+    const btn = document.getElementById('processGoogleConflictsBtn');
+    if (!btn) return;
+    const hasConflicts = Number(count) > 0;
+    btn.hidden = !hasConflicts;
+    btn.textContent = hasConflicts ? `处理 ${count} 项冲突` : '处理冲突';
+}
+
 function updateGoogleSyncControls() {
     const disabled = googleSyncInProgress || typeof TimeWhereGoogleSync === 'undefined';
     [
@@ -290,25 +311,36 @@ function setGoogleSyncInProgress(inProgress, message = '') {
 
 async function loadGoogleSyncStatus() {
     if (typeof TimeWhereGoogleSync === 'undefined') {
-        setGoogleSyncStatus('未配置', 'not_configured');
+        setGoogleSyncStatus('○ 未连接', 'not_configured');
+        await updateGoogleSyncAccountDisplay({ status: 'not_configured' });
+        updateGoogleSyncLastSyncDisplay(null);
+        updateGoogleSyncConflictButton(0);
         updateGoogleSyncControls();
         return;
     }
     const state = await TimeWhereGoogleSync.getGoogleSyncState(TimeWhereDB);
     if (state?.status === 'connected') {
-        setGoogleSyncStatus('已连接', 'connected');
+        setGoogleSyncStatus('● 已连接', 'connected');
+        updateGoogleSyncConflictButton(0);
     } else if (state?.status === 'conflict') {
-        setGoogleSyncStatus(`有冲突待处理${state.conflict_count ? `（${state.conflict_count}）` : ''}`, 'conflict');
+        setGoogleSyncStatus(`● 有冲突待处理${state.conflict_count ? `（${state.conflict_count}）` : ''}`, 'conflict');
+        updateGoogleSyncConflictButton(state.conflict_count || 0);
         await showStoredGoogleSyncConflicts();
     } else if (state?.status === 'failed') {
-        setGoogleSyncStatus('失败', 'failed');
+        setGoogleSyncStatus('● 失败', 'failed');
+        updateGoogleSyncConflictButton(0);
     } else if (state?.status === 'pending_retry') {
-        setGoogleSyncStatus('离线待重试', 'failed');
+        setGoogleSyncStatus('● 离线待重试', 'failed');
+        updateGoogleSyncConflictButton(0);
     } else if (state?.status === 'syncing') {
-        setGoogleSyncStatus('同步中', 'syncing');
+        setGoogleSyncStatus('● 同步中', 'syncing');
+        updateGoogleSyncConflictButton(0);
     } else {
-        setGoogleSyncStatus('未配置', 'not_configured');
+        setGoogleSyncStatus('○ 未连接', 'not_configured');
+        updateGoogleSyncConflictButton(0);
     }
+    await updateGoogleSyncAccountDisplay(state);
+    updateGoogleSyncLastSyncDisplay(state);
     updateGoogleSyncControls();
 }
 
@@ -322,12 +354,20 @@ async function handleConnectGoogleSync() {
                 status: 'not_configured',
                 reason: result.reason || 'oauth_client_id_missing'
             });
-            setGoogleSyncStatus('未配置', 'not_configured');
+            setGoogleSyncStatus('○ 未连接', 'not_configured');
             showToast('Google OAuth client ID 未配置；本地功能不受影响。', 'info');
             return;
         }
-        await api.saveGoogleSyncState(TimeWhereDB, { status: 'connected', connected_at: new Date().toISOString() });
-        setGoogleSyncStatus('已连接', 'connected');
+        const accountInfo = await authAdapter.getAccountInfo?.();
+        if (accountInfo?.email) {
+            await TimeWhereDB.setSetting('google_sync_account_email', accountInfo.email);
+        }
+        await api.saveGoogleSyncState(TimeWhereDB, {
+            status: 'connected',
+            connected_at: new Date().toISOString()
+        });
+        setGoogleSyncStatus('● 已连接', 'connected');
+        await updateGoogleSyncAccountDisplay({ status: 'connected' });
         showToast('Google 数据同步已连接', 'success');
     } catch (error) {
         await markGoogleSyncFailed(error);
@@ -337,22 +377,24 @@ async function handleConnectGoogleSync() {
 }
 
 async function handleUploadGoogleSync() {
-    if (!window.confirm('这是高级危险操作：将以本设备数据为准覆盖 Google 云端同步副本。继续前请确认其他设备没有未同步的重要修改。是否继续？')) {
-        return;
-    }
-    setGoogleSyncInProgress(true, '正在上传本设备数据…');
+    openGoogleSyncDangerModal('upload');
+}
+
+async function executeUploadGoogleSync() {
+    setGoogleSyncInProgress(true, '正在上传到云端…');
     try {
         const { api, driveClient } = createGoogleSyncRuntime();
         const result = await api.forceUploadLocalToCloud(TimeWhereDB, driveClient);
         if (result.status === 'not_configured') {
             await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: result.reason });
-            setGoogleSyncStatus('未配置', 'not_configured');
+            setGoogleSyncStatus('○ 未连接', 'not_configured');
             showToast('Google OAuth client ID 未配置，无法上传到 Drive。', 'info');
             return;
         }
         hideGoogleSyncPreview();
-        setGoogleSyncStatus('已连接', 'connected');
-        showToast('已上传本设备数据到 Google appDataFolder', 'success');
+        setGoogleSyncStatus('● 已连接', 'connected');
+        await loadGoogleSyncStatus();
+        showToast('已上传到 Google 云端同步副本', 'success');
     } catch (error) {
         await markGoogleSyncFailed(error);
     } finally {
@@ -367,18 +409,20 @@ async function handleGoogleSyncNow() {
         const result = await api.runAutoSync(TimeWhereDB, driveClient, { force: true });
         if (result?.status === 'not_configured') {
             await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: result.reason });
-            setGoogleSyncStatus('未配置', 'not_configured');
+            setGoogleSyncStatus('○ 未连接', 'not_configured');
             showToast('Google OAuth client ID 未配置；无法同步。', 'info');
             return;
         }
         if (result.status === 'conflict') {
             renderGoogleSyncConflicts(result.conflicts || []);
-            setGoogleSyncStatus(`有冲突待处理（${result.conflicts.length}）`, 'conflict');
+            setGoogleSyncStatus(`● 有冲突待处理（${result.conflicts.length}）`, 'conflict');
+            updateGoogleSyncConflictButton(result.conflicts.length);
             showToast(`发现 ${result.conflicts.length} 项同步冲突，请选择处理方式。`, 'info');
             return;
         }
         hideGoogleSyncPreview();
-        setGoogleSyncStatus('已连接', 'connected');
+        setGoogleSyncStatus('● 已连接', 'connected');
+        await loadGoogleSyncStatus();
         showToast(result.status === 'up_to_date' ? '本地和云端已是最新。' : 'Google 数据同步完成。', 'success');
     } catch (error) {
         await markGoogleSyncFailed(error);
@@ -388,17 +432,18 @@ async function handleGoogleSyncNow() {
 }
 
 async function handleRestoreGoogleSync() {
-    if (!window.confirm('这是高级危险操作：将以 Google 云端同步副本为准覆盖本地数据。继续前请确认本设备没有未同步的重要修改。是否继续？')) {
-        return;
-    }
-    setGoogleSyncInProgress(true, '正在读取 Google 快照…');
+    openGoogleSyncDangerModal('restore');
+}
+
+async function executeRestoreGoogleSync() {
+    setGoogleSyncInProgress(true, '正在下载到本地…');
     try {
         const { api, driveClient } = createGoogleSyncRuntime();
         const result = await api.forceRestoreCloudToLocal(TimeWhereDB, driveClient);
         if (result?.status === 'not_configured') {
             await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: result.reason });
-            setGoogleSyncStatus('未配置', 'not_configured');
-            showToast('Google OAuth client ID 未配置；无法从 Google 恢复。', 'info');
+            setGoogleSyncStatus('○ 未连接', 'not_configured');
+            showToast('Google OAuth client ID 未配置；无法下载到本地。', 'info');
             return;
         }
         if (!result || result.status === 'no_cloud_sync_document') {
@@ -407,8 +452,9 @@ async function handleRestoreGoogleSync() {
             return;
         }
         hideGoogleSyncPreview();
-        setGoogleSyncStatus('已连接', 'connected');
-        showToast(`已从 Google 恢复 ${result.applied_count || 0} 项。`, 'success');
+        setGoogleSyncStatus('● 已连接', 'connected');
+        await loadGoogleSyncStatus();
+        showToast(`已从 Google 云端同步副本下载 ${result.applied_count || 0} 项到本地。`, 'success');
     } catch (error) {
         await markGoogleSyncFailed(error);
     } finally {
@@ -425,8 +471,12 @@ async function handleDisconnectGoogleSync() {
             status: 'not_configured',
             disconnected_at: new Date().toISOString()
         });
+        await TimeWhereDB.setSetting('google_sync_account_email', null);
         hideGoogleSyncPreview();
-        setGoogleSyncStatus('未配置', 'not_configured');
+        setGoogleSyncStatus('○ 未连接', 'not_configured');
+        await updateGoogleSyncAccountDisplay({ status: 'not_configured' });
+        updateGoogleSyncLastSyncDisplay(null);
+        updateGoogleSyncConflictButton(0);
         showToast('已断开 Google 数据同步。本地数据保留。', 'success');
     } catch (error) {
         await markGoogleSyncFailed(error);
@@ -446,8 +496,77 @@ async function markGoogleSyncFailed(error) {
     } catch (_) {
         // Status write failure should not hide the original sync error.
     }
-    setGoogleSyncStatus('失败', 'failed');
+    setGoogleSyncStatus('● 失败', 'failed');
     showToast(`Google 数据同步失败：${error.message}`, 'error');
+}
+
+const GOOGLE_SYNC_DANGER_COPY = {
+    upload: {
+        title: '上传到云端',
+        message: '此操作会用本设备当前数据覆盖 Google 云端同步副本。',
+        phrase: '上传到云端',
+        confirmText: '确认上传到云端',
+        risks: [
+            '其他设备尚未同步的云端修改可能被覆盖。',
+            '覆盖后，其他设备下次同步会以新的云端副本为准。',
+            '此操作不是普通同步，仅用于确认本设备数据最可信的情况。'
+        ],
+        action: executeUploadGoogleSync
+    },
+    restore: {
+        title: '下载到本地',
+        message: '此操作会用 Google 云端同步副本覆盖本设备 IndexedDB 数据。',
+        phrase: '下载到本地',
+        confirmText: '确认下载到本地',
+        risks: [
+            '本设备尚未同步的本地修改可能被覆盖。',
+            '覆盖后，本设备会以云端副本为准继续使用。',
+            '此操作不是普通同步，仅用于确认云端数据最可信的情况。'
+        ],
+        action: executeRestoreGoogleSync
+    }
+};
+
+function openGoogleSyncDangerModal(actionName) {
+    const config = GOOGLE_SYNC_DANGER_COPY[actionName];
+    if (!config) return;
+    pendingGoogleSyncDangerAction = actionName;
+    document.getElementById('googleSyncDangerTitle').textContent = config.title;
+    document.getElementById('googleSyncDangerMessage').textContent = config.message;
+    document.getElementById('googleSyncDangerPrompt').textContent = `请输入“${config.phrase}”以确认：`;
+    document.getElementById('confirmGoogleSyncDangerBtn').textContent = config.confirmText;
+    document.getElementById('confirmGoogleSyncDangerBtn').disabled = true;
+    const input = document.getElementById('googleSyncDangerConfirmInput');
+    input.value = '';
+    const list = document.getElementById('googleSyncDangerRisks');
+    list.innerHTML = config.risks.map(item => `<li>${escapeGoogleSyncText(item)}</li>`).join('');
+    document.getElementById('googleSyncDangerModal').style.display = 'flex';
+    setTimeout(() => input.focus(), 0);
+}
+
+function closeGoogleSyncDangerModal() {
+    pendingGoogleSyncDangerAction = null;
+    const modal = document.getElementById('googleSyncDangerModal');
+    if (modal) modal.style.display = 'none';
+    const input = document.getElementById('googleSyncDangerConfirmInput');
+    if (input) input.value = '';
+    const confirmBtn = document.getElementById('confirmGoogleSyncDangerBtn');
+    if (confirmBtn) confirmBtn.disabled = true;
+}
+
+function updateGoogleSyncDangerConfirmState() {
+    const config = GOOGLE_SYNC_DANGER_COPY[pendingGoogleSyncDangerAction];
+    const input = document.getElementById('googleSyncDangerConfirmInput');
+    const confirmBtn = document.getElementById('confirmGoogleSyncDangerBtn');
+    if (!config || !input || !confirmBtn) return;
+    confirmBtn.disabled = input.value.trim() !== config.phrase;
+}
+
+async function confirmGoogleSyncDangerAction() {
+    const config = GOOGLE_SYNC_DANGER_COPY[pendingGoogleSyncDangerAction];
+    if (!config) return;
+    closeGoogleSyncDangerModal();
+    await config.action();
 }
 
 function escapeGoogleSyncText(value) {
@@ -597,12 +716,14 @@ async function handleApplyGoogleSyncPreview() {
             const result = await api.resolveSyncConflicts(TimeWhereDB, driveClient, googleSyncPreviewState.conflicts, choices);
             if (result.status === 'conflict_remaining') {
                 renderGoogleSyncConflicts((await TimeWhereDB.getSetting('google_sync_conflicts')) || []);
-                setGoogleSyncStatus(`有冲突待处理（${result.remaining_count}）`, 'conflict');
+                setGoogleSyncStatus(`● 有冲突待处理（${result.remaining_count}）`, 'conflict');
+                updateGoogleSyncConflictButton(result.remaining_count);
                 showToast(`已处理 ${result.applied_count} 项，仍有 ${result.remaining_count} 项冲突。`, 'info');
                 return;
             }
             hideGoogleSyncPreview();
-            setGoogleSyncStatus('已连接', 'connected');
+            setGoogleSyncStatus('● 已连接', 'connected');
+            updateGoogleSyncConflictButton(0);
             showToast(`已处理 ${result.applied_count} 项冲突并完成同步。`, 'success');
             return;
         }
@@ -617,7 +738,7 @@ async function handleApplyGoogleSyncPreview() {
         const uploadManifest = api.createManifest(uploadSnapshot);
         const uploadResult = await driveClient.uploadJsonFile(api.SNAPSHOT_FILE_NAME, uploadSnapshot);
         if (uploadResult?.status === 'not_configured') {
-            setGoogleSyncStatus('未配置', 'not_configured');
+            setGoogleSyncStatus('○ 未连接', 'not_configured');
             showToast(`已应用 ${result.applied_count} 项云端变更；Google OAuth 未配置，未上传合并快照。`, 'info');
             return;
         }
@@ -629,7 +750,8 @@ async function handleApplyGoogleSyncPreview() {
             last_snapshot_exported_at: uploadSnapshot.exported_at
         });
         hideGoogleSyncPreview();
-        setGoogleSyncStatus('已连接', 'connected');
+        setGoogleSyncStatus('● 已连接', 'connected');
+        updateGoogleSyncConflictButton(0);
         showToast(`已应用 ${result.applied_count} 项云端变更，并已上传确认后的同步快照。`, 'success');
     } catch (error) {
         await markGoogleSyncFailed(error);
@@ -746,6 +868,7 @@ async function parseICSAndSave(content, source = 'timetable') {
         if (event.startTime && event.endTime && event.startDate) {
             await TimeWhereDB.addEvent({
                 title: event.summary || '未命名课程',
+                subject_in_matrixview: event.summary || null,
                 date: event.startDate,
                 color: '#4A90D9',
                 time_start: event.startTime,
@@ -840,6 +963,7 @@ async function saveSettings() {
         pomodoro_work: parseInt(document.getElementById('tomatoDuration').value),
         default_duration: parseInt(document.getElementById('defaultDuration').value) || 45,
         default_priority: document.getElementById('defaultPriority').value || 'medium',
+        notification_enabled: document.getElementById('notificationEnabled').checked,
         appearance_background: document.getElementById('appearanceBackground').value || 'calm',
         appearance_avatar: document.getElementById('appearanceAvatar').value || 'default'
     };
@@ -858,11 +982,25 @@ async function saveSettings() {
     showToast('设置已保存', 'success');
 }
 
-async function reinitialize() {
-    if (confirm('确定要重新初始化吗？这将清除所有数据。')) {
-        await TimeWhereDB.clearAllData();
-        await TimeWhereDB.setSetting('initialized', false);
-        window.location.reload();
+async function handleTestNotification() {
+    try {
+        const enabled = document.getElementById('notificationEnabled')?.checked !== false;
+        await TimeWhereDB.setSetting('notification_enabled', enabled);
+        if (!enabled) {
+            showToast('系统任务提醒已关闭，未发送测试提醒', 'info');
+            return;
+        }
+        if (!chrome?.runtime?.sendMessage) {
+            showToast('当前环境不支持 Chrome 系统通知测试', 'error');
+            return;
+        }
+        const response = await chrome.runtime.sendMessage({ type: 'TIMEWHERE_TASK_REMINDER_TEST' });
+        if (!response?.ok) {
+            throw new Error(response?.error || '测试提醒发送失败');
+        }
+        showToast('已发送测试提醒；如果没有弹窗，请检查 Chrome/Windows 通知权限', 'success');
+    } catch (error) {
+        showToast(`测试提醒失败：${error.message}`, 'error');
     }
 }
 
@@ -912,85 +1050,6 @@ async function resetSettings() {
     } catch (e) {
         showToast('重置失败：' + e.message, 'error');
     }
-}
-
-function setupWizardEvents() {
-    let currentStep = 1;
-    const totalSteps = 4;
-    
-    function updateWizardUI() {
-        for (let i = 1; i <= totalSteps; i++) {
-            const stepEl = document.getElementById(`wizardStepIndicator${i}`);
-            const contentEl = document.getElementById(`wizardStep${i}`);
-            
-            if (i === currentStep) {
-                if (stepEl) stepEl.classList.add('active');
-                if (contentEl) contentEl.style.display = 'block';
-            } else {
-                if (stepEl) stepEl.classList.remove('active');
-                if (contentEl) contentEl.style.display = 'none';
-            }
-        }
-        
-        const nextBtn = document.getElementById('wizardNextBtn');
-        const prevBtn = document.getElementById('wizardPrevBtn');
-        
-        if (prevBtn) prevBtn.style.display = currentStep === 1 ? 'none' : 'block';
-        if (nextBtn) nextBtn.textContent = currentStep === totalSteps ? '完成' : '下一步';
-    }
-    
-    document.getElementById('wizardNextBtn').addEventListener('click', async () => {
-        if (currentStep === 2) {
-            const initContainer = document.getElementById('initContainer')?.checked;
-            const initTimetable = document.getElementById('initTimetable')?.checked;
-
-            if (initContainer) {
-                await TimeWhereScheduling.initDefaultContainers(TimeWhereDB);
-                showToast('默认容器已创建', 'success');
-            }
-
-            if (initTimetable) {
-                const importArea = document.getElementById('importArea');
-                if (importArea) importArea.style.display = 'block';
-                showToast('请在下方导入课表', 'info');
-            }
-        }
-
-        if (currentStep < totalSteps) {
-            currentStep++;
-            updateWizardUI();
-        }
-    });
-
-    document.getElementById('wizardPrevBtn').addEventListener('click', () => {
-        if (currentStep > 1) {
-            currentStep--;
-            updateWizardUI();
-        }
-    });
-
-    document.getElementById('wizardNextBtnAlt')?.addEventListener('click', () => {
-        currentStep = 2;
-        updateWizardUI();
-    });
-
-    document.getElementById('skipScheduleBtn')?.addEventListener('click', async () => {
-        currentStep = 3;
-        updateWizardUI();
-    });
-
-    document.getElementById('skipTaskInitBtn')?.addEventListener('click', async () => {
-        currentStep = 4;
-        updateWizardUI();
-    });
-
-    document.getElementById('wizardFinishBtn').addEventListener('click', async () => {
-        await TimeWhereDB.setSetting('initialized', true);
-        await TimeWhereDB.setSetting('first_launch', new Date().toISOString());
-        window.location.href = '../focus/focus.html';
-    });
-
-    updateWizardUI();
 }
 
 function showToast(message, type = 'info') {

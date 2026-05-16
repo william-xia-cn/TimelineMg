@@ -297,6 +297,7 @@ async function loadTaskColumn() {
     // 渲染任务卡片
     let html = '';
     const isContainerView = !!settle.activeContainer;
+    const targetTaskId = new URLSearchParams(window.location.search).get('task_id');
     settle.currentTasks.forEach((task, index) => {
         const isFirst = index === 0;
         const dueDate = task.due_date || task.deadline || '';
@@ -306,7 +307,7 @@ async function loadTaskColumn() {
         const isInProgress = task.progress === 'in_progress';
 
         html += createTaskCard(task, {
-            expanded: isFirst || isInProgress,
+            expanded: task.id === targetTaskId || isFirst || isInProgress,
             isOverdue,
             isDueToday,
             isTimed,
@@ -316,6 +317,9 @@ async function loadTaskColumn() {
         });
     });
     section.innerHTML = html;
+    if (targetTaskId) {
+        section.querySelector(`[data-task-card-id="${CSS.escape(targetTaskId)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
 }
 
 function createTaskCard(task, opts = {}) {
@@ -359,7 +363,7 @@ function createTaskCard(task, opts = {}) {
         </div>`;
 
     return `
-        <div class="accordion-task${isOverdue ? ' task-overdue' : ''}">
+        <div class="accordion-task${isOverdue ? ' task-overdue' : ''}" data-task-card-id="${taskId}">
             <details${openAttr}>
                 <summary>
                     <div class="task-title">

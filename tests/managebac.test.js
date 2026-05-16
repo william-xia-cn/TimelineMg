@@ -223,6 +223,7 @@ async function run() {
     const paramColonIcsFixture = fs.readFileSync(path.join(__dirname, 'fixtures', 'managebac-events-param-colon-sanitized.ics'), 'utf8');
     const aliasPendingIcsFixture = fs.readFileSync(path.join(__dirname, 'fixtures', 'managebac-events-alias-pending-sanitized.ics'), 'utf8');
     const settingsHtml = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'settings.html'), 'utf8');
+    const settingsCss = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'styles.css'), 'utf8');
     const settingsScript = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'script.js'), 'utf8');
     const managebacHtml = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'managebac.html'), 'utf8');
     const managebacPageScript = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'managebac.js'), 'utf8');
@@ -257,6 +258,7 @@ async function run() {
     assert('Settings Plan UI exposes inline ManageBac link input', settingsHtml.includes('id="settingsManageBacIcsLinkInput"'));
     assert('Settings Plan UI exposes inline ManageBac save button', settingsHtml.includes('id="settingsSaveManageBacIcsLinkBtn"'));
     assert('Settings Plan UI exposes inline ManageBac sync button', settingsHtml.includes('id="settingsSyncManageBacBtn"'));
+    assert('Settings ManageBac link row uses non-compressed dedicated layout', settingsHtml.includes('link-setting-row') && settingsCss.includes('.link-setting-row'));
     assert('Settings page loads ManageBac shared module before script', settingsHtml.indexOf('shared/js/managebac.js') > -1 && settingsHtml.indexOf('shared/js/managebac.js') < settingsHtml.indexOf('script.js'));
     assert('Settings page has no separate sync ManageBac event row label', !settingsHtml.includes('同步 ManageBac 事件'));
     assert('Settings sync opens unified management confirmation page', settingsScript.includes('managebac-sync.html') && settingsScript.includes('management_review_pending'));
@@ -312,7 +314,7 @@ async function run() {
     const safePending = await ManageBac.getPendingEventMappings(syncDb);
     assert('persisted pending rows contain only confirmation-safe fields', safePending.every(row => {
         const keys = Object.keys(row).sort();
-        return JSON.stringify(keys) === JSON.stringify(['description', 'due_date', 'event_uid', 'saved_at', 'suggested_plan_id', 'suggested_subject', 'summary'].sort());
+        return JSON.stringify(keys) === JSON.stringify(['description', 'due_date', 'event_uid', 'saved_at', 'suggested_plan_id', 'suggested_subject', 'suggested_subject_in_managebac', 'summary'].sort());
     }));
     assert('fresh ManageBac sync timestamp is recognized within 6 hours', ManageBac.isManageBacSyncFresh(await ManageBac.getManageBacIcsConfig(syncDb), new Date(Date.now()), 6) === true);
     const syncedTasks = await syncDb.getAllTasks();
@@ -322,8 +324,8 @@ async function run() {
     const englishPending = syncResult.pending_event_mappings.find(row => row.summary === 'English Language Acquisition Phase 5: Essay Draft');
     const mathPending = syncResult.pending_event_mappings.find(row => row.summary === 'Mathematics Analysis HL: Problem Set');
     await ManageBac.saveEventSubjectOverrides(syncDb, [
-        { event_uid: englishPending.event_uid, plan_id: 1 },
-        { event_uid: mathPending.event_uid, plan_id: 2 }
+        { event_uid: englishPending.event_uid, plan_id: 1, subject_in_managebac: englishPending.suggested_subject_in_managebac },
+        { event_uid: mathPending.event_uid, plan_id: 2, subject_in_managebac: mathPending.suggested_subject_in_managebac }
     ], syncDb.plans);
     const confirmedSync = await ManageBac.syncManageBacIcs(syncDb, icsFixture, 'https://example.invalid/calendar.ics', { applyPendingEventOverrides: true });
     assertEqual('confirmed new events create tasks', confirmedSync.created, 2);
@@ -333,7 +335,9 @@ async function run() {
         return task.source_uid === 'mb-english-essay-1@example.invalid'
             && task.plan_id === 1
             && task.source === 'managebac'
-            && task.readonly === true;
+            && task.readonly === true
+            && task.subject === 'English Language Acquisition Phase 5'
+            && task.managebac_subject === 'English Language Acquisition Phase 5';
     }));
     assert('confirmed Math event maps to Math plan_id', (await syncDb.getAllTasks()).some(task => {
         return task.source_uid === 'mb-math-problem-1@example.invalid'
@@ -439,7 +443,7 @@ async function run() {
     await ManageBac.saveEventSubjectOverrides(classIdDb, classIdRowsToConfirm.map(row => ({
         event_uid: row.event_uid,
         plan_id: row.suggested_plan_id,
-        subject_in_managebac: row.suggested_subject
+        subject_in_managebac: row.suggested_subject_in_managebac
     })), classIdDb.plans);
     const classIdSync = await ManageBac.syncManageBacIcs(classIdDb, classIdIcsFixture, 'https://example.invalid/class-id.ics', { applyPendingEventOverrides: true });
     assertEqual('class-id confirmed sync is partial while one event remains unconfirmed', classIdSync.status, 'partial');

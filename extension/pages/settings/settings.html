@@ -11,7 +11,6 @@
     <!-- Page Styles -->
     <link rel="stylesheet" href="styles.css">
     <style>
-        .wizard-view { display: none; flex-direction: column; height: 100%; transition: var(--transition); }
         .settings-view { display: block; transition: var(--transition); }
         .container-item {
             background: rgba(255, 255, 255, 0.4);
@@ -90,7 +89,7 @@
                                         <option value="0">周日</option>
                                     </select>
                                 </div>
-                                <div class="setting-row">
+                                <div class="setting-row link-setting-row">
                                     <div class="setting-info">
                                         <span class="setting-label">番茄钟时长</span>
                                         <span class="setting-desc">工作阶段的默认时长（分钟）</span>
@@ -217,52 +216,6 @@
                             </div>
                         </section>
 
-                        <!-- Google 数据同步 -->
-                        <section class="section" id="googleSyncSection">
-                            <h2 class="section-title">
-                                <span class="material-symbols-outlined">sync</span> Google 数据同步
-                            </h2>
-                            <div class="settings-group">
-                                <div class="setting-row">
-                                    <div class="setting-info">
-                                        <span class="setting-label">状态</span>
-                                        <span class="setting-desc">不连接 Google 也可以完整使用 TimeWhere；Google 仅用于云端备份和跨设备同步</span>
-                                    </div>
-                                    <span class="google-sync-status" id="googleSyncStatus" data-status="not_configured">未配置</span>
-                                </div>
-                                <div class="setting-row google-sync-actions-row">
-                                    <div class="setting-info">
-                                        <span class="setting-label">同步操作</span>
-                                        <span class="setting-desc">同步前会先预览本地 / 云端差异，不会静默覆盖 IndexedDB</span>
-                                    </div>
-                                    <div class="setting-control google-sync-actions">
-                                        <button class="action-btn" id="connectGoogleSyncBtn" type="button">连接 Google 同步</button>
-                                        <button class="action-btn" id="syncGoogleNowBtn" type="button">立即同步</button>
-                                        <button class="action-btn" id="restoreGoogleSyncBtn" type="button">从 Google 恢复</button>
-                                        <button class="action-btn" id="uploadGoogleSyncBtn" type="button">上传本设备数据</button>
-                                        <button class="action-btn danger" id="disconnectGoogleSyncBtn" type="button">断开同步</button>
-                                    </div>
-                                </div>
-                                <div class="google-sync-preview" id="googleSyncPreview" hidden></div>
-                            </div>
-                        </section>
-
-                        <!-- 任务设置 -->
-                        <section class="section" id="taskSection" style="display: none;">
-                            <h2 class="section-title">
-                                <span class="material-symbols-outlined">task</span> 任务
-                            </h2>
-                            <div class="settings-group">
-                                <div class="setting-row">
-                                    <div class="setting-info">
-                                        <span class="setting-label">配置初始化计划模版</span>
-                                        <span class="setting-desc">设置默认任务分类和 Plan</span>
-                                    </div>
-                                    <button class="action-btn" id="manageTaskTemplatesBtn">管理</button>
-                                </div>
-                            </div>
-                        </section>
-
                         <!-- 任务默认值 -->
                         <section class="section">
                             <h2 class="section-title">
@@ -291,6 +244,59 @@
                                         <option value="low">P4 低</option>
                                     </select>
                                 </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">系统任务提醒</span>
+                                        <span class="setting-desc">任务开始前 1 分钟提醒；任务时间内未完成则每 15 分钟提醒</span>
+                                    </div>
+                                    <div class="setting-inline-actions">
+                                        <label class="toggle-control">
+                                            <input type="checkbox" id="notificationEnabled">
+                                            <span>开启提醒</span>
+                                        </label>
+                                        <button class="action-btn" id="testNotificationBtn" type="button">发送测试提醒</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Google 数据同步 -->
+                        <section class="section" id="googleSyncSection">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">sync</span> Google 数据同步
+                            </h2>
+                            <div class="settings-group google-sync-group">
+                                <div class="google-sync-card">
+                                    <div class="google-sync-card-header">
+                                        <span class="setting-label">连接状态</span>
+                                        <button class="action-btn" id="connectGoogleSyncBtn" type="button">连接 Google 账户同步</button>
+                                        <button class="action-btn danger" id="disconnectGoogleSyncBtn" type="button" hidden>断开连接</button>
+                                    </div>
+                                    <div class="google-sync-state-line">
+                                        <span class="google-sync-status" id="googleSyncStatus" data-status="not_configured">○ 未连接</span>
+                                        <span class="google-sync-account" id="googleSyncAccountEmail"></span>
+                                    </div>
+                                    <p class="setting-desc">TimeWhere 可离线完整使用；Google 仅用于跨设备同步。</p>
+                                </div>
+
+                                <div class="google-sync-card">
+                                    <div class="google-sync-card-header">
+                                        <span class="setting-label">同步状态</span>
+                                        <button class="action-btn" id="syncGoogleNowBtn" type="button">手动同步</button>
+                                    </div>
+                                    <div class="google-sync-meta-line">
+                                        <span id="googleSyncAutoStatus">自动同步：已开启</span>
+                                        <span id="googleSyncLastSyncAt">最近同步：暂无</span>
+                                    </div>
+                                    <p class="setting-desc">打开主要页面和保存数据后会自动同步；有冲突时不会静默覆盖。</p>
+                                    <div class="google-sync-danger-actions">
+                                        <span class="google-sync-danger-label">高级覆盖操作</span>
+                                        <button class="action-btn danger" id="uploadGoogleSyncBtn" type="button">↑ 上传到云端</button>
+                                        <button class="action-btn danger" id="restoreGoogleSyncBtn" type="button">↓ 下载到本地</button>
+                                    </div>
+                                    <button class="action-btn google-sync-conflict-btn" id="processGoogleConflictsBtn" type="button" hidden>处理冲突</button>
+                                </div>
+                                <div class="google-sync-preview" id="googleSyncPreview" hidden></div>
                             </div>
                         </section>
 
@@ -322,80 +328,8 @@
                                     </div>
                                     <button class="action-btn danger" id="resetSettingsBtn">重置</button>
                                 </div>
-                                <div class="setting-row">
-                                    <div class="setting-info">
-                                        <span class="setting-label">重新初始化</span>
-                                        <span class="setting-desc">清除所有数据并重新开始向导</span>
-                                    </div>
-                                    <button class="action-btn danger" id="reinitBtn">重新引导</button>
-                                </div>
                             </div>
                         </section>
-                    </div>
-                </div>
-
-                    <!-- Wizard View Content (初始化向导) -->
-                <div id="wizardView" class="wizard-view">
-                    <div class="wizard-steps">
-                        <div class="step active" id="wizardStepIndicator1">1<span class="step-label">欢迎</span></div>
-                        <div class="step" id="wizardStepIndicator2">2<span class="step-label">日程</span></div>
-                        <div class="step" id="wizardStepIndicator3">3<span class="step-label">任务</span></div>
-                        <div class="step" id="wizardStepIndicator4">4<span class="step-label">完成</span></div>
-                    </div>
-
-                    <div class="wizard-content" id="wizardStepContent" style="padding-bottom: 20px;">
-                        <div id="wizardStep1">
-                            <span class="material-symbols-outlined" style="font-size: 64px; color: var(--accent); margin-bottom: 16px;">change_history</span>
-                            <h2>欢迎使用 TimeWhere</h2>
-                            <p style="max-width: 400px; margin: 0 auto;">专为 IB 学生打造的时间管理与任务规划工具。让我们用几分钟完成初始设置。</p>
-                            <div style="margin-top: 24px;">
-                                <button class="wizard-btn primary" id="wizardNextBtnAlt">开始设置</button>
-                            </div>
-                        </div>
-                        <div id="wizardStep2" style="display: none;">
-                            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--accent); margin-bottom: 16px;">event</span>
-                            <h2>日程初始化</h2>
-                            <p>创建时间容器或导入课表</p>
-                            <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px; align-items: center;">
-                                <label class="init-option">
-                                    <input type="checkbox" id="initContainer" checked>
-                                    <span class="material-symbols-outlined" style="color: var(--blue);">schedule</span>
-                                    <div style="text-align: left;">
-                                        <strong>创建默认容器</strong>
-                                        <div style="font-size: 12px; color: var(--text-sub);">学习时间、自由时间、睡前时间</div>
-                                    </div>
-                                </label>
-                                <label class="init-option">
-                                    <input type="checkbox" id="initTimetable">
-                                    <span class="material-symbols-outlined" style="color: var(--purple);">upload_file</span>
-                                    <div style="text-align: left;">
-                                        <strong>导入课表</strong>
-                                        <div style="font-size: 12px; color: var(--text-sub);">上传 ICS 文件生成日程</div>
-                                    </div>
-                                </label>
-                            </div>
-                            <button class="action-btn" id="skipScheduleBtn" style="margin-top: 16px;">跳过</button>
-                        </div>
-                        <div id="wizardStep3" style="display: none;">
-                            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--blue); margin-bottom: 16px;">task</span>
-                            <h2>任务初始化</h2>
-                            <p>设置任务分类和管理方式</p>
-                            <p style="font-size: 13px; color: var(--text-sub); margin-top: 16px;">该功能将在任务管理模块中详细配置</p>
-                            <button class="action-btn" id="skipTaskInitBtn" style="margin-top: 16px;">跳过</button>
-                        </div>
-                        <div id="wizardStep4" style="display: none;">
-                            <span class="material-symbols-outlined" style="font-size: 80px; color: var(--green); margin-bottom: 16px;">check_circle</span>
-                            <h2>配置完成！</h2>
-                            <p>TimeWhere 已准备就绪</p>
-                            <div style="margin-top: 32px;">
-                                <button class="wizard-btn primary" id="wizardFinishBtn">进入主界面</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="wizard-footer" id="wizardFooter" style="display: none;">
-                        <button class="action-btn" id="wizardPrevBtn">上一步</button>
-                        <button class="wizard-btn primary" id="wizardNextBtn">下一步</button>
                     </div>
                 </div>
 
@@ -450,7 +384,31 @@
                         </div>
                         <div class="modal-footer">
                             <button class="action-btn" id="cancelContainerBtn">取消</button>
-                            <button class="wizard-btn primary" id="confirmAddContainer">添加</button>
+                            <button class="action-btn" id="confirmAddContainer">添加</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="googleSyncDangerModal" class="modal" style="display: none;">
+                    <div class="modal-content google-sync-danger-modal">
+                        <div class="modal-header">
+                            <h3 id="googleSyncDangerTitle">上传到云端</h3>
+                            <button class="modal-close" id="closeGoogleSyncDangerModal">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="google-sync-danger-message" id="googleSyncDangerMessage"></p>
+                            <div class="google-sync-risk-block">
+                                <span class="setting-label">风险</span>
+                                <ul id="googleSyncDangerRisks"></ul>
+                            </div>
+                            <label class="google-sync-confirm-label" for="googleSyncDangerConfirmInput">
+                                <span id="googleSyncDangerPrompt">请输入确认短语：</span>
+                            </label>
+                            <input type="text" id="googleSyncDangerConfirmInput" autocomplete="off">
+                        </div>
+                        <div class="modal-footer">
+                            <button class="action-btn" id="cancelGoogleSyncDangerBtn" type="button">取消</button>
+                            <button class="action-btn danger" id="confirmGoogleSyncDangerBtn" type="button" disabled>确认</button>
                         </div>
                     </div>
                 </div>

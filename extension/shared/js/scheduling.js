@@ -173,6 +173,14 @@
         return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
     }
 
+    function normalizeSubjectKey(value) {
+        return normalizeText(value)
+            .replace(/&/g, ' and ')
+            .replace(/[^a-z0-9\u4e00-\u9fff]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
     function getDefaultStartDate(task, today) {
         const todayStr = typeof today === 'string' ? today : formatDateISO(today || new Date());
         const dueDate = task?.due_date || task?.deadline;
@@ -206,18 +214,25 @@
     }
 
     function getTaskSubject(task) {
-        return normalizeText(task?.subject || task?.plan_subject || task?.plan_name || '');
+        return normalizeSubjectKey(task?.subject || task?.plan_subject || '');
     }
 
-    function eventMatchesSubject(event, subject) {
-        if (!subject) return false;
-        const text = normalizeText([
+    function eventSubjectCandidates(event) {
+        return [
+            event?.subject_in_matrixview,
             event?.subject,
             event?.title,
             event?.name,
             event?.description
-        ].filter(Boolean).join(' '));
-        return !!text && (text.includes(subject) || subject.includes(text));
+        ].filter(Boolean).map(normalizeSubjectKey).filter(Boolean);
+    }
+
+    function eventMatchesSubject(event, subject) {
+        if (!subject) return false;
+        const candidates = eventSubjectCandidates(event);
+        if (!candidates.length) return false;
+        if (candidates.some(candidate => candidate === subject)) return true;
+        return candidates.some(candidate => candidate.includes(subject) || subject.includes(candidate));
     }
 
     function findNextSubjectTimetableDate(task, timetableEvents, todayStr) {
@@ -238,6 +253,7 @@
         const arranged = [];
         for (const task of tasks || []) {
             if (!task || task.progress === 'completed' || task.status === 'completed') continue;
+            if (task.plan_subject_active === false) continue;
 
             const nextPriority = getEscalatedPriority(task, todayStr);
             const urgentOrOverdue = nextPriority === 'urgent' || taskIsUrgentOrOverdue(task, todayStr);
@@ -463,11 +479,22 @@
             throw new Error('Task Arrange requires a DB with getAllTasks');
         }
         const tasks = await db.getAllTasks();
+        const plans = typeof db.getPlans === 'function' ? await db.getPlans() : [];
+        const plansById = new Map((plans || []).map(plan => [String(plan.id), plan]));
+        const enrichedTasks = (tasks || []).map(task => {
+            const plan = plansById.get(String(task.plan_id));
+            if (!plan) return task;
+            return {
+                ...task,
+                subject: plan.subject || null,
+                plan_subject_active: plan.subject ? plan.subject_active !== false : null
+            };
+        });
         const events = typeof db.getEvents === 'function'
             ? await db.getEvents()
             : [];
         const timetableEvents = (events || []).filter(event => event.source === 'timetable');
-        const plan = arrangeTaskStartDates(tasks, timetableEvents, todayStr);
+        const plan = arrangeTaskStartDates(enrichedTasks, timetableEvents, todayStr);
         const changes = plan.filter(item => item.changed);
         const summary = summarizeArrangePlan(plan);
 

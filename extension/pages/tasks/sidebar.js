@@ -122,6 +122,7 @@ function showPlanContextMenu(planId, anchorEl) {
     const planIndex = TaskApp.plans.findIndex(p => p.id === planId);
     const isFirst = planIndex <= 0;
     const isLast = planIndex === TaskApp.plans.length - 1;
+    const canDeletePlan = !(plan.subject && plan.subject_active !== false);
 
     // Remove existing menu
     closePlanContextMenu();
@@ -139,7 +140,7 @@ function showPlanContextMenu(planId, anchorEl) {
         <button class="ctx-menu-item" data-action="buckets"><span class="material-symbols-outlined">view_column</span> Manage buckets</button>
         <button class="ctx-menu-item" data-action="labels"><span class="material-symbols-outlined">label</span> Manage labels</button>
         <div class="ctx-menu-divider"></div>
-        <button class="ctx-menu-item ctx-menu-danger" data-action="delete"><span class="material-symbols-outlined">delete</span> Delete plan</button>`;
+        <button class="ctx-menu-item ctx-menu-danger" data-action="delete" ${canDeletePlan ? '' : 'disabled title="启用学科 Plan 只能通过 MatrixView 导入更新"'}><span class="material-symbols-outlined">delete</span> Delete plan</button>`;
 
     menu.style.top = rect.bottom + 4 + 'px';
     menu.style.left = rect.left + 'px';
@@ -314,9 +315,16 @@ function showRenamePlanDialog(plan) {
 // ========== Delete Plan ==========
 
 function showDeletePlanDialog(plan) {
+    if (plan.subject && plan.subject_active !== false) {
+        showToast('启用学科 Plan 只能通过 MatrixView 导入更新，不能手动删除。', 'error');
+        return;
+    }
+    const subjectInactiveText = plan.subject && plan.subject_active === false
+        ? '<p class="dialog-warning">这是已停用的学科 Plan。删除会同时删除该 Plan 下历史任务、Buckets 和 Labels。</p>'
+        : '';
     showDialog({
         title: 'Delete plan',
-        content: `<p>Delete <strong>${escapeHTML(plan.name)}</strong> and all its tasks? This cannot be undone.</p>`,
+        content: `<p>Delete <strong>${escapeHTML(plan.name)}</strong> and all its tasks? This cannot be undone.</p>${subjectInactiveText}`,
         confirmText: 'Delete',
         confirmDanger: true,
         onConfirm: async () => {

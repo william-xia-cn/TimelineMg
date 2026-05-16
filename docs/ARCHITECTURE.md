@@ -4,7 +4,7 @@
 **日期**: 2026-04-14  
 **状态**: Internal MVP accepted; baseline stabilized for local-first MVP. Not public release ready.
 
-> Current baseline note (2026-05-15): TimeWhere is a local-first Chrome extension MVP. Task Date Arrange is approved for current baseline stabilization with preview / user-confirmed writes only. ManageBac ICS import is an extension-side source import using a saved link plus manual/user-confirmed sync; it is not a cloud sync backend. D-019/D-020 approve optional Google Drive `appDataFolder` data sync v1 while all core features remain fully usable without Google. Background alarm automation, reminder notifications, Chrome Web Store submission, and public release still require explicit Product Owner approval.
+> Current baseline note (2026-05-16): TimeWhere is a local-first Chrome extension MVP. Task Date Arrange is approved for current baseline stabilization with preview / user-confirmed writes only. ManageBac ICS import is an extension-side source import using a saved link plus manual/user-confirmed sync; it is not a cloud sync backend. D-019/D-020 approve optional Google Drive `appDataFolder` data sync v1 while all core features remain fully usable without Google. D-021 approves Chrome system reminder notifications for local tasks only. Chrome Web Store submission and public release still require explicit Product Owner approval.
 
 ---
 
@@ -15,7 +15,7 @@
 | 客户端 | Chrome Extension (Manifest V3) | 主要运行环境 |
 | 存储 | **IndexedDB + Dexie.js** | 本地数据存储（统一存储） |
 | 后端同步 | None | No developer backend; optional Google Drive `appDataFolder` sync v1 runs client-side in the extension |
-| 通知 | UI/icon only in current MVP | System reminder notifications are future scope |
+| 通知 | Chrome notifications + alarms | Local task reminders only; not Arrange or ManageBac background automation |
 | 图标 | SVG 内联 | 完全离线支持 |
 | 字体/图标 | Local CSS/assets only | Extension pages do not load Google Fonts remotely |
 

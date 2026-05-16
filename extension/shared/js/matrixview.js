@@ -1075,14 +1075,17 @@
         const out = [];
         const seen = new Set();
         for (const mapping of mappings || []) {
-            const subject = normalizeText(mapping.subject);
             const subjectInMatrixView = normalizeText(mapping.subject_in_matrixview);
-            if (!subject || !subjectInMatrixView) continue;
-            const key = `${subject}|${subjectInMatrixView}`;
+            const planName = normalizeText(mapping.plan_name ?? mapping.subject);
+            if (!planName || !subjectInMatrixView) continue;
+            const isOtherSchool = planName === OTHER_SCHOOL_PLAN_NAME;
+            const subject = isOtherSchool ? null : subjectInMatrixView;
+            const key = `${planName}|${subjectInMatrixView}`;
             if (seen.has(key)) continue;
             seen.add(key);
             out.push({
                 subject,
+                plan_name: planName,
                 subject_in_matrixview: subjectInMatrixView,
                 source: 'matrixview',
                 updated_at: mapping.updated_at || null
@@ -1114,22 +1117,92 @@
         return created;
     }
 
+    function normalizeReconciliationRows(rows) {
+        return (rows || []).map(row => ({
+            type: row.type || row.kind || '',
+            selected: row.selected !== false,
+            old_plan_id: row.old_plan_id ?? row.plan_id ?? null,
+            old_plan_name: normalizeText(row.old_plan_name || row.plan_name || ''),
+            new_plan_name: normalizeText(row.new_plan_name || row.plan_name || row.subject || ''),
+            subject: normalizeText(row.subject || row.subject_in_matrixview || ''),
+            subject_in_matrixview: normalizeText(row.subject_in_matrixview || row.subject || '')
+        })).filter(row => row.subject_in_matrixview);
+    }
+
     async function initializeSubjectPlans(db, mappingsInput) {
         const now = new Date().toISOString();
-        const mappings = normalizeMappings(mappingsInput).map(mapping => ({ ...mapping, updated_at: now }));
-        const desiredSubjects = Array.from(new Set(mappings
-            .map(mapping => mapping.subject)
-            .filter(subject => subject !== OTHER_SCHOOL_PLAN_NAME))).sort();
+        const isReconciliation = (mappingsInput || []).some(item => item && item.type);
+        const mappings = (isReconciliation
+            ? normalizeReconciliationRows(mappingsInput)
+                .filter(row => row.type !== 'missing' && (row.selected || row.type === 'matched'))
+                .map(row => ({
+                    subject: row.subject,
+                    plan_name: row.selected === false && row.type === 'matched'
+                        ? (row.old_plan_name || row.new_plan_name)
+                        : row.new_plan_name,
+                    subject_in_matrixview: row.subject_in_matrixview,
+                    source: 'matrixview'
+                }))
+            : normalizeMappings(mappingsInput)
+        ).map(mapping => ({ ...mapping, updated_at: now }));
+        const desiredMappings = mappings
+            .filter(mapping => mapping.subject && mapping.plan_name !== OTHER_SCHOOL_PLAN_NAME);
+        const desiredBySubject = new Map(desiredMappings.map(mapping => [normalizePlanName(mapping.subject), mapping]));
         const existingPlans = await db.getPlans();
+        const createdPlans = [];
+        const updatedPlans = [];
+        const deactivatedPlans = [];
+        const reactivatedPlans = [];
         const deletedPlans = [];
         const preservedPlans = [];
         const uncertainPlans = [];
+        const deletePlanIds = new Set(normalizeReconciliationRows(isReconciliation ? mappingsInput : [])
+            .filter(row => row.type === 'missing' && row.selected === false && row.old_plan_id)
+            .map(row => row.old_plan_id));
 
         for (const plan of existingPlans) {
             if (plan.name === OTHER_SCHOOL_PLAN_NAME) continue;
-            if (isKnownSubjectPlan(plan, desiredSubjects)) {
-                await db.deletePlan(plan.id);
-                deletedPlans.push({ id: plan.id, name: plan.name, subject: plan.subject || null });
+            const subjectKey = normalizePlanName(plan.subject);
+            if (subjectKey && desiredBySubject.has(subjectKey)) {
+                const mapping = desiredBySubject.get(subjectKey);
+                const updates = {
+                    name: mapping.plan_name,
+                    subject: mapping.subject,
+                    subject_active: true,
+                    matrixview_managed: true,
+                    source: 'matrixview'
+                };
+                const updated = typeof db.updatePlan === 'function'
+                    ? await db.updatePlan(plan.id, updates)
+                    : Object.assign(plan, updates);
+                updatedPlans.push(updated || { ...plan, ...updates });
+                if (plan.subject_active === false) {
+                    reactivatedPlans.push(updated || { ...plan, ...updates });
+                }
+                desiredBySubject.delete(subjectKey);
+                await ensureDefaultBuckets(db, plan.id);
+            } else if (plan.subject || plan.matrixview_managed || plan.source === 'matrixview') {
+                if (deletePlanIds.has(plan.id)) {
+                    if (typeof db.updatePlan === 'function') {
+                        await db.updatePlan(plan.id, {
+                            subject_active: false,
+                            matrixview_managed: true,
+                            source: plan.source || 'matrixview'
+                        });
+                    }
+                    await db.deletePlan(plan.id);
+                    deletedPlans.push(plan);
+                    continue;
+                }
+                const updates = {
+                    subject_active: false,
+                    matrixview_managed: true,
+                    source: plan.source || 'matrixview'
+                };
+                const updated = typeof db.updatePlan === 'function'
+                    ? await db.updatePlan(plan.id, updates)
+                    : Object.assign(plan, updates);
+                deactivatedPlans.push(updated || { ...plan, ...updates });
             } else if (isClearlyNonSubjectPlan(plan)) {
                 preservedPlans.push({ id: plan.id, name: plan.name });
             } else {
@@ -1137,13 +1210,15 @@
             }
         }
 
-        const createdPlans = [];
-        for (const subject of desiredSubjects) {
+        for (const mapping of Array.from(desiredBySubject.values()).sort((a, b) => a.plan_name.localeCompare(b.plan_name))) {
             const plan = await db.addPlan({
-                name: subject,
-                subject,
-                color: colorForSubject(subject),
-                icon_char: subject.charAt(0).toUpperCase()
+                name: mapping.plan_name,
+                subject: mapping.subject,
+                subject_active: true,
+                matrixview_managed: true,
+                source: 'matrixview',
+                color: colorForSubject(mapping.subject),
+                icon_char: mapping.plan_name.charAt(0).toUpperCase()
             });
             createdPlans.push(plan);
             await ensureDefaultBuckets(db, plan.id);
@@ -1169,6 +1244,9 @@
         return {
             mappings,
             createdPlans,
+            updatedPlans,
+            deactivatedPlans,
+            reactivatedPlans,
             deletedPlans,
             preservedPlans,
             uncertainPlans,
@@ -1179,21 +1257,51 @@
 
     async function previewSubjectPlanInitialization(db, mappingsInput) {
         const mappings = normalizeMappings(mappingsInput);
-        const desiredSubjects = Array.from(new Set(mappings
-            .map(mapping => mapping.subject)
-            .filter(subject => subject !== OTHER_SCHOOL_PLAN_NAME))).sort();
+        const desiredMappings = mappings.filter(mapping => mapping.subject && mapping.plan_name !== OTHER_SCHOOL_PLAN_NAME);
+        const desiredSubjects = Array.from(new Set(desiredMappings.map(mapping => mapping.subject))).sort();
+        const desiredSubjectKeys = new Set(desiredSubjects.map(normalizePlanName));
         const existingPlans = await db.getPlans();
-        const deleteRebuild = [];
+        const createOrUpdate = [];
+        const deactivate = [];
         const preserved = [];
         const uncertain = [];
+        const rows = [];
+        const desiredBySubject = new Map(desiredMappings.map(mapping => [normalizePlanName(mapping.subject), mapping]));
 
         for (const plan of existingPlans) {
             if (plan.name === OTHER_SCHOOL_PLAN_NAME) {
                 preserved.push(plan.name);
                 continue;
             }
-            if (isKnownSubjectPlan(plan, desiredSubjects)) {
-                deleteRebuild.push(plan.name);
+            const subjectKey = normalizePlanName(plan.subject);
+            if (subjectKey && desiredSubjectKeys.has(subjectKey)) {
+                const mapping = desiredBySubject.get(subjectKey);
+                createOrUpdate.push(mapping.plan_name);
+                rows.push({
+                    type: 'matched',
+                    selected: true,
+                    old_plan_id: plan.id,
+                    old_plan_name: plan.name,
+                    new_plan_name: mapping.plan_name,
+                    subject: mapping.subject,
+                    subject_in_matrixview: mapping.subject_in_matrixview,
+                    suggested_action: plan.subject_active === false ? '恢复启用' : '更新',
+                    final_action: plan.subject_active === false ? '恢复启用' : '更新'
+                });
+                desiredBySubject.delete(subjectKey);
+            } else if (plan.subject || plan.matrixview_managed || plan.source === 'matrixview') {
+                deactivate.push(plan.name);
+                rows.push({
+                    type: 'missing',
+                    selected: true,
+                    old_plan_id: plan.id,
+                    old_plan_name: plan.name,
+                    new_plan_name: '',
+                    subject: plan.subject || plan.name,
+                    subject_in_matrixview: plan.subject || plan.name,
+                    suggested_action: '停用保留',
+                    final_action: '停用保留'
+                });
             } else if (isClearlyNonSubjectPlan(plan)) {
                 preserved.push(plan.name);
             } else {
@@ -1201,15 +1309,30 @@
             }
         }
 
-        for (const subject of desiredSubjects) {
-            if (!deleteRebuild.includes(subject)) {
-                deleteRebuild.push(subject);
-            }
+        for (const mapping of Array.from(desiredBySubject.values())) {
+            if (!createOrUpdate.includes(mapping.plan_name)) createOrUpdate.push(mapping.plan_name);
+            rows.push({
+                type: 'new',
+                selected: true,
+                old_plan_id: null,
+                old_plan_name: '',
+                new_plan_name: mapping.plan_name,
+                subject: mapping.subject,
+                subject_in_matrixview: mapping.subject_in_matrixview,
+                suggested_action: '创建',
+                final_action: '创建'
+            });
         }
 
         return {
+            rows: rows.sort((a, b) => {
+                const order = { matched: 0, new: 1, missing: 2 };
+                return (order[a.type] - order[b.type]) || a.subject_in_matrixview.localeCompare(b.subject_in_matrixview);
+            }),
             desiredSubjects,
-            deleteRebuildPlanNames: Array.from(new Set(deleteRebuild)).sort(),
+            createOrUpdatePlanNames: Array.from(new Set(createOrUpdate)).sort(),
+            deactivatePlanNames: Array.from(new Set(deactivate)).sort(),
+            deleteRebuildPlanNames: [],
             preservedPlanNames: Array.from(new Set(preserved)).sort(),
             uncertainPlanNames: Array.from(new Set(uncertain)).sort(),
             hasOtherSchoolPlan: existingPlans.some(plan => plan.name === OTHER_SCHOOL_PLAN_NAME),
@@ -1232,6 +1355,7 @@
         sanitizeMatrixViewData,
         extractSubjectName,
         normalizeMappings,
+        normalizeReconciliationRows,
         previewSubjectPlanInitialization,
         initializeSubjectPlans,
         escapeHTML,

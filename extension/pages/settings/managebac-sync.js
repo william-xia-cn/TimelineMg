@@ -274,7 +274,7 @@ function getSelectedManageBacRows() {
             event_uid: row.event_uid,
             plan_id: planId,
             subject: plan.subject || plan.name,
-            subject_in_managebac: plan.subject || plan.name
+            subject_in_managebac: row.suggested_subject_in_managebac || ''
         };
     }).filter(Boolean);
 }

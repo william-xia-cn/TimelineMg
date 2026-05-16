@@ -50,6 +50,9 @@ class FakeDB {
             id,
             name: plan.name,
             subject: plan.subject || null,
+            subject_active: plan.subject ? plan.subject_active !== false : null,
+            matrixview_managed: plan.matrixview_managed === true,
+            source: plan.source || null,
             color: plan.color || '#2b56e3',
             icon_char: plan.icon_char || 'P',
             created_at: `2026-05-12T00:00:${String(id).padStart(2, '0')}.000Z`,
@@ -62,6 +65,13 @@ class FakeDB {
     async deletePlan(id) {
         this.plans = this.plans.filter(plan => plan.id !== id);
         this.buckets = this.buckets.filter(bucket => bucket.plan_id !== id);
+        this.tasks = this.tasks.filter(task => task.plan_id !== id);
+    }
+
+    async updatePlan(id, data) {
+        const plan = this.plans.find(item => item.id === id);
+        Object.assign(plan, data);
+        return plan;
     }
 
     async getBucketsByPlan(planId) {
@@ -177,7 +187,9 @@ async function run() {
     await db.addPlan({ name: '大学申请' });
     await db.addPlan({ name: 'Mystery Club' });
     await db.addPlan({ name: 'English HL', subject: null });
-    await db.addPlan({ name: 'Old Physics', subject: 'Physics' });
+    const oldPhysicsPlan = await db.addPlan({ name: 'Old Physics', subject: 'Physics' });
+    db.tasks.push({ id: 'task-old-physics', plan_id: oldPhysicsPlan.id, title: 'Old physics homework' });
+    await db.addPlan({ name: 'Old Math Display', subject: 'Mathematics Analysis HL' });
     const existingOtherSchoolPlan = await db.addPlan({ name: MatrixView.OTHER_SCHOOL_PLAN_NAME });
     await db.addBucket({ plan_id: existingOtherSchoolPlan.id, name: 'Homework', sort_order: 0 });
 
@@ -190,9 +202,12 @@ async function run() {
         { subject: '', subject_in_matrixview: 'Optional Club Block' }
     ];
     const preview = await MatrixView.previewSubjectPlanInitialization(db, mappings);
-    assert('preview includes delete/rebuild list before execution', preview.deleteRebuildPlanNames.includes('English HL') && preview.deleteRebuildPlanNames.includes('Old Physics'));
+    assert('preview includes create/update list before execution', preview.createOrUpdatePlanNames.includes('English Language Acquisition Phase 5') && preview.createOrUpdatePlanNames.includes('Biology HL'));
+    assert('preview includes deactivation list before execution', preview.deactivatePlanNames.includes('Old Physics'));
     assert('preview includes preserved non-subject plans', preview.preservedPlanNames.includes('Personal') && preview.preservedPlanNames.includes('Projects'));
     assert('preview includes uncertain plan names', preview.uncertainPlanNames.includes('Mystery Club'));
+    assert('preview exposes reconciliation rows for matched new and missing subjects', ['matched', 'new', 'missing'].every(type => preview.rows.some(row => row.type === type)));
+    assert('missing reconciliation rows default to deactivate keep selected', preview.rows.some(row => row.type === 'missing' && row.old_plan_name === 'Old Physics' && row.selected === true && row.final_action === '停用保留'));
 
     const first = await MatrixView.initializeSubjectPlans(db, mappings);
     const plansAfterFirst = await db.getPlans();
@@ -202,9 +217,11 @@ async function run() {
     assert('plan init creates Other School Plan', planNamesAfterFirst.includes(MatrixView.OTHER_SCHOOL_PLAN_NAME));
     assert('plan init reuses existing Other School Plan', first.createdOtherSchoolPlan === false);
     assert('plan init skips empty edited Subject rows', !planNamesAfterFirst.includes('Optional Club Block'));
-    assert('plan init removes old subject-related Plans', !planNamesAfterFirst.includes('English HL') && !planNamesAfterFirst.includes('Old Physics'));
+    assert('plan init deactivates old subject-related Plans instead of deleting them', plansAfterFirst.some(plan => plan.name === 'Old Physics' && plan.subject_active === false));
+    assert('plan init keeps historical tasks for deactivated subject Plans', db.tasks.some(task => task.id === 'task-old-physics'));
     assert('plan init preserves non-subject Plans', ['Personal', 'Projects', '大学申请'].every(name => planNamesAfterFirst.includes(name)));
     assert('plan init keeps uncertain Plans and reports them', planNamesAfterFirst.includes('Mystery Club') && first.uncertainPlans.some(plan => plan.name === 'Mystery Club'));
+    assert('plan init treats Plan display name separately from SubjectInMatrixView', plansAfterFirst.some(plan => plan.name === 'English Language Acquisition Phase 5' && plan.subject === 'English Language Acquisition Phase 5' && plan.subject_active === true));
 
     for (const plan of plansAfterFirst.filter(plan => ['Biology HL', 'English Language Acquisition Phase 5', 'Mathematics Analysis HL'].includes(plan.name))) {
         const bucketNames = (await db.getBucketsByPlan(plan.id)).map(bucket => bucket.name);
@@ -227,6 +244,25 @@ async function run() {
     assertEqual('idempotent run does not duplicate Other School Plan buckets', otherBuckets.length, MatrixView.OTHER_SCHOOL_DEFAULT_BUCKETS.length);
     assert('Other School Plan mappings do not create duplicate subject Plans', counts[MatrixView.OTHER_SCHOOL_PLAN_NAME] === 1);
     assert('plan init stores non-empty subject mappings in settings', Array.isArray(db.settings[MatrixView.SETTINGS_MAPPING_KEY]) && db.settings[MatrixView.SETTINGS_MAPPING_KEY].length === 5);
+
+    const dbDelete = new FakeDB();
+    const deleteOldPlan = await dbDelete.addPlan({ name: 'Old Physics', subject: 'Physics' });
+    dbDelete.tasks.push({ id: 'task-delete-old-physics', plan_id: deleteOldPlan.id, title: 'Delete old physics task' });
+    const deleteMappings = [{ plan_name: 'Biology HL', subject_in_matrixview: 'Biology HL' }];
+    const deletePreview = await MatrixView.previewSubjectPlanInitialization(dbDelete, deleteMappings);
+    const deleteRows = deletePreview.rows.map(row => row.old_plan_name === 'Old Physics' ? { ...row, selected: false } : row);
+    const deleteResult = await MatrixView.initializeSubjectPlans(dbDelete, deleteRows);
+    const plansAfterDelete = await dbDelete.getPlans();
+    assert('unchecked missing subject Plan is deleted after explicit reconciliation selection', deleteResult.deletedPlans.some(plan => plan.name === 'Old Physics') && !plansAfterDelete.some(plan => plan.name === 'Old Physics'));
+    assert('deleting unchecked missing subject Plan cascades historical tasks', !dbDelete.tasks.some(task => task.id === 'task-delete-old-physics'));
+
+    const dbMatchedSkip = new FakeDB();
+    await dbMatchedSkip.addPlan({ name: 'Existing Math Display', subject: 'Mathematics Analysis HL' });
+    const matchedSkipPreview = await MatrixView.previewSubjectPlanInitialization(dbMatchedSkip, [{ plan_name: 'New Math Display', subject_in_matrixview: 'Mathematics Analysis HL' }]);
+    const matchedSkipRows = matchedSkipPreview.rows.map(row => row.type === 'matched' ? { ...row, selected: false } : row);
+    await MatrixView.initializeSubjectPlans(dbMatchedSkip, matchedSkipRows);
+    const plansAfterMatchedSkip = await dbMatchedSkip.getPlans();
+    assert('unchecked matched subject Plan is preserved instead of deactivated', plansAfterMatchedSkip.some(plan => plan.name === 'Existing Math Display' && plan.subject === 'Mathematics Analysis HL' && plan.subject_active === true));
 
     const dbJs = fs.readFileSync(path.join(__dirname, '..', 'extension', 'shared', 'js', 'db.js'), 'utf8');
     assert('DB default My Tasks bucket template uses D-015 subject buckets', dbJs.includes("const SUBJECT_DEFAULT_BUCKETS = ['上课', '作业', '单元测试', '阶段考试']")

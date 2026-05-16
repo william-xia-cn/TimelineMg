@@ -475,7 +475,7 @@
         const plans = await db.getPlans();
         const planOptions = plans.filter(plan => {
             const name = normalizeText(plan.name);
-            return name && (normalizeText(plan.subject) || name === 'Other School Plan');
+            return name && ((normalizeText(plan.subject) && plan.subject_active !== false) || name === 'Other School Plan');
         });
         const matrixReady = Array.isArray(matrixMappings) && matrixMappings.length > 0;
         return {
@@ -658,9 +658,9 @@
 
     function overrideToMapping(override) {
         if (!override?.event_uid || !override?.plan_id) return null;
-        const subject = normalizeText(override.subject || override.subject_in_managebac || 'ManageBac');
+        const subject = normalizeText(override.subject);
         return {
-            subject_in_managebac: normalizeText(override.subject_in_managebac || subject),
+            subject_in_managebac: normalizeText(override.subject_in_managebac),
             plan_id: override.plan_id,
             subject,
             sync_enabled: true,
@@ -836,6 +836,7 @@
             description: event.description || '',
             suggested_plan_id: suggestions[0]?.plan_id || '',
             suggested_subject: suggestions[0]?.subject || '',
+            suggested_subject_in_managebac: suggestions[0]?.subject_in_managebac || '',
             suggestion_score: suggestions[0]?.score || 0,
             suggestions
         };
@@ -851,6 +852,7 @@
                 description: normalizeText(row.description),
                 suggested_plan_id: row.suggested_plan_id || '',
                 suggested_subject: normalizeText(row.suggested_subject),
+                suggested_subject_in_managebac: normalizeText(row.suggested_subject_in_managebac),
                 saved_at: normalizeText(row.saved_at) || savedAt
             }));
     }
@@ -919,7 +921,7 @@
             checklist: [],
             schedule_time: null,
             duration: 45,
-            subject: mapping.subject || mapping.subject_in_managebac,
+            subject: mapping.subject || null,
             deferred_until: null,
             source: SOURCE,
             source_type: SOURCE_TYPE_ICS,
@@ -1134,8 +1136,8 @@
             byUid.set(eventUid, {
                 event_uid: eventUid,
                 plan_id: plan.id,
-                subject: planLabel(plan),
-                subject_in_managebac: normalizeText(row.subject_in_managebac || planLabel(plan)),
+                subject: normalizeText(plan.subject),
+                subject_in_managebac: normalizeText(row.subject_in_managebac),
                 source: 'managebac_event_subject_override',
                 updated_at: now
             });

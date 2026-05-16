@@ -1,4 +1,4 @@
-/* Settings & Init Wizard Styles */
+/* Settings Styles */
 :root {
     --bg-app: #f1f5f9;
     --color-sidebar: #2b56e3;
@@ -294,12 +294,46 @@ select, input[type="number"], input[type="text"] {
     transition: var(--transition);
 }
 
+.toggle-control {
+    align-items: center;
+    color: var(--text-main);
+    display: inline-flex;
+    font-size: 14px;
+    font-weight: 700;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.toggle-control input[type="checkbox"] {
+    height: 18px;
+    width: 18px;
+}
+
+.setting-inline-actions {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
 .inline-link-control {
     display: grid;
     grid-template-columns: minmax(240px, 1fr) auto auto;
     gap: 8px;
     align-items: center;
-    min-width: min(620px, 58vw);
+    width: 100%;
+    min-width: 0;
+}
+
+.link-setting-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.link-setting-row .setting-info {
+    max-width: 720px;
 }
 
 .inline-link-control input[type="url"] {
@@ -345,11 +379,62 @@ select, input[type="number"], input[type="text"] {
     background: #fee2e2;
 }
 
-.google-sync-actions {
+.google-sync-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    overflow: visible;
+}
+
+.google-sync-card {
+    padding: 14px 16px;
+    border: 1px solid var(--border-stroke);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.74);
+}
+
+.google-sync-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.google-sync-state-line,
+.google-sync-meta-line {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    color: var(--text-sub);
+    font-size: 13px;
+}
+
+.google-sync-account {
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.google-sync-danger-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
-    justify-content: flex-end;
+    margin-top: 12px;
+}
+
+.google-sync-danger-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-sub);
+    margin-right: 4px;
+}
+
+.google-sync-conflict-btn {
+    margin-top: 12px;
 }
 
 .google-sync-preview {
@@ -413,20 +498,9 @@ select, input[type="number"], input[type="text"] {
         width: 100%;
     }
 
-    .setting-row:has(.inline-link-control) {
+    .google-sync-card-header {
         align-items: stretch;
         flex-direction: column;
-        gap: 12px;
-    }
-
-    .google-sync-actions-row {
-        align-items: stretch;
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    .google-sync-actions {
-        justify-content: flex-start;
     }
 }
 
@@ -502,118 +576,6 @@ input:checked + .slider:before {
 .action-btn.danger:hover {
     background: #fef2f2;
     border-color: var(--red);
-}
-
-/* Wizard Styles */
-.wizard-container {
-    width: 100%;
-    max-width: 600px;
-    min-height: 400px;
-    display: flex;
-    flex-direction: column;
-}
-
-.wizard-steps {
-    display: flex;
-    justify-content: space-between;
-    padding: 32px 48px;
-    position: relative;
-}
-
-.wizard-steps::before {
-    content: '';
-    position: absolute;
-    top: 52px;
-    left: 48px;
-    right: 48px;
-    height: 2px;
-    background: var(--border-stroke);
-    z-index: 1;
-}
-
-.step {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: white;
-    border: 2px solid var(--border-stroke);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-    color: var(--text-sub);
-    position: relative;
-    z-index: 2;
-    transition: var(--transition);
-}
-
-.step.active {
-    border-color: var(--accent);
-    background: var(--accent);
-    color: white;
-    box-shadow: 0 0 15px var(--accent-glow);
-}
-
-.step.completed {
-    border-color: var(--green);
-    background: var(--green);
-    color: white;
-}
-
-.step-label {
-    position: absolute;
-    top: 50px;
-    white-space: nowrap;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-sub);
-}
-
-.wizard-content {
-    flex: 1;
-    padding: 24px 48px;
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 16px;
-}
-
-.wizard-content h2 {
-    font-size: 24px;
-    font-weight: 800;
-}
-
-.wizard-content p {
-    color: var(--text-sub);
-    line-height: 1.6;
-}
-
-.wizard-footer {
-    padding: 32px 48px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-}
-
-.wizard-btn {
-    padding: 12px 32px;
-    border-radius: var(--radius-md);
-    border: none;
-    font-weight: 700;
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.wizard-btn.primary {
-    background: var(--accent);
-    color: white;
-    box-shadow: 0 4px 6px var(--accent-glow);
-}
-
-.wizard-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
 }
 
 /* Toast Notification */
@@ -700,6 +662,39 @@ input:checked + .slider:before {
     gap: 12px;
     padding: 16px 20px;
     border-top: 1px solid var(--border-stroke);
+}
+
+.google-sync-danger-modal {
+    max-width: 560px;
+}
+
+.google-sync-danger-message {
+    color: var(--text-main);
+    line-height: 1.5;
+    margin-bottom: 14px;
+}
+
+.google-sync-risk-block {
+    padding: 12px 14px;
+    border: 1px solid #fecaca;
+    border-radius: var(--radius-md);
+    background: #fef2f2;
+    margin-bottom: 16px;
+}
+
+.google-sync-risk-block ul {
+    margin: 8px 0 0 18px;
+    color: #7f1d1d;
+    line-height: 1.55;
+    font-size: 13px;
+}
+
+.google-sync-confirm-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-main);
 }
 
 .form-group {
