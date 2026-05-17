@@ -119,35 +119,44 @@
                 <div class="column-header">
                     <h2>本周进度</h2>
                 </div>
-                <div class="column-content custom-scrollbar" style="gap: 20px;">
-                    <!-- 顶端部分：统计图 -->
-                    <div class="week-stats-section">
-                        <h3>学业产出统计</h3>
-                        <div class="pie-chart-container">
-                            <div class="pie-chart-wrapper">
-                                <div class="pie-chart"></div>
-                                <div class="pie-center">
-                                    <span class="pie-total-num">0</span>
-                                    <span class="pie-total-label">总任务</span>
+                <div class="column-content weekly-progress-content">
+                    <div class="weekly-progress-scroll-body custom-scrollbar">
+                        <!-- 顶端部分：统计图 -->
+                        <div class="week-stats-section">
+                            <h3>学业产出统计</h3>
+                            <div class="pie-chart-container">
+                                <div class="pie-chart-wrapper">
+                                    <div class="pie-chart"></div>
+                                    <div class="pie-center">
+                                        <span class="pie-total-num">0</span>
+                                        <span class="pie-total-label">总任务</span>
+                                    </div>
+                                </div>
+                                <div class="pie-legend">
+                                    <div class="legend-item"><span class="legend-color bg-green"></span>已完成 <strong id="legend-completed">0</strong></div>
+                                    <div class="legend-item"><span class="legend-color bg-orange"></span>进行中 <strong id="legend-in-progress">0</strong></div>
+                                    <div class="legend-item"><span class="legend-color bg-red"></span>未完成 <strong id="legend-not-started">0</strong></div>
                                 </div>
                             </div>
-                            <div class="pie-legend">
-                                <div class="legend-item"><span class="legend-color bg-green"></span>已完成 <strong id="legend-completed">0</strong></div>
-                                <div class="legend-item"><span class="legend-color bg-orange"></span>进行中 <strong id="legend-in-progress">0</strong></div>
-                                <div class="legend-item"><span class="legend-color bg-red"></span>未完成 <strong id="legend-not-started">0</strong></div>
+                        </div>
+
+                        <div class="divider"></div>
+
+                        <!-- 底部部分：任务列表 -->
+                        <div class="week-tasks-section">
+                            <h3>本周重点任务</h3>
+                            <div class="simple-task-list">
+                                <!-- JS 动态填充 -->
                             </div>
+                            <button class="add-task-btn" data-action="add-task"><span class="material-symbols-outlined">add</span> 添加周任务</button>
                         </div>
                     </div>
 
-                    <div class="divider"></div>
-
-                    <!-- 底部部分：任务列表 -->
-                    <div class="week-tasks-section">
-                        <h3>本周重点任务</h3>
-                        <div class="simple-task-list">
+                    <div class="weekly-journal-section">
+                        <h3>本周总结</h3>
+                        <div class="weekly-journal-grid">
                             <!-- JS 动态填充 -->
                         </div>
-                        <button class="add-task-btn" data-action="add-task"><span class="material-symbols-outlined">add</span> 添加周任务</button>
                     </div>
                 </div>
             </section>

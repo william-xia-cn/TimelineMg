@@ -225,10 +225,10 @@ async function run() {
     const settingsHtml = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'settings.html'), 'utf8');
     const settingsCss = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'styles.css'), 'utf8');
     const settingsScript = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'script.js'), 'utf8');
-    const managebacHtml = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'managebac.html'), 'utf8');
-    const managebacPageScript = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'managebac.js'), 'utf8');
     const managebacSyncHtml = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'managebac-sync.html'), 'utf8');
     const managebacSyncScript = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'managebac-sync.js'), 'utf8');
+    const taskArrangeHtml = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'task-arrange.html'), 'utf8');
+    const taskArrangeScript = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'task-arrange.js'), 'utf8');
     const tasksHtml = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'tasks', 'tasks.html'), 'utf8');
     const tasksScript = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'tasks', 'script.js'), 'utf8');
     const taskDetailScript = fs.readFileSync(path.join(__dirname, '..', 'extension', 'pages', 'tasks', 'detail-panel.js'), 'utf8');
@@ -258,30 +258,35 @@ async function run() {
     assert('Settings Plan UI exposes inline ManageBac link input', settingsHtml.includes('id="settingsManageBacIcsLinkInput"'));
     assert('Settings Plan UI exposes inline ManageBac save button', settingsHtml.includes('id="settingsSaveManageBacIcsLinkBtn"'));
     assert('Settings Plan UI exposes inline ManageBac sync button', settingsHtml.includes('id="settingsSyncManageBacBtn"'));
+    assert('Settings no longer exposes ManageBac subject mapping entry', !settingsHtml.includes('配置 ManageBac 学科映射')
+        && !settingsScript.includes('configureManageBacBtn')
+        && !settingsScript.includes('请先配置 ManageBac 学科映射'));
     assert('Settings ManageBac link row uses non-compressed dedicated layout', settingsHtml.includes('link-setting-row') && settingsCss.includes('.link-setting-row'));
     assert('Settings page loads ManageBac shared module before script', settingsHtml.indexOf('shared/js/managebac.js') > -1 && settingsHtml.indexOf('shared/js/managebac.js') < settingsHtml.indexOf('script.js'));
     assert('Settings page has no separate sync ManageBac event row label', !settingsHtml.includes('同步 ManageBac 事件'));
-    assert('Settings sync opens unified management confirmation page', settingsScript.includes('managebac-sync.html') && settingsScript.includes('management_review_pending'));
+    assert('Settings sync opens ManageBac-only confirmation page', settingsScript.includes('managebac-sync.html') && !settingsScript.includes('management_review_pending'));
     assert('Settings sync no longer routes to mapping page hash', !settingsScript.includes('managebac.html#pending-events'));
-    assert('ManageBac mapping page no longer owns ICS link input', !managebacHtml.includes('id="managebacIcsLinkInput"'));
-    assert('ManageBac mapping page no longer owns direct sync button', !managebacHtml.includes('id="syncManageBacBtn"'));
-    assert('ManageBac mapping page script has no stale direct sync DOM references', !/saveManageBacIcsLinkBtn|syncManageBacBtn|managebacIcsLinkInput/.test(managebacPageScript));
-    assert('ManageBac mapping page script has no obsolete direct sync handlers', !/handleSaveManageBacIcsLink|handleManageBacSync|loadManageBacSyncConfig/.test(managebacPageScript));
-    assert('ManageBac mapping page has no pending event confirmation UI', !/pendingEventMappings|savePendingEventMappingsBtn|添加确认的任务/.test(managebacHtml + managebacPageScript));
-    assert('Management review page owns Arrange and ManageBac confirmation UI', managebacSyncHtml.includes('id="pendingArrangeChanges"')
+    assert('ManageBac subject mapping page is removed from main package',
+        !fs.existsSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'managebac.html'))
+        && !fs.existsSync(path.join(__dirname, '..', 'extension', 'pages', 'settings', 'managebac.js')));
+    assert('ManageBac confirmation page is separate from Arrange review', !managebacSyncHtml.includes('id="pendingArrangeChanges"')
         && managebacSyncHtml.includes('id="pendingEventMappings"')
-        && managebacSyncHtml.includes('确认并导入选中项')
-        && managebacSyncHtml.includes('全部跳过并完成'));
+        && managebacSyncHtml.includes('ManageBac 新任务确认')
+        && !managebacSyncScript.includes('applyArrangeChanges'));
+    assert('Task Arrange confirmation page is separate from ManageBac import', taskArrangeHtml.includes('id="pendingArrangeChanges"')
+        && !taskArrangeHtml.includes('id="pendingEventMappings"')
+        && taskArrangeScript.includes('task_arrange_pending')
+        && !taskArrangeScript.includes('TimeWhereManageBac'));
     assert('ManageBac sync page has no subject mapping file input', !/managebacFileInput|saveManageBacMappingsBtn|mappingPreview/.test(managebacSyncHtml + managebacSyncScript));
     assert('ManageBac sync UI has no local ICS file input', !/accept=["'][^"']*\.ics/i.test(managebacSyncHtml));
-    assert('Planner sidebar uses visible my ManageBac label', tasksHtml.includes('my ManageBac') && !tasksHtml.includes('>MyManageBac<'));
+    assert('Planner sidebar uses visible My ManageBac label', tasksHtml.includes('My ManageBac') && !tasksHtml.includes('>MyManageBac<'));
     assert('Planner top toolbar ManageBac sync button is removed', !tasksHtml.includes('id="btnSyncManageBac"'));
     assert('Planner sidebar ManageBac sync button includes local icon and 同步 text', /id="sidebarSyncManageBacBtn"[\s\S]*material-symbols-outlined[\s\S]*sync[\s\S]*同步/.test(tasksHtml));
     assert('Planner sidebar pending count button is present for persisted pending rows', tasksHtml.includes('id="managebacPendingCountBtn"'));
-    assert('Planner sidebar my ManageBac has no raw sync text label', !/sync\s*my ManageBac/i.test(tasksHtml));
+    assert('Planner sidebar My ManageBac has no raw sync text label', !/sync\s*My ManageBac/i.test(tasksHtml));
     assert('Planner sync opens independent confirmation page', tasksScript.includes('../settings/managebac-sync.html'));
-    assert('Planner sync does not auto-create new tasks and uses management review persistence', tasksScript.includes('savePendingEventMappings')
-        && tasksScript.includes('management_review_pending')
+    assert('Planner sync does not auto-create new tasks and uses ManageBac pending persistence', tasksScript.includes('savePendingEventMappings')
+        && !tasksScript.includes('management_review_pending')
         && !tasksScript.includes('applyPendingEventOverrides: true'));
     assert('Planner sync no-link message points to Settings Plan link', tasksScript.includes('Settings → Plan → ManageBac 链接'));
     assert('Planner opening my ManageBac no longer runs automatic stale sync', !tasksScript.includes('checkManageBacSyncWhenOpening()')
@@ -289,16 +294,24 @@ async function run() {
     assert('Planner manual sidebar sync forces fetch and can open confirmation page', tasksScript.includes("closest('#sidebarSyncManageBacBtn')")
         && tasksScript.includes('force: true')
         && tasksScript.includes('openPending: true'));
+    assert('Planner manual sidebar sync stays put when ManageBac has no new tasks',
+        tasksScript.includes('pendingRows.length === 0')
+        && tasksScript.includes('ManageBac 没有新增任务')
+        && /pendingRows\.length === 0[\s\S]*return;[\s\S]*openManageBacPendingConfirmation\(\)/.test(tasksScript));
     assert('Planner pending count click opens confirmation without fetching again', tasksScript.includes("closest('#managebacPendingCountBtn')")
         && tasksScript.includes('openManageBacPendingConfirmation()'));
-    assert('Management review page reads unified pending review from settings first', managebacSyncScript.includes('management_review_pending')
-        && managebacSyncScript.includes('restoreManagementReviewPending'));
-    assert('Management review page can apply or skip the full pending review', managebacSyncScript.includes('handleConfirmManagementReview')
-        && managebacSyncScript.includes('handleSkipManagementReview')
-        && managebacSyncScript.includes('clearManagementReviewPending'));
+    assert('ManageBac confirmation page reads persisted ManageBac pending rows', managebacSyncScript.includes('getPendingEventMappings')
+        && managebacSyncScript.includes('restoreManageBacPendingRows'));
+    assert('ManageBac confirmation page can apply or skip ManageBac only', managebacSyncScript.includes('handleConfirmManageBacReview')
+        && managebacSyncScript.includes('handleSkipManageBacReview')
+        && managebacSyncScript.includes('clearManageBacPendingRows'));
     assert('Task detail no longer has a separate ManageBac detail renderer', !/renderManageBacReadOnlyDetail|ManageBac Task/.test(taskDetailScript));
     assert('Task detail uses one layout with ManageBac source badge', taskDetailScript.includes('source-badge') && taskDetailScript.includes('ManageBac'));
     assert('Task detail marks ManageBac source fields readonly', taskDetailScript.includes('data-readonly-source="true"') && taskDetailScript.includes('readonly'));
+    assert('Task detail allows ManageBac start date but keeps due date readonly',
+        /data-field="start_date"[\s\S]*\$\{sourceStartDateDisabledAttr\}/.test(taskDetailScript)
+        && /data-field="due_date"[\s\S]*\$\{sourceDisabledAttr\}/.test(taskDetailScript)
+        && taskDetailScript.includes("if (input.disabled || (isManageBacTask && field !== 'start_date')) return;"));
     assert('Task detail disables ManageBac delete action', taskDetailScript.includes('ManageBac 来源任务不能删除') && /btn-delete-task[\s\S]*disabled/.test(taskDetailScript));
     assert('Task detail keeps ManageBac progress editable', taskDetailScript.includes('TimeWhereDB.updateTask(taskId, updates)') && taskDetailScript.includes('completed_at'));
     assert('Task detail displays TimeWhere Plan and Subject fields', taskDetailScript.includes('TimeWhere Plan') && taskDetailScript.includes('data-field="subject"'));
@@ -342,6 +355,53 @@ async function run() {
     assert('confirmed Math event maps to Math plan_id', (await syncDb.getAllTasks()).some(task => {
         return task.source_uid === 'mb-math-problem-1@example.invalid'
             && task.plan_id === 2;
+    }));
+
+    const noLegacyMappingDb = new FakeDB({ matrixReady: true });
+    await ManageBac.saveManageBacIcsLink(noLegacyMappingDb, 'https://example.invalid/no-legacy.ics');
+    const noLegacyResult = await ManageBac.syncManageBacIcs(noLegacyMappingDb, icsFixture, 'https://example.invalid/no-legacy.ics');
+    assertEqual('ICS sync without ManageBac subject mappings still creates pending rows', noLegacyResult.pending_event_mappings.length, 3);
+    assert('Plan subject/name candidates suggest English without legacy mappings', noLegacyResult.pending_event_mappings.some(row => {
+        return row.summary === 'English Language Acquisition Phase 5: Essay Draft'
+            && row.suggested_plan_id === 1
+            && row.suggested_subject === 'English Language Acquisition Phase 5';
+    }));
+
+    const shorthandDb = new FakeDB({ matrixReady: true });
+    shorthandDb.plans = [
+        { id: 10, name: 'EngLA', subject: 'English Language Acquisition Phase 5' },
+        { id: 11, name: 'Math AA HL', subject: 'Mathematics Analysis HL' }
+    ];
+    shorthandDb.settings[ManageBac.MATRIXVIEW_MAPPING_KEY] = [
+        { plan_name: 'EngLA', subject: 'English Language Acquisition Phase 5', subject_in_matrixview: 'English Language Acquisition Phase 5' },
+        { plan_name: 'Math AA HL', subject: 'Mathematics Analysis HL', subject_in_matrixview: 'Mathematics Analysis HL' }
+    ];
+    const shorthandResult = await ManageBac.syncManageBacIcs(shorthandDb, aliasPendingIcsFixture, 'https://example.invalid/shorthand.ics');
+    assert('Plan name shorthand suggests matching Plan', shorthandResult.pending_event_mappings.some(row => {
+        return row.summary === 'EngLA-U4-FORM-Crit.A'
+            && row.suggested_plan_id === 10
+            && row.suggested_subject === 'English Language Acquisition Phase 5';
+    }));
+
+    const matrixOnlyDb = new FakeDB({ matrixReady: true });
+    matrixOnlyDb.plans = [{ id: 20, name: 'EAL', subject: 'English Language Acquisition Phase 5' }];
+    matrixOnlyDb.settings[ManageBac.MATRIXVIEW_MAPPING_KEY] = [
+        { plan_name: 'EAL', subject: 'English Language Acquisition Phase 5', subject_in_matrixview: 'English Language Acquisition Phase 5' }
+    ];
+    const matrixOnlyResult = await ManageBac.syncManageBacIcs(matrixOnlyDb, fullEventTextIcsFixture, 'https://example.invalid/matrix-only.ics');
+    assert('MatrixView subject_in_matrixview candidates suggest matching Plan', matrixOnlyResult.pending_event_mappings.some(row => {
+        return row.event_uid === 'mb-full-event-english-1@example.invalid'
+            && row.suggested_plan_id === 20;
+    }));
+
+    const noSuggestionDb = new FakeDB({ matrixReady: true });
+    noSuggestionDb.plans = [{ id: 30, name: 'Physics', subject: 'Physics' }];
+    noSuggestionDb.settings[ManageBac.MATRIXVIEW_MAPPING_KEY] = [
+        { plan_name: 'Physics', subject: 'Physics', subject_in_matrixview: 'Physics' }
+    ];
+    const noSuggestionResult = await ManageBac.syncManageBacIcs(noSuggestionDb, aliasPendingIcsFixture, 'https://example.invalid/no-suggestion.ics');
+    assert('unmatched events remain pending with blank suggested Plan', noSuggestionResult.pending_event_mappings.some(row => {
+        return row.suggested_plan_id === '' && row.suggested_subject === '';
     }));
 
     const localCompletedAt = '2026-05-13T12:30:00.000Z';
@@ -450,7 +510,7 @@ async function run() {
     assertEqual('class-id confirmed sync creates mapped tasks', classIdSync.created, 2);
     assertEqual('class-id disabled empty mapping remains pending', classIdSync.skipped, 1);
     assertEqual('class-id diagnostics include parsed event count', classIdSync.diagnostics.parsed_event_count, 3);
-    assertEqual('class-id diagnostics include active mapping count', classIdSync.diagnostics.active_mapping_count, 2);
+    assert('class-id diagnostics include Plan/MatrixView candidate count', classIdSync.diagnostics.active_mapping_count >= 2);
     assertEqual('class-id diagnostics include matched count', classIdSync.diagnostics.matched_count, 2);
     assertEqual('class-id diagnostics include skipped count', classIdSync.diagnostics.skipped_count, 1);
     assertEqual('class-id diagnostics include pending confirmation reason', classIdSync.skipped_reasons.class_id_not_mapped, 1);
@@ -469,7 +529,7 @@ async function run() {
     assertEqual('all-skipped sync is not reported as success', allSkipped.status, 'no_matches');
     assertEqual('all-skipped diagnostics matched count is zero', allSkipped.diagnostics.matched_count, 0);
     assertEqual('all-skipped diagnostics skipped count includes all events', allSkipped.diagnostics.skipped_count, 3);
-    assertEqual('all-skipped diagnostics reason is no active mappings', allSkipped.skipped_reasons.no_active_mappings, 3);
+    assertEqual('all-skipped diagnostics reason is no candidate match', allSkipped.skipped_reasons.class_id_not_mapped, 3);
 
     const fullEventDb = new FakeDB({ matrixReady: true });
     await ManageBac.saveMappings(fullEventDb, rowsToSave, fullEventDb.plans);

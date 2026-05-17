@@ -636,6 +636,58 @@
         );
     }
 
+    async function buildPlanSuggestionMappings(db) {
+        const plans = typeof db.getPlans === 'function' ? await db.getPlans() : [];
+        const matrixMappings = await db.getSetting(MATRIXVIEW_MAPPING_KEY);
+        const legacyMappings = activeMappings(await db.getSetting(SETTINGS_MAPPING_KEY));
+        const plansById = new Map((plans || []).map(plan => [String(plan.id), plan]));
+        const activePlans = (plans || []).filter(plan => {
+            if (!plan || !plan.id || !normalizeText(plan.name)) return false;
+            return !(plan.subject && plan.subject_active === false);
+        });
+        const candidates = [];
+        const seen = new Set();
+
+        function addCandidate(plan, label, source = 'plan') {
+            const text = normalizeText(label);
+            if (!plan || !plan.id || !text) return;
+            const key = `${plan.id}:${normalizeKey(text)}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            candidates.push({
+                subject_in_managebac: text,
+                plan_id: plan.id,
+                subject: plan.subject || plan.name,
+                source,
+                sync_enabled: true
+            });
+        }
+
+        for (const plan of activePlans) {
+            addCandidate(plan, plan.name, 'plan_name');
+            addCandidate(plan, plan.subject, 'plan_subject');
+        }
+
+        for (const mapping of matrixMappings || []) {
+            const subject = normalizeText(mapping.subject || mapping.subject_in_matrixview);
+            const planName = normalizeText(mapping.plan_name || mapping.subject);
+            const plan = activePlans.find(item =>
+                normalizeKey(item.subject) === normalizeKey(subject) ||
+                normalizeKey(item.name) === normalizeKey(planName)
+            );
+            if (plan) addCandidate(plan, mapping.subject_in_matrixview, 'matrixview_subject');
+        }
+
+        for (const mapping of legacyMappings) {
+            const plan = plansById.get(String(mapping.plan_id));
+            if (plan && !(plan.subject && plan.subject_active === false)) {
+                addCandidate(plan, mapping.subject_in_managebac, 'legacy_managebac_mapping');
+            }
+        }
+
+        return candidates;
+    }
+
     function normalizeEventOverrides(rows) {
         const out = [];
         const seen = new Set();
@@ -814,7 +866,8 @@
     }
 
     function buildEventSubjectSuggestions(event, mappings, limit = 3) {
-        return activeMappings(mappings)
+        return (mappings || [])
+            .filter(mapping => mapping && mapping.plan_id && normalizeText(mapping.subject_in_managebac))
             .map(mapping => ({
                 subject_in_managebac: mapping.subject_in_managebac,
                 subject: mapping.subject || mapping.subject_in_managebac,
@@ -1010,7 +1063,7 @@
             };
         }
 
-        const mappings = await db.getSetting(SETTINGS_MAPPING_KEY);
+        const mappings = await buildPlanSuggestionMappings(db);
         const eventOverrides = normalizeEventOverrides(await db.getSetting(SETTINGS_EVENT_OVERRIDES_KEY));
         const overridesByUid = new Map(eventOverrides.map(override => [normalizeText(override.event_uid), override]));
         const active = activeMappings(mappings);

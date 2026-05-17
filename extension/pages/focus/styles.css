@@ -301,6 +301,27 @@ body::before {
     padding-right: 4px;
 }
 
+.column-now .column-content,
+.column-week .column-content {
+    overflow: hidden;
+    min-height: 0;
+}
+
+.current-task-scroll-body,
+.weekly-progress-scroll-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-right: 4px;
+}
+
+.weekly-progress-content {
+    gap: 16px;
+}
+
 .custom-scrollbar::-webkit-scrollbar { width: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track {
     background: rgba(0, 0, 0, 0.05);
@@ -400,6 +421,54 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 /* 逾期任务左边框 */
 .accordion-task.task-overdue {
     border-left: 3px solid var(--red);
+}
+
+.daily-journal-entry {
+    background: var(--card-bg);
+    border: 1px solid var(--border-stroke);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.daily-journal-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.daily-journal-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: #eef2ff;
+    color: var(--accent);
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+}
+
+.daily-journal-icon .material-symbols-outlined { font-size: 20px; }
+
+.daily-journal-copy { min-width: 0; }
+
+.daily-journal-copy h3 {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 2px;
+}
+
+.daily-journal-copy p {
+    font-size: 11px;
+    color: var(--text-sub);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Task meta tags row */
@@ -645,7 +714,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 /* ==================
    5. 本周列 (统计图 + 任务列表)
    ================== */
-.week-stats-section h3, .week-tasks-section h3 {
+.week-stats-section h3, .week-tasks-section h3, .weekly-journal-section h3 {
     font-size: 14px;
     font-weight: 600;
     color: var(--text-main);
@@ -747,9 +816,70 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 }
 
 .week-tasks-section {
-    flex: 1;
     display: flex;
     flex-direction: column;
+}
+
+.weekly-journal-section {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.weekly-journal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.weekly-journal-day {
+    min-width: 0;
+    min-height: 58px;
+    border: 1px solid var(--border-stroke);
+    border-radius: var(--radius-sm);
+    background: var(--card-bg);
+    color: var(--text-main);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.weekly-journal-day:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 10px rgba(43, 86, 227, 0.10);
+    transform: translateY(-1px);
+}
+
+.weekly-journal-day.submitted {
+    border-color: rgba(16, 185, 129, 0.35);
+    background: #ecfdf5;
+    color: var(--green);
+}
+
+.weekly-journal-day.overdue {
+    border-color: rgba(239, 68, 68, 0.35);
+    background: #fef2f2;
+    color: var(--red);
+}
+
+.weekly-journal-day.pending {
+    color: var(--text-main);
+}
+
+.weekly-journal-weekday {
+    font-size: 11px;
+    color: inherit;
+    opacity: 0.78;
+    white-space: nowrap;
+}
+
+.weekly-journal-day strong {
+    font-size: 17px;
+    line-height: 1;
 }
 
 .simple-task-list {
@@ -885,6 +1015,10 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
     animation: modalSlideIn 0.2s ease;
 }
 
+.modal-content.daily-journal-modal {
+    max-width: 820px;
+}
+
 @keyframes modalSlideIn {
     from { opacity: 0; transform: translateY(-20px); }
     to { opacity: 1; transform: translateY(0); }
@@ -924,6 +1058,89 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
     display: flex;
     flex-direction: column;
     gap: 16px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.journal-status-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-sub);
+    font-size: 12px;
+}
+
+.journal-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.journal-section {
+    border: 1px solid var(--border-stroke);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    min-height: 120px;
+}
+
+.journal-section h4 {
+    font-size: 13px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.journal-task-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.journal-task-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-main);
+}
+
+.journal-task-list small,
+.journal-empty {
+    font-size: 11px;
+    color: var(--text-sub);
+}
+
+.journal-notes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.journal-note-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.journal-note-field textarea {
+    resize: vertical;
+    min-height: 74px;
+    border: 1px solid var(--border-stroke);
+    border-radius: 8px;
+    padding: 10px;
+    font-family: inherit;
+    font-size: 12px;
+}
+
+@media (max-width: 720px) {
+    .journal-grid,
+    .journal-notes {
+        grid-template-columns: 1fr;
+    }
 }
 
 .form-group {

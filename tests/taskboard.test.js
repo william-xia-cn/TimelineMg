@@ -33,8 +33,29 @@ function assert(desc, condition) {
 
 console.log('\nTimeWhere Task Board tests\n' + '='.repeat(44));
 
+const RealDate = Date;
+class FixedDate extends RealDate {
+    constructor(...args) {
+        if (args.length === 0) return new RealDate('2026-05-13T12:00:00');
+        return new RealDate(...args);
+    }
+
+    static now() {
+        return new RealDate('2026-05-13T12:00:00').getTime();
+    }
+
+    static parse(value) {
+        return RealDate.parse(value);
+    }
+
+    static UTC(...args) {
+        return RealDate.UTC(...args);
+    }
+}
+
 const context = {
     console,
+    Date: FixedDate,
     document: {
         createElement: () => ({
             innerHTML: '',
@@ -91,6 +112,12 @@ assert('due_date grouping with exact column shows Bucket selector without Due in
 assert('due_date grouping with non-exact column requires Due input', (() => {
     const cfg = context.getQuickAddFieldConfig('due_date', {});
     return cfg.showBucketSelect === true && cfg.showDueDate === true && cfg.showStartDate === false;
+})());
+
+assert('next_week quick-add requires explicit due_date', (() => {
+    const defaults = context.getQuickAddDefaults('next_week');
+    const cfg = context.getQuickAddFieldConfig('due_date', defaults);
+    return !defaults.due_date && cfg.showDueDate === true && cfg.showBucketSelect === true;
 })());
 
 assert('bucket grouping includes start_date and required due_date without Bucket selector', (() => {
@@ -154,6 +181,27 @@ assert('due_date grouping uses the same Planner-like add row style', dueColumnHt
     && dueColumnHtml.includes('planner-add-row')
     && dueColumnHtml.includes('添加任务'));
 assert('due_date grouping does not render bucket rename/delete menu trigger', !dueColumnHtml.includes('bucket-menu-btn'));
+
+const dueDateGrouped = context.groupTasks([
+    { id: 'overdue', title: 'Overdue task', due_date: '2026-05-12' },
+    { id: 'today', title: 'Today task', due_date: '2026-05-13' },
+    { id: 'tomorrow', title: 'Tomorrow task', due_date: '2026-05-14' },
+    { id: 'this-week', title: 'This week task', due_date: '2026-05-17' },
+    { id: 'next-week-mon', title: 'Next week Monday task', due_date: '2026-05-18' },
+    { id: 'next-week-sun', title: 'Next week Sunday task', due_date: '2026-05-24' },
+    { id: 'future', title: 'Future task', due_date: '2026-05-25' },
+    { id: 'no-date', title: 'No date task' }
+], 'due_date');
+assert('due_date grouping includes Next week between This week and Future',
+    Array.from(dueDateGrouped.keys()).join(',') === 'overdue,today,tomorrow,this_week,next_week,future,no_date');
+assert('due_date grouping classifies natural week ranges',
+    dueDateGrouped.get('overdue').tasks.map(task => task.id).join(',') === 'overdue'
+    && dueDateGrouped.get('today').tasks.map(task => task.id).join(',') === 'today'
+    && dueDateGrouped.get('tomorrow').tasks.map(task => task.id).join(',') === 'tomorrow'
+    && dueDateGrouped.get('this_week').tasks.map(task => task.id).join(',') === 'this-week'
+    && dueDateGrouped.get('next_week').tasks.map(task => task.id).join(',') === 'next-week-mon,next-week-sun'
+    && dueDateGrouped.get('future').tasks.map(task => task.id).join(',') === 'future'
+    && dueDateGrouped.get('no_date').tasks.map(task => task.id).join(',') === 'no-date');
 
 context.TaskApp.groupBy = 'priority';
 const priorityGrouped = context.groupTasks([
@@ -296,7 +344,7 @@ assert('DB addPlan assigns new plans to the end of current order', dbJs.includes
 
 assert('DB exposes reorderPlans without schema migration', dbJs.includes('async reorderPlans(orderedIds)')
     && dbJs.includes('sort_order: i')
-    && !dbJs.includes('db.version(5)'));
+    && !/db\.version\(5\)\.stores\(\{[^;]*sort_order/.test(dbJs));
 
 assert('Plan reorder UI has local icon mappings', iconsJs.includes("'arrow_upward'")
     && iconsJs.includes("'arrow_downward'")
@@ -308,7 +356,11 @@ assert('Plan reorder has visible drag styling and disabled menu styling', boardC
     && boardCss.includes('.ctx-menu-item:disabled'));
 
 assert('Task Board loads saved preferences before initial plan render', scriptJs.includes('await TaskApp.loadPreferences()')
-    && scriptJs.indexOf('await TaskApp.loadPreferences()') < scriptJs.indexOf('await TaskApp.loadPlan(TaskApp.plans[0].id)'));
+    && scriptJs.indexOf('await TaskApp.loadPreferences()') < scriptJs.indexOf('await TaskApp.loadMyTasks()'));
+
+assert('Task Board default secondary view is My Tasks', scriptJs.includes('await TaskApp.loadMyTasks()')
+    && !scriptJs.includes('await TaskApp.loadPlan(TaskApp.plans[0].id)')
+    && /else\s*\{\s*await TaskApp\.loadMyTasks\(\);[\s\S]*?updateSidebarActiveState\('my_tasks'\)/.test(scriptJs));
 
 assert('Task Board preferences are stored in settings', stateJs.includes("const TASK_BOARD_PREFS_KEY = 'task_board_preferences'")
     && stateJs.includes('TimeWhereDB.getSetting(TASK_BOARD_PREFS_KEY)')
@@ -326,7 +378,7 @@ assert('Task Board restores group and filters after each view load', stateJs.inc
 assert('Task Board saved bucket group is not applied to cross-plan views', stateJs.includes("viewMode !== 'plan' && this.groupBy === 'bucket'")
     && stateJs.includes('this.groupBy = this.getDefaultGroupBy(viewMode)'));
 
-assert('Planner visible sidebar label is my ManageBac', tasksHtml.includes('my ManageBac') && stateJs.includes("return 'my ManageBac'"));
+assert('Planner visible sidebar label is My ManageBac', tasksHtml.includes('My ManageBac') && stateJs.includes("return 'My ManageBac'"));
 
 assert('Planner top toolbar no longer owns ManageBac sync button', !tasksHtml.includes('btnSyncManageBac'));
 
@@ -339,7 +391,12 @@ assert('Planner my ManageBac opening no longer runs six-hour automatic sync', !s
 
 assert('Planner manual ManageBac sync forces refresh and persists pending rows', scriptJs.includes('force: true')
     && scriptJs.includes('savePendingEventMappings')
-    && scriptJs.includes('management_review_pending'));
+    && !scriptJs.includes('management_review_pending'));
+
+assert('Planner manual ManageBac sync does not open confirmation when no new task exists',
+    scriptJs.includes('pendingRows.length === 0')
+    && scriptJs.includes('ManageBac 没有新增任务')
+    && /pendingRows\.length === 0[\s\S]*return;[\s\S]*openManageBacPendingConfirmation\(\)/.test(scriptJs));
 
 assert('Planner supports opening task detail from task_id URL parameter', scriptJs.includes('function getInitialTaskIdFromUrl')
     && scriptJs.includes("new URLSearchParams(window.location.search).get('task_id')")

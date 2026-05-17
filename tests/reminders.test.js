@@ -163,7 +163,8 @@ const payload = Reminders.buildReminderNotificationPayload({
     ...scheduledStart,
     task: { ...scheduledStart.task, plan_name: 'English Plan', notes: 'Draft body paragraph' }
 });
-assert('notification payload is Chrome basic notification', payload.type === 'basic' && payload.iconUrl === 'icons/icon128.png');
+assert('notification payload is Chrome basic persistent notification',
+    payload.type === 'basic' && payload.iconUrl === 'icons/icon128.png' && payload.requireInteraction === true);
 assert('scheduled start notification title has action semantics', payload.title === '即将开始：Essay');
 assert('scheduled start notification body includes time plan duration and details',
     payload.message.includes('20:00') && payload.message.includes('English Plan') && payload.message.includes('45分钟') && payload.message.includes('Draft body paragraph'));
@@ -187,7 +188,12 @@ assert('manifest uses classic background service worker for importScripts',
 const background = fs.readFileSync(path.join(__dirname, '../extension/background.js'), 'utf8');
 assert('background registers reminder alarm',
     background.includes("const TASK_REMINDER_ALARM = 'timewhere-task-reminder-tick'")
-    && background.includes('chrome.alarms?.onAlarm.addListener'));
+    && background.includes('chrome.alarms?.onAlarm.addListener')
+    && background.includes('TIMEWHERE_TASK_REMINDER_ENSURE')
+    && background.includes('TIMEWHERE_TASK_REMINDER_STATUS'));
+assert('background verifies alarm registration after create',
+    background.includes('Task reminder alarm was not registered')
+    && background.includes('chrome.alarms.get'));
 assert('background runs immediate reminder check on bootstrap',
     background.includes('bootstrapTaskReminders()')
     && background.includes('await runTaskReminderTick()'));
@@ -199,6 +205,31 @@ assert('background respects notification_enabled setting',
 assert('background exposes manual test notification message',
     background.includes('TIMEWHERE_TASK_REMINDER_TEST')
     && background.includes('timewhere-test-reminder:'));
+assert('background emits debug notification on every reminder tick',
+    background.includes('TASK_REMINDER_DEBUG_NOTIFICATIONS')
+    && background.includes('TimeWhere 检查：没有任务提醒')
+    && background.includes('createTaskReminderDebugNotification(now, reminders)')
+    && background.includes('requireInteraction: true'));
+assert('background can schedule a diagnostic alarm event notification',
+    background.includes('TASK_REMINDER_DIAGNOSTIC_ALARM')
+    && background.includes('TimeWhere 诊断：alarm 事件已触发')
+    && background.includes('createDiagnosticAlarm()')
+    && background.includes('TASK_REMINDER_DIAGNOSTIC_STATE_KEY'));
+assert('background registers daily journal snapshot and prompt alarms',
+    background.includes("const DAILY_JOURNAL_SNAPSHOT_ALARM = 'timewhere-daily-journal-snapshot'")
+    && background.includes("const DAILY_JOURNAL_PROMPT_ALARM = 'timewhere-daily-journal-prompt'")
+    && background.includes('DAILY_JOURNAL_SNAPSHOT_HOUR = 6')
+    && background.includes('DAILY_JOURNAL_PROMPT_HOUR = 21')
+    && background.includes('DAILY_JOURNAL_PROMPT_MINUTE = 30')
+    && background.includes('ensureDailyJournalAlarms()'));
+assert('background daily journal prompt opens Dashboard journal URL',
+    background.includes('timewhere-daily-journal:')
+    && background.includes('focus.html?journal_date='));
+assert('background daily journal snapshot freezes planned tasks after 6',
+    background.includes('ensureTodayDailyJournalSnapshot')
+    && background.includes("task.start_date === date")
+    && background.includes('planned_task_snapshots')
+    && background.includes('daily_pool_snapshots'));
 
 const settingsHtml = fs.readFileSync(path.join(__dirname, '../extension/pages/settings/settings.html'), 'utf8');
 const settingsJs = fs.readFileSync(path.join(__dirname, '../extension/pages/settings/script.js'), 'utf8');
@@ -211,6 +242,13 @@ assert('Settings persists notification_enabled',
     && settingsJs.includes("settings.notification_enabled !== false"));
 assert('Settings sends manual notification test message',
     settingsJs.includes('TIMEWHERE_TASK_REMINDER_TEST') && settingsJs.includes('handleTestNotification'));
+assert('Settings ensures task reminder alarm from notification settings',
+    settingsJs.includes('TIMEWHERE_TASK_REMINDER_ENSURE')
+    && settingsJs.includes('alarm 已注册'));
+assert('Settings reports diagnostic alarm scheduled time',
+    settingsJs.includes('formatDiagnosticAlarmStatus')
+    && settingsJs.includes('30 秒诊断')
+    && settingsJs.includes('scheduleDiagnosticAlarmFollowUp'));
 
 console.log('\n' + '='.repeat(40));
 console.log(`Total: ${passed + failed} checks   PASS ${passed}   ${failed > 0 ? 'FAIL' : 'PASS'} ${failed}`);

@@ -65,17 +65,24 @@ assert('Focus action runner prevents duplicate clicks', focusScript.includes('da
     && focusScript.includes('control.disabled = true')
     && focusScript.includes('control.disabled = false'));
 assert('Focus no longer exports handlers for inline events', !/window\.(startTaskNow|pauseTask|completeTaskNow|deferTask|toggleWeekTask|openAddTaskModal|saveNewTask)/.test(focusScript));
-assert('Dashboard owns unified six-hour management review trigger', focusHtml.includes('../../shared/js/managebac.js')
+assert('Dashboard owns six-hour Task Arrange review trigger', focusHtml.includes('../../shared/js/managebac.js')
     && focusScript.includes('runManagementReviewCheck()')
-    && focusScript.includes('management_review_pending')
-    && focusScript.includes('management_review_last_checked_at')
-    && focusScript.includes('managebac-sync.html?source=dashboard_auto'));
+    && focusScript.includes('task_arrange_pending')
+    && focusScript.includes('task_arrange_last_checked_at')
+    && focusScript.includes('task-arrange.html?source=dashboard_auto')
+    && !focusScript.includes('fetchManageBacPreviewForManagementReview'));
 assert('Dashboard management review previews Arrange without direct confirm/apply', focusScript.includes('TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false })')
     && !focusScript.includes('maybeRunTaskArrange'));
-assert('Popup and Calendar do not run automatic Arrange on open', !popupScript.includes('maybeRunTaskArrange')
+assert('Popup does not run automatic Arrange on open', !popupScript.includes('maybeRunTaskArrange')
     && !popupScript.includes('runTaskArrangeInBackground')
+    && !popupScript.includes('runTaskArrangeInBackground'));
+assert('Calendar opening triggers Arrange preview through management review only', calendarScript.includes('runCalendarArrangeCheck()')
+    && calendarScript.includes('TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false })')
+    && calendarScript.includes("source: 'calendar_auto'")
+    && calendarScript.includes('task-arrange.html?source=calendar_auto')
     && !calendarScript.includes('maybeRunTaskArrange')
-    && !calendarScript.includes('runTaskArrangeInBackground'));
+    && !calendarScript.includes('runTaskArrangeInBackground')
+    && !calendarScript.includes('apply: true'));
 assert('Focus layout has four independent top-level board columns', /<section class="board-column column-now"/.test(focusHtml)
     && /<section class="board-column column-calendar/.test(focusHtml)
     && /<section class="board-column column-week"/.test(focusHtml)
@@ -152,6 +159,46 @@ assert('Popup expanding one task collapses other tasks and auto-scrolls it into 
 assert('Dashboard task_id URL opens matching current task card', focusScript.includes("new URLSearchParams(window.location.search).get('task_id')")
     && focusScript.includes('data-task-card-id')
     && focusScript.includes("scrollIntoView({ block: 'center'"));
+assert('Dashboard current task column appends today journal entry', focusScript.includes('renderTodayJournalEntry(todayStr, now)')
+    && focusScript.includes('daily-journal-entry')
+    && focusScript.includes('data-action="open-today-journal"')
+    && focusScript.includes('今日总结'));
+assert('Dashboard current task body scrolls separately from fixed today journal entry', focusScript.includes('current-task-scroll-body custom-scrollbar')
+    && /current-task-scroll-body custom-scrollbar[\s\S]*\$\{html\}[\s\S]*<\/div>[\s\S]*\$\{journalEntryHTML\}/.test(focusScript)
+    && /current-task-scroll-body custom-scrollbar[\s\S]*empty-state[\s\S]*<\/div>[\s\S]*\$\{journalEntryHTML\}/.test(focusScript));
+assert('Dashboard today journal uses delegated actions and URL parameter', focusScript.includes("action === 'open-today-journal'")
+    && focusScript.includes("new URLSearchParams(window.location.search).get('journal_date')")
+    && focusScript.includes('openDailyJournalModal(date)'));
+assert('Dashboard today journal modal supports draft and submit actions', focusScript.includes('data-action="save-daily-journal-draft"')
+    && focusScript.includes('data-action="submit-daily-journal"')
+    && focusScript.includes('TimeWhereDB.saveDailyJournalDraft')
+    && focusScript.includes('TimeWhereDB.submitDailyJournal'));
+assert('Dashboard today journal CSS exists for entry and modal', focusCss.includes('.daily-journal-entry')
+    && focusCss.includes('.daily-journal-modal')
+    && focusCss.includes('.journal-grid')
+    && focusCss.includes('.journal-note-field'));
+assert('Dashboard week progress includes weekly journal summary area', focusHtml.includes('weekly-journal-section')
+    && focusHtml.includes('本周总结')
+    && focusHtml.includes('weekly-journal-grid'));
+assert('Dashboard week progress body scrolls separately from fixed weekly journal summary', focusHtml.includes('weekly-progress-scroll-body custom-scrollbar')
+    && focusHtml.indexOf('weekly-progress-scroll-body') < focusHtml.indexOf('weekly-journal-section')
+    && /<\/div>\s*<div class="weekly-journal-section">/.test(focusHtml));
+assert('Dashboard weekly journal renders Monday through Sunday', focusScript.includes("const weekLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];")
+    && focusScript.includes('weekLabels.map((label, index) =>'));
+assert('Dashboard weekly journal days open matching journal date with delegated action', focusScript.includes('data-action="open-today-journal"')
+    && focusScript.includes('data-journal-date="${escapeAttribute(dateStr)}"')
+    && focusScript.includes("action === 'open-today-journal'"));
+assert('Dashboard weekly journal submitted pending and overdue states exist', focusScript.includes("journal?.status === 'submitted'")
+    && focusScript.includes("'submitted'")
+    && focusScript.includes("'overdue'")
+    && focusScript.includes("'pending'")
+    && focusCss.includes('.weekly-journal-day.submitted')
+    && focusCss.includes('.weekly-journal-day.overdue')
+    && focusCss.includes('.weekly-journal-day.pending'));
+assert('Dashboard summary entries stay fixed while middle content scrolls', /column-now \.column-content,\s*\.column-week \.column-content[\s\S]*overflow:\s*hidden/.test(focusCss)
+    && /current-task-scroll-body,[\s\S]*weekly-progress-scroll-body[\s\S]*overflow-y:\s*auto/.test(focusCss)
+    && /daily-journal-entry[\s\S]*flex-shrink:\s*0/.test(focusCss)
+    && /weekly-journal-section[\s\S]*flex-shrink:\s*0/.test(focusCss));
 assert('Popup expanded task cards do not clip core task content', popupCss.includes('.task-list')
     && /task-list[\s\S]*overflow-y:\s*auto/.test(popupCss)
     && /task-list[\s\S]*scroll-behavior:\s*smooth/.test(popupCss)

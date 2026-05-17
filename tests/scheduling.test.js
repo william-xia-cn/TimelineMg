@@ -431,8 +431,12 @@ async function runAsyncChecks() {
     ];
     const plan = S.arrangeTaskStartDates([
         { id:'subject', subject:'English Language Acquisition Phase 5', progress:'not_started', priority:'medium', due_date:'2026-06-01' },
-        { id:'urgent', subject:'English', progress:'not_started', priority:'medium', due_date:'2026-05-15', start_date:'2026-05-20' },
+        { id:'urgent', subject:'English', progress:'not_started', priority:'medium', due_date:'2026-05-15', start_date:'2026-05-15' },
+        { id:'explicit-important', subject:'English', progress:'not_started', priority:'medium', due_date:'2026-05-17', start_date:'2026-05-16' },
         { id:'nosubject', progress:'not_started', priority:'medium', due_date:'2026-05-30' },
+        { id:'unmatched-subject', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-06-01' },
+        { id:'unmatched-subject-due-start', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-06-01', start_date:'2026-06-01' },
+        { id:'unmatched-managebac', subject:'Chemistry', source:'managebac', progress:'not_started', priority:'medium', due_date:'2026-06-01' },
         { id:'done', subject:'Math', progress:'completed', priority:'urgent', due_date:'2026-05-15' }
     ], timetable, '2026-05-14');
     const byId = new Map(plan.map(row => [row.task_id, row]));
@@ -441,18 +445,45 @@ async function runAsyncChecks() {
         { id:'tolerant', subject:'English: Language Acquisition Phase 5', progress:'not_started', priority:'medium', due_date:'2026-06-01' }
     ], timetable, '2026-05-14');
     assert("SubjectInMatrixView 标准化后可容错匹配", tolerantMatch[0].start_date, '2026-05-16');
-    assert("important/urgent 任务当天排，不查课表", byId.get('urgent').start_date, '2026-05-14');
+    assert("start_date 等于 due_date 视为未指定，可被 urgent 拉到今天", byId.get('urgent').start_date, '2026-05-14');
     assert("important/urgent 任务写入 urgent priority", byId.get('urgent').priority, 'urgent');
+    assert("明确开始日期窗口的 important 任务不能被拉早到今天", byId.get('explicit-important').start_date, '2026-05-16');
+    assert("明确开始日期窗口的 important 任务仍可升级 priority", byId.get('explicit-important').priority, 'important');
     assert("无 subject 任务使用默认 start_date", byId.get('nosubject').start_date, '2026-05-23');
+    assert("有 subject 但无课表匹配的任务使用默认 start_date", byId.get('unmatched-subject').start_date, '2026-05-25');
+    assert("有 subject 且 start_date 等于 due_date 时无课表匹配可向前安排", byId.get('unmatched-subject-due-start').start_date, '2026-05-25');
+    assert("ManageBac 无课表匹配使用 14 天默认 start_date", byId.get('unmatched-managebac').start_date, '2026-05-18');
     assertBool("completed 任务不参与 Arrange", byId.has('done'), false);
+
+    const explicitWindow = S.arrangeTaskStartDates([
+        { id:'subject-window', subject:'English Language Acquisition Phase 5', progress:'not_started', priority:'medium', due_date:'2026-05-25', start_date:'2026-05-18' },
+        { id:'clamp-due', subject:'Math', progress:'not_started', priority:'medium', due_date:'2026-05-25', start_date:'2026-05-18' },
+        { id:'invalid-window', progress:'not_started', priority:'medium', due_date:'2026-05-15', start_date:'2026-05-20' }
+    ], [
+        { id:'early', source:'timetable', subject_in_matrixview:'English Language Acquisition Phase 5', date:'2026-05-16' },
+        { id:'late', source:'timetable', title:'Math Analysis', date:'2026-05-30' }
+    ], '2026-05-14');
+    const explicitById = new Map(explicitWindow.map(row => [row.task_id, row]));
+    assert("明确开始日期窗口不能被课表调早", explicitById.get('subject-window').start_date, '2026-05-18');
+    assert("明确开始日期窗口未过开始日期时不被晚于 due 的候选日期后推", explicitById.get('clamp-due').start_date, '2026-05-18');
+    assert("start_date 晚于 due_date 的异常窗口保持原 start_date", explicitById.get('invalid-window').start_date, '2026-05-20');
+    assert("异常窗口仍可更新 priority", explicitById.get('invalid-window').priority, 'urgent');
+
+    const expiredWindow = S.arrangeTaskStartDates([
+        { id:'move-today', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-05-25', start_date:'2026-05-18' },
+        { id:'move-due', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-05-19', start_date:'2026-05-18' }
+    ], [], '2026-05-20');
+    const expiredById = new Map(expiredWindow.map(row => [row.task_id, row]));
+    assert("明确窗口且 today 晚于 start_date 时后调到 today", expiredById.get('move-today').start_date, '2026-05-20');
+    assert("明确窗口且 today 晚于 due_date 时后调限制到 due_date", expiredById.get('move-due').start_date, '2026-05-19');
 
     const noTimetable = S.arrangeTaskStartDates([
         { id:'keep', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-06-01', start_date:'2026-05-22' },
         { id:'fallback-urgent', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-05-14', start_date:'2026-05-22' }
     ], [], '2026-05-14');
     const noTableById = new Map(noTimetable.map(row => [row.task_id, row]));
-    assert("无 timetable 且非 urgent 任务保留原 start_date", noTableById.get('keep').start_date, '2026-05-22');
-    assert("无 timetable 但 urgent 任务排今天", noTableById.get('fallback-urgent').start_date, '2026-05-14');
+    assert("无 timetable 且未过开始日期的明确窗口保留原 start_date", noTableById.get('keep').start_date, '2026-05-22');
+    assert("无 timetable 且异常明确窗口的 urgent 任务保持原 start_date", noTableById.get('fallback-urgent').start_date, '2026-05-22');
 
     section('TC-S-12 arrangeTasks / maybeRunTaskArrange — preview/apply 与 6 小时节流');
     const fakeDb = {
@@ -479,7 +510,7 @@ async function runAsyncChecks() {
     assert("arrangeTasks 默认只 preview 两个未完成任务变更", previewResult.proposed, 2);
     assertBool("arrangeTasks preview 不写 task", fakeDb.tasks.find(t => t.id === 'a').start_date == null, true);
     assertBool("arrangeTasks preview 不写 last_run_at", !!fakeDb.settings.task_arrange_last_run_at, false);
-    assert("arrangeTasks preview 汇总日期调整", previewResult.summary.date_changes, 2);
+    assert("arrangeTasks preview 汇总日期调整", previewResult.summary.date_changes, 1);
     assert("arrangeTasks preview 汇总 priority 升级", previewResult.summary.priority_changes, 1);
     assert("arrangeTasks preview 汇总 ManageBac 变更", previewResult.summary.managebac_changes, 1);
 
@@ -497,7 +528,8 @@ async function runAsyncChecks() {
     });
     assert("用户确认后 Arrange 更新两个未完成任务", arrangeResult.arranged, 2);
     assert("arrangeTasks subject 任务写入上课日", fakeDb.tasks.find(t => t.id === 'a').start_date, '2026-05-18');
-    assert("arrangeTasks ManageBac urgent 写入今天", fakeDb.tasks.find(t => t.id === 'b').start_date, '2026-05-14');
+    assert("arrangeTasks ManageBac 异常明确窗口不写早于原开始日期", fakeDb.tasks.find(t => t.id === 'b').start_date, '2026-05-20');
+    assert("arrangeTasks ManageBac 异常明确窗口仍升级 priority", fakeDb.tasks.find(t => t.id === 'b').priority, 'urgent');
     assert("arrangeTasks 不处理 completed", fakeDb.tasks.find(t => t.id === 'c').start_date, '2026-05-20');
     assert("arrangeTasks 不处理停用学科 Plan 下任务", fakeDb.tasks.find(t => t.id === 'inactive').start_date, '2026-05-22');
     assertBool("用户确认后写入 last_run_at", !!fakeDb.settings.task_arrange_last_run_at, true);

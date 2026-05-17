@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TimeWhere - ManageBac Mapping</title>
+    <title>TimeWhere - Task Arrange Review</title>
     <link rel="stylesheet" href="../../shared/styles/fonts.css">
     <link rel="stylesheet" href="../../shared/styles/icons.css">
     <link rel="stylesheet" href="styles.css">
@@ -34,39 +34,28 @@
                         <button class="back-btn" id="backBtn" title="返回设置">
                             <span class="material-symbols-outlined">arrow_back</span>
                         </button>
-                        <h1>ManageBac 学科映射</h1>
+                        <h1>任务日期与优先级调整确认</h1>
                     </div>
                 </header>
 
                 <div class="content custom-scrollbar managebac-content">
                     <section class="section">
                         <h2 class="section-title">
-                            <span class="material-symbols-outlined">rule</span> 前置条件
+                            <span class="material-symbols-outlined">rule_settings</span> Task Arrange
                         </h2>
-                        <div class="managebac-status-card" id="preconditionCard">
-                            <span class="material-symbols-outlined">hourglass_empty</span>
-                            <span id="preconditionStatus">正在检查 MatrixView Plan 初始化状态…</span>
-                        </div>
+                        <span class="managebac-status" id="taskArrangeStatus">从 Dashboard 或 Calendar 进入后显示待确认项</span>
                     </section>
 
                     <section class="section">
                         <h2 class="section-title">
-                            <span class="material-symbols-outlined">upload_file</span> 本地 ManageBac HTML
+                            <span class="material-symbols-outlined">event_upcoming</span> Arrange task 列表
                         </h2>
-                        <div class="managebac-import-panel">
-                            <input type="file" id="managebacFileInput" accept=".html,.htm">
-                            <button class="import-btn managebac-import-btn" id="managebacPreviewBtn">读取预览</button>
-                            <button class="action-btn" id="managebacResetBtn" type="button">重新选择</button>
-                            <span class="managebac-status" id="managebacStatus">尚未读取 ManageBac 学科配置</span>
-                        </div>
+                        <div id="pendingArrangeChanges" class="managebac-empty">没有需要确认的任务日期 / 优先级调整</div>
                     </section>
 
-                    <section class="section">
-                        <h2 class="section-title">
-                            <span class="material-symbols-outlined">account_tree</span> 映射预览
-                        </h2>
-                        <div id="mappingPreview" class="managebac-empty">读取 HTML 后显示 ManageBac 学科映射</div>
-                        <button class="import-btn managebac-save-btn" id="saveManageBacMappingsBtn" disabled>保存 ManageBac 学科映射</button>
+                    <section class="section management-actions">
+                        <button class="import-btn managebac-save-btn" id="applyArrangeChangesBtn" disabled>确认并应用选中项</button>
+                        <button class="action-btn" id="skipArrangeReviewBtn" disabled>全部跳过</button>
                     </section>
                 </div>
             </div>
@@ -77,7 +66,7 @@
     <script src="../../shared/js/dexie.js"></script>
     <script src="../../shared/js/db.js"></script>
     <script src="../../shared/js/appearance.js"></script>
-    <script src="../../shared/js/managebac.js"></script>
-    <script src="managebac.js"></script>
+    <script src="../../shared/js/scheduling.js"></script>
+    <script src="task-arrange.js"></script>
 </body>
 </html>

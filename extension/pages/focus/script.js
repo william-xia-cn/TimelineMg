@@ -4,8 +4,8 @@
 // ============================================================
 
 const PX_PER_HOUR = 40;
-const MANAGEMENT_REVIEW_PENDING_KEY = 'management_review_pending';
-const MANAGEMENT_REVIEW_LAST_CHECKED_KEY = 'management_review_last_checked_at';
+const TASK_ARRANGE_PENDING_KEY = 'task_arrange_pending';
+const TASK_ARRANGE_LAST_CHECKED_KEY = 'task_arrange_last_checked_at';
 const MANAGEMENT_REVIEW_INTERVAL_HOURS = 6;
 
 function formatDateISO(date) {
@@ -39,6 +39,7 @@ async function initApp() {
     await loadDashboardData();
     runManagementReviewCheck();
     runGoogleSyncCheck();
+    openJournalFromUrl();
 }
 
 async function runGoogleSyncCheck() {
@@ -48,62 +49,25 @@ async function runGoogleSyncCheck() {
     });
 }
 
-function managementReviewHasWork(pending) {
-    return !!pending
-        && (
-            (Array.isArray(pending.arrange_changes) && pending.arrange_changes.length > 0) ||
-            (Array.isArray(pending.managebac_pending_event_mappings) && pending.managebac_pending_event_mappings.length > 0) ||
-            !!pending.managebac_error
-        );
+function taskArrangeHasWork(pending) {
+    return Array.isArray(pending?.arrange_changes) && pending.arrange_changes.length > 0;
 }
 
-function openManagementReviewPage() {
-    window.location.href = '../settings/managebac-sync.html?source=dashboard_auto';
-}
-
-async function fetchManageBacPreviewForManagementReview() {
-    if (typeof TimeWhereManageBac === 'undefined') {
-        return { rows: [], summary: null, error: null };
-    }
-
-    const mappings = await TimeWhereDB.getSetting(TimeWhereManageBac.SETTINGS_MAPPING_KEY);
-    const activeMappingCount = (mappings || []).filter(row => row?.plan_id).length;
-    if (!activeMappingCount) {
-        return { rows: [], summary: { status: 'skipped', reason: 'mapping_required' }, error: null };
-    }
-
-    const config = await TimeWhereManageBac.getManageBacIcsConfig(TimeWhereDB);
-    if (!config?.link) {
-        return { rows: [], summary: { status: 'skipped', reason: 'link_required' }, error: null };
-    }
-
-    const icsText = await TimeWhereManageBac.fetchIcsText(config.link);
-    const result = await TimeWhereManageBac.syncManageBacIcs(TimeWhereDB, icsText, config.link, { confirmLinkChange: true });
-    const rows = await TimeWhereManageBac.savePendingEventMappings(TimeWhereDB, result.pending_event_mappings || []);
-    return {
-        rows,
-        summary: {
-            status: result.status,
-            events: result.events || 0,
-            updated: result.updated || 0,
-            deleted: result.deleted || 0,
-            skipped: result.skipped || 0
-        },
-        error: null
-    };
+function openTaskArrangeReviewPage() {
+    window.location.href = '../settings/task-arrange.html?source=dashboard_auto';
 }
 
 async function runManagementReviewCheck() {
     if (!window.TimeWhereScheduling?.arrangeTasks || !window.TimeWhereDB) return;
     try {
-        const existing = await TimeWhereDB.getSetting(MANAGEMENT_REVIEW_PENDING_KEY);
-        if (managementReviewHasWork(existing)) {
-            openManagementReviewPage();
+        const existing = await TimeWhereDB.getSetting(TASK_ARRANGE_PENDING_KEY);
+        if (taskArrangeHasWork(existing)) {
+            openTaskArrangeReviewPage();
             return;
         }
 
         const now = new Date();
-        const last = await TimeWhereDB.getSetting(MANAGEMENT_REVIEW_LAST_CHECKED_KEY);
+        const last = await TimeWhereDB.getSetting(TASK_ARRANGE_LAST_CHECKED_KEY);
         if (last) {
             const elapsedMs = now.getTime() - new Date(last).getTime();
             if (elapsedMs >= 0 && elapsedMs < MANAGEMENT_REVIEW_INTERVAL_HOURS * 3600000) {
@@ -112,36 +76,22 @@ async function runManagementReviewCheck() {
         }
 
         const arrangePreview = await TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false });
-        let managebacPreview = { rows: [], summary: null, error: null };
-        try {
-            managebacPreview = await fetchManageBacPreviewForManagementReview();
-        } catch (error) {
-            managebacPreview = {
-                rows: [],
-                summary: null,
-                error: error.message || String(error)
-            };
-        }
-
         const pending = {
             source: 'dashboard_auto',
             created_at: now.toISOString(),
             arrange_changes: arrangePreview.changes || [],
-            arrange_summary: arrangePreview.summary || null,
-            managebac_pending_event_mappings: managebacPreview.rows || [],
-            managebac_summary: managebacPreview.summary,
-            managebac_error: managebacPreview.error
+            arrange_summary: arrangePreview.summary || null
         };
 
-        if (!managementReviewHasWork(pending)) {
-            await TimeWhereDB.setSetting(MANAGEMENT_REVIEW_LAST_CHECKED_KEY, now.toISOString());
+        if (!taskArrangeHasWork(pending)) {
+            await TimeWhereDB.setSetting(TASK_ARRANGE_LAST_CHECKED_KEY, now.toISOString());
             return;
         }
 
-        await TimeWhereDB.setSetting(MANAGEMENT_REVIEW_PENDING_KEY, pending);
-        openManagementReviewPage();
+        await TimeWhereDB.setSetting(TASK_ARRANGE_PENDING_KEY, pending);
+        openTaskArrangeReviewPage();
     } catch (error) {
-        console.warn('[Focus] Management review check skipped:', error);
+        console.warn('[Focus] Task Arrange check skipped:', error);
     }
 }
 
@@ -264,6 +214,7 @@ async function loadTaskColumn() {
 
     // 执行 Daily Settle
     const settle = dailySettle(taskPool, todayContainers, now);
+    const journalEntryHTML = await renderTodayJournalEntry(todayStr, now);
 
     // 更新 header badge — 容器状态 or 任务计数
     const badge = document.querySelector('.column-now .badge');
@@ -284,13 +235,16 @@ async function loadTaskColumn() {
     // 空状态
     if (settle.currentTasks.length === 0) {
         section.innerHTML = `
-            <div class="empty-state">
-                <span class="material-symbols-outlined" style="font-size: 48px;">check_circle</span>
-                <p>${settle.activeContainer ? '当前容器无任务' : '暂无待办任务'}</p>
-                <button class="add-task-btn" data-action="add-task">
-                    <span class="material-symbols-outlined">add</span> 添加任务
-                </button>
-            </div>`;
+            <div class="current-task-scroll-body custom-scrollbar">
+                <div class="empty-state">
+                    <span class="material-symbols-outlined" style="font-size: 48px;">check_circle</span>
+                    <p>${settle.activeContainer ? '当前容器无任务' : '暂无待办任务'}</p>
+                    <button class="add-task-btn" data-action="add-task">
+                        <span class="material-symbols-outlined">add</span> 添加任务
+                    </button>
+                </div>
+            </div>
+            ${journalEntryHTML}`;
         return;
     }
 
@@ -316,10 +270,42 @@ async function loadTaskColumn() {
             containerOvertime: isContainerView && settle.containerInfo.used > settle.containerInfo.capacity
         });
     });
-    section.innerHTML = html;
+    section.innerHTML = `
+        <div class="current-task-scroll-body custom-scrollbar">
+            ${html}
+        </div>
+        ${journalEntryHTML}`;
     if (targetTaskId) {
         section.querySelector(`[data-task-card-id="${CSS.escape(targetTaskId)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
+}
+
+async function renderTodayJournalEntry(todayStr, now = new Date()) {
+    if (TimeWhereDB.ensureDailyJournalSnapshot && now.getHours() >= 6) {
+        await TimeWhereDB.ensureDailyJournalSnapshot(todayStr, now).catch(error => {
+            console.warn('[Focus] Daily journal snapshot skipped:', error);
+        });
+    }
+    const journal = TimeWhereDB.getDailyJournal ? await TimeWhereDB.getDailyJournal(todayStr) : null;
+    const status = journal?.status || (journal?.snapshot_at ? 'snapshot' : 'none');
+    const labelMap = {
+        none: '未生成计划快照',
+        snapshot: '待整理',
+        draft: '草稿',
+        submitted: '已提交'
+    };
+    const buttonText = status === 'submitted' ? '查看今日总结' : '整理今日总结';
+    return `
+        <div class="daily-journal-entry" data-journal-date="${escapeAttribute(todayStr)}">
+            <div class="daily-journal-main">
+                <div class="daily-journal-icon"><span class="material-symbols-outlined">edit</span></div>
+                <div class="daily-journal-copy">
+                    <h3>今日总结</h3>
+                    <p>${escapeHTML(formatDate(todayStr))} · ${escapeHTML(labelMap[status] || labelMap.none)}</p>
+                </div>
+            </div>
+            <button class="btn-micro primary" data-action="open-today-journal" data-journal-date="${escapeAttribute(todayStr)}">${buttonText}</button>
+        </div>`;
 }
 
 function createTaskCard(task, opts = {}) {
@@ -632,7 +618,7 @@ function updateCurrentTimeLine() {
 // ============================================================
 
 async function loadWeeklyProgress() {
-    const { start, end } = getWeekBounds();
+    const { start, end, startDate } = getWeekBounds();
     const allTasks = await TimeWhereDB.getAllTasks();
 
     // 统计
@@ -687,6 +673,7 @@ async function loadWeeklyProgress() {
 
     if (weekTasks.length === 0) {
         taskList.innerHTML = '<div class="empty-state" style="padding: 16px;"><p style="font-size: 12px;">本周暂无截止任务</p></div>';
+        await renderWeeklyJournalSummary(startDate);
         return;
     }
 
@@ -695,6 +682,39 @@ async function loadWeeklyProgress() {
             <span class="material-symbols-outlined">open_in_new</span>
             <div class="task-desc">${escapeHTML(task.title || '无标题')}</div>
         </button>`).join('');
+
+    await renderWeeklyJournalSummary(startDate);
+}
+
+async function renderWeeklyJournalSummary(weekStartDate) {
+    const grid = document.querySelector('.weekly-journal-grid');
+    if (!grid) return;
+
+    const todayStr = formatDateISO(new Date());
+    const journals = TimeWhereDB.listDailyJournals ? await TimeWhereDB.listDailyJournals() : [];
+    const journalByDate = new Map(journals.map(journal => [journal.date, journal]));
+    const weekLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+    grid.innerHTML = weekLabels.map((label, index) => {
+        const date = new Date(weekStartDate);
+        date.setDate(weekStartDate.getDate() + index);
+        const dateStr = formatDateISO(date);
+        const journal = journalByDate.get(dateStr);
+        const state = journal?.status === 'submitted'
+            ? 'submitted'
+            : (dateStr < todayStr ? 'overdue' : 'pending');
+        const titleMap = {
+            submitted: '已提交总结',
+            overdue: '到期未提交',
+            pending: '未到期'
+        };
+
+        return `
+            <button class="weekly-journal-day ${state}" data-action="open-today-journal" data-journal-date="${escapeAttribute(dateStr)}" title="${escapeAttribute(titleMap[state])}">
+                <span class="weekly-journal-weekday">${escapeHTML(label)}</span>
+                <strong>${date.getDate()}</strong>
+            </button>`;
+    }).join('');
 }
 
 function openTaskDetailInPlanner(taskId) {
@@ -948,14 +968,37 @@ function handleFocusDelegatedClick(e) {
         openTaskDetailInPlanner(taskId);
         return;
     }
+    if (action === 'open-today-journal') {
+        e.preventDefault();
+        runFocusAction(actionEl, async () => {
+            await openDailyJournalModal(actionEl.dataset.journalDate || formatDateISO(new Date()));
+        });
+        return;
+    }
     if (action === 'close-modal') {
         e.preventDefault();
         closeAddTaskModal();
+        closeDailyJournalModal();
+        return;
+    }
+    if (action === 'close-daily-journal') {
+        e.preventDefault();
+        closeDailyJournalModal();
         return;
     }
     if (action === 'save-modal') {
         e.preventDefault();
         runFocusAction(actionEl, saveNewTask);
+        return;
+    }
+    if (action === 'save-daily-journal-draft') {
+        e.preventDefault();
+        runFocusAction(actionEl, async () => saveDailyJournalFromModal(false));
+        return;
+    }
+    if (action === 'submit-daily-journal') {
+        e.preventDefault();
+        runFocusAction(actionEl, async () => saveDailyJournalFromModal(true));
         return;
     }
     if (['start', 'pause', 'complete', 'defer'].includes(action)) {
@@ -1060,6 +1103,118 @@ async function saveNewTask() {
     } catch (error) {
         showToast(`添加任务失败：${error.message}`, 'error');
     }
+}
+
+function openJournalFromUrl() {
+    const date = new URLSearchParams(window.location.search).get('journal_date');
+    if (!date) return;
+    openDailyJournalModal(date).catch(error => {
+        showToast(`打开今日总结失败：${error.message}`, 'error');
+    });
+}
+
+function renderJournalTaskList(tasks, emptyText) {
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+        return `<p class="journal-empty">${escapeHTML(emptyText)}</p>`;
+    }
+    return `<ul class="journal-task-list">${tasks.map(task => `
+        <li>
+            <span>${escapeHTML(task.title || '无标题任务')}</span>
+            ${task.due_date ? `<small>截止 ${escapeHTML(formatDate(task.due_date))}</small>` : ''}
+        </li>`).join('')}</ul>`;
+}
+
+function journalTextarea(name, label, value) {
+    return `
+        <label class="journal-note-field">
+            <span>${escapeHTML(label)}</span>
+            <textarea data-journal-field="${escapeAttribute(name)}" rows="3">${escapeHTML(value || '')}</textarea>
+        </label>`;
+}
+
+async function openDailyJournalModal(date = formatDateISO(new Date())) {
+    closeDailyJournalModal();
+    const today = new Date(`${date}T12:00:00`);
+    if (TimeWhereDB.ensureDailyJournalSnapshot && new Date().getHours() >= 6) {
+        await TimeWhereDB.ensureDailyJournalSnapshot(date, new Date()).catch(error => {
+            console.warn('[Focus] Daily journal snapshot skipped:', error);
+        });
+    }
+    const draft = await TimeWhereDB.buildDailyJournalDraft(date, new Date());
+    const statusText = draft.status === 'submitted' ? '已提交' : draft.status === 'draft' ? '草稿' : draft.snapshot_at ? '待整理' : '未生成计划快照';
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'dailyJournalModal';
+    modal.dataset.journalDate = date;
+    modal.innerHTML = `
+        <div class="modal-content daily-journal-modal">
+            <div class="modal-header">
+                <h3>今日总结 · ${escapeHTML(formatDateISO(today))}</h3>
+                <button class="modal-close" data-action="close-daily-journal">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="journal-status-row">
+                    <span class="badge">${escapeHTML(statusText)}</span>
+                    <span>${escapeHTML(draft.snapshot_at ? `计划快照 ${relativeTime(draft.snapshot_at)}` : '6 点后首次可用时生成计划快照')}</span>
+                </div>
+                <div class="journal-grid">
+                    <section class="journal-section">
+                        <h4>计划完成 <strong>${draft.planned_task_snapshots?.length || 0}</strong></h4>
+                        ${renderJournalTaskList(draft.planned_task_snapshots, '今天没有冻结的计划任务。')}
+                    </section>
+                    <section class="journal-section">
+                        <h4>实际完成 <strong>${draft.completed_task_snapshots?.length || 0}</strong></h4>
+                        ${renderJournalTaskList(draft.completed_task_snapshots, '今天还没有完成记录。')}
+                    </section>
+                    <section class="journal-section">
+                        <h4>计划延误 <strong>${draft.delayed_task_snapshots?.length || 0}</strong></h4>
+                        ${renderJournalTaskList(draft.delayed_task_snapshots, '没有计划延误。')}
+                    </section>
+                    <section class="journal-section">
+                        <h4>其他完成 <strong>${draft.extra_done_task_snapshots?.length || 0}</strong></h4>
+                        ${renderJournalTaskList(draft.extra_done_task_snapshots, '没有计划外完成任务。')}
+                    </section>
+                </div>
+                <div class="journal-notes">
+                    ${journalTextarea('planned_notes', '计划完成说明', draft.planned_notes)}
+                    ${journalTextarea('delayed_notes', '计划延误说明', draft.delayed_notes)}
+                    ${journalTextarea('extra_done_notes', '其他完成说明', draft.extra_done_notes)}
+                    ${journalTextarea('general_notes', '其他说明', draft.general_notes)}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-action="close-daily-journal">取消</button>
+                <button class="btn-secondary" data-action="save-daily-journal-draft">保存草稿</button>
+                <button class="btn-primary" data-action="submit-daily-journal">提交总结</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+}
+
+function closeDailyJournalModal() {
+    const modal = document.getElementById('dailyJournalModal');
+    if (modal) modal.remove();
+}
+
+async function saveDailyJournalFromModal(submit) {
+    const modal = document.getElementById('dailyJournalModal');
+    if (!modal) return;
+    const date = modal.dataset.journalDate || formatDateISO(new Date());
+    const payload = {};
+    modal.querySelectorAll('[data-journal-field]').forEach(field => {
+        payload[field.dataset.journalField] = field.value || '';
+    });
+    if (submit) {
+        await TimeWhereDB.submitDailyJournal(date, payload);
+        showToast('今日总结已提交', 'success');
+    } else {
+        await TimeWhereDB.saveDailyJournalDraft(date, payload);
+        showToast('今日总结草稿已保存', 'success');
+    }
+    closeDailyJournalModal();
+    await loadTaskColumn();
 }
 
 // ============================================================

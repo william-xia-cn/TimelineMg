@@ -7,7 +7,7 @@
   },
   "scripts": {
     "serve": "npx serve extension -p 3000",
-    "test": "node tests/scheduling.test.js && node tests/focus.test.js && node tests/calendar.test.js && node tests/taskboard.test.js && node tests/managebac.test.js && node tests/management-review.test.js && node tests/matrixview.test.js && node tests/baseline-safety.test.js"
+    "test": "node tests/scheduling.test.js && node tests/focus.test.js && node tests/calendar.test.js && node tests/taskboard.test.js && node tests/managebac.test.js && node tests/management-review.test.js && node tests/matrixview.test.js && node tests/reminders.test.js && node tests/daily-journal.test.js && node tests/baseline-safety.test.js"
   },
   "repository": {
     "type": "git",

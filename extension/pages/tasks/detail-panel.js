@@ -36,6 +36,7 @@ async function renderDetailPanel(taskId) {
     const isManageBacTask = TimeWhereManageBac?.isManageBacTask(task);
     const sourceReadonlyAttr = isManageBacTask ? 'data-readonly-source="true"' : '';
     const sourceDisabledAttr = isManageBacTask ? 'disabled' : '';
+    const sourceStartDateDisabledAttr = '';
     const sourceReadonlyTextareaAttr = isManageBacTask ? 'readonly' : '';
     const titleEditable = isManageBacTask ? 'false' : 'true';
     const planInfo = await getTaskPlanInfo(task);
@@ -147,7 +148,7 @@ async function renderDetailPanel(taskId) {
             <div class="detail-field detail-field-row">
                 <div class="detail-field-half">
                     <label>Start date</label>
-                    <input type="date" class="detail-date" data-field="start_date" value="${task.start_date || ''}" ${sourceDisabledAttr}>
+                    <input type="date" class="detail-date" data-field="start_date" value="${task.start_date || ''}" ${sourceStartDateDisabledAttr}>
                 </div>
                 <div class="detail-field-half">
                     <label>Due date</label>
@@ -281,9 +282,9 @@ function wireDetailPanelEvents(taskId, options = {}) {
 
     // Date / time / number inputs (start_date, due_date, schedule_time, duration)
     panel.querySelectorAll('.detail-date').forEach(input => {
-        if (input.disabled || isManageBacTask) return;
+        const field = input.dataset.field;
+        if (input.disabled || (isManageBacTask && field !== 'start_date')) return;
         input.addEventListener('change', async () => {
-            const field = input.dataset.field;
             let value = input.value;
             if (field === 'duration') {
                 value = value ? parseInt(value, 10) : 45;

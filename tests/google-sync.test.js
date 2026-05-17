@@ -52,8 +52,8 @@ class FakeTable {
     }
 
     async put(row) {
-        const id = row.id;
-        const index = this.rows.findIndex(item => String(item.id) === String(id));
+        const id = row.id ?? row.date ?? row.key;
+        const index = this.rows.findIndex(item => String(item.id ?? item.date ?? item.key) === String(id));
         if (index >= 0) {
             this.rows[index] = { ...row };
         } else {
@@ -62,11 +62,11 @@ class FakeTable {
     }
 
     async get(id) {
-        return this.rows.find(item => String(item.id) === String(id)) || null;
+        return this.rows.find(item => String(item.id ?? item.date ?? item.key) === String(id)) || null;
     }
 
     async delete(id) {
-        this.rows = this.rows.filter(item => String(item.id) !== String(id));
+        this.rows = this.rows.filter(item => String(item.id ?? item.date ?? item.key) !== String(id));
     }
 }
 
@@ -79,7 +79,8 @@ class FakeDB {
             tasks: new FakeTable([{ id: 'task-1', plan_id: 1, title: 'Essay', due_date: '2026-05-20', progress: 'not_started' }]),
             containers: new FakeTable([{ id: 'container-1', name: '学习时间', time_start: '18:30', time_end: '21:30' }]),
             events: new FakeTable([{ id: 'event-1', title: 'Class', date: '2026-05-20', source: 'timetable' }]),
-            habits: new FakeTable([{ id: 'habit-1', title: 'Words', created_at: '2026-05-01T00:00:00.000Z' }])
+            habits: new FakeTable([{ id: 'habit-1', title: 'Words', created_at: '2026-05-01T00:00:00.000Z' }]),
+            daily_journals: new FakeTable([{ date: '2026-05-15', status: 'submitted', updated_at: '2026-05-15T22:00:00.000Z' }])
         };
         this.settings = {
             matrixview_subject_mappings: [{ subject: 'English', subject_in_matrixview: 'English HL' }],
@@ -97,6 +98,7 @@ class FakeDB {
             refresh_token: 'secret-refresh-token',
             google_email: 'student@example.invalid',
             management_review_pending: [{ event_uid: 'private-pending' }],
+            task_arrange_pending: [{ task_id: 'private-arrange' }],
             raw_import_file: '<private raw file>'
         };
     }
@@ -181,6 +183,7 @@ async function run() {
     assert('snapshot exports containers', snapshot.data.containers.length === 1);
     assert('snapshot exports events', snapshot.data.events.length === 1);
     assert('snapshot exports habits', snapshot.data.habits.length === 1);
+    assert('snapshot exports daily journals', snapshot.data.daily_journals.length === 1);
     assert('snapshot includes MatrixView subject mappings', Array.isArray(snapshot.data.settings.matrixview_subject_mappings));
     assert('snapshot includes ManageBac subject mappings', Array.isArray(snapshot.data.settings.managebac_subject_mappings));
     assert('snapshot includes ManageBac ICS config', snapshot.data.settings.managebac_ics_config?.link?.includes('example.invalid'));
@@ -191,10 +194,15 @@ async function run() {
     assert('snapshot excludes OAuth access token', !('access_token' in snapshot.data.settings));
     assert('snapshot excludes OAuth refresh token', !('refresh_token' in snapshot.data.settings));
     assert('snapshot excludes Google email display', !('google_email' in snapshot.data.settings));
-    assert('snapshot excludes pending UI state', !('management_review_pending' in snapshot.data.settings));
+    assert('snapshot excludes pending UI state', !('management_review_pending' in snapshot.data.settings)
+        && !('task_arrange_pending' in snapshot.data.settings));
     assert('snapshot excludes raw import files', !('raw_import_file' in snapshot.data.settings));
 
     assert('snapshot validates', GoogleSync.validateSnapshot(snapshot) === true);
+    const legacySnapshot = JSON.parse(JSON.stringify(snapshot));
+    delete legacySnapshot.data.daily_journals;
+    assert('snapshot validation accepts old snapshots without daily journals', GoogleSync.validateSnapshot(legacySnapshot) === true
+        && Array.isArray(legacySnapshot.data.daily_journals));
     const manifest = GoogleSync.createManifest(snapshot, { updated_at: '2026-05-15T00:05:00.000Z' });
     assertEqual('manifest schema is sync manifest v1', manifest.schema, 'timewhere-sync-manifest-v1');
     assertEqual('manifest points to snapshot file', manifest.snapshot_file, 'timewhere-snapshot-v1.json');
@@ -277,6 +285,14 @@ async function run() {
     const cloudConflict = makeEntity('tasks', 'same-task', { title: 'Cloud edit' }, { dirty: false, last_synced_hash: baseHash });
     const conflictPlan = GoogleSync.planSyncMerge(makeSyncDoc({ [localConflict.key]: localConflict }), makeSyncDoc({ [cloudConflict.key]: cloudConflict }));
     assert('sync v1 local/cloud same record conflict does not auto write', conflictPlan.conflicts.length === 1 && conflictPlan.apply_local.length === 0 && conflictPlan.upload_keys.length === 0);
+
+    const baseJournal = { date: '2026-05-15', status: 'draft', updated_at: '2026-05-15T20:00:00.000Z' };
+    const baseJournalHash = GoogleSync.hashValue(baseJournal);
+    const localJournal = makeEntity('daily_journals', '2026-05-15', { date: '2026-05-15', status: 'submitted', updated_at: '2026-05-15T22:00:00.000Z' }, { dirty: true, last_synced_hash: baseJournalHash });
+    const cloudJournal = makeEntity('daily_journals', '2026-05-15', { date: '2026-05-15', status: 'draft', updated_at: '2026-05-15T21:00:00.000Z' }, { dirty: false, last_synced_hash: baseJournalHash });
+    const journalMergePlan = GoogleSync.planSyncMerge(makeSyncDoc({ [localJournal.key]: localJournal }), makeSyncDoc({ [cloudJournal.key]: cloudJournal }));
+    assert('sync v1 daily journal conflict keeps newer updated_at without manual conflict',
+        journalMergePlan.conflicts.length === 0 && journalMergePlan.upload_keys.includes('daily_journals:2026-05-15'));
 
     const firstSyncLocal = makeEntity('tasks', 'first-sync', { title: 'Local first sync' }, { dirty: true, last_synced_hash: null });
     const firstSyncCloud = makeEntity('tasks', 'first-sync', { title: 'Cloud first sync' }, { dirty: false, last_synced_hash: null });

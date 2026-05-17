@@ -115,7 +115,6 @@ const appearancePages = [
     'extension/pages/tasks/tasks.html',
     'extension/pages/settings/settings.html',
     'extension/pages/settings/matrixview.html',
-    'extension/pages/settings/managebac.html',
     'extension/pages/settings/managebac-sync.html'
 ];
 assert('main extension pages load shared appearance preferences',

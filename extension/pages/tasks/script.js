@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (initialTaskId) {
             await TaskApp.loadMyTasks();
         } else {
-            await TaskApp.loadPlan(TaskApp.plans[0].id);
+            await TaskApp.loadMyTasks();
         }
 
         // Render everything
@@ -31,6 +31,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (initialTaskId) {
             updateSidebarActiveState('my_tasks');
             openDetailPanel(initialTaskId);
+        } else {
+            updateSidebarActiveState('my_tasks');
         }
         runGoogleSyncCheck();
     } catch (err) {
@@ -347,34 +349,22 @@ async function syncManageBacFromSidebar({ force = false, openPending = false } =
         const icsText = await TimeWhereManageBac.fetchIcsText(config.link);
         const result = await TimeWhereManageBac.syncManageBacIcs(TimeWhereDB, icsText, config.link, { confirmLinkChange: true });
         const pendingRows = await TimeWhereManageBac.savePendingEventMappings(TimeWhereDB, result.pending_event_mappings || []);
-        await TimeWhereDB.setSetting('management_review_pending', {
-            source: 'managebac_manual',
-            saved_at: new Date().toISOString(),
-            created_at: new Date().toISOString(),
-            arrange_changes: [],
-            arrange_summary: null,
-            managebac_pending_event_mappings: pendingRows,
-            managebac_summary: {
-                status: result.status,
-                events: result.events || 0,
-                created: result.created || 0,
-                updated: result.updated || 0,
-                deleted: result.deleted || 0,
-                skipped: result.skipped || 0
-            },
-            managebac_error: null
-        });
+        if (pendingRows.length === 0) {
+            await refreshManageBacPendingCount();
+            showToast('ManageBac 没有新增任务', 'success');
+            if (TaskApp.viewMode === 'my_managebac') {
+                await TaskApp.loadMyManageBac();
+                TaskApp.renderAll();
+            }
+            return;
+        }
         await refreshManageBacPendingCount();
 
         if (openPending) {
             openManageBacPendingConfirmation();
             return;
         }
-        if (pendingRows.length) {
-            showToast(`ManageBac 同步完成：${pendingRows.length} 个新增事件待确认。`, 'info');
-        } else if (force) {
-            showToast(`ManageBac 同步完成：没有新增事件；已更新 ${result.updated || 0} 个已有任务。`, 'success');
-        }
+        showToast(`ManageBac 同步完成：${pendingRows.length} 个新增事件待确认。`, 'info');
         if (TaskApp.viewMode === 'my_managebac') {
             await TaskApp.loadMyManageBac();
             TaskApp.renderAll();

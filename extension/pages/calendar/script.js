@@ -1,6 +1,7 @@
 let currentView = 'week';
 let currentDate = new Date();
 const TIME_RANGE = { startHour: 6, endHour: 22, pxPerHour: 40 };
+const TASK_ARRANGE_PENDING_KEY = 'task_arrange_pending';
 
 function formatDateISO(date) {
     const y = date.getFullYear();
@@ -11,6 +12,7 @@ function formatDateISO(date) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     await initApp();
+    runCalendarArrangeCheck();
     runGoogleSyncCheck();
     setupCalendar();
     checkInitMode();
@@ -28,6 +30,39 @@ function runGoogleSyncCheck() {
     TimeWhereGoogleSync.runPageAutoSync(TimeWhereDB).catch(error => {
         console.warn('Google auto sync check failed:', error);
     });
+}
+
+function calendarReviewHasWork(pending) {
+    return Array.isArray(pending?.arrange_changes) && pending.arrange_changes.length > 0;
+}
+
+function openCalendarManagementReviewPage() {
+    window.location.href = '../settings/task-arrange.html?source=calendar_auto';
+}
+
+async function runCalendarArrangeCheck() {
+    if (!window.TimeWhereScheduling?.arrangeTasks || !window.TimeWhereDB) return;
+    try {
+        const existing = await TimeWhereDB.getSetting(TASK_ARRANGE_PENDING_KEY);
+        if (calendarReviewHasWork(existing)) {
+            openCalendarManagementReviewPage();
+            return;
+        }
+
+        const now = new Date();
+        const arrangePreview = await TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false });
+        if (!Array.isArray(arrangePreview.changes) || arrangePreview.changes.length === 0) return;
+
+        await TimeWhereDB.setSetting(TASK_ARRANGE_PENDING_KEY, {
+            source: 'calendar_auto',
+            created_at: now.toISOString(),
+            arrange_changes: arrangePreview.changes,
+            arrange_summary: arrangePreview.summary || null
+        });
+        openCalendarManagementReviewPage();
+    } catch (error) {
+        console.warn('[Calendar] Arrange check skipped:', error);
+    }
 }
 
 async function initApp() {
@@ -238,8 +273,50 @@ function openCreateModalFromWeekPointer(clientX, clientY, preferredColumn = null
 
 // 调度相关函数从 shared/js/scheduling.js 导入
 const { containerAppliesToDate, _nthWeekdayOfMonth,
-        dailySettle, buildDailyTaskPool, getContainerLayer, priorityLabel, priorityClass,
+        getContainerLayer, priorityLabel, priorityClass,
         escapeHTML, escapeAttribute } = window.TimeWhereScheduling;
+
+function getCalendarTasksForDate(tasks, dateStr) {
+    return (tasks || []).filter(task =>
+        task &&
+        task.progress !== 'completed' &&
+        task.status !== 'completed' &&
+        task.start_date === dateStr
+    );
+}
+
+function calendarTimeToMinutes(timeStr) {
+    const [hour, minute] = String(timeStr || '00:00').split(':').map(Number);
+    return (hour || 0) * 60 + (minute || 0);
+}
+
+function calendarTaskMatchesContainer(task, container) {
+    if (!task?.schedule_time || !container?.time_start || !container?.time_end) return false;
+    const taskMin = calendarTimeToMinutes(task.schedule_time);
+    const startMin = calendarTimeToMinutes(container.time_start);
+    const endMin = calendarTimeToMinutes(container.time_end);
+    return taskMin >= startMin && taskMin < endMin;
+}
+
+function assignCalendarTasksToContainers(tasks, containers) {
+    const sortedContainers = [...(containers || [])].sort((a, b) =>
+        String(a.time_start || '').localeCompare(String(b.time_start || ''))
+    );
+    const assignments = new Map(sortedContainers.map(container => [container.id, []]));
+    const firstLayerOne = sortedContainers.find(container => getContainerLayer(container) === 1);
+    const fallbackContainer = firstLayerOne || sortedContainers[0] || null;
+
+    (tasks || []).forEach(task => {
+        const target = task.schedule_time
+            ? sortedContainers.find(container => calendarTaskMatchesContainer(task, container))
+            : fallbackContainer;
+        if (target && assignments.has(target.id)) {
+            assignments.get(target.id).push(task);
+        }
+    });
+
+    return assignments;
+}
 
 function eventAppliesToDate(event, dateObj, dateStr) {
     if (!event) return false;
@@ -290,7 +367,7 @@ async function renderWeekColumns(dates) {
     const allDbEvents = (await TimeWhereDB.getEvents()) || [];
     const dbEvents = expandEventsForDateRange(allDbEvents, weekStart, weekEnd);
 
-    // 加载任务，用于 Daily Settle
+    // 加载任务，用于展示 Task Arrange 写入的开始日期
     const allTasks = (await TimeWhereDB.getAllTasks()) || [];
 
     dates.forEach((date, index) => {
@@ -315,10 +392,8 @@ async function renderWeekColumns(dates) {
             return containerAppliesToDate(c, date, dateStr, dayOfWeek, isWeekday, isWeekend);
         });
 
-        // Daily Settle — 用该日正午作为"当前时间"（让所有容器都处于"未来"状态参与分配）
-        const dayNoon = new Date(dateStr + 'T12:00:00');
-        const taskPool = buildDailyTaskPool(allTasks, dayNoon);
-        const settle = dailySettle(taskPool, dayContainers, dayNoon);
+        const dateTasks = getCalendarTasksForDate(allTasks, dateStr);
+        const taskAssignments = assignCalendarTasksToContainers(dateTasks, dayContainers);
 
         const containerEvents = dayContainers.map(c => ({
             title: c.name,
@@ -329,7 +404,7 @@ async function renderWeekColumns(dates) {
             id: c.id,
             source: 'container',
             layer: getContainerLayer(c),
-            tasks: settle.result.get(c.id)?.tasks || []
+            tasks: taskAssignments.get(c.id) || []
         }));
 
         const dateEvents = dbEvents.filter(e => e.date === dateStr && e.source !== 'container_skip').map(e => ({
@@ -1589,6 +1664,8 @@ if (typeof window !== 'undefined') {
     window.TimeWhereCalendarTest = {
         eventAppliesToDate,
         expandEventsForDateRange,
+        getCalendarTasksForDate,
+        assignCalendarTasksToContainers,
         buildRepeatOptions,
         buildRepeatControlHTML,
         getMonthItemClass,

@@ -176,7 +176,8 @@
             iconUrl: 'icons/icon128.png',
             title,
             message,
-            priority: 2
+            priority: 2,
+            requireInteraction: true
         };
     }
 

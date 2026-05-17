@@ -191,6 +191,31 @@
         return todayStr > earlyStart ? todayStr : earlyStart;
     }
 
+    function normalizeTaskDate(value) {
+        return value ? String(value).slice(0, 10) : null;
+    }
+
+    function hasExplicitStartDateWindow(task) {
+        const startDate = normalizeTaskDate(task?.start_date);
+        const dueDate = normalizeTaskDate(task?.due_date || task?.deadline);
+        return !!startDate && !!dueDate && startDate !== dueDate;
+    }
+
+    function constrainArrangeStartDate(task, candidateDate, today) {
+        const nextDate = normalizeTaskDate(candidateDate);
+        if (!nextDate || !hasExplicitStartDateWindow(task)) return nextDate;
+
+        const startDate = normalizeTaskDate(task.start_date);
+        const dueDate = normalizeTaskDate(task.due_date || task.deadline);
+        const todayStr = normalizeTaskDate(today || new Date());
+        if (startDate > dueDate) return startDate;
+        if (!todayStr || todayStr <= startDate) return startDate;
+        if (todayStr && todayStr > startDate) {
+            return todayStr > dueDate ? dueDate : todayStr;
+        }
+        return nextDate;
+    }
+
     function getEscalatedPriority(task, today) {
         const todayStr = typeof today === 'string' ? today : formatDateISO(today || new Date());
         const dueDate = task?.due_date || task?.deadline;
@@ -256,21 +281,19 @@
             if (task.plan_subject_active === false) continue;
 
             const nextPriority = getEscalatedPriority(task, todayStr);
-            const urgentOrOverdue = nextPriority === 'urgent' || taskIsUrgentOrOverdue(task, todayStr);
-            let nextStartDate = task.start_date || getDefaultStartDate(task, todayStr);
+            let nextStartDate = null;
+            const nextClassDate = getTaskSubject(task)
+                ? findNextSubjectTimetableDate(task, timetableEvents, todayStr)
+                : null;
 
             if (prioritySortValue(nextPriority) <= prioritySortValue('important')) {
                 nextStartDate = todayStr;
-            } else if (getTaskSubject(task)) {
-                const nextClassDate = findNextSubjectTimetableDate(task, timetableEvents, todayStr);
-                if (nextClassDate) {
-                    nextStartDate = nextClassDate;
-                } else if (urgentOrOverdue) {
-                    nextStartDate = todayStr;
-                }
-            } else if (!task.start_date) {
+            } else if (nextClassDate) {
+                nextStartDate = nextClassDate;
+            } else {
                 nextStartDate = getDefaultStartDate(task, todayStr);
             }
+            nextStartDate = constrainArrangeStartDate(task, nextStartDate, todayStr);
 
             const updates = {};
             if (nextStartDate && nextStartDate !== task.start_date) updates.start_date = nextStartDate;

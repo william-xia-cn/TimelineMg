@@ -3,7 +3,7 @@ const path = require('path');
 const vm = require('vm');
 
 const root = path.join(__dirname, '..');
-const scriptSource = fs.readFileSync(path.join(root, 'extension', 'pages', 'settings', 'managebac-sync.js'), 'utf8');
+const scriptSource = fs.readFileSync(path.join(root, 'extension', 'pages', 'settings', 'task-arrange.js'), 'utf8');
 
 let passed = 0;
 let failed = 0;
@@ -31,7 +31,6 @@ function createElement(id) {
         className: '',
         dataset: {},
         disabled: false,
-        value: '',
         checked: false,
         addEventListener() {},
         toggleAttribute(name, force) {
@@ -51,25 +50,17 @@ function createHarness() {
     const elements = new Map();
     [
         'backBtn',
-        'savePendingEventMappingsBtn',
-        'skipManagementReviewBtn',
-        'managebacSyncStatus',
-        'pendingArrangeChanges',
-        'pendingEventMappings'
+        'applyArrangeChangesBtn',
+        'skipArrangeReviewBtn',
+        'taskArrangeStatus',
+        'pendingArrangeChanges'
     ].forEach(id => elements.set(`#${id}`, createElement(id)));
 
     const selectors = new Map();
-    const session = new Map();
-    const calls = {
-        updateTask: [],
-        saveOverrides: [],
-        sync: 0,
-        clearPending: 0
-    };
-
+    const calls = { updateTask: [] };
     const db = {
         settings: {
-            management_review_pending: {
+            task_arrange_pending: {
                 source: 'dashboard_auto',
                 created_at: '2026-05-15T00:00:00.000Z',
                 arrange_changes: [
@@ -84,36 +75,9 @@ function createHarness() {
                         updates: { start_date: '2026-05-17', priority: 'urgent' }
                     }
                 ],
-                arrange_summary: { date_changes: 2, priority_changes: 2 },
-                managebac_pending_event_mappings: [
-                    {
-                        event_uid: 'mb-1',
-                        due_date: '2026-05-20',
-                        summary: 'ManageBac One',
-                        description: 'One description',
-                        suggested_plan_id: 1,
-                        suggested_subject: 'English',
-                        suggested_subject_in_managebac: 'English Language Acquisition Phase 5'
-                    },
-                    {
-                        event_uid: 'mb-2',
-                        due_date: '2026-05-21',
-                        summary: 'ManageBac Two',
-                        description: 'Two description',
-                        suggested_plan_id: 2,
-                        suggested_subject: 'Math',
-                        suggested_subject_in_managebac: 'Mathematics Analysis HL'
-                    }
-                ],
-                managebac_summary: { events: 2 },
-                managebac_error: null
-            },
-            managebac_subject_mappings: [{ plan_id: 1 }]
+                arrange_summary: { date_changes: 2, priority_changes: 2 }
+            }
         },
-        plans: [
-            { id: 1, name: 'English Plan', subject: 'English' },
-            { id: 2, name: 'Math Plan', subject: 'Math' }
-        ],
         async initDefaultSettings() {},
         async getSetting(key) {
             return this.settings[key];
@@ -123,47 +87,6 @@ function createHarness() {
         },
         async updateTask(taskId, updates) {
             calls.updateTask.push({ taskId, updates });
-        }
-    };
-
-    const managebac = {
-        SETTINGS_MAPPING_KEY: 'managebac_subject_mappings',
-        escapeHTML(value) {
-            return String(value ?? '')
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        },
-        escapeAttribute(value) {
-            return this.escapeHTML(value);
-        },
-        async getMappingPrecondition() {
-            return { ok: true, plans: db.plans };
-        },
-        async getPendingEventMappings() {
-            return [];
-        },
-        async savePendingEventMappings(_db, rows) {
-            return rows;
-        },
-        async clearPendingEventMappings() {
-            calls.clearPending += 1;
-        },
-        async saveEventSubjectOverrides(_db, rows) {
-            calls.saveOverrides.push(rows);
-        },
-        async getManageBacIcsConfig() {
-            return { link: 'https://example.invalid/calendar.ics' };
-        },
-        async fetchIcsText() {
-            return 'BEGIN:VCALENDAR\nEND:VCALENDAR';
-        },
-        async syncManageBacIcs(_db, _ics, _link, options) {
-            calls.sync += 1;
-            calls.syncOptions = options;
-            return { created: calls.saveOverrides[0]?.length || 0, updated: 0 };
         }
     };
 
@@ -182,15 +105,14 @@ function createHarness() {
         document,
         window: {
             addEventListener() {},
-            location: { href: '' }
+            location: { href: '' },
+            TimeWhereScheduling: {
+                escapeHTML(value) {
+                    return String(value ?? '');
+                }
+            }
         },
-        sessionStorage: {
-            getItem(key) { return session.get(key) || null; },
-            setItem(key, value) { session.set(key, value); },
-            removeItem(key) { session.delete(key); }
-        },
-        TimeWhereDB: db,
-        TimeWhereManageBac: managebac
+        TimeWhereDB: db
     };
     vm.createContext(context);
     vm.runInContext(scriptSource, context);
@@ -199,52 +121,33 @@ function createHarness() {
 }
 
 async function run() {
-    console.log('\nTimeWhere Management Review tests');
+    console.log('\nTimeWhere Task Arrange Review tests');
     console.log('============================================');
 
     const applyHarness = createHarness();
-    await applyHarness.context.loadManageBacSyncPrecondition();
-    await applyHarness.context.restoreManagementReviewPending();
+    await applyHarness.context.restoreTaskArrangePending();
 
     assert('restore renders Arrange table', applyHarness.elements.get('#pendingArrangeChanges').innerHTML.includes('Applied Arrange'));
-    assert('restore renders ManageBac table', applyHarness.elements.get('#pendingEventMappings').innerHTML.includes('ManageBac One'));
-    assert('pending review blocks back navigation', applyHarness.elements.get('#backBtn').disabled === true);
-    assert('pending review enables confirm and skip actions', applyHarness.elements.get('#savePendingEventMappingsBtn').disabled === false
-        && applyHarness.elements.get('#skipManagementReviewBtn').disabled === false);
+    assert('pending Arrange review blocks back navigation', applyHarness.elements.get('#backBtn').disabled === true);
+    assert('pending Arrange review enables apply and skip actions', applyHarness.elements.get('#applyArrangeChangesBtn').disabled === false
+        && applyHarness.elements.get('#skipArrangeReviewBtn').disabled === false);
 
     applyHarness.selectors.set('.arrange-change-checkbox[data-index="0"]', { checked: false });
     applyHarness.selectors.set('.arrange-change-checkbox[data-index="1"]', { checked: true });
-    applyHarness.selectors.set('.managebac-event-checkbox[data-index="0"]', { checked: true });
-    applyHarness.selectors.set('.managebac-event-checkbox[data-index="1"]', { checked: true });
-    applyHarness.selectors.set('.managebac-event-plan-select[data-index="0"]', { value: '1' });
-    applyHarness.selectors.set('.managebac-event-plan-select[data-index="1"]', { value: '' });
-    await applyHarness.context.handleConfirmManagementReview();
+    await applyHarness.context.handleApplyArrangeChanges();
 
     assertEqual('confirm applies only selected Arrange rows', applyHarness.calls.updateTask, [
         { taskId: 'apply-arrange', updates: { start_date: '2026-05-17', priority: 'urgent' } }
     ]);
-    assertEqual('confirm saves only selected ManageBac rows with a Plan', applyHarness.calls.saveOverrides[0], [
-        {
-            event_uid: 'mb-1',
-            plan_id: '1',
-            subject: 'English',
-            subject_in_managebac: 'English Language Acquisition Phase 5'
-        }
-    ]);
-    assert('confirm calls ManageBac sync with applyPendingEventOverrides', applyHarness.calls.sync === 1
-        && applyHarness.calls.syncOptions.applyPendingEventOverrides === true);
-    assert('confirm clears pending review and writes last checked', applyHarness.db.settings.management_review_pending === null
-        && !!applyHarness.db.settings.management_review_last_checked_at);
+    assert('confirm clears Arrange pending and writes last checked', applyHarness.db.settings.task_arrange_pending === null
+        && !!applyHarness.db.settings.task_arrange_last_checked_at);
 
     const skipHarness = createHarness();
-    await skipHarness.context.loadManageBacSyncPrecondition();
-    await skipHarness.context.restoreManagementReviewPending();
-    await skipHarness.context.handleSkipManagementReview();
+    await skipHarness.context.restoreTaskArrangePending();
+    await skipHarness.context.handleSkipArrangeReview();
     assertEqual('skip writes no task updates', skipHarness.calls.updateTask, []);
-    assertEqual('skip writes no ManageBac overrides', skipHarness.calls.saveOverrides, []);
-    assert('skip clears pending review and writes last checked', skipHarness.db.settings.management_review_pending === null
-        && !!skipHarness.db.settings.management_review_last_checked_at);
-    assert('skip clears persisted ManageBac pending rows', skipHarness.calls.clearPending === 1);
+    assert('skip clears Arrange pending and writes last checked', skipHarness.db.settings.task_arrange_pending === null
+        && !!skipHarness.db.settings.task_arrange_last_checked_at);
 
     console.log('\n============================================');
     console.log(`Total: ${passed + failed} checks   PASS ${passed}   FAIL ${failed}`);

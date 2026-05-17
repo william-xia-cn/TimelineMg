@@ -4,7 +4,6 @@
  * 日期: 2026-04-02
  */
 
-const MANAGEMENT_REVIEW_PENDING_KEY = 'management_review_pending';
 let settingsManageBacSyncInProgress = false;
 let googleSyncInProgress = false;
 let googleSyncPreviewState = null;
@@ -15,6 +14,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         await initDatabase();
         await loadSettings();
+        await ensureTaskReminderAlarm();
         runGoogleSyncCheck();
     } catch (error) {
         showToast(`设置页初始化失败：${error.message}`, 'error');
@@ -63,9 +63,6 @@ function setupEventListeners() {
     document.getElementById('resetSettingsBtn')?.addEventListener('click', resetSettings);
     document.getElementById('importMatrixViewBtn')?.addEventListener('click', () => {
         window.location.href = 'matrixview.html';
-    });
-    document.getElementById('configureManageBacBtn')?.addEventListener('click', () => {
-        window.location.href = 'managebac.html';
     });
     document.getElementById('settingsSaveManageBacIcsLinkBtn')?.addEventListener('click', handleSettingsSaveManageBacIcsLink);
     document.getElementById('settingsSyncManageBacBtn')?.addEventListener('click', handleSettingsManageBacSync);
@@ -164,13 +161,6 @@ async function handleSettingsManageBacSync() {
         return;
     }
 
-    const mappings = await TimeWhereDB.getSetting(TimeWhereManageBac.SETTINGS_MAPPING_KEY);
-    const activeMappingCount = (mappings || []).filter(row => row?.plan_id).length;
-    if (!activeMappingCount) {
-        setSettingsManageBacStatus('请先配置 ManageBac 学科映射，再同步新增事件。', 'error');
-        return;
-    }
-
     const link = document.getElementById('settingsManageBacIcsLinkInput')?.value?.trim() || '';
     let config = await TimeWhereManageBac.getManageBacIcsConfig(TimeWhereDB);
     if (!config?.link && !link) {
@@ -202,22 +192,10 @@ async function handleSettingsManageBacSync() {
         setSettingsManageBacStatus('正在解析 ManageBac 新增事件…', 'info');
         const result = await TimeWhereManageBac.syncManageBacIcs(TimeWhereDB, icsText, config.link, { confirmLinkChange: true });
         const pendingRows = await TimeWhereManageBac.savePendingEventMappings(TimeWhereDB, result.pending_event_mappings || []);
-        await TimeWhereDB.setSetting(MANAGEMENT_REVIEW_PENDING_KEY, {
-            source: 'managebac_manual',
-            created_at: new Date().toISOString(),
-            arrange_changes: [],
-            arrange_summary: null,
-            managebac_pending_event_mappings: pendingRows,
-            managebac_summary: {
-                status: result.status,
-                events: result.events || 0,
-                created: result.created || 0,
-                updated: result.updated || 0,
-                deleted: result.deleted || 0,
-                skipped: result.skipped || 0
-            },
-            managebac_error: null
-        });
+        if (pendingRows.length === 0) {
+            setSettingsManageBacStatus('ManageBac 没有新增任务。', 'success');
+            return;
+        }
         window.location.href = 'managebac-sync.html';
     } catch (error) {
         setSettingsManageBacStatus(`同步失败：${error.message}`, 'error');
@@ -979,6 +957,10 @@ async function saveSettings() {
         });
     }
 
+    if (settings.notification_enabled) {
+        await ensureTaskReminderAlarm();
+    }
+
     showToast('设置已保存', 'success');
 }
 
@@ -998,10 +980,68 @@ async function handleTestNotification() {
         if (!response?.ok) {
             throw new Error(response?.error || '测试提醒发送失败');
         }
-        showToast('已发送测试提醒；如果没有弹窗，请检查 Chrome/Windows 通知权限', 'success');
+        const alarmText = formatReminderAlarmStatus(response.alarm);
+        const diagnosticText = formatDiagnosticAlarmStatus(response.diagnosticAlarm);
+        showToast(`已发送测试提醒；${alarmText}；${diagnosticText}`, 'success');
+        scheduleDiagnosticAlarmFollowUp();
     } catch (error) {
         showToast(`测试提醒失败：${error.message}`, 'error');
     }
+}
+
+async function ensureTaskReminderAlarm() {
+    if (!chrome?.runtime?.sendMessage) return null;
+    const enabled = document.getElementById('notificationEnabled')?.checked !== false;
+    if (!enabled) return null;
+    const response = await chrome.runtime.sendMessage({ type: 'TIMEWHERE_TASK_REMINDER_ENSURE' });
+    if (!response?.ok) {
+        throw new Error(response?.error || '任务提醒 alarm 注册失败');
+    }
+    return response.alarm || null;
+}
+
+function formatReminderAlarmStatus(alarm) {
+    if (!alarm?.scheduledTime) return 'alarm 状态未返回';
+    const next = new Date(alarm.scheduledTime).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    return `alarm 已注册，下次检查 ${next}`;
+}
+
+function formatDiagnosticAlarmStatus(alarm) {
+    if (!alarm?.scheduledTime) return '诊断 alarm 状态未返回';
+    const next = new Date(alarm.scheduledTime).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+    return `30 秒诊断 ${next}`;
+}
+
+function scheduleDiagnosticAlarmFollowUp() {
+    window.setTimeout(async () => {
+        try {
+            const response = await chrome.runtime.sendMessage({ type: 'TIMEWHERE_TASK_REMINDER_STATUS' });
+            if (!response?.ok) {
+                throw new Error(response?.error || '无法读取 alarm 状态');
+            }
+            const diagnostic = response.diagnostic;
+            if (diagnostic?.status === 'fired') {
+                const firedAt = new Date(diagnostic.firedAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+                showToast(`诊断 alarm 已触发：${firedAt}`, 'success');
+                return;
+            }
+            const alarmNames = (response.alarms || []).map(alarm => alarm.name).join(', ') || '无';
+            showToast(`诊断 alarm 未触发；当前 alarm：${alarmNames}`, 'error');
+        } catch (error) {
+            showToast(`诊断 alarm 状态读取失败：${error.message}`, 'error');
+        }
+    }, 40000);
 }
 
 async function exportData() {

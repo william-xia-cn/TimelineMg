@@ -272,7 +272,7 @@ window.TaskApp = {
     getViewTitle() {
         if (this.viewMode === 'my_day') return 'My Day';
         if (this.viewMode === 'my_tasks') return 'My Tasks';
-        if (this.viewMode === 'my_managebac') return 'my ManageBac';
+        if (this.viewMode === 'my_managebac') return 'My ManageBac';
         const plan = this.getCurrentPlan();
         return plan ? plan.name : 'Tasks';
     },

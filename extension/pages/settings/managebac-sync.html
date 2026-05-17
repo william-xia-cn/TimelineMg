@@ -34,23 +34,16 @@
                         <button class="back-btn" id="backBtn" title="返回设置">
                             <span class="material-symbols-outlined">arrow_back</span>
                         </button>
-                        <h1>任务调整与 ManageBac 同步确认</h1>
+                        <h1>ManageBac 新任务确认</h1>
                     </div>
                 </header>
 
                 <div class="content custom-scrollbar managebac-content">
                     <section class="section">
                         <h2 class="section-title">
-                            <span class="material-symbols-outlined">rule_settings</span> 本轮管理检查
+                            <span class="material-symbols-outlined">event_note</span> ManageBac 同步
                         </h2>
-                        <span class="managebac-status" id="managebacSyncStatus">从 Dashboard 或 ManageBac 手动同步进入后显示待确认项</span>
-                    </section>
-
-                    <section class="section">
-                        <h2 class="section-title">
-                            <span class="material-symbols-outlined">event_upcoming</span> Arrange task 列表
-                        </h2>
-                        <div id="pendingArrangeChanges" class="managebac-empty">没有需要确认的任务日期 / 优先级调整</div>
+                        <span class="managebac-status" id="managebacSyncStatus">从 ManageBac 手动同步进入后显示待确认新任务</span>
                     </section>
 
                     <section class="section">
@@ -61,8 +54,8 @@
                     </section>
 
                     <section class="section management-actions">
-                        <button class="import-btn managebac-save-btn" id="savePendingEventMappingsBtn" disabled>确认并导入选中项</button>
-                        <button class="action-btn" id="skipManagementReviewBtn" disabled>全部跳过并完成</button>
+                        <button class="import-btn managebac-save-btn" id="savePendingEventMappingsBtn" disabled>确认并导入选中 ManageBac 任务</button>
+                        <button class="action-btn" id="skipManagementReviewBtn" disabled>全部跳过</button>
                     </section>
                 </div>
             </div>

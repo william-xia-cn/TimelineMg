@@ -35,7 +35,8 @@
         'tasks',
         'containers',
         'events',
-        'habits'
+        'habits',
+        'daily_journals'
     ];
 
     const SELECTED_SETTING_KEYS = [
@@ -56,6 +57,7 @@
         'google_email',
         GOOGLE_SYNC_ACCOUNT_EMAIL_KEY,
         'management_review_pending',
+        'task_arrange_pending',
         'managebac_pending_event_mappings',
         'matrixview_last_import_raw',
         'managebac_last_import_raw',
@@ -158,6 +160,9 @@
             throw new Error('Snapshot missing data');
         }
         for (const tableName of SNAPSHOT_TABLES) {
+            if (tableName === 'daily_journals' && snapshot.data[tableName] === undefined) {
+                snapshot.data[tableName] = [];
+            }
             if (!Array.isArray(snapshot.data[tableName])) {
                 throw new Error(`Snapshot table ${tableName} must be an array`);
             }
@@ -221,6 +226,7 @@
 
     function recordKey(tableName, record) {
         if (!record || typeof record !== 'object') return null;
+        if (tableName === 'daily_journals' && record.date != null) return String(record.date);
         if (record.id != null) return String(record.id);
         if (tableName === 'settings' && record.key != null) return String(record.key);
         return null;
@@ -378,6 +384,14 @@
             });
         }
         return changes;
+    }
+
+    function chooseNewerDailyJournal(local, cloud) {
+        if (!local || !cloud) return null;
+        const localTime = new Date(local.updated_at || local.submitted_at || local.snapshot_at || 0).getTime();
+        const cloudTime = new Date(cloud.updated_at || cloud.submitted_at || cloud.snapshot_at || 0).getTime();
+        if (Number.isNaN(localTime) && Number.isNaN(cloudTime)) return null;
+        return localTime >= cloudTime ? 'local' : 'cloud';
     }
 
     function diffSettings(localSettings, cloudSettings) {
@@ -983,6 +997,19 @@
 
             const cloudChangedSinceSync = !lastSyncedHash || cloud.hash !== lastSyncedHash;
             if (localDirty && cloudChangedSinceSync) {
+                if (table === 'daily_journals') {
+                    const newer = chooseNewerDailyJournal(local.record, cloud.record);
+                    if (newer === 'local') {
+                        uploadKeys.push(key);
+                        addMergeChange(changes, { key, table, id, action: 'upload_local', local, cloud, reason: 'daily_journal_newer_local' });
+                        continue;
+                    }
+                    if (newer === 'cloud') {
+                        applyLocal.push({ key, table, id, action: 'put_local', entity: clone(cloud) });
+                        addMergeChange(changes, { key, table, id, action: 'apply_cloud', local, cloud, reason: 'daily_journal_newer_cloud' });
+                        continue;
+                    }
+                }
                 const conflict = { key, table, id, conflict_type: 'local_update_vs_remote_update', local: clone(local), cloud: clone(cloud) };
                 conflicts.push(conflict);
                 addMergeChange(changes, { key, table, id, action: 'conflict', local, cloud, reason: conflict.conflict_type });

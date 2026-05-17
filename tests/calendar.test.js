@@ -101,6 +101,32 @@ async function run() {
     const beforeStart = helpers.expandEventsForDateRange([weeklyEvent], '2026-05-01', '2026-05-11');
     assertEqual('recurring schedule event does not render before its start date', beforeStart.length, 0);
 
+    const arrangedTasks = [
+        { id: 'today-start', title: 'Today start', progress: 'not_started', start_date: '2026-05-18' },
+        { id: 'past-start', title: 'Past start', progress: 'not_started', start_date: '2026-05-17' },
+        { id: 'future-start', title: 'Future start', progress: 'not_started', start_date: '2026-05-19' },
+        { id: 'completed', title: 'Completed', progress: 'completed', start_date: '2026-05-18' },
+        { id: 'status-completed', title: 'Status completed', status: 'completed', start_date: '2026-05-18' },
+        { id: 'no-start', title: 'No start', progress: 'not_started', start_date: null }
+    ];
+    assertEqual(
+        'Calendar task display uses exact Task Arrange start_date only',
+        helpers.getCalendarTasksForDate(arrangedTasks, '2026-05-18').map(task => task.id),
+        ['today-start']
+    );
+
+    const dayContainers = [
+        { id: 'free', name: 'Free', time_start: '09:00', time_end: '10:00', layer: 2 },
+        { id: 'study', name: 'Study', time_start: '18:00', time_end: '20:00', layer: 1 },
+        { id: 'late', name: 'Late', time_start: '20:00', time_end: '21:00', layer: 1 }
+    ];
+    const assignments = helpers.assignCalendarTasksToContainers([
+        { id: 'unscheduled', start_date: '2026-05-18' },
+        { id: 'timed', start_date: '2026-05-18', schedule_time: '20:15' }
+    ], dayContainers);
+    assertEqual('Calendar unscheduled start-date tasks render once in first study container', assignments.get('study').map(task => task.id), ['unscheduled']);
+    assertEqual('Calendar timed start-date tasks render in matching container only', assignments.get('late').map(task => task.id), ['timed']);
+
     const weeklyPayload = helpers._repeatPayload({ repeat: 'weekly', weeklyDay: 4 });
     assertEqual('weekly event repeat payload persists repeat day', weeklyPayload.repeat_days, [4]);
     const customPayload = helpers._repeatPayload({ repeat: 'custom', repeatDays: [1, 5] });
@@ -167,6 +193,18 @@ async function run() {
     assert('week columns cover the full time grid so blank areas are clickable', calendarStyles.includes('min-height: calc(17 * 40px)')
         && /columns-layer[\s\S]*min-height:\s*calc\(17 \* 40px\)/.test(calendarStyles)
         && /day-col[\s\S]*min-height:\s*calc\(17 \* 40px\)/.test(calendarStyles));
+    assert('Calendar open triggers Arrange preview through dedicated Task Arrange review', calendarScript.includes('runCalendarArrangeCheck()')
+        && calendarScript.includes('calendarReviewHasWork')
+        && calendarScript.includes('TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false })')
+        && calendarScript.includes("source: 'calendar_auto'")
+        && calendarScript.includes('task-arrange.html?source=calendar_auto')
+        && calendarScript.includes('TASK_ARRANGE_PENDING_KEY')
+        && !calendarScript.includes('maybeRunTaskArrange')
+        && !calendarScript.includes('apply: true'));
+    assert('Calendar week task display no longer uses Daily Settle rolling task pool', !calendarScript.includes('buildDailyTaskPool')
+        && !calendarScript.includes('dailySettle')
+        && calendarScript.includes('getCalendarTasksForDate(allTasks, dateStr)')
+        && calendarScript.includes('assignCalendarTasksToContainers(dateTasks, dayContainers)'));
     assertEqual('month view layer 1 container uses old layer-aware container class', helpers.getMonthItemClass({ type: 'container', source: 'container', layer: 1 }), 'month-event month-container layer-1');
     assertEqual('month view layer 2 container uses old layer-aware container class', helpers.getMonthItemClass({ type: 'container', source: 'container', layer: 2 }), 'month-event month-container layer-2');
     assertEqual('month view event item remains normal event style', helpers.getMonthItemClass({ type: 'event', source: 'manual' }), 'month-event');

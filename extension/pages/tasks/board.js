@@ -12,6 +12,7 @@ const GROUP_BY_CONFIG = {
             { key: 'today',     title: 'Today',     icon: 'today' },
             { key: 'tomorrow',  title: 'Tomorrow',  icon: 'event' },
             { key: 'this_week', title: 'This week',  icon: 'date_range' },
+            { key: 'next_week', title: 'Next week',  icon: 'event_upcoming' },
             { key: 'future',    title: 'Future',    icon: 'event_upcoming' },
             { key: 'no_date',   title: 'No date',   icon: 'event_busy' }
         ],
@@ -32,10 +33,14 @@ const GROUP_BY_CONFIG = {
             weekEnd.setDate(weekEnd.getDate() + daysToSunday);
             weekEnd.setHours(23, 59, 59, 999);
 
+            const nextWeekEnd = new Date(weekEnd);
+            nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
+
             if (due < today) return 'overdue';
             if (due >= today && due < tomorrow) return 'today';
             if (due >= tomorrow && due < dayAfterTomorrow) return 'tomorrow';
             if (due <= weekEnd) return 'this_week';
+            if (due <= nextWeekEnd) return 'next_week';
             return 'future';
         }
     },
@@ -479,7 +484,7 @@ function updateBoardHeader() {
 
 function showQuickAdd(columnEl) {
     if (TaskApp.viewMode === 'my_managebac') {
-        showToast('my ManageBac 是 ManageBac 来源任务视图，不能手动新增任务。', 'error');
+        showToast('My ManageBac 是 ManageBac 来源任务视图，不能手动新增任务。', 'error');
         return;
     }
 
@@ -719,7 +724,7 @@ function getQuickAddDefaults(columnKey) {
         switch (columnKey) {
             case 'today':    defaults.due_date = todayStr; break;
             case 'tomorrow': defaults.due_date = formatDateISO(tomorrowDate); break;
-            // overdue, this_week, future, no_date: no default date
+            // overdue, this_week, next_week, future, no_date: no default date
         }
     } else if (groupBy === 'bucket') {
         const match = columnKey.match(/^bucket_(\d+)$/);

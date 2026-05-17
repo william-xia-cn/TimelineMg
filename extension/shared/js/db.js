@@ -98,6 +98,11 @@ db.version(4).stores({
 
 });
 
+// --- Schema v5 (Daily journal snapshots) ---
+db.version(5).stores({
+    daily_journals: '&date, status, updated_at, submitted_at, snapshot_at'
+});
+
 const TimeWhereDB = {
     db: db,
 
@@ -622,6 +627,173 @@ const TimeWhereDB = {
         return allTasks.filter(t => t.progress === 'not_started' || t.progress === 'in_progress').length;
     },
 
+    // ========== Daily Journals ==========
+    getDailyJournalDate(date = new Date()) {
+        if (typeof date === 'string') return date.slice(0, 10);
+        return this.formatDateISO(date);
+    },
+
+    getLocalDateFromISO(value) {
+        if (!value) return null;
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+        return this.formatDateISO(date);
+    },
+
+    cloneJournalValue(value) {
+        return value == null ? value : JSON.parse(JSON.stringify(value));
+    },
+
+    createJournalTaskSnapshot(task) {
+        return {
+            id: task.id,
+            title: task.title || '',
+            plan_id: task.plan_id || null,
+            bucket_id: task.bucket_id || null,
+            subject: task.subject || null,
+            start_date: task.start_date || null,
+            due_date: task.due_date || task.deadline || null,
+            progress: task.progress || task.status || 'not_started',
+            priority: task.priority || 'medium',
+            completed_at: task.completed_at || null,
+            source: task.source || null,
+            source_uid: task.source_uid || null,
+            duration: task.duration || null,
+            schedule_time: task.schedule_time || null
+        };
+    },
+
+    buildDailyJournalPoolSnapshot(tasks, date, referenceDate = new Date(`${date}T12:00:00`)) {
+        return (tasks || [])
+            .filter(task => task.progress !== 'completed')
+            .filter(task => task.start_date == null || task.start_date <= date)
+            .filter(task => task.deferred_until == null || new Date(task.deferred_until) <= referenceDate)
+            .map(task => this.createJournalTaskSnapshot(task));
+    },
+
+    async getDailyJournal(date) {
+        const journalDate = this.getDailyJournalDate(date);
+        return await db.daily_journals.get(journalDate) || null;
+    },
+
+    async listDailyJournals() {
+        const rows = await db.daily_journals.toArray();
+        return rows.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    },
+
+    async ensureDailyJournalSnapshot(date = new Date(), referenceDate = new Date(), options = {}) {
+        const journalDate = this.getDailyJournalDate(date);
+        const ref = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
+        if (!options.force && ref.getHours() < 6) {
+            return { status: 'too_early', date: journalDate, journal: await this.getDailyJournal(journalDate) };
+        }
+
+        const existing = await this.getDailyJournal(journalDate);
+        if (existing?.snapshot_at && Array.isArray(existing.planned_task_snapshots)) {
+            return { status: 'exists', date: journalDate, journal: existing };
+        }
+
+        const now = this.getNowISO();
+        const tasks = await this.getAllTasks();
+        const planned = tasks
+            .filter(task => task.start_date === journalDate)
+            .map(task => this.createJournalTaskSnapshot(task));
+        const dailyPool = this.buildDailyJournalPoolSnapshot(tasks, journalDate, ref);
+        const journal = {
+            ...(existing || {}),
+            date: journalDate,
+            status: existing?.status || 'snapshot',
+            planned_task_snapshots: planned,
+            daily_pool_snapshots: dailyPool,
+            completed_task_snapshots: existing?.completed_task_snapshots || [],
+            delayed_task_snapshots: existing?.delayed_task_snapshots || [],
+            extra_done_task_snapshots: existing?.extra_done_task_snapshots || [],
+            planned_notes: existing?.planned_notes || '',
+            delayed_notes: existing?.delayed_notes || '',
+            extra_done_notes: existing?.extra_done_notes || '',
+            general_notes: existing?.general_notes || '',
+            snapshot_at: now,
+            created_at: existing?.created_at || now,
+            updated_at: now,
+            submitted_at: existing?.submitted_at || null
+        };
+        await db.daily_journals.put(journal);
+        await this.markGoogleSyncDirty('daily_journals', journal.date, journal, options);
+        return { status: 'created', date: journalDate, journal };
+    },
+
+    async buildDailyJournalDraft(date = new Date(), referenceDate = new Date()) {
+        const journalDate = this.getDailyJournalDate(date);
+        let journal = await this.getDailyJournal(journalDate);
+        if (!journal && referenceDate.getHours() >= 6) {
+            journal = (await this.ensureDailyJournalSnapshot(journalDate, referenceDate)).journal;
+        }
+        const tasks = await this.getAllTasks();
+        const taskById = new Map(tasks.map(task => [String(task.id), task]));
+        const plannedSnapshots = journal?.planned_task_snapshots || [];
+        const plannedIds = new Set(plannedSnapshots.map(task => String(task.id)));
+        const completed = tasks
+            .filter(task => this.getLocalDateFromISO(task.completed_at) === journalDate)
+            .map(task => this.createJournalTaskSnapshot(task));
+        const completedIds = new Set(completed.map(task => String(task.id)));
+        const delayed = plannedSnapshots.filter(snapshot => {
+            const current = taskById.get(String(snapshot.id));
+            if (!current) return true;
+            return current.progress !== 'completed' && this.getLocalDateFromISO(current.completed_at) !== journalDate;
+        });
+        const extraDone = completed.filter(snapshot => !plannedIds.has(String(snapshot.id)));
+        return {
+            ...(journal || {}),
+            date: journalDate,
+            status: journal?.status || 'snapshot',
+            planned_task_snapshots: plannedSnapshots,
+            daily_pool_snapshots: journal?.daily_pool_snapshots || this.buildDailyJournalPoolSnapshot(tasks, journalDate, referenceDate),
+            completed_task_snapshots: completed,
+            delayed_task_snapshots: delayed,
+            extra_done_task_snapshots: extraDone,
+            completed_planned_count: completed.filter(snapshot => plannedIds.has(String(snapshot.id))).length,
+            completed_count: completed.length,
+            delayed_count: delayed.length,
+            extra_done_count: extraDone.length,
+            planned_count: plannedSnapshots.length,
+            completed_ids: Array.from(completedIds)
+        };
+    },
+
+    async saveDailyJournalDraft(date, data = {}, options = {}) {
+        const journalDate = this.getDailyJournalDate(date);
+        const base = await this.buildDailyJournalDraft(journalDate);
+        const now = this.getNowISO();
+        const journal = {
+            ...base,
+            planned_notes: data.planned_notes ?? base.planned_notes ?? '',
+            delayed_notes: data.delayed_notes ?? base.delayed_notes ?? '',
+            extra_done_notes: data.extra_done_notes ?? base.extra_done_notes ?? '',
+            general_notes: data.general_notes ?? base.general_notes ?? '',
+            status: base.status === 'submitted' ? 'submitted' : 'draft',
+            created_at: base.created_at || now,
+            updated_at: now,
+            submitted_at: base.submitted_at || null
+        };
+        await db.daily_journals.put(journal);
+        await this.markGoogleSyncDirty('daily_journals', journal.date, journal, options);
+        return journal;
+    },
+
+    async submitDailyJournal(date, data = {}, options = {}) {
+        const draft = await this.saveDailyJournalDraft(date, data, options);
+        const now = this.getNowISO();
+        const journal = {
+            ...draft,
+            status: 'submitted',
+            submitted_at: now,
+            updated_at: now
+        };
+        await db.daily_journals.put(journal);
+        await this.markGoogleSyncDirty('daily_journals', journal.date, journal, options);
+        return journal;
+    },
+
     // ========== Containers ==========
     async getContainers(filter = {}) {
         let collection = db.containers.orderBy('name');
@@ -966,6 +1138,7 @@ const TimeWhereDB = {
         await db.containers.clear();
         await db.habits.clear();
         await db.events.clear();
+        await db.daily_journals.clear();
         await db.sync_log.clear();
     },
 
@@ -978,6 +1151,7 @@ const TimeWhereDB = {
             containers: await db.containers.count(),
             habits: await db.habits.count(),
             events: await db.events.count(),
+            daily_journals: await db.daily_journals.count(),
             settings: await db.settings.count(),
             sync_logs: await db.sync_log.count()
         };
@@ -994,13 +1168,14 @@ const TimeWhereDB = {
         data.containers = await db.containers.toArray();
         data.habits = await db.habits.toArray();
         data.events = await db.events.toArray();
+        data.daily_journals = await db.daily_journals.toArray();
         data.settings = await db.settings.toArray();
         return data;
     },
 
     async importAllData(data) {
         if (!data || typeof data !== 'object') throw new Error('Invalid backup format');
-        const tables = ['plans', 'buckets', 'labels', 'tasks', 'containers', 'habits', 'events', 'settings'];
+        const tables = ['plans', 'buckets', 'labels', 'tasks', 'containers', 'habits', 'events', 'daily_journals', 'settings'];
         for (const table of tables) {
             if (!Array.isArray(data[table])) continue;
             await db[table].clear();
