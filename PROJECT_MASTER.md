@@ -3,10 +3,10 @@
 ## Project Status
 
 - **Project**: TimeWhere
-- **Version**: package / extension release version `0.1.0`; design-doc version `v2.3`
+- **Version**: package / extension release version `0.1.1`; design-doc version `v2.3`
 - **Stage**: Baseline Stabilized; Google data sync v1 implementation in progress under D-020
 - **Active release/deployment target**: Internal MVP acceptance approved by Product Owner; Phase 1, Phase 2A, and documentation baseline cleanup are complete.
-- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. Public release, tag, merge, deploy, publish, release/artifact upload, submit, Chrome Web Store submission, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
+- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-022 approves an internal testing artifact for `0.1.1` only. Public release, tag, merge, deploy, publish, submit, Chrome Web Store submission, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
 
 ## Collaboration Model
 
@@ -92,11 +92,11 @@ Escalate to external advisor for:
 
 | Item | Status |
 |---|---|
-| Candidate version | `0.1.0` |
-| Candidate commit | Not confirmed |
-| Package/artifact | N/A |
-| Artifact hash | N/A |
-| Deployment channel | Internal MVP acceptance |
+| Candidate version | `0.1.1` |
+| Candidate commit | Source metadata commit pending after internal package generation |
+| Package/artifact | `dist/TimeWhere-0.1.1-internal-20260517-171804.zip` |
+| Artifact hash | SHA256 `945B1656A5DA72F3559F019BE327626AD8C6BBD68D7C29FE057140FCCE17BC0F` |
+| Deployment channel | Internal testing |
 | Review status | Internal MVP acceptance approved by Product Owner |
 | Public release | NOT_STARTED; explicitly out of MVP scope |
 | Tag | NOT_APPROVED |
