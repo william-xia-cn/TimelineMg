@@ -42,6 +42,10 @@ async function renderDetailPanel(taskId) {
     const planInfo = await getTaskPlanInfo(task);
     const subjectText = task.subject || planInfo.subject || planInfo.name || 'No subject';
     const manageBacSubjectText = task.managebac_subject || '';
+    const isRecurringTask = !!task.recurrence_series_id;
+    const recurrenceLabel = isRecurringTask
+        ? `${task.recurrence_frequency === 'monthly' ? '每月' : '每周'} ${task.recurrence_index || 1}/${task.recurrence_count || '?'}`
+        : '';
 
     const buckets = TaskApp.currentPlanBuckets;
     const labels = TaskApp.currentPlanLabels;
@@ -173,6 +177,49 @@ async function renderDetailPanel(taskId) {
                 </div>
             </div>
 
+            <!-- Checklist -->
+            <div class="detail-field">
+                <label>Checklist${task.checklist && task.checklist.length > 0 ? ` (${task.checklist.filter(i => i.checked).length}/${task.checklist.length})` : ''}</label>
+                <div class="checklist-list" id="checklistItems">${checklistHTML}</div>
+                <div class="checklist-add">
+                    <input type="text" class="checklist-add-input" id="checklistNewItem" placeholder="Add an item..." ${sourceDisabledAttr}>
+                </div>
+            </div>
+
+            ${!isManageBacTask ? `
+            <div class="detail-field recurrence-detail-section" data-recurrence-section>
+                <label>周期任务</label>
+                ${isRecurringTask ? `
+                    <div class="recurrence-series-panel">
+                        <span class="recurrence-series-badge">${escapeHTML(recurrenceLabel)}</span>
+                        <select class="detail-select recurrence-scope-select" data-field="recurrence_scope" aria-label="周期任务编辑范围">
+                            <option value="single">本次</option>
+                            <option value="future">本次及之后</option>
+                            <option value="all">全部</option>
+                        </select>
+                    </div>
+                    <div class="recurrence-resize-panel">
+                        <label class="recurrence-count-label">
+                            总任务数
+                            <input type="number" class="recurrence-count-input" data-field="recurrence_resize_count" min="2" max="12" value="${task.recurrence_count || 2}" aria-label="周期任务总任务数">
+                        </label>
+                        <button type="button" class="btn-create-recurrence" data-action="resize-recurrence" disabled>更新重复次数</button>
+                    </div>
+                    <p class="source-readonly-hint">除完成状态外，编辑将按所选范围应用到周期任务。</p>
+                ` : `
+                    <div class="recurrence-create-panel">
+                        <select class="detail-select" data-field="recurrence_frequency">
+                            <option value="none">不重复</option>
+                            <option value="weekly">每周</option>
+                            <option value="monthly">每月</option>
+                        </select>
+                        <input type="number" class="detail-date recurrence-count-input" data-field="recurrence_count" min="2" max="12" value="2" disabled>
+                        <button type="button" class="btn-create-recurrence" data-action="create-recurrence" disabled>生成周期任务</button>
+                    </div>
+                    <p class="source-readonly-hint">周期任务必须有截止日期，最多生成 12 个实例。</p>
+                `}
+            </div>` : ''}
+
             <!-- Labels -->
             <div class="detail-field">
                 <label>Labels</label>
@@ -183,15 +230,6 @@ async function renderDetailPanel(taskId) {
             <div class="detail-field">
                 <label>Notes</label>
                 <textarea class="detail-textarea ${isManageBacTask ? 'source-readonly' : ''}" data-field="notes" placeholder="Add notes..." rows="4" ${sourceReadonlyTextareaAttr} ${sourceReadonlyAttr}>${escapeHTML(task.notes || '')}</textarea>
-            </div>
-
-            <!-- Checklist -->
-            <div class="detail-field">
-                <label>Checklist${task.checklist && task.checklist.length > 0 ? ` (${task.checklist.filter(i => i.checked).length}/${task.checklist.length})` : ''}</label>
-                <div class="checklist-list" id="checklistItems">${checklistHTML}</div>
-                <div class="checklist-add">
-                    <input type="text" class="checklist-add-input" id="checklistNewItem" placeholder="Add an item..." ${sourceDisabledAttr}>
-                </div>
             </div>
         </div>
 
@@ -235,6 +273,15 @@ function wireDetailPanelEvents(taskId, options = {}) {
     const panel = document.getElementById('taskDetailPanel');
     if (!panel) return;
 
+    const updateTaskFromDetail = async (updates) => {
+        const scope = getDetailRecurrenceScope(panel);
+        if (typeof TimeWhereDB.updateRecurringTaskScope === 'function') {
+            await TimeWhereDB.updateRecurringTaskScope(taskId, updates, scope);
+        } else {
+            await TimeWhereDB.updateTask(taskId, updates);
+        }
+    };
+
     // Close button
     panel.querySelector('.detail-close-btn')?.addEventListener('click', closeDetailPanel);
 
@@ -244,7 +291,7 @@ function wireDetailPanelEvents(taskId, options = {}) {
         titleEl.addEventListener('blur', async () => {
             const newTitle = titleEl.textContent.trim();
             if (newTitle) {
-                await TimeWhereDB.updateTask(taskId, { title: newTitle });
+                await updateTaskFromDetail({ title: newTitle });
                 await TaskApp.refresh();
             }
         });
@@ -269,7 +316,7 @@ function wireDetailPanelEvents(taskId, options = {}) {
     panel.querySelectorAll('.priority-option').forEach(btn => {
         if (btn.disabled || isManageBacTask) return;
         btn.addEventListener('click', async () => {
-            await TimeWhereDB.updateTask(taskId, { priority: btn.dataset.priority });
+            await updateTaskFromDetail({ priority: btn.dataset.priority });
             await TaskApp.refresh();
         });
     });
@@ -280,7 +327,7 @@ function wireDetailPanelEvents(taskId, options = {}) {
         bucketSelect.addEventListener('change', async () => {
             if (bucketSelect.disabled || isManageBacTask) return;
             const val = bucketSelect.value;
-            await TimeWhereDB.updateTask(taskId, { bucket_id: val ? parseInt(val) : null });
+            await updateTaskFromDetail({ bucket_id: val ? parseInt(val) : null });
             await TaskApp.refresh();
         });
     }
@@ -296,7 +343,7 @@ function wireDetailPanelEvents(taskId, options = {}) {
             } else {
                 value = value || null;
             }
-            await TimeWhereDB.updateTask(taskId, { [field]: value });
+            await updateTaskFromDetail({ [field]: value });
             await TaskApp.refresh();
         });
     });
@@ -315,7 +362,7 @@ function wireDetailPanelEvents(taskId, options = {}) {
                 labels.push(labelId);
             }
 
-            await TimeWhereDB.updateTask(taskId, { labels });
+            await updateTaskFromDetail({ labels });
             await TaskApp.refresh();
         });
     });
@@ -327,7 +374,7 @@ function wireDetailPanelEvents(taskId, options = {}) {
         notesEl.addEventListener('input', () => {
             clearTimeout(notesTimer);
             notesTimer = setTimeout(async () => {
-                await TimeWhereDB.updateTask(taskId, { notes: notesEl.value });
+                await updateTaskFromDetail({ notes: notesEl.value });
                 // Don't full refresh for notes — just sync quietly
             }, 500);
         });
@@ -338,7 +385,11 @@ function wireDetailPanelEvents(taskId, options = {}) {
         if (cb.disabled || isManageBacTask) return;
         cb.addEventListener('change', async () => {
             const itemId = cb.closest('.checklist-item').dataset.itemId;
-            await TimeWhereDB.toggleChecklistItem(taskId, itemId);
+            const task = await TimeWhereDB.getTaskById(taskId);
+            const checklist = (task.checklist || []).map(item =>
+                item.id === itemId ? { ...item, checked: !item.checked } : item
+            );
+            await TimeWhereDB.updateChecklist(taskId, checklist);
             await TaskApp.refresh();
         });
     });
@@ -350,7 +401,7 @@ function wireDetailPanelEvents(taskId, options = {}) {
             const itemId = btn.closest('.checklist-item').dataset.itemId;
             const task = await TimeWhereDB.getTaskById(taskId);
             const newChecklist = (task.checklist || []).filter(i => i.id !== itemId);
-            await TimeWhereDB.updateChecklist(taskId, newChecklist);
+            await updateTaskFromDetail({ checklist: newChecklist });
             await TaskApp.refresh();
         });
     });
@@ -368,31 +419,101 @@ function wireDetailPanelEvents(taskId, options = {}) {
                     title,
                     checked: false
                 }];
-                await TimeWhereDB.updateChecklist(taskId, newChecklist);
+                await updateTaskFromDetail({ checklist: newChecklist });
                 addInput.value = '';
                 await TaskApp.refresh();
             }
         });
     }
 
+    const recurrenceFrequency = panel.querySelector('[data-field="recurrence_frequency"]');
+    const recurrenceCount = panel.querySelector('[data-field="recurrence_count"]');
+    const createRecurrenceBtn = panel.querySelector('[data-action="create-recurrence"]');
+    recurrenceFrequency?.addEventListener('change', () => {
+        const enabled = ['weekly', 'monthly'].includes(recurrenceFrequency.value);
+        if (recurrenceCount) recurrenceCount.disabled = !enabled;
+        if (createRecurrenceBtn) createRecurrenceBtn.disabled = !enabled;
+    });
+    createRecurrenceBtn?.addEventListener('click', async () => {
+        const frequency = recurrenceFrequency?.value || 'none';
+        const count = parseInt(recurrenceCount?.value || '0', 10);
+        try {
+            await TimeWhereDB.createRecurringTaskSeriesFromTask(taskId, { frequency, count });
+            await TaskApp.refresh();
+            showToast('周期任务已生成', 'success');
+            openDetailPanel(taskId);
+        } catch (error) {
+            showToast(error.message || '生成周期任务失败', 'error');
+        }
+    });
+
+    const recurrenceResizeCount = panel.querySelector('[data-field="recurrence_resize_count"]');
+    const resizeRecurrenceBtn = panel.querySelector('[data-action="resize-recurrence"]');
+    const initialRecurrenceCount = parseInt(recurrenceResizeCount?.value || '0', 10);
+    recurrenceResizeCount?.addEventListener('input', () => {
+        const count = parseInt(recurrenceResizeCount.value || '0', 10);
+        if (resizeRecurrenceBtn) {
+            resizeRecurrenceBtn.disabled = count === initialRecurrenceCount || count < 2 || count > 12;
+        }
+    });
+    resizeRecurrenceBtn?.addEventListener('click', async () => {
+        const count = parseInt(recurrenceResizeCount?.value || '0', 10);
+        try {
+            await TimeWhereDB.resizeRecurringTaskSeries(taskId, count);
+            await TaskApp.refresh();
+            showToast('周期任务次数已更新', 'success');
+            openDetailPanel(taskId);
+        } catch (error) {
+            showToast(error.message || '更新周期任务次数失败', 'error');
+        }
+    });
+
     // Delete task
     const deleteBtn = panel.querySelector('.btn-delete-task');
     if (deleteBtn && !deleteBtn.disabled && !isManageBacTask) {
-        deleteBtn.addEventListener('click', () => {
-        showDialog({
-            title: 'Delete task',
-            content: '<p>Are you sure you want to delete this task?</p>',
-            confirmText: 'Delete',
-            confirmDanger: true,
-            onConfirm: async () => {
-                await TimeWhereDB.deleteTask(taskId);
-                closeDetailPanel();
-                await TaskApp.refresh();
-                showToast('Task deleted', 'success');
-                return true;
+        deleteBtn.addEventListener('click', async () => {
+            const task = await TimeWhereDB.getTaskById(taskId);
+            if (task?.recurrence_series_id) {
+                showDialog({
+                    title: '删除周期任务',
+                    content: `
+                        <p>请选择删除范围。</p>
+                        <div class="recurrence-delete-options">
+                            <label><input type="radio" name="recurrenceDeleteScope" value="single" checked> 删除本次</label>
+                            <label><input type="radio" name="recurrenceDeleteScope" value="future"> 删除本次及之后</label>
+                            <label><input type="radio" name="recurrenceDeleteScope" value="all"> 删除全部</label>
+                        </div>`,
+                    confirmText: '删除',
+                    confirmDanger: true,
+                    onConfirm: async () => {
+                        const scope = document.querySelector('input[name="recurrenceDeleteScope"]:checked')?.value || 'single';
+                        await TimeWhereDB.deleteRecurringTaskScope(taskId, scope);
+                        closeDetailPanel();
+                        await TaskApp.refresh();
+                        showToast('周期任务已删除', 'success');
+                        return true;
+                    }
+                });
+                return;
             }
-        });
+            showDialog({
+                title: 'Delete task',
+                content: '<p>Are you sure you want to delete this task?</p>',
+                confirmText: 'Delete',
+                confirmDanger: true,
+                onConfirm: async () => {
+                    await TimeWhereDB.deleteTask(taskId);
+                    closeDetailPanel();
+                    await TaskApp.refresh();
+                    showToast('Task deleted', 'success');
+                    return true;
+                }
+            });
         });
     }
+}
+
+function getDetailRecurrenceScope(panel) {
+    return panel?.querySelector('[data-field="recurrence_scope"]')?.value || 'single';
 }
 

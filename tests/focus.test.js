@@ -45,6 +45,28 @@ assert('current task defer buttons use data-task-id and data-days', /data-action
     && /data-days="1"/.test(focusScript)
     && /data-days="3"/.test(focusScript)
     && /data-days="7"/.test(focusScript));
+assert('Dashboard current task card renders status labels for all progress states',
+    focusScript.includes('function getTaskStatusLabel')
+    && focusScript.includes("text: '未开始', className: 'not-started'")
+    && focusScript.includes("text: '进行中', className: 'in-progress'")
+    && focusScript.includes("text: '已完成', className: 'completed'")
+    && focusScript.includes('task-status-label'));
+assert('Dashboard current task card renders existing checklist only',
+    focusScript.includes('function renderTaskChecklist')
+    && focusScript.includes('if (checklist.length === 0) return')
+    && focusScript.includes('current-task-checklist-item')
+    && focusScript.includes('data-action="toggle-current-checklist"'));
+assert('Dashboard checklist toggle uses delegated action and updateChecklist',
+    focusScript.includes("action === 'toggle-current-checklist'")
+    && focusScript.includes('toggleCurrentTaskChecklist')
+    && focusScript.includes('TimeWhereDB.updateChecklist(taskId, checklist)'));
+assert('Dashboard defer buttons are in right-aligned action controls',
+    focusScript.includes('task-action-controls')
+    && focusScript.includes('defer-button-group')
+    && focusScript.includes('defer-label')
+    && focusScript.includes('defer-options')
+    && focusScript.includes('>1天</button>')
+    && /task-action-controls[\s\S]*progressBtns[\s\S]*deferHtml/.test(focusScript));
 assert('delegated click listener handles Focus actions', focusScript.includes("document.addEventListener('click', handleFocusDelegatedClick)")
     && focusScript.includes('function handleFocusDelegatedClick'));
 assert('Dashboard weekly task list opens Planner task detail instead of toggling completion', focusScript.includes('data-action="open-task-detail"')
@@ -55,7 +77,18 @@ assert('Dashboard weekly task list opens Planner task detail instead of toggling
 assert('ManageBac source tasks render non-clickable defer blocked text', focusScript.includes('isManageBacSourceTask')
     && focusScript.includes('defer-blocked-text')
     && focusScript.includes('ManageBac 来源任务不能延后'));
-assert('ManageBac source defer branch does not render defer buttons', /const deferHtml = isManageBacSource \?[\s\S]*defer-blocked-text[\s\S]*<\/div>` : `[\s\S]*data-action="defer"/.test(focusScript));
+assert('ManageBac source defer branch does not render defer buttons',
+    /const deferHtml = isManageBacSource[\s\S]*defer-blocked-text[\s\S]*: `<div class="defer-button-group"[\s\S]*data-action="defer"/.test(focusScript));
+assert('Dashboard current task CSS defines status checklist and action alignment',
+    focusCss.includes('.task-status-label.not-started')
+    && focusCss.includes('.task-status-label.in-progress')
+    && focusCss.includes('.task-status-label.completed')
+    && focusCss.includes('.current-task-checklist')
+    && focusCss.includes('.task-action-controls')
+    && focusCss.includes('.defer-button-group')
+    && focusCss.includes('.defer-options')
+    && /\.defer-button-group\s*\{[\s\S]*border: 1px dashed/.test(focusCss)
+    && focusCss.includes('min-height: 24px'));
 assert('async task actions use try/catch and toast failure paths', /async function startTaskNow[\s\S]*try[\s\S]*catch/.test(focusScript)
     && /async function pauseTask[\s\S]*try[\s\S]*catch/.test(focusScript)
     && /async function completeTaskNow[\s\S]*try[\s\S]*catch/.test(focusScript)
@@ -77,12 +110,14 @@ assert('Dashboard management review auto-applies Arrange through shared helper w
     && focusScript.includes('refreshTaskArrangeReviewEntry')
     && !focusScript.includes('task-arrange.html?source=dashboard_auto')
     && !focusScript.includes('maybeRunTaskArrange'));
-assert('Dashboard calendar column includes Task Arrange Review entry after today tomorrow calendar', focusHtml.includes('gcal-container custom-scrollbar')
+assert('Dashboard calendar column places Task Arrange Review between title and date navigation', focusHtml.includes('gcal-container custom-scrollbar')
     && focusHtml.includes('task-arrange-review-entry')
-    && focusHtml.indexOf('gcal-container custom-scrollbar') < focusHtml.indexOf('task-arrange-review-entry')
+    && focusHtml.indexOf('<h2>日程 (今日 & 明日)</h2>') < focusHtml.indexOf('task-arrange-review-entry')
+    && focusHtml.indexOf('task-arrange-review-entry') < focusHtml.indexOf('class="cal-actions"')
     && focusHtml.includes('data-action="open-task-arrange-review"')
     && focusHtml.includes('taskArrangeReviewBadge')
-    && focusHtml.includes('暂无新的自动调整'));
+    && focusHtml.includes('暂无新的自动调整')
+    && focusCss.includes('.column-calendar .task-arrange-review-entry'));
 assert('Dashboard Task Arrange Review modal marks unread records viewed', focusScript.includes('openTaskArrangeReviewModal')
     && focusScript.includes('renderTaskArrangeReviewRows')
     && focusScript.includes('markUnreadTaskArrangeReviewsViewed')
@@ -277,10 +312,27 @@ assert('Popup current task render includes Dashboard-like card semantics', popup
     && popupScript.includes('deadline')
     && popupScript.includes('task-tags')
     && popupScript.includes('task-actions')
-    && popupScript.includes('defer-row'));
+    && popupScript.includes('task-action-controls'));
+assert('Popup current task card renders status labels for all progress states',
+    popupScript.includes('function getPopupTaskStatusLabel')
+    && popupScript.includes("text: '未开始', className: 'not-started'")
+    && popupScript.includes("text: '进行中', className: 'in-progress'")
+    && popupScript.includes("text: '已完成', className: 'completed'")
+    && popupScript.includes('popup-task-status-label'));
+assert('Popup current task card renders existing checklist only',
+    popupScript.includes('function renderPopupTaskChecklist')
+    && popupScript.includes('if (checklist.length === 0) return')
+    && popupScript.includes('popup-task-checklist-item')
+    && popupScript.includes('data-action="toggle-popup-checklist"'));
+assert('Popup checklist toggle uses delegated action and updateChecklist',
+    popupScript.includes("action === 'toggle-popup-checklist'")
+    && popupScript.includes('togglePopupTaskChecklist')
+    && popupScript.includes('TimeWhereDB.updateChecklist(taskId, checklist)'));
 assert('Popup normal task actions and defer buttons are inside card', popupScript.includes('data-action="start"')
     && popupScript.includes('data-action="pause"')
     && popupScript.includes('data-action="complete"')
+    && popupScript.includes('defer-label')
+    && popupScript.includes('defer-options')
     && popupScript.includes('data-action="defer"')
     && popupScript.includes('data-days="1"')
     && popupScript.includes('data-days="3"')
@@ -290,7 +342,17 @@ assert('Popup defer updates due_date instead of start_date', /async function def
     && !/async function deferTask[\s\S]*updateTask\(taskId, \{ start_date: nextStartDate \}\)/.test(popupScript));
 assert('Popup ManageBac branch renders blocked defer text and no defer buttons', popupScript.includes('isManageBacSourceTask')
     && popupScript.includes('defer-blocked-text')
-    && /const deferHtml = isManageBacSource \?[\s\S]*defer-blocked-text[\s\S]*<\/div>` : `[\s\S]*data-action="defer"/.test(popupScript));
+    && /const deferHtml = isManageBacSource[\s\S]*defer-blocked-text[\s\S]*: `<div class="popup-defer-group"[\s\S]*data-action="defer"/.test(popupScript));
+assert('Popup CSS defines status checklist and compact action controls',
+    popupCss.includes('.popup-task-status-label.not-started')
+    && popupCss.includes('.popup-task-status-label.in-progress')
+    && popupCss.includes('.popup-task-status-label.completed')
+    && popupCss.includes('.popup-task-checklist')
+    && popupCss.includes('.task-action-controls')
+    && popupCss.includes('.popup-defer-group')
+    && popupCss.includes('.defer-options')
+    && /\.popup-defer-group\s*\{[\s\S]*border: 1px dashed/.test(popupCss)
+    && popupCss.includes('min-height: 32px'));
 assert('Popup action success reloads task and header counts', popupScript.includes('await reloadPopup()'));
 assert('Popup action failure shows toast', popupScript.includes('showToast(`操作失败：${error.message}`'));
 assert('Popup CSS no longer contains quick action or stat card styles', !/quick-actions|stats-section|stat-card|action-btn/.test(popupCss));

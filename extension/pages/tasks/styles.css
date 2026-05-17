@@ -2,7 +2,7 @@
 
 :root {
     --bg-app: #f1f5f9;
-    --color-sidebar: #2b56e3;
+    --color-sidebar: #0b2a66;
     --color-context: rgba(255, 255, 255, 0.4);
     --color-purple: #7c4dff;
     --column-bg: rgba(248, 250, 252, 0.5);
@@ -15,7 +15,7 @@
     --border-light: rgba(255, 255, 255, 0.6);
     --border-stroke: rgba(226, 232, 240, 0.8);
 
-    --accent: #2b56e3;
+    --accent: #1d8cf8;
     --red: #ef4444;
     --orange: #f59e0b;
     --green: #10b981;
@@ -78,7 +78,7 @@ body::before {
 .logo-icon {
     width: 36px;
     height: 36px;
-    background: rgba(255,255,255,0.2);
+    background: transparent;
     border-radius: 10px;
     display: flex;
     align-items: center;
@@ -86,6 +86,14 @@ body::before {
     color: white;
     font-size: 20px;
     margin-bottom: 32px;
+}
+
+.logo-mark {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border-radius: 10px;
+    object-fit: cover;
 }
 
 .nav-menu {
@@ -143,7 +151,7 @@ body::before {
 .btn-create-plan {
     width: 100%;
     padding: 10px;
-    background: var(--color-purple);
+    background: var(--accent);
     color: white;
     border: none;
     border-radius: var(--radius-md);
@@ -154,7 +162,7 @@ body::before {
     justify-content: center;
     gap: 8px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(124, 77, 255, 0.3);
+    box-shadow: 0 4px 12px rgba(29, 140, 248, 0.24);
     transition: var(--transition);
 }
 .btn-create-plan:hover { transform: translateY(-2px); filter: brightness(1.1); }
@@ -388,7 +396,7 @@ body::before {
 }
 .icon-btn:hover { background: var(--bg-app); color: var(--text-main); }
 .icon-btn .material-symbols-outlined { font-size: 18px; }
-.icon-btn.filter-active { background: #eff6ff; color: var(--accent); border-color: var(--accent); }
+.icon-btn.filter-active { background: #eaf5ff; color: var(--accent); border-color: var(--accent); }
 
 .view-tabs {
     padding: 0 32px;
@@ -749,19 +757,6 @@ body::before {
     margin-bottom: 8px;
 }
 
-.task-progress-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--text-muted);
-    padding: 0;
-    flex-shrink: 0;
-    transition: var(--transition);
-}
-.task-progress-btn:hover { color: var(--accent); }
-.task-progress-btn.progress-done { color: var(--green); }
-.task-progress-btn .material-symbols-outlined { font-size: 20px; }
-
 .task-title {
     font-size: 13px;
     font-weight: 500;
@@ -829,6 +824,12 @@ body::before {
 .status-today   { background: #fef3c7; color: #b45309; }
 .status-timed   { background: #eff6ff; color: #2563eb; }
 .status-plan    { background: #eef2ff; color: #4f46e5; }
+.status-recurrence,
+.task-recurrence-badge,
+.task-list-recurrence {
+    background: #eaf5ff;
+    color: var(--accent);
+}
 
 .task-priority-badge {
     font-size: 10px;
@@ -886,6 +887,22 @@ body::before {
     display: flex;
     justify-content: flex-end;
     gap: 6px;
+}
+
+.quick-add-recurrence {
+    display: flex;
+    gap: 8px;
+    align-items: end;
+    flex-wrap: wrap;
+}
+
+.quick-add-recurrence .quick-add-field {
+    flex: 1;
+    min-width: 110px;
+}
+
+.quick-add-recurrence-count {
+    max-width: 96px;
 }
 
 .quick-add-submit,
@@ -1091,6 +1108,68 @@ body::before {
     background: white;
 }
 .detail-date:focus { border-color: var(--accent); }
+
+.recurrence-detail-section {
+    border: 1px solid var(--border-stroke);
+    border-radius: var(--radius-md);
+    padding: 12px;
+    background: #f8fbff;
+}
+
+.recurrence-series-panel,
+.recurrence-create-panel,
+.recurrence-resize-panel {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.recurrence-series-badge {
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: #eaf5ff;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.recurrence-scope-select {
+    flex: 1;
+    min-width: 140px;
+}
+
+.recurrence-count-input {
+    width: 86px;
+}
+
+.recurrence-count-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.btn-create-recurrence {
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 9px 12px;
+    cursor: pointer;
+}
+
+.btn-create-recurrence:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
 
 .detail-field-row {
     display: flex;
@@ -1327,7 +1406,7 @@ body::before {
     outline: none;
     transition: var(--transition);
 }
-.dialog-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(43, 86, 227, 0.1); }
+.dialog-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(29, 140, 248, 0.12); }
 
 .dialog-actions {
     display: flex;
@@ -1378,6 +1457,12 @@ body::before {
     gap: 8px 12px;
 }
 
+.copy-task-recurrence {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 96px;
+    gap: 10px;
+}
+
 .copy-task-checkbox {
     display: flex;
     align-items: center;
@@ -1390,6 +1475,21 @@ body::before {
 
 .copy-task-checkbox input {
     accent-color: var(--accent);
+}
+
+.recurrence-delete-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.recurrence-delete-options label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
 }
 
 .copy-task-error {
@@ -1636,7 +1736,7 @@ body::before {
     transition: var(--transition);
 }
 .groupby-option:hover { background: var(--bg-app); }
-.groupby-option.active { color: var(--accent); font-weight: 600; background: #eff6ff; }
+.groupby-option.active { color: var(--accent); font-weight: 600; background: #eaf5ff; }
 
 /* ====================
    11. No Plan State
@@ -1741,19 +1841,6 @@ body::before {
 .task-list-row:hover {
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     transform: translateY(-1px);
-}
-.task-list-progress-btn {
-    border: none;
-    background: none;
-    color: var(--text-sub);
-    cursor: pointer;
-    padding: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.task-list-progress-btn:hover {
-    color: var(--accent);
 }
 .task-list-main {
     flex: 1;

@@ -140,6 +140,43 @@ const TimeWhereDB = {
         return candidate > dueDate ? dueDate : candidate;
     },
 
+    normalizeRecurrenceOptions(options = {}) {
+        const frequency = options.frequency || options.recurrence_frequency || 'none';
+        const count = Number(options.count || options.recurrence_count || 0);
+        if (!['weekly', 'monthly'].includes(frequency)) return null;
+        if (!Number.isInteger(count) || count < 2 || count > 12) {
+            throw new Error('周期任务次数必须在 2 到 12 之间');
+        }
+        return { frequency, count };
+    },
+
+    addMonthsClampedISO(dateStr, months) {
+        if (!dateStr) return null;
+        const [year, month, day] = dateStr.split('-').map(Number);
+        if (!year || !month || !day) return null;
+        const target = new Date(year, month - 1 + months, 1);
+        const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+        target.setDate(Math.min(day, lastDay));
+        return this.formatDateISO(target);
+    },
+
+    getRecurrenceDate(anchorDate, frequency, indexOffset) {
+        if (!anchorDate) return null;
+        if (frequency === 'weekly') return this.addDaysISO(anchorDate, indexOffset * 7);
+        if (frequency === 'monthly') return this.addMonthsClampedISO(anchorDate, indexOffset);
+        return anchorDate;
+    },
+
+    cloneRecurringChecklist(checklist = []) {
+        return (checklist || []).map((item, index) => ({
+            ...item,
+            id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+                ? crypto.randomUUID()
+                : `recurrence-check-${Date.now()}-${index}`,
+            checked: false
+        }));
+    },
+
     getGoogleSyncApi() {
         return typeof globalThis !== 'undefined' ? globalThis.TimeWhereGoogleSync : null;
     },
@@ -192,6 +229,28 @@ const TimeWhereDB = {
         return ['start_date', 'due_date', 'deadline', 'plan_id'].some(field =>
             Object.prototype.hasOwnProperty.call(data || {}, field)
         );
+    },
+
+    isRecurringTask(task = {}) {
+        return !!(task && task.recurrence_series_id);
+    },
+
+    async getRecurringSeriesTasks(taskOrId) {
+        const task = typeof taskOrId === 'object' ? taskOrId : await db.tasks.get(taskOrId);
+        if (!task?.recurrence_series_id) return task ? [task] : [];
+        const allTasks = await db.tasks.toArray();
+        const tasks = allTasks.filter(item => item.recurrence_series_id === task.recurrence_series_id);
+        return tasks.sort((a, b) => (a.recurrence_index || 0) - (b.recurrence_index || 0));
+    },
+
+    getRecurringScopeTargets(seriesTasks, currentTask, scope = 'single') {
+        if (!currentTask?.recurrence_series_id) return currentTask ? [currentTask] : [];
+        if (scope === 'all') return seriesTasks;
+        if (scope === 'future') {
+            const currentIndex = currentTask.recurrence_index || 1;
+            return seriesTasks.filter(task => (task.recurrence_index || 1) >= currentIndex);
+        }
+        return seriesTasks.filter(task => String(task.id) === String(currentTask.id));
     },
 
     // ========== Plans ==========
@@ -591,6 +650,16 @@ const TimeWhereDB = {
             created_at: now,
             updated_at: now
         };
+        if (task.recurrence_series_id) {
+            Object.assign(newTask, {
+                recurrence_series_id: task.recurrence_series_id,
+                recurrence_index: task.recurrence_index || null,
+                recurrence_count: task.recurrence_count || null,
+                recurrence_frequency: task.recurrence_frequency || null,
+                recurrence_anchor_start_date: task.recurrence_anchor_start_date || null,
+                recurrence_anchor_due_date: task.recurrence_anchor_due_date || null
+            });
+        }
 
         await db.tasks.add(newTask);
         await this.addSyncLog('task', 'create', newTask);
@@ -599,6 +668,196 @@ const TimeWhereDB = {
             await this.markTaskArrangeDirty('task_created_with_arrange_date', options);
         }
         return newTask;
+    },
+
+    async addRecurringTaskSeries(task, recurrenceOptions = {}, options = {}) {
+        const recurrence = this.normalizeRecurrenceOptions(recurrenceOptions);
+        if (!recurrence) return [await this.addTask(task, options)];
+        if (this.isManageBacSourceTask(task)) {
+            throw new Error('ManageBac 来源任务不能创建周期任务');
+        }
+
+        const firstTaskInput = {
+            ...task,
+            due_date: task.due_date || task.deadline || null
+        };
+        if (!firstTaskInput.due_date) {
+            throw new Error('周期任务必须设置截止日期');
+        }
+        firstTaskInput.start_date = this.getInitialTaskStartDate(firstTaskInput, new Date(this.getNowISO()));
+        const seriesId = this.generateId();
+        const anchorStartDate = firstTaskInput.start_date || null;
+        const anchorDueDate = firstTaskInput.due_date;
+        const created = [];
+
+        for (let index = 1; index <= recurrence.count; index++) {
+            const offset = index - 1;
+            const instanceInput = {
+                ...firstTaskInput,
+                start_date: this.getRecurrenceDate(anchorStartDate, recurrence.frequency, offset),
+                due_date: this.getRecurrenceDate(anchorDueDate, recurrence.frequency, offset),
+                deadline: this.getRecurrenceDate(anchorDueDate, recurrence.frequency, offset),
+                progress: 'not_started',
+                status: 'pending',
+                completed_at: null,
+                checklist: this.cloneRecurringChecklist(firstTaskInput.checklist || []),
+                recurrence_series_id: seriesId,
+                recurrence_index: index,
+                recurrence_count: recurrence.count,
+                recurrence_frequency: recurrence.frequency,
+                recurrence_anchor_start_date: anchorStartDate,
+                recurrence_anchor_due_date: anchorDueDate
+            };
+            created.push(await this.addTask(instanceInput, options));
+        }
+
+        return created;
+    },
+
+    async createRecurringTaskSeriesFromTask(taskId, recurrenceOptions = {}, options = {}) {
+        const task = await db.tasks.get(taskId);
+        if (!task) throw new Error('找不到任务');
+        if (this.isManageBacSourceTask(task)) throw new Error('ManageBac 来源任务不能创建周期任务');
+        if (task.recurrence_series_id) throw new Error('该任务已经属于周期任务');
+        const recurrence = this.normalizeRecurrenceOptions(recurrenceOptions);
+        if (!recurrence) return [task];
+        const dueDate = task.due_date || task.deadline || null;
+        if (!dueDate) throw new Error('周期任务必须设置截止日期');
+
+        const anchorStartDate = this.getInitialTaskStartDate({ ...task, due_date: dueDate }, new Date(this.getNowISO()));
+        const seriesId = this.generateId();
+        const sharedSeriesFields = {
+            recurrence_series_id: seriesId,
+            recurrence_index: 1,
+            recurrence_count: recurrence.count,
+            recurrence_frequency: recurrence.frequency,
+            recurrence_anchor_start_date: anchorStartDate,
+            recurrence_anchor_due_date: dueDate,
+            start_date: anchorStartDate,
+            due_date: dueDate,
+            deadline: dueDate
+        };
+        const first = await this.updateTask(taskId, sharedSeriesFields, options);
+        const created = [first];
+
+        for (let index = 2; index <= recurrence.count; index++) {
+            const offset = index - 1;
+            const instanceInput = {
+                ...task,
+                id: undefined,
+                start_date: this.getRecurrenceDate(anchorStartDate, recurrence.frequency, offset),
+                due_date: this.getRecurrenceDate(dueDate, recurrence.frequency, offset),
+                deadline: this.getRecurrenceDate(dueDate, recurrence.frequency, offset),
+                progress: 'not_started',
+                status: 'pending',
+                completed_at: null,
+                checklist: this.cloneRecurringChecklist(task.checklist || []),
+                recurrence_series_id: seriesId,
+                recurrence_index: index,
+                recurrence_count: recurrence.count,
+                recurrence_frequency: recurrence.frequency,
+                recurrence_anchor_start_date: anchorStartDate,
+                recurrence_anchor_due_date: dueDate
+            };
+            delete instanceInput.google_task_id;
+            created.push(await this.addTask(instanceInput, options));
+        }
+
+        return created;
+    },
+
+    async resizeRecurringTaskSeries(taskId, newCount, options = {}) {
+        const task = await db.tasks.get(taskId);
+        if (!task) throw new Error('找不到任务');
+        if (this.isManageBacSourceTask(task)) throw new Error('ManageBac 来源任务不能调整周期任务');
+        if (!task.recurrence_series_id) throw new Error('该任务不属于周期任务');
+
+        const targetCount = Number(newCount);
+        if (!Number.isInteger(targetCount) || targetCount < 2 || targetCount > 12) {
+            throw new Error('周期任务次数必须在 2 到 12 之间');
+        }
+
+        const seriesTasks = await this.getRecurringSeriesTasks(task);
+        if (!seriesTasks.length) throw new Error('找不到周期任务系列');
+        const frequency = task.recurrence_frequency || seriesTasks[0].recurrence_frequency;
+        if (!['weekly', 'monthly'].includes(frequency)) {
+            throw new Error('周期任务频率无效');
+        }
+
+        const currentMaxIndex = Math.max(...seriesTasks.map(item => item.recurrence_index || 1));
+        const anchorTask = seriesTasks[0];
+        const anchorStartDate = task.recurrence_anchor_start_date || anchorTask.recurrence_anchor_start_date || anchorTask.start_date || null;
+        const anchorDueDate = task.recurrence_anchor_due_date || anchorTask.recurrence_anchor_due_date || anchorTask.due_date || anchorTask.deadline || null;
+        if (!anchorDueDate) throw new Error('周期任务必须设置截止日期');
+
+        const deleted = [];
+        const created = [];
+        if (targetCount < currentMaxIndex) {
+            const tailTasks = seriesTasks.filter(item => (item.recurrence_index || 1) > targetCount);
+            const completedTailTask = tailTasks.find(item => item.progress === 'completed' || !!item.completed_at);
+            if (completedTailTask) {
+                throw new Error('不能减少到该次数：后续周期任务中已有已完成实例');
+            }
+            for (const tailTask of tailTasks) {
+                await this.deleteTask(tailTask.id, options);
+                deleted.push(tailTask);
+            }
+        }
+
+        const template = anchorTask;
+        if (targetCount > currentMaxIndex) {
+            for (let index = currentMaxIndex + 1; index <= targetCount; index++) {
+                const offset = index - 1;
+                const instanceInput = {
+                    ...template,
+                    id: undefined,
+                    start_date: this.getRecurrenceDate(anchorStartDate, frequency, offset),
+                    due_date: this.getRecurrenceDate(anchorDueDate, frequency, offset),
+                    deadline: this.getRecurrenceDate(anchorDueDate, frequency, offset),
+                    progress: 'not_started',
+                    status: 'pending',
+                    completed_at: null,
+                    checklist: this.cloneRecurringChecklist(template.checklist || []),
+                    recurrence_series_id: task.recurrence_series_id,
+                    recurrence_index: index,
+                    recurrence_count: targetCount,
+                    recurrence_frequency: frequency,
+                    recurrence_anchor_start_date: anchorStartDate,
+                    recurrence_anchor_due_date: anchorDueDate
+                };
+                delete instanceInput.google_task_id;
+                created.push(await this.addTask(instanceInput, options));
+            }
+        }
+
+        const remainingTasks = (await this.getRecurringSeriesTasks(task))
+            .filter(item => (item.recurrence_index || 1) <= targetCount);
+        const updated = [];
+        for (const remainingTask of remainingTasks) {
+            if (remainingTask.recurrence_count !== targetCount) {
+                updated.push(await this.updateTask(remainingTask.id, { recurrence_count: targetCount }, options));
+            } else {
+                updated.push(remainingTask);
+            }
+        }
+
+        return { updated, created, deleted, recurrence_count: targetCount };
+    },
+
+    getChecklistProgressUpdate(checklist = [], existingTask = {}) {
+        if (!Array.isArray(checklist) || checklist.length === 0) return {};
+        const checkedCount = checklist.filter(item => item && item.checked === true).length;
+        if (checkedCount === 0) {
+            return { progress: 'not_started', status: 'pending', completed_at: null };
+        }
+        if (checkedCount === checklist.length) {
+            return {
+                progress: 'completed',
+                status: 'completed',
+                completed_at: existingTask.completed_at || this.getNowISO()
+            };
+        }
+        return { progress: 'in_progress', status: 'in_progress', completed_at: null };
     },
 
     async updateTask(id, data, options = {}) {
@@ -628,6 +887,13 @@ const TimeWhereDB = {
         if (data.deadline !== undefined && data.due_date === undefined) {
             updateData.due_date = data.deadline;
         }
+        if (
+            Object.prototype.hasOwnProperty.call(data, 'checklist') &&
+            !Object.prototype.hasOwnProperty.call(data, 'progress') &&
+            !Object.prototype.hasOwnProperty.call(data, 'status')
+        ) {
+            Object.assign(updateData, this.getChecklistProgressUpdate(data.checklist, existingTask));
+        }
 
         await db.tasks.update(id, updateData);
         const updatedTask = await db.tasks.get(id);
@@ -639,12 +905,77 @@ const TimeWhereDB = {
         return updatedTask;
     },
 
+    getDayDeltaISO(fromDate, toDate) {
+        if (!fromDate || !toDate) return null;
+        const from = new Date(`${fromDate}T00:00:00`);
+        const to = new Date(`${toDate}T00:00:00`);
+        if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+        return Math.round((to.getTime() - from.getTime()) / 86400000);
+    },
+
+    buildRecurringScopedUpdates(currentTask, targetTask, data = {}) {
+        const updates = { ...data };
+        const startDelta = Object.prototype.hasOwnProperty.call(data, 'start_date')
+            ? this.getDayDeltaISO(currentTask.start_date || null, data.start_date || null)
+            : null;
+        const dueDelta = Object.prototype.hasOwnProperty.call(data, 'due_date')
+            ? this.getDayDeltaISO(currentTask.due_date || currentTask.deadline || null, data.due_date || null)
+            : null;
+        const deadlineDelta = Object.prototype.hasOwnProperty.call(data, 'deadline')
+            ? this.getDayDeltaISO(currentTask.deadline || currentTask.due_date || null, data.deadline || null)
+            : null;
+
+        if (String(targetTask.id) !== String(currentTask.id)) {
+            if (startDelta !== null) updates.start_date = this.addDaysISO(targetTask.start_date, startDelta);
+            if (dueDelta !== null) updates.due_date = this.addDaysISO(targetTask.due_date || targetTask.deadline, dueDelta);
+            if (deadlineDelta !== null) updates.deadline = this.addDaysISO(targetTask.deadline || targetTask.due_date, deadlineDelta);
+            if (Object.prototype.hasOwnProperty.call(data, 'checklist')) {
+                updates.checklist = this.cloneRecurringChecklist(data.checklist || []);
+            }
+        }
+
+        return updates;
+    },
+
+    async updateRecurringTaskScope(id, data, scope = 'single', options = {}) {
+        const currentTask = await db.tasks.get(id);
+        if (!currentTask) throw new Error('找不到任务');
+        if (!currentTask.recurrence_series_id || scope === 'single') {
+            return [await this.updateTask(id, data, options)];
+        }
+
+        const seriesTasks = await this.getRecurringSeriesTasks(currentTask);
+        const targets = this.getRecurringScopeTargets(seriesTasks, currentTask, scope);
+        const updated = [];
+        for (const target of targets) {
+            const scopedUpdates = this.buildRecurringScopedUpdates(currentTask, target, data);
+            updated.push(await this.updateTask(target.id, scopedUpdates, options));
+        }
+        return updated;
+    },
+
     async deleteTask(id, options = {}) {
         const task = await db.tasks.get(id);
         this.assertTaskWritable(task, options);
         await db.tasks.delete(id);
         await this.addSyncLog('task', 'delete', task);
         await this.markGoogleSyncDeleted('tasks', id, task, options);
+    },
+
+    async deleteRecurringTaskScope(id, scope = 'single', options = {}) {
+        const task = await db.tasks.get(id);
+        if (!task) return [];
+        if (!task.recurrence_series_id || scope === 'single') {
+            await this.deleteTask(id, options);
+            return [task];
+        }
+
+        const seriesTasks = await this.getRecurringSeriesTasks(task);
+        const targets = this.getRecurringScopeTargets(seriesTasks, task, scope);
+        for (const target of targets) {
+            await this.deleteTask(target.id, options);
+        }
+        return targets;
     },
 
     async completeTask(id) {

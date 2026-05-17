@@ -136,14 +136,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // Progress toggle button
-            const progressBtn = e.target.closest('.task-progress-btn');
-            if (progressBtn) {
-                e.stopPropagation();
-                const taskId = progressBtn.dataset.taskId;
-                await cycleTaskProgress(taskId);
-                return;
-            }
-
             // Task card click → open detail panel
             const card = e.target.closest('.task-card');
             if (card) {
@@ -206,14 +198,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const listView = document.getElementById('taskListView');
     if (listView) {
         listView.addEventListener('click', async (e) => {
-            const progressBtn = e.target.closest('.task-list-progress-btn');
-            if (progressBtn) {
-                e.stopPropagation();
-                const taskId = progressBtn.dataset.taskId;
-                await cycleTaskProgress(taskId);
-                return;
-            }
-
             const row = e.target.closest('.task-list-row');
             if (row) {
                 const taskId = row.dataset.taskId;

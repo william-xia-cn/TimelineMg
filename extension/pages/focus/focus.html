@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TimeWhere - Focus Dashboard</title>
+    <link rel="icon" type="image/png" href="../../icons/icon48.png">
     <!-- Local Fonts -->
     <link rel="stylesheet" href="../../shared/styles/fonts.css">
     <!-- Local Icons -->
@@ -16,7 +17,7 @@
         <!-- 导航栏 -->
         <aside class="sidebar">
             <div class="logo">
-                <div class="logo-icon"><span class="material-symbols-outlined">change_history</span></div>
+                <div class="logo-icon"><img src="../../icons/icon128.png" alt="TimeWhere" class="logo-mark"></div>
             </div>
             <nav class="nav-menu">
                 <a href="focus.html" class="nav-item active" title="仪表盘"><span class="material-symbols-outlined">grid_view</span></a>
@@ -50,6 +51,14 @@
             <section class="board-column column-calendar double-width">
                 <div class="column-header">
                     <h2>日程 (今日 & 明日)</h2>
+                    <button class="task-arrange-review-entry" data-action="open-task-arrange-review">
+                        <span class="material-symbols-outlined">rule_settings</span>
+                        <span class="task-arrange-review-copy">
+                            <strong>Task Arrange Review</strong>
+                            <small id="taskArrangeReviewStatus">暂无新的自动调整</small>
+                        </span>
+                        <span class="task-arrange-review-badge" id="taskArrangeReviewBadge" hidden>0 项调整</span>
+                    </button>
                     <div class="cal-actions">
                         <button class="icon-btn"><span class="material-symbols-outlined">chevron_left</span></button>
                         <span id="cal-date-range"></span>
@@ -159,14 +168,6 @@
                         </div>
                     </div>
                 </div>
-                <button class="task-arrange-review-entry" data-action="open-task-arrange-review">
-                    <span class="material-symbols-outlined">rule_settings</span>
-                    <span class="task-arrange-review-copy">
-                        <strong>Task Arrange Review</strong>
-                        <small id="taskArrangeReviewStatus">暂无新的自动调整</small>
-                    </span>
-                    <span class="task-arrange-review-badge" id="taskArrangeReviewBadge" hidden>0 项调整</span>
-                </button>
             </section>
 
             <!-- 第5列：消息流 -->

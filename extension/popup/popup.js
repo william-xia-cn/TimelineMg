@@ -115,6 +115,8 @@ function renderCurrentTaskCard(task, index, expandedIndex = 0) {
     const pCls = priorityClass(task.priority);
     const taskId = escapeAttribute(task.id);
     const isExpanded = index === expandedIndex;
+    const statusLabel = getPopupTaskStatusLabel(task.progress);
+    const checklistHtml = renderPopupTaskChecklist(task);
 
     const progressBtns = isInProgress
         ? `<button class="btn-micro" data-action="pause" data-task-id="${taskId}">暂停</button>
@@ -122,16 +124,15 @@ function renderCurrentTaskCard(task, index, expandedIndex = 0) {
         : `<button class="btn-micro primary" data-action="start" data-task-id="${taskId}">开始</button>
            <button class="btn-micro" data-action="complete" data-task-id="${taskId}">完成</button>`;
 
-    const deferHtml = isManageBacSource ? `
-        <div class="defer-row">
+    const deferHtml = isManageBacSource
+        ? `<span class="defer-blocked-text">ManageBac 来源任务不能延后</span>`
+        : `<div class="popup-defer-group" aria-label="延后">
             <span class="defer-label">延后</span>
-            <span class="defer-blocked-text">ManageBac 来源任务不能延后</span>
-        </div>` : `
-        <div class="defer-row">
-            <span class="defer-label">延后</span>
-            <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="1">1天</button>
-            <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="3">3天</button>
-            <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="7">7天</button>
+            <div class="defer-options">
+                <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="1">1天</button>
+                <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="3">3天</button>
+                <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="7">7天</button>
+            </div>
         </div>`;
 
     const tags = [
@@ -146,21 +147,50 @@ function renderCurrentTaskCard(task, index, expandedIndex = 0) {
                 <div class="task-title-row">
                     <span class="status-dot ${isInProgress ? 'pulsing' : 'pending'}"></span>
                     <span class="task-title">${escapeHTML(task.title || '无标题任务')}</span>
+                    <span class="popup-task-status-label ${statusLabel.className}">${statusLabel.text}</span>
                 </div>
                 <span class="material-symbols-outlined expand-icon">expand_more</span>
             </summary>
             <div class="current-task-info">
                 ${task.notes ? `<div class="task-notes">${escapeHTML(task.notes)}</div>` : ''}
+                ${checklistHtml}
                 <div class="task-meta">
                     <span class="priority-badge ${pCls}">${escapeHTML(pLabel)}</span>
                     <span class="duration">${task.duration || 45}分钟</span>
                     ${dueStr ? `<span class="deadline">截止: ${formatDate(dueStr)}</span>` : ''}
                 </div>
                 ${tags ? `<div class="task-tags">${tags}</div>` : ''}
-                <div class="task-actions">${progressBtns}</div>
-                ${deferHtml}
+                <div class="task-actions">
+                    ${isManageBacSource ? `<div class="task-action-left">${deferHtml}</div>` : ''}
+                    <div class="task-action-controls">
+                        ${progressBtns}
+                        ${!isManageBacSource ? deferHtml : ''}
+                    </div>
+                </div>
             </div>
         </details>`;
+}
+
+function getPopupTaskStatusLabel(progress) {
+    if (progress === 'completed') return { text: '已完成', className: 'completed' };
+    if (progress === 'in_progress') return { text: '进行中', className: 'in-progress' };
+    return { text: '未开始', className: 'not-started' };
+}
+
+function renderPopupTaskChecklist(task) {
+    const checklist = Array.isArray(task.checklist) ? task.checklist : [];
+    if (checklist.length === 0) return '';
+    const taskId = escapeAttribute(task.id);
+    const items = checklist.map(item => {
+        const itemId = escapeAttribute(item.id || '');
+        const title = escapeHTML(item.title || '');
+        return `
+            <label class="popup-task-checklist-item">
+                <input type="checkbox" data-action="toggle-popup-checklist" data-task-id="${taskId}" data-checklist-id="${itemId}" ${item.checked ? 'checked' : ''}>
+                <span>${title}</span>
+            </label>`;
+    }).join('');
+    return `<div class="popup-task-checklist">${items}</div>`;
 }
 
 function renderNoTask() {
@@ -253,6 +283,7 @@ async function handleTaskActionClick(event) {
         if (action === 'pause') await pauseTask(taskId);
         if (action === 'complete') await completeTask(taskId);
         if (action === 'defer') await deferTask(taskId, parseInt(actionEl.dataset.days || '1', 10));
+        if (action === 'toggle-popup-checklist') await togglePopupTaskChecklist(taskId, actionEl.dataset.checklistId);
     });
 }
 
@@ -303,6 +334,15 @@ async function deferTask(taskId, days) {
     target.setDate(target.getDate() + days);
     await TimeWhereDB.updateTask(taskId, { due_date: formatDateISO(target) });
     showToast(`任务已延后 ${days} 天`, 'info');
+}
+
+async function togglePopupTaskChecklist(taskId, checklistId) {
+    const task = await TimeWhereDB.getTaskById(taskId);
+    const checklist = (task?.checklist || []).map(item =>
+        String(item.id) === String(checklistId) ? { ...item, checked: !item.checked } : item
+    );
+    await TimeWhereDB.updateChecklist(taskId, checklist);
+    showToast('清单已更新', 'info');
 }
 
 function showToast(message, type = 'info') {

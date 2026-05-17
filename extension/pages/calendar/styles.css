@@ -1,7 +1,7 @@
 /* 与 Dashboard 统一的设计系统重构：高品质毛玻璃与动态效果 */
 :root {
     --bg-app: #f1f5f9;                 /* 底层大背景 */
-    --color-sidebar: #2b56e3;          /* 根据日历图片里的侧边栏，为明亮的蓝色 */
+    --color-sidebar: #0b2a66;          /* 深蓝科技感侧边栏 */
     --column-bg: rgba(255, 255, 255, 0.75); /* 主容器毛玻璃背景 */
     --card-bg: rgba(255, 255, 255, 0.9);
     
@@ -12,8 +12,8 @@
     --border-stroke: #e2e8f0;
 
     /* 色板 */
-    --accent: #2b56e3;   /* 主题蓝 */
-    --accent-glow: rgba(43, 86, 227, 0.4);
+    --accent: #1d8cf8;   /* 新图标亮蓝 */
+    --accent-glow: rgba(29, 140, 248, 0.32);
     --red: #ef4444;
     --orange: #f59e0b;
     --yellow: #facc15;
@@ -77,7 +77,7 @@ body::before {
 .logo-icon {
     width: 36px;
     height: 36px;
-    background: linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05));
+    background: transparent;
     border-radius: 10px;
     display: flex;
     align-items: center;
@@ -85,6 +85,14 @@ body::before {
     color: white;
     font-size: 20px;
     margin-bottom: 32px;
+}
+
+.logo-mark {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border-radius: 10px;
+    object-fit: cover;
 }
 
 .nav-menu {

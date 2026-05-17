@@ -121,6 +121,20 @@ async function showCopyTaskDialog(taskId) {
                     <label class="copy-task-checkbox"><input type="checkbox" id="copyTaskChecklist" checked> 复制清单</label>
                     <label class="copy-task-checkbox"><input type="checkbox" id="copyTaskLabels" checked> 复制标签</label>
                 </div>
+                <div class="copy-task-recurrence" aria-label="周期任务">
+                    <label class="copy-task-field">
+                        <span>重复</span>
+                        <select id="copyTaskRecurrenceFrequency" class="dialog-input">
+                            <option value="none">不重复</option>
+                            <option value="weekly">每周</option>
+                            <option value="monthly">每月</option>
+                        </select>
+                    </label>
+                    <label class="copy-task-field">
+                        <span>次数</span>
+                        <input type="number" id="copyTaskRecurrenceCount" class="dialog-input" min="2" max="12" value="2" disabled>
+                    </label>
+                </div>
                 <div class="copy-task-error" id="copyTaskError" role="alert" hidden></div>
             </div>`,
         onConfirm: async () => {
@@ -141,6 +155,8 @@ async function showCopyTaskDialog(taskId) {
             const copyNotes = document.getElementById('copyTaskNotes')?.checked !== false;
             const copyChecklist = document.getElementById('copyTaskChecklist')?.checked !== false;
             const copyLabels = document.getElementById('copyTaskLabels')?.checked !== false;
+            const recurrenceFrequency = document.getElementById('copyTaskRecurrenceFrequency')?.value || 'none';
+            const recurrenceCount = parseInt(document.getElementById('copyTaskRecurrenceCount')?.value || '0', 10);
 
             const payload = buildCopiedTaskPayload(task, {
                 title,
@@ -151,12 +167,20 @@ async function showCopyTaskDialog(taskId) {
                 copyLabels
             });
 
-            const newTask = await TimeWhereDB.addTask(payload);
+            const createdTasks = recurrenceFrequency === 'weekly' || recurrenceFrequency === 'monthly'
+                ? await TimeWhereDB.addRecurringTaskSeries(payload, { frequency: recurrenceFrequency, count: recurrenceCount })
+                : [await TimeWhereDB.addTask(payload)];
+            const newTask = createdTasks[0];
             await TaskApp.refresh();
             showToast('任务已复制', 'success');
             if (newTask?.id) openDetailPanel(newTask.id);
             return true;
         }
+    });
+
+    document.getElementById('copyTaskRecurrenceFrequency')?.addEventListener('change', (event) => {
+        const countInput = document.getElementById('copyTaskRecurrenceCount');
+        if (countInput) countInput.disabled = event.target.value === 'none';
     });
 }
 

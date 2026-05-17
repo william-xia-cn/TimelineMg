@@ -316,6 +316,8 @@ function createTaskCard(task, opts = {}) {
     const isManageBacSource = TimeWhereDB.isManageBacSourceTask?.(task) === true;
 
     const dotClass = isInProgress ? 'pulsing' : 'pending';
+    const statusLabel = getTaskStatusLabel(task.progress);
+    const checklistHtml = renderTaskChecklist(task);
 
     // 标签
     let tagsHtml = '';
@@ -330,16 +332,15 @@ function createTaskCard(task, opts = {}) {
         : `<button class="btn-micro primary" data-action="start" data-task-id="${taskId}">开始</button>
            <button class="btn-micro" data-action="complete" data-task-id="${taskId}">完成</button>`;
 
-    const deferHtml = isManageBacSource ? `
-        <div class="defer-row">
+    const deferHtml = isManageBacSource
+        ? `<span class="defer-blocked-text">ManageBac 来源任务不能延后</span>`
+        : `<div class="defer-button-group" aria-label="延后">
             <span class="defer-label">延后</span>
-            <span class="defer-blocked-text">ManageBac 来源任务不能延后</span>
-        </div>` : `
-        <div class="defer-row">
-            <span class="defer-label">延后</span>
-            <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="1">1天</button>
-            <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="3">3天</button>
-            <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="7">7天</button>
+            <div class="defer-options">
+                <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="1">1天</button>
+                <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="3">3天</button>
+                <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="7">7天</button>
+            </div>
         </div>`;
 
     return `
@@ -349,11 +350,13 @@ function createTaskCard(task, opts = {}) {
                     <div class="task-title">
                         <span class="status-dot ${dotClass}"></span>
                         <h4>${title}</h4>
+                        <span class="task-status-label ${statusLabel.className}">${statusLabel.text}</span>
                     </div>
                     <span class="material-symbols-outlined expand-icon">expand_more</span>
                 </summary>
                 <div class="task-details">
                     ${notes ? `<p>${notes}</p>` : ''}
+                    ${checklistHtml}
                     <div class="task-meta-tags">
                         <span class="priority-badge ${pClass}">${pLabel}</span>
                         ${startDateText ? `<span class="meta-item start-date-item"><span class="material-symbols-outlined">play_arrow</span>开始 ${startDateText}</span>` : ''}
@@ -361,11 +364,38 @@ function createTaskCard(task, opts = {}) {
                         ${deadlineText ? `<span class="meta-item deadline-item">截止 ${deadlineText}</span>` : ''}
                         ${tagsHtml}
                     </div>
-                    <div class="task-action-row">${progressBtns}</div>
-                    ${deferHtml}
+                    <div class="task-action-row">
+                        <div class="task-action-left">${isManageBacSource ? deferHtml : ''}</div>
+                        <div class="task-action-controls">
+                            ${progressBtns}
+                            ${!isManageBacSource ? deferHtml : ''}
+                        </div>
+                    </div>
                 </div>
             </details>
         </div>`;
+}
+
+function getTaskStatusLabel(progress) {
+    if (progress === 'completed') return { text: '已完成', className: 'completed' };
+    if (progress === 'in_progress') return { text: '进行中', className: 'in-progress' };
+    return { text: '未开始', className: 'not-started' };
+}
+
+function renderTaskChecklist(task) {
+    const checklist = Array.isArray(task.checklist) ? task.checklist : [];
+    if (checklist.length === 0) return '';
+    const taskId = escapeAttribute(task.id);
+    const items = checklist.map(item => {
+        const itemId = escapeAttribute(item.id || '');
+        const title = escapeHTML(item.title || '');
+        return `
+            <label class="current-task-checklist-item">
+                <input type="checkbox" data-action="toggle-current-checklist" data-task-id="${taskId}" data-checklist-id="${itemId}" ${item.checked ? 'checked' : ''}>
+                <span>${title}</span>
+            </label>`;
+    }).join('');
+    return `<div class="current-task-checklist">${items}</div>`;
 }
 
 async function startTaskNow(taskId) {
@@ -418,6 +448,19 @@ async function deferTask(taskId, days) {
         showToast(`任务已延后 ${days} 天`, 'info');
     } catch (error) {
         showToast(`延后任务失败：${error.message}`, 'error');
+    }
+}
+
+async function toggleCurrentTaskChecklist(taskId, checklistId) {
+    try {
+        const task = await TimeWhereDB.getTaskById(taskId);
+        const checklist = (task?.checklist || []).map(item =>
+            String(item.id) === String(checklistId) ? { ...item, checked: !item.checked } : item
+        );
+        await TimeWhereDB.updateChecklist(taskId, checklist);
+        await loadDashboardData();
+    } catch (error) {
+        showToast(`更新清单失败：${error.message}`, 'error');
     }
 }
 
@@ -1039,6 +1082,11 @@ function handleFocusDelegatedClick(e) {
     if (action === 'submit-daily-journal') {
         e.preventDefault();
         runFocusAction(actionEl, async () => saveDailyJournalFromModal(true));
+        return;
+    }
+    if (action === 'toggle-current-checklist') {
+        e.preventDefault();
+        runFocusAction(actionEl, async () => toggleCurrentTaskChecklist(taskId, actionEl.dataset.checklistId));
         return;
     }
     if (['start', 'pause', 'complete', 'defer'].includes(action)) {

@@ -1,6 +1,19 @@
 /* TimeWhere SVG Icons - Inline SVG replacements for Remix Icon */
 
 /* Icon container - use as span or inline element */
+.material-symbols-outlined {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    height: 1em;
+    overflow: hidden;
+    line-height: 1;
+    color: transparent;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
 .icon {
     display: inline-flex;
     align-items: center;

@@ -2,9 +2,9 @@
 :root {
     --bg-popup: rgba(255, 255, 255, 0.75);
     --bg-card: rgba(255, 255, 255, 0.9);
-    --color-sidebar: #2b56e3;
-    --accent: #6366f1;
-    --accent-glow: rgba(99, 102, 241, 0.4);
+    --color-sidebar: #0b2a66;
+    --accent: #1d8cf8;
+    --accent-glow: rgba(29, 140, 248, 0.32);
     --text-main: #1e293b;
     --text-sub: #64748b;
     --red: #ef4444;
@@ -65,13 +65,21 @@ body {
 .logo-icon {
     width: 32px;
     height: 32px;
-    background: linear-gradient(135deg, var(--accent), var(--purple));
+    background: transparent;
     border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
     font-size: 16px;
+}
+
+.logo-mark {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border-radius: 8px;
+    object-fit: cover;
 }
 
 .app-name {
@@ -93,7 +101,7 @@ body {
     gap: 4px;
     padding: 5px 7px;
     border-radius: 999px;
-    background: rgba(99, 102, 241, 0.1);
+    background: rgba(29, 140, 248, 0.1);
     color: var(--text-sub);
     font-size: 11px;
     font-weight: 700;
@@ -265,6 +273,7 @@ body {
     align-items: center;
     gap: 8px;
     margin-bottom: 8px;
+    flex-wrap: wrap;
 }
 
 .status-dot {
@@ -290,6 +299,29 @@ body {
     color: var(--text-main);
     line-height: 1.3;
     overflow-wrap: anywhere;
+}
+
+.popup-task-status-label {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+.popup-task-status-label.not-started {
+    background: #fee2e2;
+    color: var(--red);
+}
+.popup-task-status-label.in-progress {
+    background: #eaf5ff;
+    color: var(--accent);
+}
+.popup-task-status-label.completed {
+    background: #dcfce7;
+    color: var(--green);
 }
 
 .task-meta {
@@ -354,17 +386,87 @@ body {
 
 .task-tag.danger { background: #fee2e2; color: var(--red); }
 .task-tag.today { background: #dbeafe; color: var(--blue); }
-.task-tag.timed { background: #ede9fe; color: var(--purple); }
+.task-tag.timed { background: #eaf5ff; color: var(--accent); }
+
+.popup-task-checklist {
+    display: grid;
+    gap: 6px;
+}
+
+.popup-task-checklist-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-main);
+    cursor: pointer;
+    user-select: none;
+}
+
+.popup-task-checklist-item input {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--accent);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.popup-task-checklist-item input:checked + span {
+    color: var(--text-sub);
+    text-decoration: line-through;
+}
 
 .task-actions {
     display: flex;
+    align-items: center;
+    justify-content: flex-end;
     gap: 8px;
     margin-top: 2px;
+    flex-wrap: wrap;
+}
+
+.task-action-left {
+    flex: 1;
+    min-width: 120px;
+}
+
+.task-action-controls,
+.popup-defer-group {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.popup-defer-group {
+    padding: 4px;
+    border: 1px dashed rgba(148, 163, 184, 0.75);
+    border-radius: 8px;
+}
+
+.defer-label {
+    min-height: 24px;
+    padding: 0 7px;
+    border-radius: 8px;
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    background: white;
+    color: var(--text-sub);
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+}
+
+.defer-options {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .btn-micro {
-    flex: 1;
-    padding: 8px 10px;
+    min-height: 32px;
+    padding: 0 10px;
     border-radius: 8px;
     font-size: 12px;
     font-weight: 700;
@@ -386,23 +488,10 @@ body {
     box-shadow: var(--shadow-sm);
 }
 
-.defer-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding-top: 2px;
-}
-
-.defer-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--text-sub);
-    min-width: 32px;
-}
-
 .btn-defer {
-    padding: 5px 8px;
-    border-radius: 999px;
+    min-height: 24px;
+    padding: 0 7px;
+    border-radius: 8px;
     border: 1px solid rgba(226, 232, 240, 0.9);
     background: white;
     color: var(--text-sub);

@@ -87,6 +87,53 @@ for (const file of materialIconFiles) {
 }
 assert('all static material-symbols-outlined icon names have local SVG mappings', missingIconRefs.length === 0);
 
+const iconCss = read('extension/shared/styles/icons.css');
+assert('material icon placeholders hide raw ligature text before SVG replacement',
+    /\.material-symbols-outlined\s*\{[\s\S]*color:\s*transparent;/.test(iconCss)
+    && /\.material-symbols-outlined\s*\{[\s\S]*width:\s*1em;/.test(iconCss)
+    && /\.material-symbols-outlined\s*\{[\s\S]*overflow:\s*hidden;/.test(iconCss));
+
+const brandedHtmlPages = [
+    'extension/popup/popup.html',
+    'extension/pages/focus/focus.html',
+    'extension/pages/calendar/calendar.html',
+    'extension/pages/tasks/tasks.html',
+    'extension/pages/settings/settings.html',
+    'extension/pages/settings/matrixview.html',
+    'extension/pages/settings/managebac-sync.html',
+    'extension/pages/settings/task-arrange.html'
+];
+assert('internal TimeWhere logo uses PNG app icon instead of change_history ligature',
+    brandedHtmlPages.every(file => {
+        const html = read(file);
+        return /class=["']logo-icon["'][^>]*>\s*<img\b(?=[^>]+class=["']logo-mark["'])(?=[^>]+alt=["']TimeWhere["'])[^>]+>/.test(html)
+            && !/class=["']logo-icon["'][^>]*>\s*<span\b[^>]+material-symbols-outlined[^>]*>\s*change_history\s*<\/span>/.test(html);
+    }));
+assert('branded TimeWhere pages expose a local favicon',
+    brandedHtmlPages.every(file => /<link rel="icon" type="image\/png" href="(?:\.\.\/icons|\.\.\/\.\.\/icons)\/icon48\.png">/.test(read(file))));
+
+const brandCssFiles = [
+    'extension/popup/popup.css',
+    'extension/pages/focus/styles.css',
+    'extension/pages/calendar/styles.css',
+    'extension/pages/tasks/styles.css',
+    'extension/pages/settings/styles.css'
+];
+assert('default brand theme uses deep blue sidebar and bright blue accent',
+    brandCssFiles.every(file => {
+        const css = read(file);
+        return /--color-sidebar:\s*#0b2a66;/.test(css)
+            && /--accent:\s*#1d8cf8;/.test(css)
+            && !/--accent:\s*#6366f1;/.test(css)
+            && !/rgba\(99,\s*102,\s*241/.test(css);
+    }));
+const taskStylesCss = read('extension/pages/tasks/styles.css');
+const createPlanButtonBlock = taskStylesCss.match(/\.btn-create-plan\s*\{([\s\S]*?)\}/)?.[1] || '';
+assert('Planner primary create button follows blue brand accent, not purple',
+    createPlanButtonBlock.includes('background: var(--accent);')
+    && !createPlanButtonBlock.includes('background: var(--color-purple);')
+    && !/rgba\(124,\s*77,\s*255/.test(createPlanButtonBlock));
+
 const requiredAppearanceAssets = [
     'bg.jpg',
     'bg-calm.jpg',

@@ -3,10 +3,10 @@
 ## Project Status
 
 - **Project**: TimeWhere
-- **Version**: package / extension release version `0.1.1`; design-doc version `v2.3`
-- **Stage**: Baseline Stabilized; Google data sync v1 implementation in progress under D-020
-- **Active release/deployment target**: Internal MVP acceptance approved by Product Owner; Phase 1, Phase 2A, and documentation baseline cleanup are complete.
-- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-022 approves an internal testing artifact for `0.1.1` only. Public release, tag, merge, deploy, publish, submit, Chrome Web Store submission, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
+- **Version**: package / extension release version `0.2.0`; design-doc version `v2.3`
+- **Stage**: Baseline Stabilized; Chrome Web Store Private testing material preparation under D-023
+- **Active release/deployment target**: Prepare TimeWhere `0.2.0` Chrome Web Store Private testing submission materials and releaseMg readiness evidence. Internal MVP acceptance, Phase 1, Phase 2A, and documentation baseline cleanup are complete.
+- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-023 approves CWS Private testing material preparation for `0.2.0` only. Actual Chrome Web Store upload, Submit for Review, publish, public listing, tag, merge, deploy, push, release, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
 
 ## Collaboration Model
 
@@ -77,7 +77,7 @@ Escalate to external advisor for:
 
 ### Out Of Scope
 
-- Release, publish, release/artifact upload, deploy, merge, tag, or submit actions without explicit Product Owner approval.
+- Release, publish, Chrome Web Store upload, Submit for Review, release/artifact upload, deploy, merge, push, tag, or submit actions without explicit Product Owner approval.
 - Recording secrets, OAuth client secrets, cookies, tokens, private account data, or private user identifiers in repository documents.
 - Changing product scope, data model, sync behavior, privacy posture, or release standards without Product Owner decision.
 - Google Calendar / Google Tasks integration; Google data sync v1 uses Drive `appDataFolder` only.
@@ -86,18 +86,18 @@ Escalate to external advisor for:
 - Defense / squeezing rules.
 - Background alarm usage outside local task reminders. D-021 approves alarms only for local task reminder notifications.
 - Background alarm based ManageBac ICS subscription sync. Current ManageBac follow-up supports saved link configuration, Dashboard-entry management checks, manual sync, and user-confirmed task creation only.
-- Chrome Web Store submission.
+- Actual Chrome Web Store upload, Submit for Review, publish, or public listing. D-023 approves Private testing material preparation only.
 
 ## Release / Deployment State
 
 | Item | Status |
 |---|---|
-| Candidate version | `0.1.1` |
-| Candidate commit | Source metadata commit pending after internal package generation |
-| Package/artifact | `dist/TimeWhere-0.1.1-internal-20260517-171804.zip` |
-| Artifact hash | SHA256 `945B1656A5DA72F3559F019BE327626AD8C6BBD68D7C29FE057140FCCE17BC0F` |
-| Deployment channel | Internal testing |
-| Review status | Internal MVP acceptance approved by Product Owner |
+| Candidate version | `0.2.0` |
+| Candidate commit | `6a95c88` plus uncommitted working-tree changes; source metadata commit pending before any CWS upload/submit |
+| Package/artifact | `dist/TimeWhere-0.2.0-private-cws-20260518-011449.zip` |
+| Artifact hash | SHA256 `62DCB492E94CC0D20E6BB690906A4246024C9741D6FC049766CC5AE6780F95BF` |
+| Deployment channel | Chrome Web Store Private testing material preparation |
+| Review status | releaseMg CWS Private readiness evidence prepared; Product Owner decision still required |
 | Public release | NOT_STARTED; explicitly out of MVP scope |
 | Tag | NOT_APPROVED |
 
@@ -107,6 +107,7 @@ Escalate to external advisor for:
 |---|---|---|---|
 | Import source mismatch | CLOSED | Product Owner | Product Owner accepted `_imports/governance-template/README.md` and `MIGRATION_GUIDE.md` as partial equivalents for missing `EXPORT_README.md` and `SOURCE_INVENTORY.md`. |
 | Public release confusion | OPEN | Product&Project Mg / Build&Test / releaseMg | Internal MVP acceptance is approved, but public release, Chrome Web Store submission, tag, push, merge, deploy, publish, upload, and submit remain explicitly unapproved. |
+| Candidate source traceability | OPEN | Product Owner / Build&Test / releaseMg | `0.2.0` CWS Private artifact was generated from a dirty working tree. Before any CWS upload/submit, Product Owner should approve the commit/staging path or explicitly accept this local-source traceability risk. |
 | Container id documentation mismatch | DECIDED / DOCS PENDING | Product&Project Mg / Build&Test | Product Owner approved string UUID ids for tasks, containers, events, and habits; planner helper records may remain numeric for now. Docs still need cleanup. |
 | Baseline unknowns after pre-governance development | TRIAGED | Product&Project Mg / Build&Test | Read-only code/docs audits are complete. Phase 1 corrective package is approved and ready for Build&Test. |
 | Popup half-implemented task actions | CLOSED | Product&Project Mg | Build&Test implemented DB-backed Popup start/defer behavior; Product&Project Mg review passed; releaseMg narrow recheck returned PASS. |
@@ -146,9 +147,13 @@ Escalate to external advisor for:
 - Active documentation cleanup:
   - `docs/handoffs/outbox/HANDOFF-DOCS-BASELINE-CLEANUP-001.md`
   - `docs/handoffs/outbox/REVIEW-DOCS-BASELINE-CLEANUP-001.md`
+- CWS Private testing material preparation:
+  - `docs/release/RELEASE_GATE_REPORT_CWS_PRIVATE_0.2.0_2026-05-18.md`
+  - `docs/release/CWS_PRIVATE_SUBMISSION_MATERIALS_0.2.0_2026-05-18.md`
+  - `docs/release/cws-assets/0.2.0-private/`
 
 ## Product Owner Decisions Needed
 
 1. Confirm Product Owner name or preferred authority label.
-2. Select the next product, acceptance, or git/version-control work package.
-3. If committing the baseline, approve the branch/stage/commit sequence in `docs/handoffs/outbox/GIT-HYGIENE-COMMIT-PLAN-001.md`.
+2. Decide whether to approve CWS Developer Dashboard upload / Submit for Review for the `0.2.0` Private testing candidate.
+3. Approve the branch/stage/commit sequence for the dirty working tree before any CWS upload/submit, or explicitly accept the local-source traceability risk.

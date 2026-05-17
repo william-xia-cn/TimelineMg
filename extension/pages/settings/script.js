@@ -623,13 +623,200 @@ async function showStoredGoogleSyncConflicts() {
 }
 
 function summarizeGoogleSyncConflict(conflict) {
-    const label = `${conflict.table || 'record'} / ${conflict.id || ''}`;
+    const localRecord = getGoogleSyncConflictRecord(conflict, 'local');
+    const cloudRecord = getGoogleSyncConflictRecord(conflict, 'cloud');
+    const localSummary = summarizeGoogleSyncBusinessRecord(conflict.table, conflict.id, localRecord);
+    const cloudSummary = summarizeGoogleSyncBusinessRecord(conflict.table, conflict.id, cloudRecord);
+    const displaySummary = localRecord ? localSummary : cloudSummary;
+    const label = `${displaySummary.typeLabel}：${displaySummary.title}`;
     const typeText = {
         local_update_vs_remote_update: '本地和云端都修改过',
         local_update_vs_remote_delete: '本地修改，但云端已删除',
         delete_vs_remote_update: '本地删除，但云端已修改'
     }[conflict.conflict_type] || '同步冲突';
-    return { label, typeText };
+    return { label, typeText, localSummary, cloudSummary, localRecord, cloudRecord };
+}
+
+const GOOGLE_SYNC_TABLE_LABELS = {
+    tasks: '任务',
+    events: '日程',
+    containers: '时间容器',
+    habits: '习惯',
+    plans: 'Plan',
+    buckets: 'Bucket',
+    labels: '标签',
+    daily_journals: '每日总结',
+    settings: '设置'
+};
+
+const GOOGLE_SYNC_SETTING_LABELS = {
+    matrixview_subject_mappings: 'MatrixView 学科映射',
+    managebac_subject_mappings: 'ManageBac 学科映射',
+    managebac_ics_config: 'ManageBac 订阅链接',
+    appearance_background: '外观背景',
+    appearance_avatar: '头像',
+    theme: '主题',
+    start_week_on: '每周开始日',
+    default_duration: '默认时长',
+    default_priority: '默认优先级'
+};
+
+const GOOGLE_SYNC_PROGRESS_LABELS = {
+    not_started: '未开始',
+    in_progress: '进行中',
+    completed: '已完成',
+    pending: '待处理'
+};
+
+function getGoogleSyncConflictRecord(conflict, side) {
+    if (side === 'local') return conflict.local?.record || null;
+    return conflict.cloud?.record || null;
+}
+
+function summarizeGoogleSyncBusinessRecord(table, id, record) {
+    const typeLabel = GOOGLE_SYNC_TABLE_LABELS[table] || table || '记录';
+    if (!record) {
+        return {
+            typeLabel,
+            title: `${typeLabel} ${id || ''}`.trim(),
+            fields: [{ key: 'deleted', label: '状态', value: '已删除' }]
+        };
+    }
+    if (table === 'tasks') {
+        return {
+            typeLabel,
+            title: record.title || `任务 ${id || ''}`.trim(),
+            fields: [
+                { key: 'title', label: '标题', value: record.title || '无标题任务' },
+                { key: 'plan_id', label: 'Plan', value: record.plan_id ? `Plan #${record.plan_id}` : '未指定' },
+                { key: 'start_date', label: '开始日期', value: record.start_date || '无' },
+                { key: 'due_date', label: '截止日期', value: record.due_date || record.deadline || '无' },
+                { key: 'progress', label: '状态', value: GOOGLE_SYNC_PROGRESS_LABELS[record.progress || record.status] || record.progress || record.status || '未开始' },
+                { key: 'priority', label: '优先级', value: record.priority || '默认' },
+                { key: 'notes', label: '说明', value: summarizeGoogleSyncLongText(record.notes) }
+            ]
+        };
+    }
+    if (table === 'events') {
+        return {
+            typeLabel,
+            title: record.title || `日程 ${id || ''}`.trim(),
+            fields: [
+                { key: 'title', label: '标题', value: record.title || '无标题日程' },
+                { key: 'date', label: '日期', value: record.date || '无' },
+                { key: 'time', label: '时间', value: `${record.time_start || '全天'}${record.time_end ? ` - ${record.time_end}` : ''}` },
+                { key: 'repeat', label: '重复', value: record.repeat || 'none' },
+                { key: 'source', label: '来源', value: record.source || 'manual' }
+            ]
+        };
+    }
+    if (table === 'containers') {
+        return {
+            typeLabel,
+            title: record.name || `时间容器 ${id || ''}`.trim(),
+            fields: [
+                { key: 'name', label: '名称', value: record.name || '未命名容器' },
+                { key: 'time', label: '时间', value: `${record.time_start || '无'} - ${record.time_end || '无'}` },
+                { key: 'repeat', label: '重复', value: record.repeat || 'none' },
+                { key: 'enabled', label: '启用', value: record.enabled === false ? '否' : '是' }
+            ]
+        };
+    }
+    if (table === 'habits') {
+        return {
+            typeLabel,
+            title: record.name || record.title || `习惯 ${id || ''}`.trim(),
+            fields: [
+                { key: 'name', label: '名称', value: record.name || record.title || '未命名习惯' },
+                { key: 'frequency', label: '频率', value: record.frequency || 'daily' },
+                { key: 'status_today', label: '今日状态', value: record.status_today || record.status || '未完成' }
+            ]
+        };
+    }
+    if (table === 'plans' || table === 'buckets' || table === 'labels') {
+        return {
+            typeLabel,
+            title: record.name || `${typeLabel} ${id || ''}`.trim(),
+            fields: [
+                { key: 'name', label: '名称', value: record.name || '未命名' },
+                { key: 'plan_id', label: '归属 Plan', value: record.plan_id ? `Plan #${record.plan_id}` : '无' },
+                { key: 'color', label: '颜色', value: record.color || '默认' },
+                { key: 'sort_order', label: '排序', value: record.sort_order ?? '无' }
+            ]
+        };
+    }
+    if (table === 'daily_journals') {
+        return {
+            typeLabel,
+            title: record.date || String(id || '每日总结'),
+            fields: [
+                { key: 'date', label: '日期', value: record.date || id || '无' },
+                { key: 'status', label: '状态', value: record.status || 'snapshot' },
+                { key: 'updated_at', label: '更新时间', value: record.updated_at || '无' }
+            ]
+        };
+    }
+    if (table === 'settings') {
+        const key = record.key || id;
+        return {
+            typeLabel,
+            title: GOOGLE_SYNC_SETTING_LABELS[key] || key || '设置',
+            fields: [
+                { key: 'key', label: '设置项', value: GOOGLE_SYNC_SETTING_LABELS[key] || key || '未知设置' },
+                { key: 'value', label: '值', value: summarizeGoogleSyncSettingValue(key, record.value) }
+            ]
+        };
+    }
+    return {
+        typeLabel,
+        title: record.title || record.name || `${typeLabel} ${id || ''}`.trim(),
+        fields: Object.entries(record).slice(0, 6).map(([key, value]) => ({ key, label: key, value: summarizeGoogleSyncValue(value) }))
+    };
+}
+
+function summarizeGoogleSyncLongText(value) {
+    if (!value) return '无';
+    const text = String(value).trim();
+    if (!text) return '无';
+    return text.length > 48 ? `${text.slice(0, 48)}...` : text;
+}
+
+function summarizeGoogleSyncSettingValue(key, value) {
+    if (key === 'managebac_ics_config') {
+        return value?.link ? '已保存 ManageBac 链接' : '未配置';
+    }
+    if (Array.isArray(value)) return `${value.length} 项`;
+    if (value && typeof value === 'object') return `${Object.keys(value).length} 项`;
+    return summarizeGoogleSyncValue(value);
+}
+
+function summarizeGoogleSyncValue(value) {
+    if (value == null || value === '') return '无';
+    if (typeof value === 'boolean') return value ? '是' : '否';
+    if (Array.isArray(value)) return `${value.length} 项`;
+    if (typeof value === 'object') return `${Object.keys(value).length} 项`;
+    return summarizeGoogleSyncLongText(value);
+}
+
+function renderGoogleSyncConflictSide(sideLabel, summary, otherSummary) {
+    const deleted = summary.fields.length === 1 && summary.fields[0].key === 'deleted';
+    const fields = summary.fields.map(field => {
+        const other = otherSummary?.fields?.find(item => item.key === field.key);
+        const changed = deleted || !other || String(other.value) !== String(field.value);
+        return `
+            <div class="google-sync-conflict-field${changed ? ' changed' : ''}">
+                <span>${escapeGoogleSyncText(field.label)}</span>
+                <strong>${escapeGoogleSyncText(field.value)}</strong>
+            </div>
+        `;
+    }).join('');
+    return `
+        <div class="google-sync-conflict-side${deleted ? ' deleted' : ''}">
+            <div class="google-sync-conflict-side-title">${escapeGoogleSyncText(sideLabel)}</div>
+            <div class="google-sync-conflict-business-title">${escapeGoogleSyncText(summary.title)}</div>
+            <div class="google-sync-conflict-fields">${fields}</div>
+        </div>
+    `;
 }
 
 function renderGoogleSyncConflicts(conflicts) {
@@ -643,10 +830,14 @@ function renderGoogleSyncConflicts(conflicts) {
     const rows = conflicts.map(conflict => {
         const summary = summarizeGoogleSyncConflict(conflict);
         return `
-            <div class="google-sync-preview-row" data-sync-change-key="${escapeGoogleSyncText(conflict.key)}">
+            <div class="google-sync-preview-row google-sync-conflict-row" data-sync-change-key="${escapeGoogleSyncText(conflict.key)}">
                 <div class="google-sync-preview-meta">
                     <span class="google-sync-preview-title">${escapeGoogleSyncText(summary.label)}</span>
                     <span class="google-sync-preview-desc">${escapeGoogleSyncText(summary.typeText)}</span>
+                    <div class="google-sync-conflict-compare">
+                        ${renderGoogleSyncConflictSide('本设备版本', summary.localSummary, summary.cloudSummary)}
+                        ${renderGoogleSyncConflictSide('云端版本', summary.cloudSummary, summary.localSummary)}
+                    </div>
                 </div>
                 <select class="google-sync-choice" data-change-key="${escapeGoogleSyncText(conflict.key)}">
                     <option value="skip" selected>跳过</option>

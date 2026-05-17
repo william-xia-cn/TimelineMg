@@ -226,6 +226,10 @@ function createTaskCardHTML(task) {
     if (task.schedule_time) {
         statusBadges += `<span class="task-status-badge status-timed">⏰ ${task.schedule_time}</span>`;
     }
+    const recurrenceLabel = getRecurrenceLabel(task);
+    if (recurrenceLabel) {
+        statusBadges += `<span class="task-status-badge status-recurrence">${escapeHTML(recurrenceLabel)}</span>`;
+    }
 
     // Bucket tag
     let bucketHTML = '';
@@ -233,13 +237,6 @@ function createTaskCardHTML(task) {
         bucketHTML = `<span class="task-bucket-tag">${bucketName}</span>`;
     }
 
-    // Progress icon
-    const progressIcons = {
-        not_started: 'radio_button_unchecked',
-        in_progress: 'timelapse',
-        completed: 'check_circle'
-    };
-    const progressIcon = progressIcons[task.progress] || progressIcons.not_started;
     const progressClass = task.progress === 'completed' ? 'progress-done' : '';
     if (isSourceReadOnly) {
         const planBadgeText = planName || 'No plan';
@@ -257,9 +254,6 @@ function createTaskCardHTML(task) {
             ${sourceIconHTML}
             ${labelsHTML}
             <div class="task-card-header">
-                <button class="task-progress-btn ${progressClass}" data-task-id="${task.id}" title="Toggle progress">
-                    <span class="material-symbols-outlined">${progressIcon}</span>
-                </button>
                 <h4 class="task-title">${escapeHTML(task.title)}</h4>
             </div>
             ${statusBadges ? `<div class="task-status-badges">${statusBadges}</div>` : ''}
@@ -268,6 +262,7 @@ function createTaskCardHTML(task) {
                     ${bucketHTML}
                     ${startDateHTML}
                     ${dueDateHTML}
+                    ${recurrenceLabel ? `<span class="task-recurrence-badge">${escapeHTML(recurrenceLabel)}</span>` : ''}
                     ${checklistHTML}
                 </div>
                 <span class="task-priority-badge" style="color:${priorityCfg.color};background:${priorityCfg.bgColor}">
@@ -566,19 +561,11 @@ function createTaskListRowHTML(task) {
         dueHTML = `<span class="task-list-due ${cls}">${formatDueDate(task.due_date)}</span>`;
     }
 
-    const progressIcons = {
-        not_started: 'radio_button_unchecked',
-        in_progress: 'timelapse',
-        completed: 'check_circle'
-    };
-    const progressIcon = progressIcons[task.progress] || progressIcons.not_started;
     const isSourceReadOnly = TimeWhereManageBac?.isManageBacTask(task);
+    const recurrenceLabel = getRecurrenceLabel(task);
 
     return `
         <div class="task-list-row" data-task-id="${task.id}">
-            <button class="task-list-progress-btn" data-task-id="${task.id}">
-                <span class="material-symbols-outlined">${progressIcon}</span>
-            </button>
             <div class="task-list-main">
                 <div class="task-list-title-wrap">
                     <span class="task-list-title">${escapeHTML(task.title)}</span>
@@ -587,6 +574,7 @@ function createTaskListRowHTML(task) {
                 <div class="task-list-meta">
                     ${bucketName ? `<span class="task-list-bucket">${escapeHTML(bucketName)}</span>` : ''}
                     ${isSourceReadOnly ? '<span class="task-list-bucket">ManageBac</span>' : ''}
+                    ${recurrenceLabel ? `<span class="task-list-bucket task-list-recurrence">${escapeHTML(recurrenceLabel)}</span>` : ''}
                     ${dueHTML}
                 </div>
             </div>
@@ -824,6 +812,20 @@ async function renderQuickAddForm(columnEl, planId) {
                 </select>
             </label>` : ''}
         <div class="quick-add-error" role="alert" hidden></div>
+        <div class="quick-add-recurrence" data-recurrence-controls>
+            <label class="quick-add-field">
+                <span>Repeat</span>
+                <select class="quick-add-select" data-field="recurrence_frequency">
+                    <option value="none">不重复</option>
+                    <option value="weekly">每周</option>
+                    <option value="monthly">每月</option>
+                </select>
+            </label>
+            <label class="quick-add-field quick-add-recurrence-count" hidden>
+                <span>次数</span>
+                <input type="number" class="quick-add-date" data-field="recurrence_count" min="2" max="12" value="2">
+            </label>
+        </div>
         <div class="quick-add-actions">
             <button type="button" class="quick-add-submit" data-quick-action="create">Add</button>
             <button type="button" class="quick-add-cancel" data-quick-action="cancel">Cancel</button>
@@ -869,7 +871,17 @@ async function renderQuickAddForm(columnEl, planId) {
                 payload.bucket_id = bucketSelect.value ? parseInt(bucketSelect.value, 10) : null;
             }
 
-            await TimeWhereDB.addTask(normalizeManualTaskPayload(payload));
+            const recurrenceFrequency = form.querySelector('[data-field="recurrence_frequency"]')?.value || 'none';
+            const recurrenceCount = parseInt(form.querySelector('[data-field="recurrence_count"]')?.value || '0', 10);
+            const normalizedPayload = normalizeManualTaskPayload(payload);
+            if (recurrenceFrequency === 'weekly' || recurrenceFrequency === 'monthly') {
+                await TimeWhereDB.addRecurringTaskSeries(normalizedPayload, {
+                    frequency: recurrenceFrequency,
+                    count: recurrenceCount
+                });
+            } else {
+                await TimeWhereDB.addTask(normalizedPayload);
+            }
 
             form.remove();
             await TaskApp.refresh();
@@ -883,6 +895,11 @@ async function renderQuickAddForm(columnEl, planId) {
         const action = e.target.closest('[data-quick-action]')?.dataset.quickAction;
         if (action === 'create') handleCreate();
         if (action === 'cancel') form.remove();
+    });
+
+    form.querySelector('[data-field="recurrence_frequency"]')?.addEventListener('change', (e) => {
+        const countField = form.querySelector('.quick-add-recurrence-count');
+        if (countField) countField.hidden = e.target.value === 'none';
     });
 
     form.addEventListener('keydown', (e) => {
@@ -954,6 +971,12 @@ function normalizeManualTaskPayload(task) {
     };
 }
 
+function getRecurrenceLabel(task = {}) {
+    if (!task.recurrence_series_id || !task.recurrence_frequency) return '';
+    const label = task.recurrence_frequency === 'monthly' ? '每月' : '每周';
+    return `${label} ${task.recurrence_index || 1}/${task.recurrence_count || '?'}`;
+}
+
 async function getQuickAddBuckets(planId) {
     if (TaskApp.currentPlanId === planId) return TaskApp.currentPlanBuckets || [];
     if (typeof TimeWhereDB.getBucketsByPlan === 'function') {
@@ -984,31 +1007,6 @@ function clearQuickAddError(form) {
     if (!errorEl) return;
     errorEl.textContent = '';
     errorEl.hidden = true;
-}
-
-// ========== Task Progress Toggle ==========
-
-async function cycleTaskProgress(taskId) {
-    const task = await TimeWhereDB.getTaskById(taskId);
-    if (!task) return;
-
-    const cycle = {
-        'not_started': 'in_progress',
-        'in_progress': 'completed',
-        'completed': 'not_started'
-    };
-    const newProgress = cycle[task.progress] || 'not_started';
-    const updates = { progress: newProgress };
-
-    if (newProgress === 'completed') {
-        updates.completed_at = new Date().toISOString();
-    } else {
-        updates.completed_at = null;
-    }
-
-    await TimeWhereDB.updateTask(taskId, updates);
-    await TaskApp.refresh();
-    showToast(`Task ${newProgress === 'completed' ? 'completed' : newProgress === 'in_progress' ? 'started' : 'reset'}`, 'success');
 }
 
 // ========== Utility ==========

@@ -1,7 +1,7 @@
 /* Settings Styles */
 :root {
     --bg-app: #f1f5f9;
-    --color-sidebar: #2b56e3;
+    --color-sidebar: #0b2a66;
     --column-bg: rgba(255, 255, 255, 0.5);
     --card-bg: rgba(255, 255, 255, 0.9);
     
@@ -11,8 +11,8 @@
     --border-light: rgba(255, 255, 255, 0.6);
     --border-stroke: #e2e8f0;
 
-    --accent: #6366f1;   /* Indigo */
-    --accent-glow: rgba(99, 102, 241, 0.4);
+    --accent: #1d8cf8;   /* 新图标亮蓝 */
+    --accent-glow: rgba(29, 140, 248, 0.32);
     --red: #ef4444;
     --orange: #f59e0b;
     --green: #10b981;
@@ -78,7 +78,7 @@ body::before {
 .logo-icon {
     width: 36px;
     height: 36px;
-    background: rgba(255, 255, 255, 0.15);
+    background: transparent;
     border-radius: 10px;
     display: flex;
     align-items: center;
@@ -86,6 +86,14 @@ body::before {
     color: white;
     font-size: 20px;
     margin-bottom: 32px;
+}
+
+.logo-mark {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border-radius: 10px;
+    object-fit: cover;
 }
 
 .nav-menu {
@@ -468,6 +476,10 @@ select, input[type="number"], input[type="text"] {
     background: rgba(255, 255, 255, 0.82);
 }
 
+.google-sync-conflict-row {
+    align-items: start;
+}
+
 .google-sync-preview-meta {
     display: flex;
     flex-direction: column;
@@ -483,6 +495,68 @@ select, input[type="number"], input[type="text"] {
 .google-sync-preview-desc {
     font-size: 12px;
     color: var(--text-sub);
+}
+
+.google-sync-conflict-compare {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.google-sync-conflict-side {
+    border: 1px solid var(--border-stroke);
+    border-radius: var(--radius-sm);
+    background: rgba(248, 250, 252, 0.9);
+    padding: 8px;
+    min-width: 0;
+}
+
+.google-sync-conflict-side.deleted {
+    background: rgba(254, 242, 242, 0.78);
+}
+
+.google-sync-conflict-side-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-sub);
+    margin-bottom: 4px;
+}
+
+.google-sync-conflict-business-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-main);
+    overflow-wrap: anywhere;
+    margin-bottom: 6px;
+}
+
+.google-sync-conflict-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.google-sync-conflict-field {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 6px;
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.google-sync-conflict-field span {
+    color: var(--text-sub);
+}
+
+.google-sync-conflict-field strong {
+    color: var(--text-main);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.google-sync-conflict-field.changed strong {
+    color: #b42318;
 }
 
 .google-sync-preview-actions {
@@ -501,6 +575,11 @@ select, input[type="number"], input[type="text"] {
     .google-sync-card-header {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .google-sync-preview-row,
+    .google-sync-conflict-compare {
+        grid-template-columns: 1fr;
     }
 }
 

@@ -343,6 +343,7 @@ async function run() {
 
     const settingsHtml = read('extension/pages/settings/settings.html');
     const settingsScript = read('extension/pages/settings/script.js');
+    const settingsCss = read('extension/pages/settings/styles.css');
     const dbScript = read('extension/shared/js/db.js');
     assert('Settings UI contains Google 数据同步 section', settingsHtml.includes('Google 数据同步'));
     assert('Settings UI places Google sync after task defaults and before data management',
@@ -371,6 +372,33 @@ async function run() {
     assert('Settings loads google-sync.js before page script', settingsHtml.indexOf('google-sync.js') > -1 && settingsHtml.indexOf('google-sync.js') < settingsHtml.indexOf('script.js"></script>'));
     assert('Settings sync preview has explicit confirmation handler', settingsScript.includes('handleApplyGoogleSyncPreview') && settingsScript.includes('确认同步选中项'));
     assert('Settings confirmation supports v1 conflict choices', settingsScript.includes("mode === 'v1_conflicts'") && settingsScript.includes('resolveSyncConflicts'));
+    assert('Settings conflict UI summarizes records with business fields',
+        settingsScript.includes('summarizeGoogleSyncBusinessRecord')
+        && settingsScript.includes("table === 'tasks'")
+        && settingsScript.includes("label: '开始日期'")
+        && settingsScript.includes("label: '截止日期'")
+        && settingsScript.includes("label: '状态'")
+        && settingsScript.includes('GOOGLE_SYNC_PROGRESS_LABELS'));
+    assert('Settings conflict UI renders local and cloud comparison columns',
+        settingsScript.includes('google-sync-conflict-compare')
+        && settingsScript.includes('本设备版本')
+        && settingsScript.includes('云端版本')
+        && settingsScript.includes('renderGoogleSyncConflictSide'));
+    assert('Settings conflict UI shows delete conflicts as deleted business state',
+        settingsScript.includes("value: '已删除'")
+        && settingsScript.includes("deleted ? ' deleted' : ''"));
+    assert('Settings conflict UI labels selected settings in Chinese',
+        settingsScript.includes('GOOGLE_SYNC_SETTING_LABELS')
+        && settingsScript.includes('ManageBac 订阅链接')
+        && settingsScript.includes('默认时长'));
+    assert('Settings conflict actions still keep skip local cloud choices',
+        settingsScript.includes('<option value="skip" selected>跳过</option>')
+        && settingsScript.includes('<option value="local">使用本地</option>')
+        && settingsScript.includes('<option value="cloud">使用云端</option>'));
+    assert('Settings conflict CSS supports two-column comparison and changed fields',
+        settingsCss.includes('.google-sync-conflict-compare')
+        && settingsCss.includes('.google-sync-conflict-side')
+        && settingsCss.includes('.google-sync-conflict-field.changed'));
     assert('Settings dangerous upload/restore use v1 force helpers', settingsScript.includes('forceUploadLocalToCloud') && settingsScript.includes('forceRestoreCloudToLocal'));
     assert('main pages load google-sync.js for page-open sync checks',
         [

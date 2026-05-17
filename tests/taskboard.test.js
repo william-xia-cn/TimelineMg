@@ -151,7 +151,14 @@ assert('quick-add preserves inferred defaults before normalization', boardJs.inc
     && boardJs.includes('...defaults')
     && boardJs.includes('priority: defaults.priority || defaultPriority'));
 
-assert('quick-add creation uses normalized manual payload before addTask', /TimeWhereDB\.addTask\(normalizeManualTaskPayload\(payload\)\)/.test(boardJs));
+assert('quick-add creation uses normalized manual payload before addTask', boardJs.includes('const normalizedPayload = normalizeManualTaskPayload(payload)')
+    && boardJs.includes('TimeWhereDB.addTask(normalizedPayload)'));
+assert('quick-add can create weekly or monthly recurring task series',
+    boardJs.includes('data-field="recurrence_frequency"')
+    && boardJs.includes('<option value="weekly">每周</option>')
+    && boardJs.includes('<option value="monthly">每月</option>')
+    && boardJs.includes('data-field="recurrence_count" min="2" max="12"')
+    && boardJs.includes('TimeWhereDB.addRecurringTaskSeries(normalizedPayload'));
 assert('DB addTask derives subject from selected Plan only', /const subject = plan\?\.subject \|\| null;/.test(dbJs)
     && !/let subject = task\.subject/.test(dbJs));
 assert('DB addTask initializes start_date from due date rules and no longer defaults to today',
@@ -186,7 +193,8 @@ assert('quick-add renders bucket selector for due_date and other groupings', boa
 
 assert('quick-add form has compact inline styling', /\.quick-add-form/.test(boardCss)
     && /\.quick-add-error/.test(boardCss)
-    && /\.quick-add-actions/.test(boardCss));
+    && /\.quick-add-actions/.test(boardCss)
+    && /\.quick-add-recurrence/.test(boardCss));
 
 assert('Task Board exposes Calendar tab and container', tasksHtml.includes('data-view="calendar"')
     && tasksHtml.includes('id="taskCalendarView"')
@@ -320,6 +328,29 @@ assert('Task card exposes Planner-like more menu copy action entry point',
     && manageBacCardHtml.includes('more_horiz')
     && boardJs.includes('data-task-menu-action="copy"')
     && boardJs.includes('复制任务'));
+assert('Board and List no longer expose inline progress toggle buttons',
+    !manageBacCardHtml.includes('task-progress-btn')
+    && !boardJs.includes('task-progress-btn')
+    && !boardJs.includes('task-list-progress-btn')
+    && !boardCss.includes('.task-progress-btn')
+    && !boardCss.includes('.task-list-progress-btn'));
+assert('Board/List event delegation no longer handles progress toggle shortcuts',
+    !scriptJs.includes("closest('.task-progress-btn')")
+    && !scriptJs.includes("closest('.task-list-progress-btn')")
+    && !boardJs.includes('function cycleTaskProgress'));
+assert('Task card displays recurrence badge when task belongs to series', (() => {
+    const html = context.createTaskCardHTML({
+        id: 'recurring-1',
+        title: 'Weekly review',
+        progress: 'not_started',
+        priority: 'medium',
+        recurrence_series_id: 'series-1',
+        recurrence_frequency: 'weekly',
+        recurrence_index: 3,
+        recurrence_count: 12
+    });
+    return html.includes('每周 3/12') && html.includes('task-recurrence-badge');
+})());
 
 const normalCardHtml = context.createTaskCardHTML({
     id: 'task-1',
@@ -342,6 +373,27 @@ assert('Task action menu delegates copy to copy dialog', scriptJs.includes("clos
 assert('Task detail panel exposes same copy menu action', detailPanelJs.includes('task-detail-menu-btn')
     && detailPanelJs.includes('more_horiz')
     && scriptJs.includes("closest('.task-detail-menu-btn')"));
+assert('Task detail supports recurrence creation and scoped edits',
+    detailPanelJs.includes('data-recurrence-section')
+    && detailPanelJs.includes('data-field="recurrence_scope"')
+    && detailPanelJs.includes('本次及之后')
+    && detailPanelJs.includes('TimeWhereDB.createRecurringTaskSeriesFromTask')
+    && detailPanelJs.includes('TimeWhereDB.updateRecurringTaskScope'));
+assert('Task detail places Checklist before recurrence settings',
+    detailPanelJs.indexOf('<!-- Checklist -->') !== -1
+    && detailPanelJs.indexOf('data-recurrence-section') !== -1
+    && detailPanelJs.indexOf('<!-- Checklist -->') < detailPanelJs.indexOf('data-recurrence-section'));
+assert('Task detail supports resizing recurring series count',
+    detailPanelJs.includes('data-field="recurrence_resize_count"')
+    && detailPanelJs.includes('min="2" max="12"')
+    && detailPanelJs.includes('data-action="resize-recurrence"')
+    && detailPanelJs.includes('TimeWhereDB.resizeRecurringTaskSeries(taskId, count)')
+    && boardCss.includes('.recurrence-resize-panel'));
+assert('Task detail recurring delete dialog supports single future and all scopes',
+    detailPanelJs.includes('删除本次')
+    && detailPanelJs.includes('删除本次及之后')
+    && detailPanelJs.includes('删除全部')
+    && detailPanelJs.includes('TimeWhereDB.deleteRecurringTaskScope'));
 
 const copiedPayload = context.buildCopiedTaskPayload({
     id: 'mb-source',
@@ -402,6 +454,10 @@ assert('copied task keeps selected same-plan fields by default',
     && copiedPayload.deadline === '2026-05-20'
     && copiedPayload.notes === 'Source notes'
     && copiedPayload.labels.join(',') === '7');
+assert('copy task dialog can create a recurring copied task series',
+    dialogsJs.includes('copyTaskRecurrenceFrequency')
+    && dialogsJs.includes('copyTaskRecurrenceCount')
+    && dialogsJs.includes('TimeWhereDB.addRecurringTaskSeries(payload'));
 const copiedNoDatesPayload = context.buildCopiedTaskPayload({
     title: 'No date copy',
     plan_id: 'plan-eng',
@@ -425,6 +481,58 @@ assert('copy options can omit dates and optional content before addTask normaliz
     && copiedNoDatesPayload.notes === ''
     && copiedNoDatesPayload.labels.length === 0
     && copiedNoDatesPayload.checklist.length === 0);
+
+assert('DB exposes recurring task series helpers and validates count limit', dbJs.includes('async addRecurringTaskSeries')
+    && dbJs.includes('async createRecurringTaskSeriesFromTask')
+    && dbJs.includes('async updateRecurringTaskScope')
+    && dbJs.includes('async deleteRecurringTaskScope')
+    && dbJs.includes('async resizeRecurringTaskSeries')
+    && dbJs.includes('count < 2 || count > 12'));
+assert('DB recurring series lookup avoids schema migration for recurrence index',
+    dbJs.includes('const allTasks = await db.tasks.toArray()')
+    && dbJs.includes('item.recurrence_series_id === task.recurrence_series_id')
+    && !/where\(['"]recurrence_series_id['"]\)/.test(dbJs));
+assert('DB monthly recurrence clamps to month end without drifting anchor', dbJs.includes('addMonthsClampedISO')
+    && dbJs.includes('new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate()')
+    && dbJs.includes('Math.min(day, lastDay)'));
+assert('DB recurring tasks write series metadata onto task records', dbJs.includes('recurrence_series_id')
+    && dbJs.includes('recurrence_index')
+    && dbJs.includes('recurrence_count')
+    && dbJs.includes('recurrence_frequency')
+    && dbJs.includes('recurrence_anchor_start_date')
+    && dbJs.includes('recurrence_anchor_due_date')
+    && dbJs.includes('if (task.recurrence_series_id)')
+    && dbJs.includes('Object.assign(newTask'));
+assert('Recurring edit scope shifts target dates by delta instead of regenerating series',
+    dbJs.includes('buildRecurringScopedUpdates')
+    && dbJs.includes('getDayDeltaISO')
+    && dbJs.includes('this.addDaysISO(targetTask.start_date, startDelta)')
+    && dbJs.includes('this.addDaysISO(targetTask.due_date || targetTask.deadline, dueDelta)'));
+assert('Recurring resize appends tail instances from anchor dates',
+    dbJs.includes('currentMaxIndex + 1')
+    && dbJs.includes('this.getRecurrenceDate(anchorStartDate, frequency, offset)')
+    && dbJs.includes('this.getRecurrenceDate(anchorDueDate, frequency, offset)')
+    && dbJs.includes('recurrence_index: index')
+    && dbJs.includes('recurrence_count: targetCount'));
+assert('Recurring resize only deletes unfinished tail instances and updates remaining count',
+    dbJs.includes('(item.recurrence_index || 1) > targetCount')
+    && dbJs.includes("item.progress === 'completed' || !!item.completed_at")
+    && dbJs.includes('不能减少到该次数')
+    && dbJs.includes('await this.deleteTask(tailTask.id, options)')
+    && dbJs.includes('{ recurrence_count: targetCount }'));
+assert('Checklist updates derive task progress semantics in DB layer',
+    dbJs.includes('getChecklistProgressUpdate')
+    && dbJs.includes("return { progress: 'not_started', status: 'pending', completed_at: null }")
+    && dbJs.includes("progress: 'in_progress', status: 'in_progress', completed_at: null")
+    && dbJs.includes("progress: 'completed'")
+    && dbJs.includes('Object.assign(updateData, this.getChecklistProgressUpdate(data.checklist, existingTask))'));
+assert('Checklist progress derivation skips empty checklist and explicit progress changes',
+    dbJs.includes('checklist.length === 0') &&
+    dbJs.includes("!Object.prototype.hasOwnProperty.call(data, 'progress')") &&
+    dbJs.includes("!Object.prototype.hasOwnProperty.call(data, 'status')"));
+assert('Detail checklist checkbox updates current task only even for recurring tasks',
+    detailPanelJs.includes('await TimeWhereDB.updateChecklist(taskId, checklist)')
+    && !/checklist-checkbox[\s\S]*?await updateTaskFromDetail\(\{ checklist \}\)/.test(detailPanelJs));
 
 context.TaskApp.groupBy = 'priority';
 context.TaskApp.viewMode = 'plan';
@@ -526,6 +634,23 @@ assert('Plan reorder UI has local icon mappings', iconsJs.includes("'arrow_upwar
     && iconsJs.includes("'arrow_downward'")
     && iconsJs.includes("'vertical_align_top'")
     && iconsJs.includes("'vertical_align_bottom'"));
+
+const createPlanBlock = boardCss.match(/\.btn-create-plan\s*\{([\s\S]*?)\}/)?.[1] || '';
+const iconOverrideBlock = iconsJs.match(/const TIMEWHERE_ICON_OVERRIDES = \{([\s\S]*?)\n\};/)?.[1] || '';
+const taskIconMatch = iconOverrideBlock.match(/'task':\s*'([^']+)'/);
+const calendarIconMatch = iconOverrideBlock.match(/'calendar_today':\s*'([^']+)'/);
+assert('Planner Create a plan button uses blue brand accent instead of purple',
+    createPlanBlock.includes('background: var(--accent);')
+    && !createPlanBlock.includes('background: var(--color-purple);')
+    && !/rgba\(124,\s*77,\s*255/.test(createPlanBlock)
+    && createPlanBlock.includes('rgba(29, 140, 248, 0.24)'));
+assert('Tasks and Calendar navigation icons are distinct local SVG concepts',
+    taskIconMatch && calendarIconMatch
+    && taskIconMatch[1] !== calendarIconMatch[1]
+    && taskIconMatch[1].includes('M8 4H16L18 6V20H6V6L8 4Z')
+    && taskIconMatch[1].includes('M9 12L10.5 13.5L14 10')
+    && calendarIconMatch[1].includes('<rect x="4" y="6" width="16" height="14"')
+    && calendarIconMatch[1].includes('<rect x="8" y="14" width="3" height="3"'));
 
 assert('Plan reorder has visible drag styling and disabled menu styling', boardCss.includes('.plan-link.dragging')
     && boardCss.includes('.plan-link.drag-over')

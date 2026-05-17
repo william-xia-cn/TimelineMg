@@ -3,7 +3,7 @@
 ## Active Target
 
 - Baseline Stabilized
-- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, and documentation baseline cleanup are complete. Public release / CWS / tag / push / merge / deploy remain unapproved.
+- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, and documentation baseline cleanup are complete. TimeWhere `0.2.0` CWS Private testing material preparation is approved by D-023. Actual CWS upload / Submit for Review / publish / public listing / tag / push / merge / deploy remain unapproved.
 
 ## Active Collaboration Model
 
@@ -28,6 +28,7 @@
 
 - [x] Import governance template into new project documents.
 - [x] Product Owner confirms governance mode, active release target, version naming, and current scope.
+- [x] releaseMg prepared TimeWhere `0.2.0` Chrome Web Store Private testing materials, package evidence, and readiness report under D-023.
 
 ## NEXT
 
@@ -80,6 +81,8 @@
 ## LATER
 
 - [ ] Reload the unpacked extension with the fixed ID and run Google data sync v1 real-auth smoke against a test Google account.
+- [ ] Product Owner decides whether to approve CWS Developer Dashboard upload / Submit for Review for the `0.2.0` Private testing candidate.
+- [ ] Product Owner / Build&Test resolves candidate source traceability by approving a commit/staging path or explicitly accepting the dirty-worktree artifact risk before any CWS upload/submit.
 - [ ] Add feature specs only when scope/risk requires durable boundaries.
 - [ ] Create formal handoffs only for cross-session, release, privacy/security, high-risk, or Product Owner-requested work.
 
@@ -88,7 +91,8 @@
 | Blocker | Owner | Required action |
 |---|---|---|
 | Product Owner authority label/name not recorded | Product Owner | Confirm preferred authority label/name when needed. |
-| Public release boundary | Build&Test / releaseMg | Do not treat Internal MVP acceptance as Chrome Web Store submission or public release readiness. |
+| Public release boundary | Build&Test / releaseMg | D-023 approves CWS Private material preparation only. Do not upload, Submit for Review, publish, public-list, tag, push, merge, deploy, or release without explicit Product Owner approval. |
+| Candidate source traceability | Product Owner / Build&Test / releaseMg | `0.2.0` CWS Private artifact was generated from a dirty working tree. Resolve commit/staging path or record Product Owner risk acceptance before any upload/submit. |
 | Manual browser validation not run | CLOSED | releaseMg executed `docs/TEST_PLAN.md` L3 checklist and recorded results in `docs/release/RELEASE_GATE_REPORT_INTERNAL_MVP_2026-05-11.md`. |
 | Container id documentation mismatch | Product&Project Mg / Build&Test | Product Owner approved UUID/string ids for tasks, containers, events, and habits; planner helper records may remain numeric. Documentation cleanup remains pending. |
 | P1 baseline behavior risks | CLOSED | Build&Test fix passed Product&Project Mg review and releaseMg narrow recheck returned PASS. |
