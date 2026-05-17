@@ -479,38 +479,39 @@ body::before {
 .container-task-item {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+    justify-content: space-between;
     font-size: 9px;
     line-height: 1.3;
     white-space: nowrap;
     overflow: hidden;
+    border-radius: 4px;
+    padding: 2px 4px;
 }
-.task-priority-dot {
-    flex-shrink: 0;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
+.container-task-item.start {
+    color: #047857;
+    background: #dcfce7;
 }
-.task-priority-dot.priority-high   { background: #ef4444; }
-.task-priority-dot.priority-medium { background: #f59e0b; }
-.task-priority-dot.priority-low    { background: #6b7280; }
+.container-task-item.due {
+    color: #b91c1c;
+    background: #fee2e2;
+}
 .task-item-title {
     flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.task-item-dur {
+.task-item-type {
     flex-shrink: 0;
-    opacity: 0.7;
+    font-weight: 700;
 }
-.task-timed {
-    flex-shrink: 0;
-    font-size: 8px;
-    background: rgba(255,255,255,0.25);
-    border-radius: 2px;
-    padding: 0 2px;
+.task-item-start {
+    color: #047857;
 }
-
+.task-item-due {
+    color: #b91c1c;
+}
 /* Layer toggle in container dialog */
 .layer-toggle {
     display: flex;

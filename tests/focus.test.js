@@ -61,28 +61,43 @@ assert('async task actions use try/catch and toast failure paths', /async functi
     && /async function completeTaskNow[\s\S]*try[\s\S]*catch/.test(focusScript)
     && /async function deferTask[\s\S]*try[\s\S]*catch/.test(focusScript)
     && focusScript.includes('showToast(`操作失败：'));
+assert('Dashboard defer updates due_date instead of start_date', /async function deferTask[\s\S]*baseDate = task\?\.due_date \|\| task\?\.deadline \|\| formatDateISO\(today\)/.test(focusScript)
+    && /async function deferTask[\s\S]*updateTask\(taskId, \{ due_date: targetStr \}\)/.test(focusScript)
+    && !/async function deferTask[\s\S]*updateTask\(taskId, \{ start_date: targetStr \}\)/.test(focusScript));
 assert('Focus action runner prevents duplicate clicks', focusScript.includes('dataset.busy')
     && focusScript.includes('control.disabled = true')
     && focusScript.includes('control.disabled = false'));
 assert('Focus no longer exports handlers for inline events', !/window\.(startTaskNow|pauseTask|completeTaskNow|deferTask|toggleWeekTask|openAddTaskModal|saveNewTask)/.test(focusScript));
-assert('Dashboard owns six-hour Task Arrange review trigger', focusHtml.includes('../../shared/js/managebac.js')
+assert('Dashboard owns six-hour automatic Task Arrange review trigger', focusHtml.includes('../../shared/js/managebac.js')
+    && focusHtml.includes('../../shared/js/task-arrange-auto.js')
     && focusScript.includes('runManagementReviewCheck()')
-    && focusScript.includes('task_arrange_pending')
-    && focusScript.includes('task_arrange_last_checked_at')
-    && focusScript.includes('task-arrange.html?source=dashboard_auto')
+    && focusScript.includes('TimeWhereTaskArrangeAuto.runTaskArrangeAutoReview')
     && !focusScript.includes('fetchManageBacPreviewForManagementReview'));
-assert('Dashboard management review previews Arrange without direct confirm/apply', focusScript.includes('TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false })')
+assert('Dashboard management review auto-applies Arrange through shared helper without confirmation redirect', focusScript.includes("source: 'dashboard_auto'")
+    && focusScript.includes('refreshTaskArrangeReviewEntry')
+    && !focusScript.includes('task-arrange.html?source=dashboard_auto')
     && !focusScript.includes('maybeRunTaskArrange'));
+assert('Dashboard calendar column includes Task Arrange Review entry after today tomorrow calendar', focusHtml.includes('gcal-container custom-scrollbar')
+    && focusHtml.includes('task-arrange-review-entry')
+    && focusHtml.indexOf('gcal-container custom-scrollbar') < focusHtml.indexOf('task-arrange-review-entry')
+    && focusHtml.includes('data-action="open-task-arrange-review"')
+    && focusHtml.includes('taskArrangeReviewBadge')
+    && focusHtml.includes('暂无新的自动调整'));
+assert('Dashboard Task Arrange Review modal marks unread records viewed', focusScript.includes('openTaskArrangeReviewModal')
+    && focusScript.includes('renderTaskArrangeReviewRows')
+    && focusScript.includes('markUnreadTaskArrangeReviewsViewed')
+    && focusScript.includes('record.viewed_at')
+    && focusScript.includes('TimeWhereTaskArrangeAuto.saveTaskArrangeReviewLog')
+    && focusScript.includes('data-action="close-task-arrange-review"'));
 assert('Popup does not run automatic Arrange on open', !popupScript.includes('maybeRunTaskArrange')
     && !popupScript.includes('runTaskArrangeInBackground')
     && !popupScript.includes('runTaskArrangeInBackground'));
-assert('Calendar opening triggers Arrange preview through management review only', calendarScript.includes('runCalendarArrangeCheck()')
-    && calendarScript.includes('TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false })')
+assert('Calendar opening triggers automatic Arrange review logging only', calendarScript.includes('runCalendarArrangeCheck()')
+    && calendarScript.includes('TimeWhereTaskArrangeAuto.runTaskArrangeAutoReview')
     && calendarScript.includes("source: 'calendar_auto'")
-    && calendarScript.includes('task-arrange.html?source=calendar_auto')
+    && !calendarScript.includes('task-arrange.html?source=calendar_auto')
     && !calendarScript.includes('maybeRunTaskArrange')
-    && !calendarScript.includes('runTaskArrangeInBackground')
-    && !calendarScript.includes('apply: true'));
+    && !calendarScript.includes('runTaskArrangeInBackground'));
 assert('Focus layout has four independent top-level board columns', /<section class="board-column column-now"/.test(focusHtml)
     && /<section class="board-column column-calendar/.test(focusHtml)
     && /<section class="board-column column-week"/.test(focusHtml)
@@ -99,17 +114,33 @@ assert('Focus week and feed are not stacked inside one column', focusHtml.indexO
     && focusHtml.indexOf('column-feed') > focusHtml.indexOf('column-week')
     && (focusHtml.match(/<section class="board-column column-/g) || []).length === 4
     && !/<div class="side-panel column-feed"/.test(focusHtml));
-assert('Focus calendar render path calls dailySettle for container task fill', /function renderDayColumn\([^)]*allTasks/.test(focusScript)
-    && focusScript.includes('const dayTaskPool = buildDailyTaskPool(allTasks, dayReferenceTime)')
-    && focusScript.includes('const settle = dailySettle(dayTaskPool, dayContainers, dayReferenceTime)'));
-assert('Focus calendar container item carries settled tasks into render', focusScript.includes("tasks: settle.result.get(c.id)?.tasks || []")
+assert('Focus calendar render path uses exact date task display instead of Daily Settle projection', /function renderDayColumn\([^)]*allTasks/.test(focusScript)
+    && focusScript.includes('const dateTasks = getDateTasksForDisplay(allTasks, dateStr)')
+    && focusScript.includes('assignDateTasksToContainers(dateTasks, dayContainers)')
+    && !focusScript.includes('const dayTaskPool = buildDailyTaskPool(allTasks, dayReferenceTime)')
+    && !focusScript.includes('const settle = dailySettle(dayTaskPool, dayContainers, dayReferenceTime)'));
+assert('Focus calendar container item carries exact date tasks into render', focusScript.includes('function getDateTasksForDisplay')
+    && focusScript.includes("calendar_item_type: 'due'")
+    && focusScript.includes("calendar_item_type: 'start'")
+    && focusScript.includes('tasks: taskAssignments.get(c.id) || []')
     && focusScript.includes('renderContainerTasks(item.tasks)'));
 assert('Focus calendar container card renders task list markup', focusScript.includes('function renderContainerTasks')
     && focusScript.includes('container-tasks')
     && focusScript.includes('container-task-item')
-    && focusScript.includes('task-priority-dot')
-    && focusScript.includes('task-item-dur')
-    && focusScript.includes('task-timed'));
+    && focusScript.includes('task-item-title')
+    && focusScript.includes('task-item-type task-item-${type}')
+    && focusScript.includes("type === 'due' ? '结束' : '开始'")
+    && !focusScript.includes('task-priority-dot')
+    && !focusScript.includes('task-item-dur'));
+assert('Focus today tomorrow task display matches Calendar start marker style',
+    focusCss.includes('.task-item-type')
+    && focusCss.includes('.task-item-start')
+    && focusCss.includes('color: #047857')
+    && focusCss.includes('.container-task-item.start')
+    && focusCss.includes('.container-task-item.due')
+    && focusCss.includes('.task-item-due')
+    && focusCss.includes('color: #b91c1c')
+    && !focusCss.includes('.task-priority-dot'));
 assert('Focus regular calendar events do not render container task list', focusScript.includes("isContainer: false")
     && focusScript.includes("item.isContainer ? renderContainerTasks(item.tasks) : ''"));
 assert('Focus calendar uses Calendar-like layer-aware event card rendering', focusScript.includes('function createFocusCalendarCard')
@@ -159,6 +190,14 @@ assert('Popup expanding one task collapses other tasks and auto-scrolls it into 
 assert('Dashboard task_id URL opens matching current task card', focusScript.includes("new URLSearchParams(window.location.search).get('task_id')")
     && focusScript.includes('data-task-card-id')
     && focusScript.includes("scrollIntoView({ block: 'center'"));
+assert('Dashboard current task card details show start_date when present',
+    focusScript.includes('const startDate = task.start_date')
+    && focusScript.includes('startDateText')
+    && focusScript.includes('start-date-item')
+    && focusScript.includes('开始 ${startDateText}'));
+assert('Dashboard current task card omits empty start_date meta',
+    focusScript.includes("startDateText ? `<span class=\"meta-item start-date-item\"")
+    && focusCss.includes('.start-date-item'));
 assert('Dashboard current task column appends today journal entry', focusScript.includes('renderTodayJournalEntry(todayStr, now)')
     && focusScript.includes('daily-journal-entry')
     && focusScript.includes('data-action="open-today-journal"')
@@ -175,8 +214,33 @@ assert('Dashboard today journal modal supports draft and submit actions', focusS
     && focusScript.includes('TimeWhereDB.submitDailyJournal'));
 assert('Dashboard today journal CSS exists for entry and modal', focusCss.includes('.daily-journal-entry')
     && focusCss.includes('.daily-journal-modal')
-    && focusCss.includes('.journal-grid')
-    && focusCss.includes('.journal-note-field'));
+    && focusCss.includes('.journal-review-layout')
+    && focusCss.includes('.journal-note-card'));
+assert('Dashboard today journal modal uses aligned review layout', focusScript.includes('journal-review-layout')
+    && focusScript.includes('renderJournalPlannedTaskReview')
+    && focusScript.includes('journal-summary-field')
+    && focusScript.includes('journal-note-card')
+    && focusScript.includes('journal-note-title')
+    && focusScript.includes('data-journal-field="${escapeAttribute(name)}"')
+    && focusScript.includes('aria-label="${escapeAttribute(label)}"')
+    && focusScript.includes('placeholder="补充说明..."')
+    && focusScript.includes('计划延误说明')
+    && focusScript.includes('计划外完成说明')
+    && focusCss.includes('grid-template-columns: repeat(2, minmax(0, 1fr))')
+    && /journal-section[\s\S]*height:\s*100%/.test(focusCss)
+    && /journal-note-card[\s\S]*display:\s*flex[\s\S]*flex-direction:\s*column[\s\S]*min-height:\s*120px[\s\S]*height:\s*100%/.test(focusCss)
+    && /journal-note-title[\s\S]*flex-shrink:\s*0/.test(focusCss)
+    && /journal-note-card textarea[\s\S]*flex:\s*1/.test(focusCss)
+    && /journal-summary-field[\s\S]*grid-column:\s*1 \/ -1/.test(focusCss)
+    && /@media \(max-width:\s*720px\)[\s\S]*journal-review-layout[\s\S]*grid-template-columns:\s*1fr/.test(focusCss));
+assert('Dashboard today journal task statuses use green completed and red delayed markers', focusScript.includes("statusClass = 'completed'")
+    && focusScript.includes("statusIcon = 'check_circle'")
+    && focusScript.includes("statusClass = 'delayed'")
+    && focusScript.includes("statusIcon = 'close'")
+    && focusCss.includes('.journal-task-status.completed')
+    && focusCss.includes('color: #047857')
+    && focusCss.includes('.journal-task-status.delayed')
+    && focusCss.includes('color: #dc2626'));
 assert('Dashboard week progress includes weekly journal summary area', focusHtml.includes('weekly-journal-section')
     && focusHtml.includes('本周总结')
     && focusHtml.includes('weekly-journal-grid'));
@@ -221,6 +285,9 @@ assert('Popup normal task actions and defer buttons are inside card', popupScrip
     && popupScript.includes('data-days="1"')
     && popupScript.includes('data-days="3"')
     && popupScript.includes('data-days="7"'));
+assert('Popup defer updates due_date instead of start_date', /async function deferTask[\s\S]*baseDate = task\?\.due_date \|\| task\?\.deadline \|\| formatDateISO\(today\)/.test(popupScript)
+    && /async function deferTask[\s\S]*updateTask\(taskId, \{ due_date: formatDateISO\(target\) \}\)/.test(popupScript)
+    && !/async function deferTask[\s\S]*updateTask\(taskId, \{ start_date: nextStartDate \}\)/.test(popupScript));
 assert('Popup ManageBac branch renders blocked defer text and no defer buttons', popupScript.includes('isManageBacSourceTask')
     && popupScript.includes('defer-blocked-text')
     && /const deferHtml = isManageBacSource \?[\s\S]*defer-blocked-text[\s\S]*<\/div>` : `[\s\S]*data-action="defer"/.test(popupScript));

@@ -96,9 +96,14 @@ async function renderDetailPanel(taskId) {
                 <h2>Task Details</h2>
                 ${isManageBacTask ? '<span class="source-badge">ManageBac</span>' : ''}
             </div>
-            <button class="detail-close-btn" title="Close">
-                <span class="material-symbols-outlined">close</span>
-            </button>
+            <div class="detail-header-actions">
+                <button type="button" class="task-detail-menu-btn" data-task-id="${task.id}" title="More task actions">
+                    <span class="material-symbols-outlined">more_horiz</span>
+                </button>
+                <button class="detail-close-btn" title="Close">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
         </div>
 
         <div class="detail-body custom-scrollbar">

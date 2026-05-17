@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             updateSidebarActiveState('my_tasks');
         }
+        runPlannerTaskArrangeCheck();
         runGoogleSyncCheck();
     } catch (err) {
         console.error('[Tasks] Init failed:', err);
@@ -126,6 +127,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const kanbanBoard = document.getElementById('kanbanBoard');
     if (kanbanBoard) {
         kanbanBoard.addEventListener('click', async (e) => {
+            const taskMenuBtn = e.target.closest('.task-card-menu-btn');
+            if (taskMenuBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                showTaskActionMenu(taskMenuBtn);
+                return;
+            }
+
             // Progress toggle button
             const progressBtn = e.target.closest('.task-progress-btn');
             if (progressBtn) {
@@ -162,6 +171,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     document.addEventListener('click', async (e) => {
+        const taskMenuBtn = e.target.closest('.task-detail-menu-btn');
+        if (taskMenuBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            showTaskActionMenu(taskMenuBtn);
+            return;
+        }
+
+        const taskMenuAction = e.target.closest('[data-task-menu-action]');
+        if (taskMenuAction) {
+            e.preventDefault();
+            e.stopPropagation();
+            const taskId = taskMenuAction.dataset.taskId;
+            closeTaskActionMenu();
+            if (taskMenuAction.dataset.taskMenuAction === 'copy') {
+                await showCopyTaskDialog(taskId);
+            }
+            return;
+        }
+
         const bucketAction = e.target.closest('[data-bucket-action]');
         if (!bucketAction) return;
         const bucketId = parseInt(bucketAction.dataset.bucketId, 10);
@@ -191,6 +220,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 openDetailPanel(taskId);
                 return;
             }
+        });
+    }
+
+    // ========== Event Delegation: Calendar View ==========
+    const calendarView = document.getElementById('taskCalendarView');
+    if (calendarView) {
+        calendarView.addEventListener('click', (e) => {
+            const item = e.target.closest('.task-calendar-item');
+            if (!item) return;
+            const taskId = item.dataset.taskId;
+            openDetailPanel(taskId);
         });
     }
 
@@ -257,6 +297,18 @@ function runGoogleSyncCheck() {
     });
 }
 
+async function runPlannerTaskArrangeCheck() {
+    if (!window.TimeWhereTaskArrangeAuto?.runTaskArrangeAutoReview || !window.TimeWhereDB) return;
+    try {
+        const result = await TimeWhereTaskArrangeAuto.runTaskArrangeAutoReview(TimeWhereDB, { source: 'planner_auto' });
+        if (result?.ran && !result.no_changes) {
+            await TaskApp.refresh();
+        }
+    } catch (error) {
+        console.warn('[Tasks] Task Arrange check skipped:', error);
+    }
+}
+
 // ========== Helpers ==========
 
 function getInitialTaskIdFromUrl() {
@@ -270,11 +322,15 @@ function getInitialTaskIdFromUrl() {
 function showNoPlanState(show) {
     const noPlanState = document.getElementById('noPlanState');
     const board = document.getElementById('kanbanBoard');
+    const list = document.getElementById('taskListView');
+    const calendar = document.getElementById('taskCalendarView');
     const header = document.querySelector('.board-header');
     const tabs = document.querySelector('.view-tabs');
 
     if (noPlanState) noPlanState.style.display = show ? 'flex' : 'none';
     if (board) board.style.display = show ? 'none' : '';
+    if (list) list.style.display = 'none';
+    if (calendar) calendar.style.display = 'none';
     if (header) header.style.display = show ? 'none' : '';
     if (tabs) tabs.style.display = show ? 'none' : '';
 }

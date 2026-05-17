@@ -4,9 +4,6 @@
 // ============================================================
 
 const PX_PER_HOUR = 40;
-const TASK_ARRANGE_PENDING_KEY = 'task_arrange_pending';
-const TASK_ARRANGE_LAST_CHECKED_KEY = 'task_arrange_last_checked_at';
-const MANAGEMENT_REVIEW_INTERVAL_HOURS = 6;
 
 function formatDateISO(date) {
     const y = date.getFullYear();
@@ -49,47 +46,41 @@ async function runGoogleSyncCheck() {
     });
 }
 
-function taskArrangeHasWork(pending) {
-    return Array.isArray(pending?.arrange_changes) && pending.arrange_changes.length > 0;
+async function getTaskArrangeReviewLog() {
+    return await TimeWhereTaskArrangeAuto.getTaskArrangeReviewLog(TimeWhereDB);
 }
 
-function openTaskArrangeReviewPage() {
-    window.location.href = '../settings/task-arrange.html?source=dashboard_auto';
+async function saveTaskArrangeReviewLog(log) {
+    await TimeWhereTaskArrangeAuto.saveTaskArrangeReviewLog(TimeWhereDB, log);
+}
+
+async function refreshTaskArrangeReviewEntry() {
+    const badge = document.getElementById('taskArrangeReviewBadge');
+    const status = document.getElementById('taskArrangeReviewStatus');
+    if (!badge || !status || !window.TimeWhereDB) return;
+    const log = await getTaskArrangeReviewLog();
+    const unread = log.filter(record => !record.viewed_at);
+    const unreadChanges = unread.reduce((total, record) => total + (record.changes?.length || 0), 0);
+    if (unreadChanges > 0) {
+        badge.hidden = false;
+        badge.textContent = `${unreadChanges} 项调整`;
+        status.textContent = `${unread.length} 次自动调整未查看`;
+        return;
+    }
+    badge.hidden = true;
+    badge.textContent = '0 项调整';
+    status.textContent = '暂无新的自动调整';
 }
 
 async function runManagementReviewCheck() {
-    if (!window.TimeWhereScheduling?.arrangeTasks || !window.TimeWhereDB) return;
+    if (!window.TimeWhereTaskArrangeAuto?.runTaskArrangeAutoReview || !window.TimeWhereDB) return;
     try {
-        const existing = await TimeWhereDB.getSetting(TASK_ARRANGE_PENDING_KEY);
-        if (taskArrangeHasWork(existing)) {
-            openTaskArrangeReviewPage();
-            return;
+        const result = await TimeWhereTaskArrangeAuto.runTaskArrangeAutoReview(TimeWhereDB, { source: 'dashboard_auto' });
+        await refreshTaskArrangeReviewEntry();
+        if (result?.ran && !result.no_changes) {
+            await loadTaskColumn();
+            await loadCalendarColumn();
         }
-
-        const now = new Date();
-        const last = await TimeWhereDB.getSetting(TASK_ARRANGE_LAST_CHECKED_KEY);
-        if (last) {
-            const elapsedMs = now.getTime() - new Date(last).getTime();
-            if (elapsedMs >= 0 && elapsedMs < MANAGEMENT_REVIEW_INTERVAL_HOURS * 3600000) {
-                return;
-            }
-        }
-
-        const arrangePreview = await TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false });
-        const pending = {
-            source: 'dashboard_auto',
-            created_at: now.toISOString(),
-            arrange_changes: arrangePreview.changes || [],
-            arrange_summary: arrangePreview.summary || null
-        };
-
-        if (!taskArrangeHasWork(pending)) {
-            await TimeWhereDB.setSetting(TASK_ARRANGE_LAST_CHECKED_KEY, now.toISOString());
-            return;
-        }
-
-        await TimeWhereDB.setSetting(TASK_ARRANGE_PENDING_KEY, pending);
-        openTaskArrangeReviewPage();
     } catch (error) {
         console.warn('[Focus] Task Arrange check skipped:', error);
     }
@@ -105,7 +96,8 @@ async function loadDashboardData() {
             loadTaskColumn(),
             loadCalendarColumn(),
             loadWeeklyProgress(),
-            loadFeedColumn()
+            loadFeedColumn(),
+            refreshTaskArrangeReviewEntry()
         ]);
     } catch(e) {
         console.error('loadDashboardData failed:', e);
@@ -317,6 +309,8 @@ function createTaskCard(task, opts = {}) {
     const pLabel = priorityLabel(task.priority);
     const pClass = priorityClass(task.priority);
     const durationText = `${task.duration || 45}min`;
+    const startDate = task.start_date;
+    const startDateText = startDate ? formatDate(startDate) : '';
     const dueDate = task.due_date || task.deadline;
     const deadlineText = dueDate ? formatDate(dueDate) : '';
     const isManageBacSource = TimeWhereDB.isManageBacSourceTask?.(task) === true;
@@ -362,6 +356,7 @@ function createTaskCard(task, opts = {}) {
                     ${notes ? `<p>${notes}</p>` : ''}
                     <div class="task-meta-tags">
                         <span class="priority-badge ${pClass}">${pLabel}</span>
+                        ${startDateText ? `<span class="meta-item start-date-item"><span class="material-symbols-outlined">play_arrow</span>开始 ${startDateText}</span>` : ''}
                         <span class="meta-item"><span class="material-symbols-outlined">schedule</span>${durationText}</span>
                         ${deadlineText ? `<span class="meta-item deadline-item">截止 ${deadlineText}</span>` : ''}
                         ${tagsHtml}
@@ -414,10 +409,11 @@ async function deferTask(taskId, days) {
             return;
         }
         const today = new Date();
-        const target = new Date(today);
-        target.setDate(today.getDate() + days);
+        const baseDate = task?.due_date || task?.deadline || formatDateISO(today);
+        const target = new Date(baseDate + 'T00:00:00');
+        target.setDate(target.getDate() + days);
         const targetStr = formatDateISO(target);
-        await TimeWhereDB.updateTask(taskId, { start_date: targetStr });
+        await TimeWhereDB.updateTask(taskId, { due_date: targetStr });
         await loadDashboardData();
         showToast(`任务已延后 ${days} 天`, 'info');
     } catch (error) {
@@ -474,6 +470,45 @@ async function loadCalendarColumn() {
     }
 }
 
+function getDateTasksForDisplay(tasks, dateStr) {
+    const items = [];
+    (tasks || []).forEach(task => {
+        if (!task || task.progress === 'completed' || task.status === 'completed') return;
+        const dueDate = task.due_date || task.deadline || null;
+        if (dueDate === dateStr) {
+            items.push({ ...task, calendar_item_type: 'due' });
+        } else if (task.start_date === dateStr) {
+            items.push({ ...task, calendar_item_type: 'start' });
+        }
+    });
+    return items.sort((a, b) => {
+        if (a.calendar_item_type !== b.calendar_item_type) return a.calendar_item_type === 'due' ? -1 : 1;
+        return String(a.title || '').localeCompare(String(b.title || ''));
+    });
+}
+
+function focusTaskMatchesContainer(task, container) {
+    if (!task?.schedule_time || !container?.time_start || !container?.time_end) return false;
+    const taskMin = timeToMinutes(task.schedule_time);
+    return taskMin >= timeToMinutes(container.time_start) && taskMin < timeToMinutes(container.time_end);
+}
+
+function assignDateTasksToContainers(tasks, containers) {
+    const sortedContainers = [...(containers || [])].sort((a, b) =>
+        String(a.time_start || '').localeCompare(String(b.time_start || ''))
+    );
+    const assignments = new Map(sortedContainers.map(container => [container.id, []]));
+    const firstLayerOne = sortedContainers.find(container => getContainerLayer(container) === 1);
+    const fallbackContainer = firstLayerOne || sortedContainers[0] || null;
+    (tasks || []).forEach(task => {
+        const target = task.schedule_time
+            ? sortedContainers.find(container => focusTaskMatchesContainer(task, container))
+            : fallbackContainer;
+        if (target && assignments.has(target.id)) assignments.get(target.id).push(task);
+    });
+    return assignments;
+}
+
 function renderDayColumn(col, dateObj, dateStr, allContainers, allDbEvents, allTasks, isToday) {
     col.innerHTML = '';
 
@@ -492,11 +527,8 @@ function renderDayColumn(col, dateObj, dateStr, allContainers, allDbEvents, allT
             return containerAppliesToDate(c, dateObj, dateStr, dayOfWeek, isWeekday, isWeekend);
         });
 
-    const dayReferenceTime = isToday
-        ? new Date()
-        : new Date(`${dateStr}T12:00:00`);
-    const dayTaskPool = buildDailyTaskPool(allTasks, dayReferenceTime);
-    const settle = dailySettle(dayTaskPool, dayContainers, dayReferenceTime);
+    const dateTasks = getDateTasksForDisplay(allTasks, dateStr);
+    const taskAssignments = assignDateTasksToContainers(dateTasks, dayContainers);
 
     // 容器 → 事件格式
     const containerEvents = dayContainers
@@ -510,7 +542,7 @@ function renderDayColumn(col, dateObj, dateStr, allContainers, allDbEvents, allT
             id: c.id,
             layer: getContainerLayer(c),
             isContainer: true,
-            tasks: settle.result.get(c.id)?.tasks || []
+            tasks: taskAssignments.get(c.id) || []
         }));
 
     // 普通事件（非 skip）
@@ -725,14 +757,11 @@ function openTaskDetailInPlanner(taskId) {
 function renderContainerTasks(tasks) {
     if (!tasks || tasks.length === 0) return '';
     return `<div class="container-tasks">` + tasks.map(task => {
-        const pLabel = priorityLabel(task.priority);
-        const pCls = priorityClass(task.priority);
-        const timedMark = task.schedule_time ? `<span class="task-timed">${escapeHTML(task.schedule_time)}</span>` : '';
-        return `<div class="container-task-item">
-            <span class="task-priority-dot ${pCls}" title="${escapeAttribute(pLabel)}"></span>
+        const type = task.calendar_item_type === 'due' ? 'due' : 'start';
+        const label = type === 'due' ? '结束' : '开始';
+        return `<div class="container-task-item ${type}">
             <span class="task-item-title">${escapeHTML(task.title || '无标题')}</span>
-            <span class="task-item-dur">${task.duration || 45}m</span>
-            ${timedMark}
+            <span class="task-item-type task-item-${type}">${label}</span>
         </div>`;
     }).join('') + `</div>`;
 }
@@ -975,10 +1004,21 @@ function handleFocusDelegatedClick(e) {
         });
         return;
     }
+    if (action === 'open-task-arrange-review') {
+        e.preventDefault();
+        runFocusAction(actionEl, openTaskArrangeReviewModal);
+        return;
+    }
     if (action === 'close-modal') {
         e.preventDefault();
         closeAddTaskModal();
         closeDailyJournalModal();
+        closeTaskArrangeReviewModal();
+        return;
+    }
+    if (action === 'close-task-arrange-review') {
+        e.preventDefault();
+        closeTaskArrangeReviewModal();
         return;
     }
     if (action === 'close-daily-journal') {
@@ -1013,6 +1053,96 @@ function handleFocusDelegatedClick(e) {
 }
 
 function handleFocusDelegatedChange() {}
+
+function renderTaskArrangeReviewRows(records) {
+    const rows = (records || []).flatMap(record => (record.changes || []).map(change => ({ record, change })));
+    if (rows.length === 0) {
+        return `<div class="arrange-review-empty">暂无新的自动调整。</div>`;
+    }
+    return `
+        <div class="arrange-review-table-wrap">
+            <table class="arrange-review-table">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>开始日期变化</th>
+                        <th>优先级变化</th>
+                        <th>来源</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(({ record, change }) => {
+                        const startChange = change.from_start_date === change.to_start_date
+                            ? '不变'
+                            : `${change.from_start_date || '未设置'} → ${change.to_start_date || '未设置'}`;
+                        const priorityChange = change.from_priority === change.to_priority
+                            ? '不变'
+                            : `${change.from_priority || 'medium'} → ${change.to_priority || 'medium'}`;
+                        const statusClass = change.status === 'failed' ? 'failed' : 'applied';
+                        const statusText = change.status === 'failed' ? `失败：${change.error || '未知错误'}` : '已自动应用';
+                        return `
+                            <tr class="${statusClass}">
+                                <td>
+                                    <strong>${escapeHTML(change.title || change.task_id || 'Untitled task')}</strong>
+                                    <small>${escapeHTML(relativeTime(record.created_at) || formatDate(record.created_at) || '')}</small>
+                                    <em>${escapeHTML(statusText)}</em>
+                                </td>
+                                <td>${escapeHTML(startChange)}</td>
+                                <td>${escapeHTML(priorityChange)}</td>
+                                <td>${escapeHTML(change.source === 'managebac' ? 'ManageBac' : change.source || 'TimeWhere')}</td>
+                            </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>`;
+}
+
+async function markUnreadTaskArrangeReviewsViewed(records) {
+    const unreadIds = new Set((records || []).filter(record => !record.viewed_at).map(record => record.id));
+    if (unreadIds.size === 0) return;
+    const now = new Date().toISOString();
+    const log = await getTaskArrangeReviewLog();
+    const updated = log.map(record => unreadIds.has(record.id) ? { ...record, viewed_at: now } : record);
+    await saveTaskArrangeReviewLog(updated);
+}
+
+async function openTaskArrangeReviewModal() {
+    closeTaskArrangeReviewModal();
+    const log = await getTaskArrangeReviewLog();
+    const unread = log.filter(record => !record.viewed_at);
+    const recordsToShow = unread.length > 0 ? unread : log.slice(0, 3);
+    const unreadChangeCount = unread.reduce((total, record) => total + (record.changes?.length || 0), 0);
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'taskArrangeReviewModal';
+    modal.innerHTML = `
+        <div class="modal-content task-arrange-review-modal">
+            <div class="modal-header">
+                <h3>Task Arrange Review</h3>
+                <button class="modal-close" data-action="close-task-arrange-review">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="arrange-review-summary">
+                    <span class="badge ${unreadChangeCount > 0 ? 'red' : ''}">${unreadChangeCount > 0 ? `${unreadChangeCount} 项未读自动调整` : '暂无未读自动调整'}</span>
+                    <span>这里展示 Task Arrange 已自动应用的最近结果，不需要手动确认。</span>
+                </div>
+                ${renderTaskArrangeReviewRows(recordsToShow)}
+            </div>
+            <div class="modal-footer">
+                <button class="btn-primary" data-action="close-task-arrange-review">知道了</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+    await markUnreadTaskArrangeReviewsViewed(unread);
+    await refreshTaskArrangeReviewEntry();
+}
+
+function closeTaskArrangeReviewModal() {
+    const modal = document.getElementById('taskArrangeReviewModal');
+    if (modal) modal.remove();
+}
 
 function openAddTaskModal() {
     const modal = document.createElement('div');
@@ -1124,11 +1254,46 @@ function renderJournalTaskList(tasks, emptyText) {
         </li>`).join('')}</ul>`;
 }
 
+function renderJournalPlannedTaskReview(draft) {
+    const planned = Array.isArray(draft.planned_task_snapshots) ? draft.planned_task_snapshots : [];
+    if (planned.length === 0) {
+        return `<p class="journal-empty">今天没有冻结的计划任务。</p>`;
+    }
+
+    const completedIds = new Set((draft.completed_task_snapshots || []).map(task => String(task.id)));
+    const delayedIds = new Set((draft.delayed_task_snapshots || []).map(task => String(task.id)));
+
+    return `<ul class="journal-task-list journal-review-task-list">${planned.map(task => {
+        const taskId = String(task.id);
+        let statusClass = 'pending';
+        let statusIcon = 'help';
+        let statusLabel = '待确认';
+        if (completedIds.has(taskId)) {
+            statusClass = 'completed';
+            statusIcon = 'check_circle';
+            statusLabel = '任务完成';
+        } else if (delayedIds.has(taskId)) {
+            statusClass = 'delayed';
+            statusIcon = 'close';
+            statusLabel = '任务延误';
+        }
+
+        return `
+            <li class="journal-task-status ${statusClass}">
+                <span class="journal-task-status-main">
+                    <span class="material-symbols-outlined journal-task-status-icon">${statusIcon}</span>
+                    <span>${escapeHTML(task.title || '无标题任务')}</span>
+                </span>
+                <small>${escapeHTML(statusLabel)}</small>
+            </li>`;
+    }).join('')}</ul>`;
+}
+
 function journalTextarea(name, label, value) {
     return `
-        <label class="journal-note-field">
-            <span>${escapeHTML(label)}</span>
-            <textarea data-journal-field="${escapeAttribute(name)}" rows="3">${escapeHTML(value || '')}</textarea>
+        <label class="journal-note-card">
+            <span class="journal-note-title">${escapeHTML(label)}</span>
+            <textarea data-journal-field="${escapeAttribute(name)}" rows="3" aria-label="${escapeAttribute(label)}" placeholder="补充说明...">${escapeHTML(value || '')}</textarea>
         </label>`;
 }
 
@@ -1159,29 +1324,20 @@ async function openDailyJournalModal(date = formatDateISO(new Date())) {
                     <span class="badge">${escapeHTML(statusText)}</span>
                     <span>${escapeHTML(draft.snapshot_at ? `计划快照 ${relativeTime(draft.snapshot_at)}` : '6 点后首次可用时生成计划快照')}</span>
                 </div>
-                <div class="journal-grid">
+                <div class="journal-review-layout">
                     <section class="journal-section">
-                        <h4>计划完成 <strong>${draft.planned_task_snapshots?.length || 0}</strong></h4>
-                        ${renderJournalTaskList(draft.planned_task_snapshots, '今天没有冻结的计划任务。')}
+                        <h4>今日任务 <strong>${draft.planned_task_snapshots?.length || 0}</strong></h4>
+                        ${renderJournalPlannedTaskReview(draft)}
                     </section>
+                    ${journalTextarea('delayed_notes', '计划延误说明', draft.delayed_notes)}
                     <section class="journal-section">
-                        <h4>实际完成 <strong>${draft.completed_task_snapshots?.length || 0}</strong></h4>
-                        ${renderJournalTaskList(draft.completed_task_snapshots, '今天还没有完成记录。')}
-                    </section>
-                    <section class="journal-section">
-                        <h4>计划延误 <strong>${draft.delayed_task_snapshots?.length || 0}</strong></h4>
-                        ${renderJournalTaskList(draft.delayed_task_snapshots, '没有计划延误。')}
-                    </section>
-                    <section class="journal-section">
-                        <h4>其他完成 <strong>${draft.extra_done_task_snapshots?.length || 0}</strong></h4>
+                        <h4>计划外完成 <strong>${draft.extra_done_task_snapshots?.length || 0}</strong></h4>
                         ${renderJournalTaskList(draft.extra_done_task_snapshots, '没有计划外完成任务。')}
                     </section>
-                </div>
-                <div class="journal-notes">
-                    ${journalTextarea('planned_notes', '计划完成说明', draft.planned_notes)}
-                    ${journalTextarea('delayed_notes', '计划延误说明', draft.delayed_notes)}
-                    ${journalTextarea('extra_done_notes', '其他完成说明', draft.extra_done_notes)}
-                    ${journalTextarea('general_notes', '其他说明', draft.general_notes)}
+                    ${journalTextarea('extra_done_notes', '计划外完成说明', draft.extra_done_notes)}
+                    <div class="journal-summary-field">
+                    ${journalTextarea('general_notes', '今日总结', draft.general_notes)}
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">

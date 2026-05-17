@@ -10,11 +10,13 @@ const vm = require('vm');
 const root = path.join(__dirname, '..');
 const boardJs = fs.readFileSync(path.join(root, 'extension', 'pages', 'tasks', 'board.js'), 'utf8');
 const dialogsJs = fs.readFileSync(path.join(root, 'extension', 'pages', 'tasks', 'dialogs.js'), 'utf8');
+const detailPanelJs = fs.readFileSync(path.join(root, 'extension', 'pages', 'tasks', 'detail-panel.js'), 'utf8');
 const sidebarJs = fs.readFileSync(path.join(root, 'extension', 'pages', 'tasks', 'sidebar.js'), 'utf8');
 const stateJs = fs.readFileSync(path.join(root, 'extension', 'pages', 'tasks', 'state.js'), 'utf8');
 const scriptJs = fs.readFileSync(path.join(root, 'extension', 'pages', 'tasks', 'script.js'), 'utf8');
 const tasksHtml = fs.readFileSync(path.join(root, 'extension', 'pages', 'tasks', 'tasks.html'), 'utf8');
 const dbJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'db.js'), 'utf8');
+const taskArrangeAutoJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'task-arrange-auto.js'), 'utf8');
 const iconsJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'icons.js'), 'utf8');
 const boardCss = fs.readFileSync(path.join(root, 'extension', 'pages', 'tasks', 'styles.css'), 'utf8');
 
@@ -69,6 +71,12 @@ const context = {
         })
     },
     setTimeout,
+    crypto: {
+        randomUUID: (() => {
+            let i = 0;
+            return () => `uuid-${++i}`;
+        })()
+    },
     requestAnimationFrame: (fn) => fn(),
     TaskApp: {
         groupBy: 'due_date',
@@ -81,22 +89,24 @@ const context = {
     TimeWhereManageBac: null
 };
 vm.runInNewContext(boardJs, context);
+vm.runInNewContext(dialogsJs, context);
 
-assert('manual task payload requires due_date', (() => {
-    try {
-        context.normalizeManualTaskPayload({ title: 'No date' });
-        return false;
-    } catch (error) {
-        return error.message === '请选择截止日期';
-    }
-})());
+const noDateTask = context.normalizeManualTaskPayload({ title: 'No date' });
+assert('manual task payload allows missing due_date',
+    noDateTask.due_date === null && noDateTask.start_date === null);
 
 const normalized = context.normalizeManualTaskPayload({
     title: 'With due date',
     due_date: '2026-05-20',
     start_date: null
 });
-assert('manual task start_date defaults to due_date', normalized.start_date === '2026-05-20');
+assert('manual task start_date initializes by default 7 day rule', normalized.start_date === '2026-05-13');
+
+assert('manual overdue task start_date initializes to due_date', context.normalizeManualTaskPayload({
+    title: 'Overdue due date',
+    due_date: '2026-05-10',
+    start_date: null
+}).start_date === '2026-05-10');
 
 assert('manual task keeps explicit start_date', context.normalizeManualTaskPayload({
     title: 'With start date',
@@ -120,6 +130,13 @@ assert('next_week quick-add requires explicit due_date', (() => {
     return !defaults.due_date && cfg.showDueDate === true && cfg.showBucketSelect === true;
 })());
 
+assert('no_date quick-add can normalize an empty due_date payload', (() => {
+    const defaults = context.getQuickAddDefaults('no_date');
+    const cfg = context.getQuickAddFieldConfig('due_date', defaults);
+    const payload = context.normalizeManualTaskPayload({ ...defaults, title: 'No date quick add' });
+    return cfg.showDueDate === true && payload.due_date === null && payload.start_date === null;
+})());
+
 assert('bucket grouping includes start_date and required due_date without Bucket selector', (() => {
     const cfg = context.getQuickAddFieldConfig('bucket', { bucket_id: 12 });
     return cfg.showStartDate === true && cfg.showDueDate === true && cfg.showBucketSelect === false;
@@ -137,8 +154,20 @@ assert('quick-add preserves inferred defaults before normalization', boardJs.inc
 assert('quick-add creation uses normalized manual payload before addTask', /TimeWhereDB\.addTask\(normalizeManualTaskPayload\(payload\)\)/.test(boardJs));
 assert('DB addTask derives subject from selected Plan only', /const subject = plan\?\.subject \|\| null;/.test(dbJs)
     && !/let subject = task\.subject/.test(dbJs));
+assert('DB addTask initializes start_date from due date rules and no longer defaults to today',
+    dbJs.includes('getInitialTaskStartDate(task = {}, referenceDate = new Date())')
+    && dbJs.includes('const leadDays = this.isManageBacSourceTask(task) ? 14 : 7')
+    && dbJs.includes('start_date: normalizedTask.start_date || null')
+    && !dbJs.includes('start_date: task.start_date || this.formatDateISO(new Date())'));
 assert('DB updateTask recalculates subject when plan_id changes', dbJs.includes("Object.prototype.hasOwnProperty.call(data, 'plan_id')")
     && dbJs.includes('updateData.subject = nextPlan?.subject || null'));
+assert('DB marks Task Arrange dirty for task date or plan changes only', taskArrangeAutoJs.includes("task_arrange_dirty_at")
+    && dbJs.includes('markTaskArrangeDirty')
+    && dbJs.includes('hasArrangeRelevantTaskUpdate')
+    && dbJs.includes("['start_date', 'due_date', 'deadline', 'plan_id']")
+    && dbJs.includes('task_created_with_arrange_date')
+    && dbJs.includes('task_arrange_field_changed')
+    && !/if \(data\.progress\)[\s\S]{0,120}markTaskArrangeDirty/.test(dbJs));
 assert('DB blocks deletion of active subject Plans', dbJs.includes('plan?.subject && plan.subject_active !== false')
     && dbJs.includes('启用学科 Plan 只能通过 MatrixView 导入更新'));
 assert('Plan sidebar disables active subject Plan deletion', sidebarJs.includes('const canDeletePlan = !(plan.subject && plan.subject_active !== false)')
@@ -147,10 +176,10 @@ assert('Plan sidebar disables active subject Plan deletion', sidebarJs.includes(
 assert('quick-add prevents duplicate forms while async bucket options load', boardJs.includes('dataset.quickAddOpening')
     && boardJs.includes("delete columnEl.dataset.quickAddOpening"));
 
-assert('quick-add has a visible missing due_date error path', boardJs.includes('请选择截止日期')
-    && boardJs.includes('showQuickAddError(form, error.message'));
+assert('quick-add no longer has business-layer missing due_date error', !boardJs.includes('请选择截止日期'));
 
-assert('quick-add renders required due date input when needed', /data-field="due_date" required/.test(boardJs));
+assert('quick-add keeps Due visual required hint and required attribute', boardJs.includes('<span>Due <strong>*</strong></span>')
+    && /data-field="due_date" required/.test(boardJs));
 
 assert('quick-add renders bucket selector for due_date and other groupings', boardJs.includes('showBucketSelect')
     && boardJs.includes('renderQuickAddBucketOptions'));
@@ -158,6 +187,48 @@ assert('quick-add renders bucket selector for due_date and other groupings', boa
 assert('quick-add form has compact inline styling', /\.quick-add-form/.test(boardCss)
     && /\.quick-add-error/.test(boardCss)
     && /\.quick-add-actions/.test(boardCss));
+
+assert('Task Board exposes Calendar tab and container', tasksHtml.includes('data-view="calendar"')
+    && tasksHtml.includes('id="taskCalendarView"')
+    && stateJs.includes("currentView: 'board'")
+    && stateJs.includes("'board' | 'list' | 'calendar'"));
+assert('Task Board renderBoard supports Calendar view', boardJs.includes("TaskApp.currentView === 'calendar'")
+    && boardJs.includes('renderCalendarView()')
+    && boardJs.includes("calendarEl.style.display = ''"));
+assert('Task Calendar renders 13 continuous months', boardJs.includes('for (let i = 0; i < 13; i++)')
+    && boardJs.includes('today.getMonth() - 3'));
+assert('Task Calendar focuses the current month after rendering surrounding months',
+    boardJs.includes("task-calendar-month.current-month")
+    && boardJs.includes('scrollIntoView({ block: \'start\' })'));
+assert('Task Calendar styles define green start and red due items', boardCss.includes('.task-calendar-item.start')
+    && boardCss.includes('color: #047857')
+    && boardCss.includes('.task-calendar-item.due')
+    && boardCss.includes('color: #b91c1c'));
+
+const calendarDayHtml = context.renderTaskCalendarDay(new RealDate('2026-05-20T00:00:00'), 4, [
+    { id: 'start-only', title: 'Start only', start_date: '2026-05-20', priority: 'medium' },
+    { id: 'due-only', title: 'Due only', due_date: '2026-05-20', priority: 'medium' },
+    { id: 'same-day', title: 'Same day', start_date: '2026-05-20', due_date: '2026-05-20', priority: 'medium' },
+    { id: 'no-date', title: 'No date', priority: 'medium' },
+    { id: 'done', title: 'Done task', due_date: '2026-05-20', progress: 'completed', priority: 'low' }
+], new RealDate('2026-05-13T12:00:00'));
+assert('Task Calendar start_date task uses green start class', calendarDayHtml.includes('data-task-id="start-only"')
+    && calendarDayHtml.includes('task-calendar-item start')
+    && /data-task-id="start-only"[\s\S]*task-calendar-item-title[\s\S]*Start only[\s\S]*task-calendar-item-type[\s\S]*开始/.test(calendarDayHtml));
+assert('Task Calendar due_date task uses red due class', calendarDayHtml.includes('data-task-id="due-only"')
+    && calendarDayHtml.includes('task-calendar-item due')
+    && /data-task-id="due-only"[\s\S]*task-calendar-item-title[\s\S]*Due only[\s\S]*task-calendar-item-type[\s\S]*结束/.test(calendarDayHtml));
+assert('Task Calendar same-day start and due renders once as due', (() => {
+    const sameCount = (calendarDayHtml.match(/data-task-id="same-day"/g) || []).length;
+    return sameCount === 1 && /task-calendar-item due[\s\S]*data-task-id="same-day"/.test(calendarDayHtml);
+})());
+assert('Task Calendar omits no-date tasks and marks completed tasks', !calendarDayHtml.includes('data-task-id="no-date"')
+    && /task-calendar-item due completed[\s\S]*data-task-id="done"/.test(calendarDayHtml));
+assert('Task Calendar task click delegates to existing detail panel', scriptJs.includes("getElementById('taskCalendarView')")
+    && scriptJs.includes("closest('.task-calendar-item')")
+    && scriptJs.includes('openDetailPanel(taskId)'));
+assert('No-plan state hides Calendar view with Board/List', scriptJs.includes("getElementById('taskCalendarView')")
+    && scriptJs.includes("calendar.style.display = 'none'"));
 
 assert('Task Board columns use unified compact desktop width with room for five buckets', boardCss.includes('6 列紧凑基准')
     && boardCss.includes('width: calc((100% - 80px) / 6);')
@@ -229,8 +300,13 @@ const manageBacCardHtml = context.createTaskCardHTML({
     progress: 'not_started',
     priority: 'medium',
     source: 'managebac',
+    start_date: '2026-05-18',
     due_date: '2026-05-20'
 });
+assert('Plan/My Tasks task card shows start_date when present',
+    manageBacCardHtml.includes('task-start-badge')
+    && manageBacCardHtml.includes('开始 5/18')
+    && manageBacCardHtml.includes('play_arrow'));
 assert('ManageBac task card shows TimeWhere Plan name where source text used to appear',
     manageBacCardHtml.includes('English Language Acquisition')
     && manageBacCardHtml.includes('status-plan')
@@ -239,6 +315,11 @@ assert('ManageBac task card uses local MB icon in top-right source marker',
     manageBacCardHtml.includes('task-source-managebac')
     && manageBacCardHtml.includes('../../shared/images/managebac-icon.png')
     && manageBacCardHtml.includes('title="ManageBac"'));
+assert('Task card exposes Planner-like more menu copy action entry point',
+    manageBacCardHtml.includes('task-card-menu-btn')
+    && manageBacCardHtml.includes('more_horiz')
+    && boardJs.includes('data-task-menu-action="copy"')
+    && boardJs.includes('复制任务'));
 
 const normalCardHtml = context.createTaskCardHTML({
     id: 'task-1',
@@ -248,7 +329,102 @@ const normalCardHtml = context.createTaskCardHTML({
     priority: 'medium',
     due_date: '2026-05-20'
 });
+assert('Plan/My Tasks task card omits empty start_date badge', !normalCardHtml.includes('task-start-badge'));
 assert('normal task card does not render ManageBac source icon', !normalCardHtml.includes('task-source-managebac'));
+assert('Plan/My Tasks task card keeps due date badge while adding start date support',
+    manageBacCardHtml.includes('task-due-badge')
+    && manageBacCardHtml.includes('5/20'));
+
+assert('Task card menu click is handled before card detail open', /task-card-menu-btn[\s\S]*stopPropagation\(\)[\s\S]*showTaskActionMenu\(taskMenuBtn\)[\s\S]*closest\('\.task-card'\)/.test(scriptJs));
+assert('Task action menu delegates copy to copy dialog', scriptJs.includes("closest('[data-task-menu-action]')")
+    && scriptJs.includes("taskMenuAction.dataset.taskMenuAction === 'copy'")
+    && scriptJs.includes('await showCopyTaskDialog(taskId)'));
+assert('Task detail panel exposes same copy menu action', detailPanelJs.includes('task-detail-menu-btn')
+    && detailPanelJs.includes('more_horiz')
+    && scriptJs.includes("closest('.task-detail-menu-btn')"));
+
+const copiedPayload = context.buildCopiedTaskPayload({
+    id: 'mb-source',
+    title: 'ManageBac source',
+    plan_id: 'plan-eng',
+    bucket_id: 12,
+    progress: 'completed',
+    status: 'completed',
+    priority: 'urgent',
+    start_date: '2026-05-18',
+    due_date: '2026-05-20',
+    deadline: '2026-05-20',
+    labels: [7],
+    notes: 'Source notes',
+    checklist: [{ id: 'old-1', title: 'Read', checked: true }],
+    schedule_time: '19:00',
+    duration: 60,
+    completed_at: '2026-05-19T10:00:00.000Z',
+    source: 'managebac',
+    source_type: 'managebac_ics',
+    source_uid: 'uid-1',
+    source_url: 'https://managebac.example/task',
+    managebac_subject: 'English',
+    readonly: true,
+    synced_at: '2026-05-19T09:00:00.000Z',
+    google_task_id: 'google-1'
+}, {
+    title: 'Copied title',
+    bucket_id: 12,
+    copyDates: true,
+    copyNotes: true,
+    copyChecklist: true,
+    copyLabels: true
+});
+assert('copied task resets execution state and checklist checked values',
+    copiedPayload.title === 'Copied title'
+    && copiedPayload.progress === 'not_started'
+    && copiedPayload.status === 'pending'
+    && copiedPayload.completed_at === null
+    && copiedPayload.checklist.length === 1
+    && copiedPayload.checklist[0].checked === false
+    && copiedPayload.checklist[0].id !== 'old-1');
+assert('copied ManageBac task becomes a normal local task',
+    copiedPayload.source === null
+    && copiedPayload.source_type === null
+    && copiedPayload.source_uid === null
+    && copiedPayload.source_url === null
+    && copiedPayload.managebac_subject === null
+    && copiedPayload.readonly === false
+    && copiedPayload.synced_at === null
+    && copiedPayload.google_task_id === null);
+assert('copied task keeps selected same-plan fields by default',
+    copiedPayload.plan_id === 'plan-eng'
+    && copiedPayload.bucket_id === 12
+    && copiedPayload.priority === 'urgent'
+    && copiedPayload.start_date === '2026-05-18'
+    && copiedPayload.due_date === '2026-05-20'
+    && copiedPayload.deadline === '2026-05-20'
+    && copiedPayload.notes === 'Source notes'
+    && copiedPayload.labels.join(',') === '7');
+const copiedNoDatesPayload = context.buildCopiedTaskPayload({
+    title: 'No date copy',
+    plan_id: 'plan-eng',
+    start_date: '2026-05-18',
+    due_date: '2026-05-20',
+    deadline: '2026-05-20',
+    notes: 'Skip',
+    labels: [1],
+    checklist: [{ id: 'old-2', title: 'Skip me', checked: true }]
+}, {
+    title: 'No dates copied',
+    copyDates: false,
+    copyNotes: false,
+    copyChecklist: false,
+    copyLabels: false
+});
+assert('copy options can omit dates and optional content before addTask normalization',
+    copiedNoDatesPayload.start_date === undefined
+    && copiedNoDatesPayload.due_date === undefined
+    && copiedNoDatesPayload.deadline === undefined
+    && copiedNoDatesPayload.notes === ''
+    && copiedNoDatesPayload.labels.length === 0
+    && copiedNoDatesPayload.checklist.length === 0);
 
 context.TaskApp.groupBy = 'priority';
 context.TaskApp.viewMode = 'plan';
@@ -361,6 +537,19 @@ assert('Task Board loads saved preferences before initial plan render', scriptJs
 assert('Task Board default secondary view is My Tasks', scriptJs.includes('await TaskApp.loadMyTasks()')
     && !scriptJs.includes('await TaskApp.loadPlan(TaskApp.plans[0].id)')
     && /else\s*\{\s*await TaskApp\.loadMyTasks\(\);[\s\S]*?updateSidebarActiveState\('my_tasks'\)/.test(scriptJs));
+assert('Planner opening triggers automatic Task Arrange review without confirmation page', tasksHtml.includes('../../shared/js/task-arrange-auto.js')
+    && scriptJs.includes('runPlannerTaskArrangeCheck()')
+    && scriptJs.includes('TimeWhereTaskArrangeAuto.runTaskArrangeAutoReview')
+    && scriptJs.includes("source: 'planner_auto'")
+    && !scriptJs.includes('task-arrange.html?source=planner_auto'));
+assert('Shared Task Arrange auto helper honors dirty throttle and writes review log', taskArrangeAutoJs.includes("const DIRTY_KEY = 'task_arrange_dirty_at'")
+    && taskArrangeAutoJs.includes('async function runTaskArrangeAutoReview')
+    && taskArrangeAutoJs.includes('async function shouldRunTaskArrange')
+    && taskArrangeAutoJs.includes('if (dirtyAt) return { run: true, dirty: true }')
+    && taskArrangeAutoJs.includes("reason: 'new_day'")
+    && taskArrangeAutoJs.includes('appendTaskArrangeReviewRecord')
+    && taskArrangeAutoJs.includes('clearTaskArrangeDirty(db)')
+    && taskArrangeAutoJs.includes('no_changes: true'));
 
 assert('Task Board preferences are stored in settings', stateJs.includes("const TASK_BOARD_PREFS_KEY = 'task_board_preferences'")
     && stateJs.includes('TimeWhereDB.getSetting(TASK_BOARD_PREFS_KEY)')

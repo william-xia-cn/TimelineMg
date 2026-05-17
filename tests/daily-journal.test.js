@@ -50,11 +50,36 @@ assert('daily pool snapshot follows Daily Settle task-pool eligibility',
     && dbJs.includes('task.start_date == null || task.start_date <= date')
     && dbJs.includes('task.deferred_until == null || new Date(task.deferred_until) <= referenceDate'));
 
-assert('draft computes completed delayed and extra-done snapshots',
-    dbJs.includes('completed_task_snapshots: completed')
+assert('draft computes mutually exclusive planned-completed delayed and extra-done snapshots',
+    dbJs.includes('const completedPlanned = completed.filter(snapshot => plannedIds.has(String(snapshot.id)))')
+    && dbJs.includes('completed_task_snapshots: completedPlanned')
+    && dbJs.includes('all_completed_task_snapshots: completed')
     && dbJs.includes('delayed_task_snapshots: delayed')
     && dbJs.includes('extra_done_task_snapshots: extraDone')
     && dbJs.includes('this.getLocalDateFromISO(task.completed_at) === journalDate'));
+
+assert('Dashboard journal labels use aligned review layout and no planned completion note',
+    focusScript.includes('今日任务')
+    && focusScript.includes('计划延误说明')
+    && focusScript.includes('计划外完成')
+    && focusScript.includes('计划外完成说明')
+    && focusScript.includes("'今日总结'")
+    && focusScript.includes('journal-note-title')
+    && focusScript.includes('placeholder="补充说明..."')
+    && !focusScript.includes('placeholder="${escapeAttribute(label)}"')
+    && !/<h4>计划内完成/.test(focusScript)
+    && !/<h4>计划延误/.test(focusScript)
+    && !focusScript.includes("'计划完成说明'"));
+
+assert('Dashboard journal planned tasks show completed delayed and fallback status markers',
+    focusScript.includes('renderJournalPlannedTaskReview')
+    && focusScript.includes("statusClass = 'completed'")
+    && focusScript.includes("statusIcon = 'check_circle'")
+    && focusScript.includes("statusLabel = '任务完成'")
+    && focusScript.includes("statusClass = 'delayed'")
+    && focusScript.includes("statusIcon = 'close'")
+    && focusScript.includes("statusLabel = '任务延误'")
+    && focusScript.includes("statusLabel = '待确认'"));
 
 assert('journal submit does not update tasks',
     /async submitDailyJournal[\s\S]*db\.daily_journals\.put\(journal\)/.test(dbJs)

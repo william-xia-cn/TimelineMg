@@ -63,7 +63,7 @@ function hasArrangeWork(pending) {
 }
 
 function isArrangeBlocking() {
-    return !arrangeCompleted && hasArrangeWork(arrangePending);
+    return false;
 }
 
 function setArrangeInProgress(inProgress, message = '') {

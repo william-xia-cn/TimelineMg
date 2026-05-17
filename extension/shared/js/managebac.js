@@ -609,7 +609,7 @@
                         ...classRefs,
                         full_event_text: fullEventText,
                         due_date: dueDate,
-                        start_date: parseIcsDate(props.DTSTART?.[0]) || dueDate,
+                        start_date: parseIcsDate(props.DTSTART?.[0]) || null,
                         end_date: parseIcsDate(props.DTEND?.[0]) || null,
                         status: normalizeText(props.STATUS?.[0]).toLowerCase(),
                         updated_at: normalizeText(props['LAST-MODIFIED']?.[0] || props.DTSTAMP?.[0]),
@@ -958,8 +958,27 @@
         return normalizeText(text.replace(new RegExp(`^${escaped}\\s*[:\\-–—]?\\s*`, 'i'), '')) || text;
     }
 
+    function formatDateISO(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    function getDefaultSourceStartDate(dueDate, now) {
+        if (!dueDate) return null;
+        const todayStr = String(now || new Date().toISOString()).slice(0, 10);
+        if (dueDate < todayStr) return dueDate;
+        const early = new Date(`${dueDate}T00:00:00`);
+        early.setDate(early.getDate() - 14);
+        const earlyStr = formatDateISO(early);
+        const candidate = todayStr > earlyStr ? todayStr : earlyStr;
+        return candidate > dueDate ? dueDate : candidate;
+    }
+
     function eventToTask(event, mapping, now) {
         const title = stripSubjectPrefix(event.summary, mapping.subject_in_managebac);
+        const initialStartDate = event.start_date || getDefaultSourceStartDate(event.due_date, now);
         return {
             title,
             plan_id: mapping.plan_id,
@@ -967,7 +986,7 @@
             progress: event.status === 'completed' ? 'completed' : 'not_started',
             completed_at: null,
             priority: 'medium',
-            start_date: event.start_date || event.due_date,
+            start_date: initialStartDate,
             due_date: event.due_date,
             labels: [],
             notes: [event.description, event.location ? `Location: ${event.location}` : ''].filter(Boolean).join('\n'),

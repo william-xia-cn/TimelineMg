@@ -297,8 +297,11 @@ async function deferTask(taskId, days) {
         showToast('ManageBac 来源任务不能延后', 'error');
         return;
     }
-    const nextStartDate = getDeferredStartDate(days, new Date());
-    await TimeWhereDB.updateTask(taskId, { start_date: nextStartDate });
+    const today = new Date();
+    const baseDate = task?.due_date || task?.deadline || formatDateISO(today);
+    const target = new Date(baseDate + 'T00:00:00');
+    target.setDate(target.getDate() + days);
+    await TimeWhereDB.updateTask(taskId, { due_date: formatDateISO(target) });
     showToast(`任务已延后 ${days} 天`, 'info');
 }
 

@@ -75,6 +75,140 @@ function closeDialog() {
     }
 }
 
+// ========== Copy Task Dialog ==========
+
+async function showCopyTaskDialog(taskId) {
+    const task = await TimeWhereDB.getTaskById(taskId);
+    if (!task) {
+        showToast('找不到要复制的任务', 'error');
+        return;
+    }
+
+    const planId = task.plan_id;
+    const plan = (TaskApp.plans || []).find(item => String(item.id) === String(planId));
+    const planName = plan?.name || (planId ? `Plan ${planId}` : 'No plan');
+    const buckets = planId && typeof TimeWhereDB.getBucketsByPlan === 'function'
+        ? await TimeWhereDB.getBucketsByPlan(planId)
+        : [];
+    const bucketOptions = [
+        `<option value="">No bucket</option>`,
+        ...buckets.map(bucket => `
+            <option value="${bucket.id}" ${bucket.id === task.bucket_id ? 'selected' : ''}>${escapeHTML(bucket.name)}</option>
+        `)
+    ].join('');
+    const defaultTitle = `${task.title || 'Untitled task'} - 副本`;
+
+    showDialog({
+        title: '复制任务',
+        confirmText: '复制',
+        content: `
+            <div class="copy-task-form">
+                <label class="copy-task-field">
+                    <span>任务名称</span>
+                    <input type="text" id="copyTaskTitle" class="dialog-input" value="${escapeAttribute(defaultTitle)}" autofocus>
+                </label>
+                <label class="copy-task-field">
+                    <span>Plan</span>
+                    <input type="text" class="dialog-input" value="${escapeAttribute(planName)}" disabled>
+                </label>
+                <label class="copy-task-field">
+                    <span>Bucket</span>
+                    <select id="copyTaskBucket" class="dialog-input">${bucketOptions}</select>
+                </label>
+                <div class="copy-task-options" aria-label="复制字段">
+                    <label class="copy-task-checkbox"><input type="checkbox" id="copyTaskDates" checked> 复制日期</label>
+                    <label class="copy-task-checkbox"><input type="checkbox" id="copyTaskNotes" checked> 复制说明</label>
+                    <label class="copy-task-checkbox"><input type="checkbox" id="copyTaskChecklist" checked> 复制清单</label>
+                    <label class="copy-task-checkbox"><input type="checkbox" id="copyTaskLabels" checked> 复制标签</label>
+                </div>
+                <div class="copy-task-error" id="copyTaskError" role="alert" hidden></div>
+            </div>`,
+        onConfirm: async () => {
+            const titleInput = document.getElementById('copyTaskTitle');
+            const errorEl = document.getElementById('copyTaskError');
+            const title = titleInput?.value.trim();
+            if (!title) {
+                if (errorEl) {
+                    errorEl.textContent = '请输入任务名称';
+                    errorEl.hidden = false;
+                }
+                titleInput?.focus();
+                return false;
+            }
+
+            const bucketValue = document.getElementById('copyTaskBucket')?.value || '';
+            const copyDates = document.getElementById('copyTaskDates')?.checked !== false;
+            const copyNotes = document.getElementById('copyTaskNotes')?.checked !== false;
+            const copyChecklist = document.getElementById('copyTaskChecklist')?.checked !== false;
+            const copyLabels = document.getElementById('copyTaskLabels')?.checked !== false;
+
+            const payload = buildCopiedTaskPayload(task, {
+                title,
+                bucket_id: bucketValue ? parseInt(bucketValue, 10) : null,
+                copyDates,
+                copyNotes,
+                copyChecklist,
+                copyLabels
+            });
+
+            const newTask = await TimeWhereDB.addTask(payload);
+            await TaskApp.refresh();
+            showToast('任务已复制', 'success');
+            if (newTask?.id) openDetailPanel(newTask.id);
+            return true;
+        }
+    });
+}
+
+function buildCopiedTaskPayload(task, options = {}) {
+    const payload = {
+        title: options.title || `${task.title || 'Untitled task'} - 副本`,
+        plan_id: task.plan_id,
+        bucket_id: Object.prototype.hasOwnProperty.call(options, 'bucket_id') ? options.bucket_id : (task.bucket_id || null),
+        progress: 'not_started',
+        status: 'pending',
+        priority: task.priority || 'medium',
+        labels: options.copyLabels === false ? [] : [...(task.labels || [])],
+        notes: options.copyNotes === false ? '' : (task.notes || ''),
+        checklist: options.copyChecklist === false ? [] : cloneChecklistForCopy(task.checklist),
+        schedule_time: task.schedule_time || null,
+        duration: task.duration || 45,
+        completed_at: null,
+        source: null,
+        source_type: null,
+        source_uid: null,
+        source_updated_at: null,
+        source_url: null,
+        managebac_subject: null,
+        readonly: false,
+        synced_at: null,
+        google_task_id: null
+    };
+
+    if (options.copyDates !== false) {
+        payload.start_date = task.start_date || null;
+        payload.due_date = task.due_date || task.deadline || null;
+        if (task.deadline || task.due_date) payload.deadline = task.deadline || task.due_date;
+    }
+
+    return payload;
+}
+
+function cloneChecklistForCopy(checklist = []) {
+    return (checklist || []).map((item, index) => ({
+        ...item,
+        id: generateCopiedChecklistId(index),
+        checked: false
+    }));
+}
+
+function generateCopiedChecklistId(index = 0) {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `copy-${Date.now()}-${index}`;
+}
+
 // ========== Manage Buckets Dialog ==========
 
 async function showManageBucketsDialog(planId) {

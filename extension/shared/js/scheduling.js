@@ -201,19 +201,29 @@
         return !!startDate && !!dueDate && startDate !== dueDate;
     }
 
-    function constrainArrangeStartDate(task, candidateDate, today) {
-        const nextDate = normalizeTaskDate(candidateDate);
-        if (!nextDate || !hasExplicitStartDateWindow(task)) return nextDate;
+    function getArrangeBaseStartDate(task, today) {
+        const startDate = normalizeTaskDate(task?.start_date);
+        const dueDate = normalizeTaskDate(task?.due_date || task?.deadline);
+        if (!dueDate) return startDate || normalizeTaskDate(today || new Date());
+        if (!startDate || startDate === dueDate) return getDefaultStartDate(task, today);
+        return startDate;
+    }
 
-        const startDate = normalizeTaskDate(task.start_date);
-        const dueDate = normalizeTaskDate(task.due_date || task.deadline);
+    function constrainArrangeStartDate(task, candidateDate, today, baseStartDate = null) {
+        const nextDate = normalizeTaskDate(candidateDate);
+        if (!nextDate) return nextDate;
+
+        const dueDate = normalizeTaskDate(task?.due_date || task?.deadline);
+        const startDate = normalizeTaskDate(baseStartDate) || getArrangeBaseStartDate(task, today);
         const todayStr = normalizeTaskDate(today || new Date());
-        if (startDate > dueDate) return startDate;
-        if (!todayStr || todayStr <= startDate) return startDate;
-        if (todayStr && todayStr > startDate) {
-            return todayStr > dueDate ? dueDate : todayStr;
+        if (startDate > dueDate) return dueDate;
+        let constrained = nextDate;
+        if (startDate && constrained < startDate) constrained = startDate;
+        if (dueDate && constrained > dueDate) constrained = dueDate;
+        if (todayStr && startDate && todayStr > startDate && (!dueDate || todayStr <= dueDate)) {
+            constrained = todayStr > constrained ? todayStr : constrained;
         }
-        return nextDate;
+        return constrained;
     }
 
     function getEscalatedPriority(task, today) {
@@ -279,8 +289,11 @@
         for (const task of tasks || []) {
             if (!task || task.progress === 'completed' || task.status === 'completed') continue;
             if (task.plan_subject_active === false) continue;
+            const dueDate = normalizeTaskDate(task.due_date || task.deadline);
+            if (!dueDate || dueDate < todayStr) continue;
 
             const nextPriority = getEscalatedPriority(task, todayStr);
+            const baseStartDate = getArrangeBaseStartDate(task, todayStr);
             let nextStartDate = null;
             const nextClassDate = getTaskSubject(task)
                 ? findNextSubjectTimetableDate(task, timetableEvents, todayStr)
@@ -293,7 +306,7 @@
             } else {
                 nextStartDate = getDefaultStartDate(task, todayStr);
             }
-            nextStartDate = constrainArrangeStartDate(task, nextStartDate, todayStr);
+            nextStartDate = constrainArrangeStartDate(task, nextStartDate, todayStr, baseStartDate);
 
             const updates = {};
             if (nextStartDate && nextStartDate !== task.start_date) updates.start_date = nextStartDate;
@@ -541,7 +554,7 @@
         const errors = [];
         for (const item of changes) {
             try {
-                await db.updateTask(item.task_id, item.updates);
+                await db.updateTask(item.task_id, item.updates, { skipTaskArrangeDirty: true });
                 arranged++;
             } catch (error) {
                 errors.push({ task_id: item.task_id, error: error.message || String(error) });

@@ -128,7 +128,7 @@ async function run() {
     await applyHarness.context.restoreTaskArrangePending();
 
     assert('restore renders Arrange table', applyHarness.elements.get('#pendingArrangeChanges').innerHTML.includes('Applied Arrange'));
-    assert('pending Arrange review blocks back navigation', applyHarness.elements.get('#backBtn').disabled === true);
+    assert('legacy Arrange review page no longer blocks back navigation', applyHarness.elements.get('#backBtn').disabled === false);
     assert('pending Arrange review enables apply and skip actions', applyHarness.elements.get('#applyArrangeChangesBtn').disabled === false
         && applyHarness.elements.get('#skipArrangeReviewBtn').disabled === false);
 

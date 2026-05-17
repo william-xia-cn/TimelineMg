@@ -197,6 +197,14 @@ function createTaskCardHTML(task) {
     // Due date + status labels
     let dueDateHTML = '';
     const todayStr = formatDateISO(new Date());
+    let startDateHTML = '';
+    if (task.start_date) {
+        startDateHTML = `
+            <span class="task-start-badge">
+                <span class="material-symbols-outlined">play_arrow</span>
+                开始 ${formatDueDate(task.start_date)}
+            </span>`;
+    }
     if (task.due_date) {
         const isOverdue = task.due_date < todayStr;
         const isDueToday = task.due_date === todayStr;
@@ -243,6 +251,9 @@ function createTaskCardHTML(task) {
 
     return `
         <div class="task-card ${progressClass} ${isSourceReadOnly ? 'has-source-icon' : ''}" data-task-id="${task.id}">
+            <button type="button" class="task-card-menu-btn" data-task-id="${task.id}" title="More task actions">
+                <span class="material-symbols-outlined">more_horiz</span>
+            </button>
             ${sourceIconHTML}
             ${labelsHTML}
             <div class="task-card-header">
@@ -255,6 +266,7 @@ function createTaskCardHTML(task) {
             <div class="task-card-footer">
                 <div class="task-card-meta">
                     ${bucketHTML}
+                    ${startDateHTML}
                     ${dueDateHTML}
                     ${checklistHTML}
                 </div>
@@ -318,6 +330,46 @@ function renderColumnHTML(colData) {
         </div>`;
 }
 
+function showTaskActionMenu(button) {
+    const taskId = button?.dataset?.taskId;
+    if (!taskId) return;
+
+    const existing = document.querySelector('.task-action-menu');
+    if (existing) {
+        const sameTask = existing.dataset.taskId === String(taskId);
+        existing.remove();
+        document.removeEventListener('click', closeTaskActionMenuOnOutside);
+        if (sameTask) return;
+    }
+
+    const rect = button.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.className = 'task-action-menu';
+    menu.dataset.taskId = String(taskId);
+    menu.innerHTML = `
+        <button type="button" class="task-action-menu-item" data-task-menu-action="copy" data-task-id="${escapeAttribute(taskId)}">
+            <span class="material-symbols-outlined">content_copy</span>
+            复制任务
+        </button>`;
+    menu.style.top = `${rect.bottom + 6}px`;
+    menu.style.left = `${Math.min(rect.left, window.innerWidth - 180)}px`;
+    document.body.appendChild(menu);
+
+    setTimeout(() => {
+        document.addEventListener('click', closeTaskActionMenuOnOutside);
+    }, 0);
+}
+
+function closeTaskActionMenuOnOutside(e) {
+    if (e.target.closest('.task-action-menu') || e.target.closest('.task-card-menu-btn') || e.target.closest('.task-detail-menu-btn')) return;
+    closeTaskActionMenu();
+}
+
+function closeTaskActionMenu() {
+    document.querySelector('.task-action-menu')?.remove();
+    document.removeEventListener('click', closeTaskActionMenuOnOutside);
+}
+
 // ========== Main Render ==========
 
 function renderKanbanBoard() {
@@ -373,6 +425,126 @@ function renderListView() {
     listEl.innerHTML = html;
 }
 
+function renderCalendarView() {
+    const calendarEl = document.getElementById('taskCalendarView');
+    if (!calendarEl) return;
+
+    const today = new Date();
+    const startMonth = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+    const months = [];
+    for (let i = 0; i < 13; i++) {
+        months.push(new Date(startMonth.getFullYear(), startMonth.getMonth() + i, 1));
+    }
+
+    const tasks = TaskApp.getFilteredTasks();
+    calendarEl.innerHTML = `
+        <div class="task-calendar-months">
+            ${months.map(monthDate => renderTaskCalendarMonth(monthDate, tasks, today)).join('')}
+        </div>`;
+
+    const currentMonth = calendarEl.querySelector('.task-calendar-month.current-month');
+    if (currentMonth && typeof currentMonth.scrollIntoView === 'function') {
+        if (typeof requestAnimationFrame !== 'function') {
+            currentMonth.scrollIntoView({ block: 'start' });
+            return;
+        }
+        requestAnimationFrame(() => {
+            currentMonth.scrollIntoView({ block: 'start' });
+        });
+    }
+}
+
+function renderTaskCalendarMonth(monthDate, tasks, today = new Date()) {
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    let startOffset = firstDay.getDay();
+    startOffset = startOffset === 0 ? 6 : startOffset - 1;
+
+    const startDate = new Date(firstDay);
+    startDate.setDate(firstDay.getDate() - startOffset);
+    const visibleDays = Math.ceil((lastDay - startDate) / 86400000) + 1;
+    const totalDays = Math.ceil(visibleDays / 7) * 7;
+
+    const monthTitle = `${year}.${String(month + 1).padStart(2, '0')}`;
+    const dayHeaders = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
+
+    let cellsHTML = '';
+    for (let i = 0; i < totalDays; i++) {
+        const date = new Date(startDate);
+        date.setDate(startDate.getDate() + i);
+        cellsHTML += renderTaskCalendarDay(date, month, tasks, today);
+    }
+
+    return `
+        <section class="task-calendar-month ${isCurrentMonth ? 'current-month' : ''}">
+            <h3 class="task-calendar-month-title">${monthTitle}</h3>
+            <div class="task-calendar-weekdays">
+                ${dayHeaders.map(day => `<div class="task-calendar-weekday">${day}</div>`).join('')}
+            </div>
+            <div class="task-calendar-grid">
+                ${cellsHTML}
+            </div>
+        </section>`;
+}
+
+function renderTaskCalendarDay(date, currentMonth, tasks, today = new Date()) {
+    const dateStr = formatDateISO(date);
+    const todayStr = formatDateISO(today);
+    const classes = ['task-calendar-day'];
+    if (date.getMonth() !== currentMonth) classes.push('other-month');
+    if (dateStr === todayStr) classes.push('today');
+
+    const items = getTaskCalendarItemsForDate(tasks, dateStr);
+    const visibleItems = items.slice(0, 4);
+    const hiddenCount = items.length - visibleItems.length;
+
+    return `
+        <div class="${classes.join(' ')}" data-date="${dateStr}">
+            <div class="task-calendar-date">${date.getDate()}</div>
+            <div class="task-calendar-items">
+                ${visibleItems.map(renderTaskCalendarItem).join('')}
+                ${hiddenCount > 0 ? `<div class="task-calendar-more">+${hiddenCount}</div>` : ''}
+            </div>
+        </div>`;
+}
+
+function getTaskCalendarItemsForDate(tasks, dateStr) {
+    const items = [];
+    for (const task of tasks || []) {
+        const dueDate = task.due_date || task.deadline || null;
+        const startDate = task.start_date || null;
+        if (dueDate === dateStr) {
+            items.push({ task, type: 'due' });
+        } else if (startDate === dateStr) {
+            items.push({ task, type: 'start' });
+        }
+    }
+    return items.sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'due' ? -1 : 1;
+        const aPriority = taskPrioritySortValue(a.task.priority);
+        const bPriority = taskPrioritySortValue(b.task.priority);
+        if (aPriority !== bPriority) return aPriority - bPriority;
+        return String(a.task.title || '').localeCompare(String(b.task.title || ''));
+    });
+}
+
+function renderTaskCalendarItem(item) {
+    const task = item.task;
+    const type = item.type === 'due' ? 'due' : 'start';
+    const completed = task.progress === 'completed' || task.status === 'completed';
+    const classes = ['task-calendar-item', type];
+    if (completed) classes.push('completed');
+    const typeLabel = type === 'due' ? '结束' : '开始';
+    return `
+        <button type="button" class="${classes.join(' ')}" data-task-id="${escapeAttribute(task.id)}" title="${escapeAttribute(task.title || '')}">
+            <span class="task-calendar-item-title">${escapeHTML(task.title || 'Untitled task')}</span>
+            <span class="task-calendar-item-type">${typeLabel}</span>
+        </button>`;
+}
+
 function createTaskListRowHTML(task) {
     const priorityCfg = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
     const bucketName = TaskApp.getBucketName(task.bucket_id);
@@ -425,16 +597,24 @@ function createTaskListRowHTML(task) {
 function renderBoard() {
     const boardEl = document.getElementById('kanbanBoard');
     const listEl = document.getElementById('taskListView');
-    if (!boardEl || !listEl) return;
+    const calendarEl = document.getElementById('taskCalendarView');
+    if (!boardEl || !listEl || !calendarEl) return;
     normalizeTaskBoardGroupBy();
 
     if (TaskApp.currentView === 'list') {
         boardEl.style.display = 'none';
         listEl.style.display = '';
+        calendarEl.style.display = 'none';
         renderListView();
+    } else if (TaskApp.currentView === 'calendar') {
+        boardEl.style.display = 'none';
+        listEl.style.display = 'none';
+        calendarEl.style.display = '';
+        renderCalendarView();
     } else {
         boardEl.style.display = '';
         listEl.style.display = 'none';
+        calendarEl.style.display = 'none';
         renderKanbanBoard();
     }
 }
@@ -753,13 +933,24 @@ function getQuickAddFieldConfig(groupBy, defaults = {}) {
     };
 }
 
+function getInitialTaskStartDate(task, referenceDate = new Date()) {
+    const dueDate = task.due_date || task.deadline || null;
+    if (!dueDate) return task.start_date || null;
+    if (task.start_date) return task.start_date;
+    const todayStr = formatDateISO(referenceDate);
+    if (dueDate < todayStr) return dueDate;
+    const due = new Date(dueDate + 'T00:00:00');
+    due.setDate(due.getDate() - 7);
+    const earlyStart = formatDateISO(due);
+    const candidate = todayStr > earlyStart ? todayStr : earlyStart;
+    return candidate > dueDate ? dueDate : candidate;
+}
+
 function normalizeManualTaskPayload(task) {
-    if (!task.due_date) {
-        throw new Error('请选择截止日期');
-    }
     return {
         ...task,
-        start_date: task.start_date || task.due_date
+        due_date: task.due_date || null,
+        start_date: getInitialTaskStartDate(task)
     };
 }
 
@@ -850,6 +1041,15 @@ function formatDateISO(date) {
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
+}
+
+function taskPrioritySortValue(priority) {
+    const map = { urgent: 0, P1: 0, important: 1, P2: 1, medium: 2, P3: 2, low: 3, P4: 3 };
+    return map[priority] ?? 2;
+}
+
+function escapeAttribute(value) {
+    return escapeHTML(String(value ?? ''));
 }
 
 function showToast(message, type = 'info') {

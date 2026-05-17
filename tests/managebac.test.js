@@ -240,6 +240,28 @@ async function run() {
             && event.summary.includes('Essay Draft')
             && event.due_date === '2026-05-20';
     }));
+    const sourceStartTask = ManageBac.eventToTask({
+        uid: 'source-start',
+        summary: 'English Essay',
+        due_date: '2026-05-30',
+        start_date: '2026-05-22'
+    }, {
+        plan_id: 1,
+        subject: 'English Language Acquisition Phase 5',
+        subject_in_managebac: 'English'
+    }, '2026-05-13T00:00:00.000Z');
+    assertEqual('ManageBac eventToTask preserves source DTSTART as start_date', sourceStartTask.start_date, '2026-05-22');
+    const initializedSourceTask = ManageBac.eventToTask({
+        uid: 'no-source-start',
+        summary: 'English Essay',
+        due_date: '2026-05-30',
+        start_date: null
+    }, {
+        plan_id: 1,
+        subject: 'English Language Acquisition Phase 5',
+        subject_in_managebac: 'English'
+    }, '2026-05-13T00:00:00.000Z');
+    assertEqual('ManageBac eventToTask initializes missing DTSTART by 14 day rule', initializedSourceTask.start_date, '2026-05-16');
 
     const syncDb = new FakeDB({ matrixReady: true });
     const syncRows = preview.map(row => {

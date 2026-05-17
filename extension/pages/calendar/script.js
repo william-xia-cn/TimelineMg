@@ -1,7 +1,6 @@
 let currentView = 'week';
 let currentDate = new Date();
 const TIME_RANGE = { startHour: 6, endHour: 22, pxPerHour: 40 };
-const TASK_ARRANGE_PENDING_KEY = 'task_arrange_pending';
 
 function formatDateISO(date) {
     const y = date.getFullYear();
@@ -32,34 +31,11 @@ function runGoogleSyncCheck() {
     });
 }
 
-function calendarReviewHasWork(pending) {
-    return Array.isArray(pending?.arrange_changes) && pending.arrange_changes.length > 0;
-}
-
-function openCalendarManagementReviewPage() {
-    window.location.href = '../settings/task-arrange.html?source=calendar_auto';
-}
-
 async function runCalendarArrangeCheck() {
-    if (!window.TimeWhereScheduling?.arrangeTasks || !window.TimeWhereDB) return;
+    if (!window.TimeWhereTaskArrangeAuto?.runTaskArrangeAutoReview || !window.TimeWhereDB) return;
     try {
-        const existing = await TimeWhereDB.getSetting(TASK_ARRANGE_PENDING_KEY);
-        if (calendarReviewHasWork(existing)) {
-            openCalendarManagementReviewPage();
-            return;
-        }
-
-        const now = new Date();
-        const arrangePreview = await TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false });
-        if (!Array.isArray(arrangePreview.changes) || arrangePreview.changes.length === 0) return;
-
-        await TimeWhereDB.setSetting(TASK_ARRANGE_PENDING_KEY, {
-            source: 'calendar_auto',
-            created_at: now.toISOString(),
-            arrange_changes: arrangePreview.changes,
-            arrange_summary: arrangePreview.summary || null
-        });
-        openCalendarManagementReviewPage();
+        const result = await TimeWhereTaskArrangeAuto.runTaskArrangeAutoReview(TimeWhereDB, { source: 'calendar_auto' });
+        if (result?.ran && !result.no_changes) await render();
     } catch (error) {
         console.warn('[Calendar] Arrange check skipped:', error);
     }
@@ -277,12 +253,20 @@ const { containerAppliesToDate, _nthWeekdayOfMonth,
         escapeHTML, escapeAttribute } = window.TimeWhereScheduling;
 
 function getCalendarTasksForDate(tasks, dateStr) {
-    return (tasks || []).filter(task =>
-        task &&
-        task.progress !== 'completed' &&
-        task.status !== 'completed' &&
-        task.start_date === dateStr
-    );
+    const items = [];
+    (tasks || []).forEach(task => {
+        if (!task || task.progress === 'completed' || task.status === 'completed') return;
+        const dueDate = task.due_date || task.deadline || null;
+        if (dueDate === dateStr) {
+            items.push({ ...task, calendar_item_type: 'due' });
+        } else if (task.start_date === dateStr) {
+            items.push({ ...task, calendar_item_type: 'start' });
+        }
+    });
+    return items.sort((a, b) => {
+        if (a.calendar_item_type !== b.calendar_item_type) return a.calendar_item_type === 'due' ? -1 : 1;
+        return String(a.title || '').localeCompare(String(b.title || ''));
+    });
 }
 
 function calendarTimeToMinutes(timeStr) {
@@ -515,14 +499,11 @@ function createEventCard(item) {
     if (type === 'container' && tasks.length > 0) {
         tasksHTML = `<div class="container-tasks">` +
             tasks.map(t => {
-                const pLabel = priorityLabel(t.priority);
-                const pCls = priorityClass(t.priority);
-                const timedMark = t.schedule_time ? `<span class="task-timed">${escapeHTML(t.schedule_time)}</span>` : '';
-                return `<div class="container-task-item">
-                    <span class="task-priority-dot ${pCls}" title="${escapeAttribute(pLabel)}"></span>
+                const itemType = t.calendar_item_type === 'due' ? 'due' : 'start';
+                const itemLabel = itemType === 'due' ? '结束' : '开始';
+                return `<div class="container-task-item ${itemType}">
                     <span class="task-item-title">${escapeHTML(t.title || '无标题')}</span>
-                    <span class="task-item-dur">${t.duration || 45}m</span>
-                    ${timedMark}
+                    <span class="task-item-type task-item-${itemType}">${itemLabel}</span>
                 </div>`;
             }).join('') +
         `</div>`;

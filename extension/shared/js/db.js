@@ -119,6 +119,27 @@ const TimeWhereDB = {
         return `${y}-${m}-${d}`;
     },
 
+    addDaysISO(dateStr, days) {
+        if (!dateStr) return null;
+        const date = new Date(`${dateStr}T00:00:00`);
+        if (Number.isNaN(date.getTime())) return null;
+        date.setDate(date.getDate() + days);
+        return this.formatDateISO(date);
+    },
+
+    getInitialTaskStartDate(task = {}, referenceDate = new Date()) {
+        const dueDate = task.due_date || task.deadline || null;
+        if (!dueDate) return task.start_date || null;
+        if (task.start_date) return task.start_date;
+        const todayStr = typeof referenceDate === 'string' ? referenceDate.slice(0, 10) : this.formatDateISO(referenceDate);
+        if (dueDate < todayStr) return dueDate;
+        const leadDays = this.isManageBacSourceTask(task) ? 14 : 7;
+        const earlyStart = this.addDaysISO(dueDate, -leadDays);
+        if (!earlyStart) return dueDate;
+        const candidate = todayStr > earlyStart ? todayStr : earlyStart;
+        return candidate > dueDate ? dueDate : candidate;
+    },
+
     getGoogleSyncApi() {
         return typeof globalThis !== 'undefined' ? globalThis.TimeWhereGoogleSync : null;
     },
@@ -149,6 +170,28 @@ const TimeWhereDB = {
         } catch (error) {
             console.warn('Google sync tombstone marker failed:', error);
         }
+    },
+
+    getTaskArrangeAutoApi() {
+        return typeof globalThis !== 'undefined' ? globalThis.TimeWhereTaskArrangeAuto : null;
+    },
+
+    async markTaskArrangeDirty(reason = 'arrange_relevant_change', options = {}) {
+        if (options.skipTaskArrangeDirty) return;
+        const api = this.getTaskArrangeAutoApi();
+        if (api?.markTaskArrangeDirty) {
+            await api.markTaskArrangeDirty(this, reason);
+        }
+    },
+
+    hasArrangeRelevantTaskDate(task = {}) {
+        return !!(task.start_date || task.due_date || task.deadline || task.plan_id);
+    },
+
+    hasArrangeRelevantTaskUpdate(data = {}) {
+        return ['start_date', 'due_date', 'deadline', 'plan_id'].some(field =>
+            Object.prototype.hasOwnProperty.call(data || {}, field)
+        );
     },
 
     // ========== Plans ==========
@@ -214,6 +257,9 @@ const TimeWhereDB = {
         await db.plans.update(id, updateData);
         const updated = await db.plans.get(id);
         await this.markGoogleSyncDirty('plans', id, updated);
+        if (['subject', 'subject_active', 'matrixview_managed'].some(field => Object.prototype.hasOwnProperty.call(data || {}, field))) {
+            await this.markTaskArrangeDirty('plan_subject_changed');
+        }
         return updated;
     },
 
@@ -505,6 +551,11 @@ const TimeWhereDB = {
     async addTask(task, options = {}) {
         this.assertTaskWritable(task, options);
         const now = this.getNowISO();
+        const normalizedTask = {
+            ...task,
+            due_date: task.due_date || task.deadline || null
+        };
+        normalizedTask.start_date = this.getInitialTaskStartDate(normalizedTask, new Date(now));
         const plan = task.plan_id ? await db.plans.get(task.plan_id) : await this.ensureDefaultPlan();
         const planId = task.plan_id || plan.id;
         const subject = plan?.subject || null;
@@ -518,8 +569,8 @@ const TimeWhereDB = {
             bucket_id: task.bucket_id || null,
             progress: progressVal,
             priority: task.priority || 'medium',
-            start_date: task.start_date || this.formatDateISO(new Date()),
-            due_date: task.due_date || null,
+            start_date: normalizedTask.start_date || null,
+            due_date: normalizedTask.due_date || null,
             labels: task.labels || [],
             notes: task.notes || '',
             checklist: task.checklist || [],
@@ -544,6 +595,9 @@ const TimeWhereDB = {
         await db.tasks.add(newTask);
         await this.addSyncLog('task', 'create', newTask);
         await this.markGoogleSyncDirty('tasks', newTask.id, newTask, options);
+        if (this.hasArrangeRelevantTaskDate(newTask)) {
+            await this.markTaskArrangeDirty('task_created_with_arrange_date', options);
+        }
         return newTask;
     },
 
@@ -579,6 +633,9 @@ const TimeWhereDB = {
         const updatedTask = await db.tasks.get(id);
         await this.addSyncLog('task', 'update', updatedTask);
         await this.markGoogleSyncDirty('tasks', id, updatedTask, options);
+        if (this.hasArrangeRelevantTaskUpdate(data)) {
+            await this.markTaskArrangeDirty('task_arrange_field_changed', options);
+        }
         return updatedTask;
     },
 
@@ -735,6 +792,7 @@ const TimeWhereDB = {
         const completed = tasks
             .filter(task => this.getLocalDateFromISO(task.completed_at) === journalDate)
             .map(task => this.createJournalTaskSnapshot(task));
+        const completedPlanned = completed.filter(snapshot => plannedIds.has(String(snapshot.id)));
         const completedIds = new Set(completed.map(task => String(task.id)));
         const delayed = plannedSnapshots.filter(snapshot => {
             const current = taskById.get(String(snapshot.id));
@@ -748,10 +806,11 @@ const TimeWhereDB = {
             status: journal?.status || 'snapshot',
             planned_task_snapshots: plannedSnapshots,
             daily_pool_snapshots: journal?.daily_pool_snapshots || this.buildDailyJournalPoolSnapshot(tasks, journalDate, referenceDate),
-            completed_task_snapshots: completed,
+            completed_task_snapshots: completedPlanned,
+            all_completed_task_snapshots: completed,
             delayed_task_snapshots: delayed,
             extra_done_task_snapshots: extraDone,
-            completed_planned_count: completed.filter(snapshot => plannedIds.has(String(snapshot.id))).length,
+            completed_planned_count: completedPlanned.length,
             completed_count: completed.length,
             delayed_count: delayed.length,
             extra_done_count: extraDone.length,
@@ -919,6 +978,9 @@ const TimeWhereDB = {
         await db.events.add(newEvent);
         await this.addSyncLog('event', 'create', newEvent);
         await this.markGoogleSyncDirty('events', newEvent.id, newEvent);
+        if (newEvent.source === 'timetable') {
+            await this.markTaskArrangeDirty('timetable_event_created');
+        }
         return newEvent;
     },
 
@@ -932,6 +994,9 @@ const TimeWhereDB = {
         const updatedEvent = await db.events.get(id);
         await this.addSyncLog('event', 'update', updatedEvent);
         await this.markGoogleSyncDirty('events', id, updatedEvent);
+        if (updatedEvent?.source === 'timetable') {
+            await this.markTaskArrangeDirty('timetable_event_updated');
+        }
         return updatedEvent;
     },
 
@@ -940,6 +1005,9 @@ const TimeWhereDB = {
         await db.events.delete(id);
         await this.addSyncLog('event', 'delete', event);
         await this.markGoogleSyncDeleted('events', id, event);
+        if (event?.source === 'timetable') {
+            await this.markTaskArrangeDirty('timetable_event_deleted');
+        }
     },
 
     // ========== Habits ==========

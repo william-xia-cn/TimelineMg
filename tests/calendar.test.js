@@ -103,6 +103,8 @@ async function run() {
 
     const arrangedTasks = [
         { id: 'today-start', title: 'Today start', progress: 'not_started', start_date: '2026-05-18' },
+        { id: 'today-due', title: 'Today due', progress: 'not_started', due_date: '2026-05-18' },
+        { id: 'same-day', title: 'Same day', progress: 'not_started', start_date: '2026-05-18', due_date: '2026-05-18' },
         { id: 'past-start', title: 'Past start', progress: 'not_started', start_date: '2026-05-17' },
         { id: 'future-start', title: 'Future start', progress: 'not_started', start_date: '2026-05-19' },
         { id: 'completed', title: 'Completed', progress: 'completed', start_date: '2026-05-18' },
@@ -110,9 +112,14 @@ async function run() {
         { id: 'no-start', title: 'No start', progress: 'not_started', start_date: null }
     ];
     assertEqual(
-        'Calendar task display uses exact Task Arrange start_date only',
+        'Calendar task display uses exact start and due date items with due priority',
         helpers.getCalendarTasksForDate(arrangedTasks, '2026-05-18').map(task => task.id),
-        ['today-start']
+        ['same-day', 'today-due', 'today-start']
+    );
+    assertEqual(
+        'Calendar same-day start and due is marked as due once',
+        helpers.getCalendarTasksForDate(arrangedTasks, '2026-05-18').find(task => task.id === 'same-day').calendar_item_type,
+        'due'
     );
 
     const dayContainers = [
@@ -122,9 +129,10 @@ async function run() {
     ];
     const assignments = helpers.assignCalendarTasksToContainers([
         { id: 'unscheduled', start_date: '2026-05-18' },
+        { id: 'due-unscheduled', due_date: '2026-05-18', calendar_item_type: 'due' },
         { id: 'timed', start_date: '2026-05-18', schedule_time: '20:15' }
     ], dayContainers);
-    assertEqual('Calendar unscheduled start-date tasks render once in first study container', assignments.get('study').map(task => task.id), ['unscheduled']);
+    assertEqual('Calendar unscheduled date tasks render once in first study container', assignments.get('study').map(task => task.id), ['unscheduled', 'due-unscheduled']);
     assertEqual('Calendar timed start-date tasks render in matching container only', assignments.get('late').map(task => task.id), ['timed']);
 
     const weeklyPayload = helpers._repeatPayload({ repeat: 'weekly', weeklyDay: 4 });
@@ -193,18 +201,30 @@ async function run() {
     assert('week columns cover the full time grid so blank areas are clickable', calendarStyles.includes('min-height: calc(17 * 40px)')
         && /columns-layer[\s\S]*min-height:\s*calc\(17 \* 40px\)/.test(calendarStyles)
         && /day-col[\s\S]*min-height:\s*calc\(17 \* 40px\)/.test(calendarStyles));
-    assert('Calendar open triggers Arrange preview through dedicated Task Arrange review', calendarScript.includes('runCalendarArrangeCheck()')
-        && calendarScript.includes('calendarReviewHasWork')
-        && calendarScript.includes('TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false })')
+    assert('Calendar open auto-applies Arrange through shared review helper', calendarScript.includes('runCalendarArrangeCheck()')
+        && calendarHtml.includes('../../shared/js/task-arrange-auto.js')
+        && calendarScript.includes('TimeWhereTaskArrangeAuto.runTaskArrangeAutoReview')
         && calendarScript.includes("source: 'calendar_auto'")
-        && calendarScript.includes('task-arrange.html?source=calendar_auto')
-        && calendarScript.includes('TASK_ARRANGE_PENDING_KEY')
         && !calendarScript.includes('maybeRunTaskArrange')
-        && !calendarScript.includes('apply: true'));
+        && !calendarScript.includes('task-arrange.html?source=calendar_auto'));
     assert('Calendar week task display no longer uses Daily Settle rolling task pool', !calendarScript.includes('buildDailyTaskPool')
         && !calendarScript.includes('dailySettle')
         && calendarScript.includes('getCalendarTasksForDate(allTasks, dateStr)')
         && calendarScript.includes('assignCalendarTasksToContainers(dateTasks, dayContainers)'));
+    assert('Calendar task display uses the same start marker structure as Dashboard today tomorrow',
+        calendarScript.includes('task-item-title')
+        && calendarScript.includes('task-item-type task-item-${itemType}')
+        && calendarScript.includes("itemType === 'due' ? '结束' : '开始'")
+        && calendarScript.includes("calendar_item_type: 'due'")
+        && !calendarScript.includes('task-priority-dot')
+        && !calendarScript.includes('task-item-dur')
+        && calendarStyles.includes('.task-item-start')
+        && calendarStyles.includes('color: #047857')
+        && calendarStyles.includes('.container-task-item.start')
+        && calendarStyles.includes('.container-task-item.due')
+        && calendarStyles.includes('.task-item-due')
+        && calendarStyles.includes('color: #b91c1c')
+        && !calendarStyles.includes('.task-priority-dot'));
     assertEqual('month view layer 1 container uses old layer-aware container class', helpers.getMonthItemClass({ type: 'container', source: 'container', layer: 1 }), 'month-event month-container layer-1');
     assertEqual('month view layer 2 container uses old layer-aware container class', helpers.getMonthItemClass({ type: 'container', source: 'container', layer: 2 }), 'month-event month-container layer-2');
     assertEqual('month view event item remains normal event style', helpers.getMonthItemClass({ type: 'event', source: 'manual' }), 'month-event');

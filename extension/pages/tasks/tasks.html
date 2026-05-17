@@ -73,6 +73,7 @@
                 <div class="view-tab-buttons">
                     <button class="btn-tab active" data-view="board">Board</button>
                     <button class="btn-tab" data-view="list">List</button>
+                    <button class="btn-tab" data-view="calendar">Calendar</button>
                 </div>
                 <div class="header-actions">
                     <div class="search-bar">
@@ -90,6 +91,10 @@
 
             <section id="taskListView" class="task-list-view custom-scrollbar" style="display:none;">
                 <!-- Dynamic: list rendered by board.js -->
+            </section>
+
+            <section id="taskCalendarView" class="task-calendar-view custom-scrollbar" style="display:none;">
+                <!-- Dynamic: continuous month calendar rendered by board.js -->
             </section>
 
             <!-- Empty state when no plan selected -->
@@ -122,6 +127,7 @@
     <script src="../../shared/js/appearance.js"></script>
     <script src="../../shared/js/managebac.js"></script>
     <script src="../../shared/js/scheduling.js"></script>
+    <script src="../../shared/js/task-arrange-auto.js"></script>
     <script src="state.js"></script>
     <script src="board.js"></script>
     <script src="sidebar.js"></script>

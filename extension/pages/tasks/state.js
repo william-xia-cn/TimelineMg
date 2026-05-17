@@ -27,7 +27,7 @@ function sanitizeTaskGroupBy(groupBy, fallback) {
 window.TaskApp = {
     // --- Current UI state ---
     currentPlanId: null,
-    currentView: 'board',          // 'board' | 'list'
+    currentView: 'board',          // 'board' | 'list' | 'calendar'
     viewMode: 'plan',              // 'plan' | 'my_day' | 'my_tasks' | 'my_managebac'
     groupBy: 'due_date',           // 'due_date' | 'bucket' | 'priority' | 'progress' | 'labels'
     selectedTaskId: null,
