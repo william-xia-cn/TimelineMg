@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy - TimeWhere</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; max-width: 860px; margin: 40px auto; padding: 0 20px; color: #1f2937; }
+    h1, h2 { color: #0f2f63; }
+    code { background: #f3f4f6; padding: 2px 4px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Privacy Policy for TimeWhere</h1>
+  <p><strong>Last Updated:</strong> May 19, 2026</p>
+
+  <p>TimeWhere is a Chrome extension for personal task, calendar, study planning, daily review, and optional cross-device data synchronization. TimeWhere is designed as a local-first tool: core task, calendar, planner, dashboard, MatrixView, ManageBac, reminder, and journal features work without signing in to a Google account.</p>
+
+  <h2>1. Data TimeWhere Processes</h2>
+  <p>TimeWhere may process data that the user enters, imports, or configures inside the extension, including:</p>
+  <ul>
+    <li>Tasks, task status, due dates, start dates, priorities, plans, buckets, labels, and scheduling metadata.</li>
+    <li>Calendar containers, calendar events, timetable records, MatrixView import data, and Daily Journal entries.</li>
+    <li>ManageBac-related configuration and imported task/event metadata when the user provides a ManageBac events subscription link.</li>
+    <li>Extension settings, notification preferences, sync state, and local operational metadata needed to run the extension.</li>
+    <li>Google account authorization state when the user chooses to enable optional Google Drive data synchronization.</li>
+  </ul>
+
+  <h2>2. Local Storage</h2>
+  <p>By default, TimeWhere stores data locally in the user's browser using IndexedDB and Chrome extension storage. The developer does not receive, host, sell, or access the user's local TimeWhere data.</p>
+
+  <h2>3. Optional Google Drive Synchronization</h2>
+  <p>If the user enables Google data synchronization, TimeWhere uses Chrome Identity and Google Drive <code>appDataFolder</code> to store a TimeWhere synchronization file in the user's own Google Drive account. This is used only for cross-device synchronization of TimeWhere data. TimeWhere does not use Google Calendar or Google Tasks APIs. The developer does not operate a separate server for this sync data and does not have access to the user's raw Google Drive appDataFolder contents.</p>
+
+  <h2>4. ManageBac Subscription Links</h2>
+  <p>If the user configures a ManageBac events subscription link, TimeWhere uses the link only to fetch and process the user's school event/task information for TimeWhere planning workflows. Such links may be private to the user or school system. Users should not share private ManageBac links publicly. If Google Drive synchronization is enabled, the user's saved TimeWhere configuration may be included in the user's own synchronized TimeWhere data.</p>
+
+  <h2>5. Permissions</h2>
+  <p>TimeWhere requests Chrome permissions only for its core purpose:</p>
+  <ul>
+    <li><strong>identity / identity.email:</strong> used only when the user enables optional Google Drive data sync and to help identify the selected Google account.</li>
+    <li><strong>alarms:</strong> used for local task reminders, reminder checks, and daily journal scheduling.</li>
+    <li><strong>notifications:</strong> used to show local task reminders and test notifications.</li>
+    <li><strong>storage:</strong> used to store extension settings and local operational state.</li>
+    <li><strong>tabs:</strong> used to open TimeWhere dashboard or focus pages from the popup or notification interactions.</li>
+    <li><strong>unlimitedStorage:</strong> used to support local-first task, calendar, timetable, journal, and sync metadata storage.</li>
+    <li><strong>Host permissions:</strong> Keystone ManageBac events paths are used only for user-configured ManageBac imports; Google Drive API hosts are used only for optional Google Drive appDataFolder synchronization.</li>
+  </ul>
+
+  <h2>6. Data Sharing and Sale</h2>
+  <p>TimeWhere does not sell user data. TimeWhere does not transfer user data to third parties for advertising, creditworthiness, lending, or any purpose unrelated to the extension's single purpose. Data accessed through Google APIs is used only to provide user-facing TimeWhere synchronization and follows the Chrome Web Store User Data Policy, including Limited Use requirements.</p>
+
+  <h2>7. Remote Code</h2>
+  <p>TimeWhere does not use remote JavaScript or WebAssembly code. Extension code is packaged with the Chrome extension.</p>
+
+  <h2>8. Changes to This Policy</h2>
+  <p>This policy may be updated when TimeWhere's features, permissions, or data practices change. The latest version will be posted at this URL.</p>
+
+  <h2>9. Contact</h2>
+  <p>For questions about this privacy policy, contact the developer through the public GitHub repository for TimeWhere / TimelineMg.</p>
+</body>
+</html>
