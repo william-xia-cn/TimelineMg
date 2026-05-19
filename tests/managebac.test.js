@@ -39,8 +39,8 @@ class FakeDB {
         this.tasks = [];
         this.nextTask = 1;
         this.plans = [
-            { id: 1, name: 'English Language Acquisition Phase 5', subject: 'English Language Acquisition Phase 5' },
-            { id: 2, name: 'Mathematics Analysis HL', subject: 'Mathematics Analysis HL' },
+            { id: 1, name: 'English Language Acquisition Phase 5', subject: 'English Language Acquisition Phase 5', subject_in_matrixview: 'English Language Acquisition Phase 5' },
+            { id: 2, name: 'Mathematics Analysis HL', subject: 'Mathematics Analysis HL', subject_in_matrixview: 'Mathematics Analysis HL' },
             { id: 3, name: 'Other School Plan', subject: null }
         ];
         if (matrixReady) {
@@ -372,6 +372,7 @@ async function run() {
             && task.source === 'managebac'
             && task.readonly === true
             && task.subject === 'English Language Acquisition Phase 5'
+            && task.subject_in_matrixview === 'English Language Acquisition Phase 5'
             && task.managebac_subject === 'English Language Acquisition Phase 5';
     }));
     assert('confirmed Math event maps to Math plan_id', (await syncDb.getAllTasks()).some(task => {
@@ -616,7 +617,9 @@ async function run() {
     assertEqual('confirmed pending event creates one task', aliasConfirmed.created, 1);
     assertEqual('unconfirmed new event remains pending', aliasConfirmed.pending_event_mappings.length, 1);
     assert('confirmed event maps to selected plan', (await aliasDb.getAllTasks()).some(task => {
-        return task.source_uid === 'mb-alias-engla-1@example.invalid' && task.plan_id === 1;
+        return task.source_uid === 'mb-alias-engla-1@example.invalid'
+            && task.plan_id === 1
+            && task.subject_in_matrixview === 'English Language Acquisition Phase 5';
     }));
 
     await aliasDb.setSetting(ManageBac.SETTINGS_EVENT_OVERRIDES_KEY, []);

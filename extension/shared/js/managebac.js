@@ -658,6 +658,7 @@
                 subject_in_managebac: text,
                 plan_id: plan.id,
                 subject: plan.subject || plan.name,
+                subject_in_matrixview: plan.subject_in_matrixview || '',
                 source,
                 sync_enabled: true
             });
@@ -675,7 +676,12 @@
                 normalizeKey(item.subject) === normalizeKey(subject) ||
                 normalizeKey(item.name) === normalizeKey(planName)
             );
-            if (plan) addCandidate(plan, mapping.subject_in_matrixview, 'matrixview_subject');
+            if (plan) {
+                addCandidate({
+                    ...plan,
+                    subject_in_matrixview: plan.subject_in_matrixview || mapping.subject_in_matrixview || ''
+                }, mapping.subject_in_matrixview, 'matrixview_subject');
+            }
         }
 
         for (const mapping of legacyMappings) {
@@ -700,6 +706,7 @@
                 event_uid: eventUid,
                 plan_id: row.plan_id,
                 subject: normalizeText(row.subject),
+                subject_in_matrixview: normalizeText(row.subject_in_matrixview),
                 subject_in_managebac: normalizeText(row.subject_in_managebac),
                 source: 'managebac_event_subject_override',
                 updated_at: row.updated_at || null
@@ -715,6 +722,7 @@
             subject_in_managebac: normalizeText(override.subject_in_managebac),
             plan_id: override.plan_id,
             subject,
+            subject_in_matrixview: normalizeText(override.subject_in_matrixview),
             sync_enabled: true,
             source: 'managebac_event_subject_override'
         };
@@ -994,6 +1002,7 @@
             schedule_time: null,
             duration: 45,
             subject: mapping.subject || null,
+            subject_in_matrixview: mapping.subject_in_matrixview || null,
             deferred_until: null,
             source: SOURCE,
             source_type: SOURCE_TYPE_ICS,
@@ -1103,6 +1112,7 @@
                 desired.push(preserveLocalExecutionState(eventToTask(event, {
                     plan_id: existingTask.plan_id,
                     subject: existingTask.subject || existingTask.managebac_subject,
+                    subject_in_matrixview: existingTask.subject_in_matrixview || '',
                     subject_in_managebac: existingTask.managebac_subject || existingTask.subject || 'ManageBac'
                 }, now), existingTask));
                 continue;
@@ -1209,6 +1219,7 @@
                 event_uid: eventUid,
                 plan_id: plan.id,
                 subject: normalizeText(plan.subject),
+                subject_in_matrixview: normalizeText(plan.subject_in_matrixview),
                 subject_in_managebac: normalizeText(row.subject_in_managebac),
                 source: 'managebac_event_subject_override',
                 updated_at: now

@@ -67,11 +67,39 @@ assert('Dashboard defer buttons are in right-aligned action controls',
     && focusScript.includes('defer-options')
     && focusScript.includes('>1天</button>')
     && /task-action-controls[\s\S]*progressBtns[\s\S]*deferHtml/.test(focusScript));
+assert('Dashboard current task card opens local detail modal from content area',
+    focusScript.includes('task-detail-open-zone')
+    && focusScript.includes('data-action="open-current-task-detail"')
+    && focusScript.includes('openCurrentTaskDetailModal')
+    && focusScript.includes('saveCurrentTaskDetailModal')
+    && focusScript.includes('currentTaskDetailModal')
+    && focusCss.includes('.task-detail-open-zone')
+    && !focusScript.includes('btn-task-detail'));
+assert('Dashboard exposes copyable debug snapshot for current runtime data',
+    focusHtml.includes('data-action="copy-debug-snapshot"')
+    && focusHtml.includes('诊断快照')
+    && focusScript.includes('async function buildFocusDebugSnapshot')
+    && focusScript.includes('daily_settle')
+    && focusScript.includes('arrange_preview')
+    && focusScript.includes('matrixview_subject_mappings')
+    && focusScript.includes('navigator.clipboard.writeText')
+    && focusScript.includes("action === 'copy-debug-snapshot'")
+    && focusCss.includes('.debug-snapshot-btn'));
+assert('Dashboard debug snapshot avoids obvious secret and raw link settings',
+    focusScript.includes("task_arrange_dirty_at")
+    && focusScript.includes("task_arrange_last_checked_at")
+    && focusScript.includes("task_arrange_last_run_at")
+    && !focusScript.includes("safeSettings.google")
+    && !focusScript.includes("safeSettings.token")
+    && !focusScript.includes("safeSettings.managebac_ics_url")
+    && !focusScript.includes("safeSettings.managebac_link"));
 assert('delegated click listener handles Focus actions', focusScript.includes("document.addEventListener('click', handleFocusDelegatedClick)")
     && focusScript.includes('function handleFocusDelegatedClick'));
-assert('Dashboard weekly task list opens Planner task detail instead of toggling completion', focusScript.includes('data-action="open-task-detail"')
-    && focusScript.includes('openTaskDetailInPlanner')
-    && focusScript.includes('../tasks/tasks.html?task_id=')
+assert('Dashboard weekly task list opens local task detail modal instead of toggling or leaving Dashboard', focusScript.includes('data-action="open-task-detail"')
+    && focusScript.includes("action === 'open-task-detail'")
+    && focusScript.includes('openCurrentTaskDetailModal(taskId)')
+    && !focusScript.includes('openTaskDetailInPlanner')
+    && !focusScript.includes('../tasks/tasks.html?task_id=')
     && !focusScript.includes('data-action="week-toggle"')
     && !focusScript.includes('toggleWeekTask'));
 assert('ManageBac source tasks render non-clickable defer blocked text', focusScript.includes('isManageBacSourceTask')
@@ -208,15 +236,31 @@ assert('Popup header pending count uses today Daily Settle task pool', popupScri
 assert('Popup no-task copy uses 暂无待办任务 only', popupHtml.includes('暂无待办任务')
     && popupScript.includes('暂无待办任务')
     && !/暂无进行中的任务/.test(popupHtml + popupScript));
-assert('Popup renders Daily Settle currentTasks list', popupScript.includes('settle.currentTasks || []')
-    && popupScript.includes('renderCurrentTaskList(currentTasks)')
+assert('Popup renders Daily Settle displayTasks list', popupScript.includes('settle.displayTasks || settle.currentTasks || []')
+    && popupScript.includes('renderCurrentTaskList(displayTasks)')
     && popupScript.includes('tasks.map((task, index) => renderCurrentTaskCard(task, index, expandedIndex))'));
+assert('Dashboard current task column renders Daily Settle displayTasks list',
+    focusScript.includes('const displayTasks = settle.displayTasks || settle.currentTasks || []')
+    && focusScript.includes('displayTasks.forEach((task, index)')
+    && focusScript.includes("assignment.status !== 'unassigned'"));
+assert('Dashboard current task column marks unassigned tasks without hiding actions',
+    focusScript.includes('tag-unassigned')
+    && focusScript.includes('当前未分配')
+    && focusScript.includes('task-unassigned')
+    && focusScript.includes('data-action="start"')
+    && focusScript.includes('data-action="complete"')
+    && focusScript.includes('data-action="defer"'));
+assert('Popup current task list marks unassigned tasks from Daily Settle display model',
+    popupScript.includes("assignment.status === 'unassigned'")
+    && popupScript.includes('task-tag unassigned')
+    && popupScript.includes('popup-task-card${assignment.status')
+    && popupScript.includes('当前未分配'));
 assert('Popup does not fallback to one current task or sorted pool', !popupScript.includes('currentTasks[0] || sortedPool[0]')
     && !popupScript.includes('sortedPool[0]'));
 assert('Popup current task list expands only one task, preferring in-progress task', popupScript.includes('const inProgressIndex = tasks.findIndex')
     && popupScript.includes('const expandedIndex = inProgressIndex >= 0 ? inProgressIndex : 0')
     && popupScript.includes('const isExpanded = index === expandedIndex')
-    && popupScript.includes('class="task-card popup-task-card"'));
+    && popupScript.includes('class="task-card popup-task-card${assignment.status'));
 assert('Popup expanding one task collapses other tasks and auto-scrolls it into view', popupScript.includes("taskList.addEventListener('toggle', handleTaskCardToggle, true)")
     && popupScript.includes("querySelectorAll('.popup-task-card[open]')")
     && popupScript.includes('if (other !== card) other.open = false')
@@ -337,6 +381,16 @@ assert('Popup normal task actions and defer buttons are inside card', popupScrip
     && popupScript.includes('data-days="1"')
     && popupScript.includes('data-days="3"')
     && popupScript.includes('data-days="7"'));
+assert('Popup current task card opens local detail modal from content area',
+    popupScript.includes('task-detail-open-zone')
+    && popupScript.includes('data-action="open-current-task-detail"')
+    && popupScript.includes('openCurrentTaskDetailModal')
+    && popupScript.includes('saveCurrentTaskDetailModal')
+    && popupScript.includes('currentTaskDetailModal')
+    && popupCss.includes('.popup-task-detail-modal')
+    && !popupScript.includes('btn-task-detail')
+    && !popupScript.includes('openTaskDetailInPlanner')
+    && !popupScript.includes('pages/tasks/tasks.html?task_id='));
 assert('Popup defer updates due_date instead of start_date', /async function deferTask[\s\S]*baseDate = task\?\.due_date \|\| task\?\.deadline \|\| formatDateISO\(today\)/.test(popupScript)
     && /async function deferTask[\s\S]*updateTask\(taskId, \{ due_date: formatDateISO\(target\) \}\)/.test(popupScript)
     && !/async function deferTask[\s\S]*updateTask\(taskId, \{ start_date: nextStartDate \}\)/.test(popupScript));

@@ -211,13 +211,22 @@ async function loadTaskColumn() {
     // 更新 header badge — 容器状态 or 任务计数
     const badge = document.querySelector('.column-now .badge');
     if (badge) {
-        if (settle.activeContainer) {
-            const remainMin = Math.max(0, timeToMinutes(settle.activeContainer.time_end) - (now.getHours() * 60 + now.getMinutes()));
-            badge.textContent = `${settle.activeContainer.name} · ${remainMin}min`;
+        const displayContainer = settle.currentContainerInfo?.container || null;
+        if (displayContainer) {
+            const displayStart = timeToMinutes(displayContainer.time_start);
+            const displayEnd = timeToMinutes(displayContainer.time_end);
+            const nowMin = now.getHours() * 60 + now.getMinutes();
+            const isActiveDisplay = settle.activeContainer?.id === displayContainer.id;
+            const remainMin = isActiveDisplay
+                ? Math.max(0, displayEnd - nowMin)
+                : Math.max(0, displayStart - nowMin);
+            badge.textContent = isActiveDisplay
+                ? `${displayContainer.name} · ${remainMin}min`
+                : `下一段 ${displayContainer.name} · ${remainMin}min`;
             badge.className = 'badge container-active';
-            badge.style.cssText = `background:${settle.activeContainer.color}20; color:${settle.activeContainer.color};`;
+            badge.style.cssText = `background:${displayContainer.color}20; color:${displayContainer.color};`;
         } else {
-            const count = settle.currentTasks.length;
+            const count = (settle.displayTasks || settle.currentTasks || []).length;
             badge.textContent = count > 0 ? `${count} 项待办` : '无任务';
             badge.className = count > 0 ? 'badge red' : 'badge';
             badge.style.cssText = '';
@@ -225,7 +234,8 @@ async function loadTaskColumn() {
     }
 
     // 空状态
-    if (settle.currentTasks.length === 0) {
+    const displayTasks = settle.displayTasks || settle.currentTasks || [];
+    if (displayTasks.length === 0) {
         section.innerHTML = `
             <div class="current-task-scroll-body custom-scrollbar">
                 <div class="empty-state">
@@ -242,15 +252,15 @@ async function loadTaskColumn() {
 
     // 渲染任务卡片
     let html = '';
-    const isContainerView = !!settle.activeContainer;
     const targetTaskId = new URLSearchParams(window.location.search).get('task_id');
-    settle.currentTasks.forEach((task, index) => {
+    displayTasks.forEach((task, index) => {
         const isFirst = index === 0;
         const dueDate = task.due_date || task.deadline || '';
         const isOverdue = dueDate && dueDate < todayStr;
         const isDueToday = dueDate === todayStr;
         const isTimed = !!task.schedule_time;
         const isInProgress = task.progress === 'in_progress';
+        const assignment = task.assignment || { status: 'unassigned', label: '当前未分配' };
 
         html += createTaskCard(task, {
             expanded: task.id === targetTaskId || isFirst || isInProgress,
@@ -258,8 +268,9 @@ async function loadTaskColumn() {
             isDueToday,
             isTimed,
             isInProgress,
-            isContainerView,
-            containerOvertime: isContainerView && settle.containerInfo.used > settle.containerInfo.capacity
+            isContainerView: assignment.status !== 'unassigned',
+            assignment,
+            containerOvertime: assignment.status !== 'unassigned' && assignment.used > assignment.capacity
         });
     });
     section.innerHTML = `
@@ -301,7 +312,7 @@ async function renderTodayJournalEntry(todayStr, now = new Date()) {
 }
 
 function createTaskCard(task, opts = {}) {
-    const { expanded, isOverdue, isDueToday, isTimed, isInProgress } = opts;
+    const { expanded, isOverdue, isDueToday, isTimed, isInProgress, assignment = task.assignment || null } = opts;
     const openAttr = expanded ? ' open' : '';
     const title = escapeHTML(task.title || '无标题任务');
     const notes = escapeHTML(task.notes || task.description || '');
@@ -324,6 +335,12 @@ function createTaskCard(task, opts = {}) {
     if (isOverdue) tagsHtml += '<span class="tag tag-overdue">逾期</span>';
     if (isDueToday) tagsHtml += '<span class="tag tag-due-today">今日截止</span>';
     if (isTimed) tagsHtml += `<span class="tag tag-timed">${escapeHTML(task.schedule_time)}</span>`;
+    if (assignment?.status === 'unassigned') {
+        tagsHtml += '<span class="tag tag-unassigned">当前未分配</span>';
+    } else if (assignment?.status === 'current' || assignment?.status === 'upcoming') {
+        const label = `${assignment.label || '后续'} ${assignment.container_name || ''}`.trim();
+        tagsHtml += `<span class="tag tag-assigned">${escapeHTML(label)}</span>`;
+    }
 
     // 操作按钮
     const progressBtns = isInProgress
@@ -342,12 +359,11 @@ function createTaskCard(task, opts = {}) {
                 <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="7">7天</button>
             </div>
         </div>`;
-
     return `
-        <div class="accordion-task${isOverdue ? ' task-overdue' : ''}" data-task-card-id="${taskId}">
+        <div class="accordion-task${isOverdue ? ' task-overdue' : ''}${assignment?.status === 'unassigned' ? ' task-unassigned' : ''}" data-task-card-id="${taskId}">
             <details${openAttr}>
                 <summary>
-                    <div class="task-title">
+                    <div class="task-title" data-action="open-current-task-detail" data-task-id="${taskId}" title="打开任务详情">
                         <span class="status-dot ${dotClass}"></span>
                         <h4>${title}</h4>
                         <span class="task-status-label ${statusLabel.className}">${statusLabel.text}</span>
@@ -355,14 +371,16 @@ function createTaskCard(task, opts = {}) {
                     <span class="material-symbols-outlined expand-icon">expand_more</span>
                 </summary>
                 <div class="task-details">
-                    ${notes ? `<p>${notes}</p>` : ''}
-                    ${checklistHtml}
-                    <div class="task-meta-tags">
-                        <span class="priority-badge ${pClass}">${pLabel}</span>
-                        ${startDateText ? `<span class="meta-item start-date-item"><span class="material-symbols-outlined">play_arrow</span>开始 ${startDateText}</span>` : ''}
-                        <span class="meta-item"><span class="material-symbols-outlined">schedule</span>${durationText}</span>
-                        ${deadlineText ? `<span class="meta-item deadline-item">截止 ${deadlineText}</span>` : ''}
-                        ${tagsHtml}
+                    <div class="task-detail-open-zone" data-action="open-current-task-detail" data-task-id="${taskId}" title="打开任务详情">
+                        ${notes ? `<p>${notes}</p>` : ''}
+                        ${checklistHtml}
+                        <div class="task-meta-tags">
+                            <span class="priority-badge ${pClass}">${pLabel}</span>
+                            ${startDateText ? `<span class="meta-item start-date-item"><span class="material-symbols-outlined">play_arrow</span>开始 ${startDateText}</span>` : ''}
+                            <span class="meta-item"><span class="material-symbols-outlined">schedule</span>${durationText}</span>
+                            ${deadlineText ? `<span class="meta-item deadline-item">截止 ${deadlineText}</span>` : ''}
+                            ${tagsHtml}
+                        </div>
                     </div>
                     <div class="task-action-row">
                         <div class="task-action-left">${isManageBacSource ? deferHtml : ''}</div>
@@ -380,6 +398,194 @@ function getTaskStatusLabel(progress) {
     if (progress === 'completed') return { text: '已完成', className: 'completed' };
     if (progress === 'in_progress') return { text: '进行中', className: 'in-progress' };
     return { text: '未开始', className: 'not-started' };
+}
+
+function sanitizeDebugTask(task) {
+    if (!task) return null;
+    return {
+        id: task.id,
+        title: task.title || '',
+        progress: task.progress || task.status || 'not_started',
+        priority: task.priority || 'medium',
+        plan_id: task.plan_id || null,
+        bucket_id: task.bucket_id || null,
+        start_date: task.start_date || null,
+        due_date: task.due_date || task.deadline || null,
+        schedule_time: task.schedule_time || null,
+        duration: task.duration || null,
+        source: task.source || task.source_type || null,
+        subject: task.subject || task.plan_subject || null,
+        subject_in_matrixview: task.subject_in_matrixview || task.plan_subject_in_matrixview || null,
+        checklist: Array.isArray(task.checklist)
+            ? task.checklist.map(item => ({ id: item.id || null, title: item.title || '', checked: !!item.checked }))
+            : [],
+        assignment: task.assignment ? { ...task.assignment } : null
+    };
+}
+
+function sanitizeDebugContainer(container) {
+    if (!container) return null;
+    return {
+        id: container.id,
+        name: container.name || '',
+        type: container.type || null,
+        layer: container.layer ?? null,
+        enabled: container.enabled !== false,
+        date: container.date || null,
+        repeat: container.repeat || null,
+        repeat_days: container.repeat_days || null,
+        time_start: container.time_start || null,
+        time_end: container.time_end || null,
+        color: container.color || null
+    };
+}
+
+function sanitizeDebugEvent(event) {
+    if (!event) return null;
+    return {
+        id: event.id,
+        title: event.title || event.name || '',
+        source: event.source || null,
+        type: event.type || null,
+        date: event.date || null,
+        time_start: event.time_start || null,
+        time_end: event.time_end || null,
+        subject: event.subject || null,
+        subject_in_matrixview: event.subject_in_matrixview || null,
+        repeat: event.repeat || null,
+        repeat_days: event.repeat_days || null
+    };
+}
+
+function serializeSettleResult(settle) {
+    const result = {};
+    for (const [id, info] of settle.result.entries()) {
+        result[id] = {
+            container: sanitizeDebugContainer(info.container),
+            capacity: info.capacity,
+            used: info.used,
+            tasks: (info.tasks || []).map(sanitizeDebugTask)
+        };
+    }
+    return result;
+}
+
+async function buildFocusDebugSnapshot() {
+    const now = new Date();
+    const todayStr = formatDateISO(now);
+    const allTasks = await TimeWhereDB.getAllTasks();
+    const plans = TimeWhereDB.getPlans ? await TimeWhereDB.getPlans() : [];
+    const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
+    const events = TimeWhereDB.getEvents ? await TimeWhereDB.getEvents() : [];
+    const matrixMappings = TimeWhereDB.getSetting
+        ? (await TimeWhereDB.getSetting('matrixview_subject_mappings') || [])
+        : [];
+    const dateObj = new Date(todayStr + 'T00:00:00');
+    const dow = dateObj.getDay();
+    const isWeekday = dow >= 1 && dow <= 5;
+    const isWeekend = dow === 0 || dow === 6;
+    const todayContainers = allContainers.filter(c =>
+        containerAppliesToDate(c, dateObj, todayStr, dow, isWeekday, isWeekend)
+    );
+    const taskPool = buildDailyTaskPool(allTasks, now);
+    const settle = dailySettle(taskPool, todayContainers, now);
+    let arrangePreview = null;
+    try {
+        if (window.TimeWhereScheduling?.arrangeTasks) {
+            const preview = await window.TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false });
+            arrangePreview = {
+                proposed: preview.proposed,
+                summary: preview.summary,
+                changes: (preview.changes || []).map(change => ({
+                    task_id: change.task_id,
+                    title: change.task?.title || '',
+                    source: change.task?.source || change.task?.source_type || null,
+                    old_start_date: change.task?.start_date || null,
+                    new_start_date: change.start_date || null,
+                    old_priority: change.task?.priority || null,
+                    new_priority: change.priority || null,
+                    updates: change.updates || {}
+                }))
+            };
+        }
+    } catch (error) {
+        arrangePreview = { error: error.message };
+    }
+    const safeSettings = {};
+    for (const key of ['task_arrange_dirty_at', 'task_arrange_last_checked_at', 'task_arrange_last_run_at']) {
+        safeSettings[key] = TimeWhereDB.getSetting ? await TimeWhereDB.getSetting(key) : null;
+    }
+    return {
+        schema: 'timewhere-focus-debug-v1',
+        generated_at: now.toISOString(),
+        page: {
+            url: location.href,
+            title: document.title,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            today: todayStr,
+            now_local: now.toString()
+        },
+        counts: {
+            all_tasks: allTasks.length,
+            task_pool: taskPool.length,
+            all_containers: allContainers.length,
+            today_containers: todayContainers.length,
+            events: events.length,
+            plans: plans.length
+        },
+        plans: plans.map(plan => ({
+            id: plan.id,
+            name: plan.name || '',
+            subject: plan.subject || null,
+            subject_in_matrixview: plan.subject_in_matrixview || null,
+            subject_active: plan.subject_active !== false
+        })),
+        matrixview_subject_mappings: Array.isArray(matrixMappings)
+            ? matrixMappings.map(mapping => ({
+                plan_name: mapping.plan_name || null,
+                subject: mapping.subject || null,
+                subject_in_matrixview: mapping.subject_in_matrixview || null,
+                source: mapping.source || null,
+                updated_at: mapping.updated_at || null
+            }))
+            : [],
+        daily_settle: {
+            input: {
+                task_pool: taskPool.map(sanitizeDebugTask),
+                today_containers: todayContainers.map(sanitizeDebugContainer)
+            },
+            output: {
+                active_container: sanitizeDebugContainer(settle.activeContainer),
+                current_container: sanitizeDebugContainer(settle.currentContainerInfo?.container),
+                current_tasks: (settle.currentTasks || []).map(sanitizeDebugTask),
+                display_tasks: (settle.displayTasks || []).map(sanitizeDebugTask),
+                unassigned: (settle.unassigned || []).map(sanitizeDebugTask),
+                containers: serializeSettleResult(settle)
+            }
+        },
+        arrange_preview: arrangePreview,
+        events: events.map(sanitizeDebugEvent),
+        settings: safeSettings,
+        dom: {
+            current_task_cards: Array.from(document.querySelectorAll('[data-task-card-id]')).map(el => ({
+                task_id: el.getAttribute('data-task-card-id'),
+                class_name: el.className,
+                text: (el.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 500)
+            }))
+        }
+    };
+}
+
+async function copyFocusDebugSnapshot() {
+    try {
+        const snapshot = await buildFocusDebugSnapshot();
+        const text = JSON.stringify(snapshot, null, 2);
+        await navigator.clipboard.writeText(text);
+        showToast('诊断快照已复制，可直接粘贴给我', 'success');
+    } catch (error) {
+        console.error('[Focus] debug snapshot failed:', error);
+        showToast(`复制诊断快照失败：${error.message}`, 'error');
+    }
 }
 
 function renderTaskChecklist(task) {
@@ -792,11 +998,6 @@ async function renderWeeklyJournalSummary(weekStartDate) {
     }).join('');
 }
 
-function openTaskDetailInPlanner(taskId) {
-    if (!taskId) return;
-    window.location.href = `../tasks/tasks.html?task_id=${encodeURIComponent(taskId)}`;
-}
-
 function renderContainerTasks(tasks) {
     if (!tasks || tasks.length === 0) return '';
     return `<div class="container-tasks">` + tasks.map(task => {
@@ -1037,7 +1238,12 @@ function handleFocusDelegatedClick(e) {
     }
     if (action === 'open-task-detail') {
         e.preventDefault();
-        openTaskDetailInPlanner(taskId);
+        runFocusAction(actionEl, async () => openCurrentTaskDetailModal(taskId));
+        return;
+    }
+    if (action === 'open-current-task-detail') {
+        e.preventDefault();
+        runFocusAction(actionEl, async () => openCurrentTaskDetailModal(taskId));
         return;
     }
     if (action === 'open-today-journal') {
@@ -1052,11 +1258,22 @@ function handleFocusDelegatedClick(e) {
         runFocusAction(actionEl, openTaskArrangeReviewModal);
         return;
     }
+    if (action === 'copy-debug-snapshot') {
+        e.preventDefault();
+        runFocusAction(actionEl, copyFocusDebugSnapshot);
+        return;
+    }
     if (action === 'close-modal') {
         e.preventDefault();
         closeAddTaskModal();
+        closeCurrentTaskDetailModal();
         closeDailyJournalModal();
         closeTaskArrangeReviewModal();
+        return;
+    }
+    if (action === 'close-current-task-detail') {
+        e.preventDefault();
+        closeCurrentTaskDetailModal();
         return;
     }
     if (action === 'close-task-arrange-review') {
@@ -1072,6 +1289,11 @@ function handleFocusDelegatedClick(e) {
     if (action === 'save-modal') {
         e.preventDefault();
         runFocusAction(actionEl, saveNewTask);
+        return;
+    }
+    if (action === 'save-current-task-detail') {
+        e.preventDefault();
+        runFocusAction(actionEl, saveCurrentTaskDetailModal);
         return;
     }
     if (action === 'save-daily-journal-draft') {
@@ -1251,6 +1473,126 @@ function openAddTaskModal() {
 function closeAddTaskModal() {
     const modal = document.getElementById('addTaskModal');
     if (modal) modal.remove();
+}
+
+async function openCurrentTaskDetailModal(taskId) {
+    const task = await TimeWhereDB.getTaskById(taskId);
+    if (!task) {
+        showToast('任务不存在或已删除', 'error');
+        return;
+    }
+    closeCurrentTaskDetailModal();
+    const isManageBacSource = TimeWhereDB.isManageBacSourceTask?.(task) === true;
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'currentTaskDetailModal';
+    modal.dataset.taskId = task.id;
+    modal.innerHTML = `
+        <div class="modal-content current-task-detail-modal">
+            <div class="modal-header">
+                <h3>任务详情</h3>
+                <button class="modal-close" data-action="close-current-task-detail">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                ${isManageBacSource ? '<p class="source-readonly-hint">ManageBac 来源内容只读；可修改本地状态、优先级和开始日期。</p>' : ''}
+                <div class="form-group">
+                    <label>任务标题</label>
+                    <input type="text" id="detailTaskTitle" value="${escapeAttribute(task.title || '')}" ${isManageBacSource ? 'readonly' : ''}>
+                </div>
+                <div class="form-grid two-col">
+                    <div class="form-group">
+                        <label>状态</label>
+                        <select id="detailTaskProgress">
+                            <option value="not_started" ${task.progress === 'not_started' ? 'selected' : ''}>未开始</option>
+                            <option value="in_progress" ${task.progress === 'in_progress' ? 'selected' : ''}>进行中</option>
+                            <option value="completed" ${task.progress === 'completed' ? 'selected' : ''}>已完成</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>优先级</label>
+                        <select id="detailTaskPriority">
+                            <option value="urgent" ${task.priority === 'urgent' ? 'selected' : ''}>P1 - 紧急</option>
+                            <option value="important" ${task.priority === 'important' ? 'selected' : ''}>P2 - 重要</option>
+                            <option value="medium" ${!task.priority || task.priority === 'medium' ? 'selected' : ''}>P3 - 普通</option>
+                            <option value="low" ${task.priority === 'low' ? 'selected' : ''}>P4 - 低</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-grid two-col">
+                    <div class="form-group">
+                        <label>开始日期</label>
+                        <input type="date" id="detailTaskStartDate" value="${escapeAttribute(task.start_date || '')}">
+                    </div>
+                    <div class="form-group">
+                        <label>截止日期</label>
+                        <input type="date" id="detailTaskDueDate" value="${escapeAttribute(task.due_date || task.deadline || '')}" ${isManageBacSource ? 'disabled' : ''}>
+                    </div>
+                </div>
+                <div class="form-grid two-col">
+                    <div class="form-group">
+                        <label>定时时间</label>
+                        <input type="time" id="detailTaskScheduleTime" value="${escapeAttribute(task.schedule_time || '')}" ${isManageBacSource ? 'disabled' : ''}>
+                    </div>
+                    <div class="form-group">
+                        <label>预计时长（分钟）</label>
+                        <input type="number" id="detailTaskDuration" value="${escapeAttribute(String(task.duration || 45))}" min="5" max="480" step="5" ${isManageBacSource ? 'disabled' : ''}>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>说明</label>
+                    <textarea id="detailTaskNotes" rows="4" ${isManageBacSource ? 'readonly' : ''}>${escapeHTML(task.notes || task.description || '')}</textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" data-action="close-current-task-detail">取消</button>
+                <button class="btn-primary" data-action="save-current-task-detail">保存</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+    setTimeout(() => document.getElementById('detailTaskTitle')?.focus(), 100);
+}
+
+function closeCurrentTaskDetailModal() {
+    const modal = document.getElementById('currentTaskDetailModal');
+    if (modal) modal.remove();
+}
+
+async function saveCurrentTaskDetailModal() {
+    const modal = document.getElementById('currentTaskDetailModal');
+    const taskId = modal?.dataset?.taskId;
+    if (!taskId) return;
+    const task = await TimeWhereDB.getTaskById(taskId);
+    if (!task) {
+        closeCurrentTaskDetailModal();
+        showToast('任务不存在或已删除', 'error');
+        return;
+    }
+    const isManageBacSource = TimeWhereDB.isManageBacSourceTask?.(task) === true;
+    const progress = document.getElementById('detailTaskProgress')?.value || 'not_started';
+    const updates = {
+        progress,
+        priority: document.getElementById('detailTaskPriority')?.value || 'medium',
+        start_date: document.getElementById('detailTaskStartDate')?.value || null,
+        completed_at: progress === 'completed' ? (task.completed_at || new Date().toISOString()) : null
+    };
+    if (!isManageBacSource) {
+        const title = document.getElementById('detailTaskTitle')?.value?.trim();
+        if (!title) {
+            showToast('请输入任务标题', 'error');
+            return;
+        }
+        updates.title = title;
+        updates.due_date = document.getElementById('detailTaskDueDate')?.value || null;
+        updates.schedule_time = document.getElementById('detailTaskScheduleTime')?.value || null;
+        updates.duration = parseInt(document.getElementById('detailTaskDuration')?.value || '45', 10) || 45;
+        updates.notes = document.getElementById('detailTaskNotes')?.value || '';
+    }
+    await TimeWhereDB.updateTask(taskId, updates);
+    closeCurrentTaskDetailModal();
+    await loadDashboardData();
+    showToast('任务详情已更新', 'success');
 }
 
 async function saveNewTask() {

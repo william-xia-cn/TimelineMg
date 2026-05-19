@@ -65,9 +65,9 @@ async function loadCurrentTasks() {
         return;
     }
 
-    const { currentTasks } = await getTodayTaskProjection();
-    if (currentTasks.length > 0) {
-        renderCurrentTaskList(currentTasks);
+    const { displayTasks } = await getTodayTaskProjection();
+    if (displayTasks.length > 0) {
+        renderCurrentTaskList(displayTasks);
     } else {
         renderNoTask();
     }
@@ -89,8 +89,8 @@ async function getTodayTaskProjection() {
     );
 
     const settle = dailySettle(taskPool, todayContainers, now);
-    const currentTasks = settle.currentTasks || [];
-    return { currentTasks, taskPool, todayContainers };
+    const displayTasks = settle.displayTasks || settle.currentTasks || [];
+    return { displayTasks, taskPool, todayContainers };
 }
 
 function renderCurrentTaskList(tasks) {
@@ -117,6 +117,7 @@ function renderCurrentTaskCard(task, index, expandedIndex = 0) {
     const isExpanded = index === expandedIndex;
     const statusLabel = getPopupTaskStatusLabel(task.progress);
     const checklistHtml = renderPopupTaskChecklist(task);
+    const assignment = task.assignment || { status: 'unassigned', label: '当前未分配' };
 
     const progressBtns = isInProgress
         ? `<button class="btn-micro" data-action="pause" data-task-id="${taskId}">暂停</button>
@@ -134,17 +135,19 @@ function renderCurrentTaskCard(task, index, expandedIndex = 0) {
                 <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="7">7天</button>
             </div>
         </div>`;
-
     const tags = [
         isOverdue ? `<span class="task-tag danger">逾期</span>` : '',
         isDueToday ? `<span class="task-tag today">今天</span>` : '',
-        isTimed ? `<span class="task-tag timed">${escapeHTML(task.schedule_time)}</span>` : ''
+        isTimed ? `<span class="task-tag timed">${escapeHTML(task.schedule_time)}</span>` : '',
+        assignment.status === 'unassigned'
+            ? '<span class="task-tag unassigned">当前未分配</span>'
+            : `<span class="task-tag assigned">${escapeHTML(`${assignment.label || '后续'} ${assignment.container_name || ''}`.trim())}</span>`
     ].filter(Boolean).join('');
 
     return `
-        <details class="task-card popup-task-card" ${isExpanded ? 'open' : ''}>
+        <details class="task-card popup-task-card${assignment.status === 'unassigned' ? ' task-unassigned' : ''}" ${isExpanded ? 'open' : ''}>
             <summary class="task-card-summary">
-                <div class="task-title-row">
+                <div class="task-title-row" data-action="open-current-task-detail" data-task-id="${taskId}" title="打开任务详情">
                     <span class="status-dot ${isInProgress ? 'pulsing' : 'pending'}"></span>
                     <span class="task-title">${escapeHTML(task.title || '无标题任务')}</span>
                     <span class="popup-task-status-label ${statusLabel.className}">${statusLabel.text}</span>
@@ -152,16 +155,18 @@ function renderCurrentTaskCard(task, index, expandedIndex = 0) {
                 <span class="material-symbols-outlined expand-icon">expand_more</span>
             </summary>
             <div class="current-task-info">
-                ${task.notes ? `<div class="task-notes">${escapeHTML(task.notes)}</div>` : ''}
-                ${checklistHtml}
-                <div class="task-meta">
-                    <span class="priority-badge ${pCls}">${escapeHTML(pLabel)}</span>
-                    <span class="duration">${task.duration || 45}分钟</span>
-                    ${dueStr ? `<span class="deadline">截止: ${formatDate(dueStr)}</span>` : ''}
+                <div class="task-detail-open-zone" data-action="open-current-task-detail" data-task-id="${taskId}" title="打开任务详情">
+                    ${task.notes ? `<div class="task-notes">${escapeHTML(task.notes)}</div>` : ''}
+                    ${checklistHtml}
+                    <div class="task-meta">
+                        <span class="priority-badge ${pCls}">${escapeHTML(pLabel)}</span>
+                        <span class="duration">${task.duration || 45}分钟</span>
+                        ${dueStr ? `<span class="deadline">截止: ${formatDate(dueStr)}</span>` : ''}
+                    </div>
+                    ${tags ? `<div class="task-tags">${tags}</div>` : ''}
                 </div>
-                ${tags ? `<div class="task-tags">${tags}</div>` : ''}
                 <div class="task-actions">
-                    ${isManageBacSource ? `<div class="task-action-left">${deferHtml}</div>` : ''}
+                    <div class="task-action-left">${isManageBacSource ? deferHtml : ''}</div>
                     <div class="task-action-controls">
                         ${progressBtns}
                         ${!isManageBacSource ? deferHtml : ''}
@@ -237,9 +242,9 @@ async function loadHeaderCounts() {
 function setupEventListeners() {
     const taskList = document.getElementById('currentTaskList');
     if (taskList) {
-        taskList.addEventListener('click', handleTaskActionClick);
         taskList.addEventListener('toggle', handleTaskCardToggle, true);
     }
+    document.addEventListener('click', handleTaskActionClick);
 
     const btnSettings = document.getElementById('btnSettings');
     if (btnSettings) {
@@ -277,6 +282,19 @@ async function handleTaskActionClick(event) {
     event.preventDefault();
     event.stopPropagation();
 
+    if (actionEl.dataset.action === 'open-current-task-detail') {
+        await openCurrentTaskDetailModal(actionEl.dataset.taskId);
+        return;
+    }
+    if (actionEl.dataset.action === 'close-current-task-detail') {
+        closeCurrentTaskDetailModal();
+        return;
+    }
+    if (actionEl.dataset.action === 'save-current-task-detail') {
+        await runPopupAction(actionEl, saveCurrentTaskDetailModal);
+        return;
+    }
+
     await runPopupAction(actionEl, async () => {
         const { action, taskId } = actionEl.dataset;
         if (action === 'start') await startTask(taskId);
@@ -302,6 +320,98 @@ async function runPopupAction(control, action) {
             control.disabled = false;
         }
     }
+}
+
+async function openCurrentTaskDetailModal(taskId) {
+    const task = await TimeWhereDB.getTaskById(taskId);
+    if (!task) {
+        showToast('任务不存在或已删除', 'error');
+        return;
+    }
+    closeCurrentTaskDetailModal();
+    const isManageBacSource = TimeWhereDB.isManageBacSourceTask?.(task) === true;
+    const modal = document.createElement('div');
+    modal.className = 'popup-modal-overlay';
+    modal.id = 'currentTaskDetailModal';
+    modal.dataset.taskId = task.id;
+    modal.innerHTML = `
+        <div class="popup-task-detail-modal">
+            <div class="popup-modal-header">
+                <h3>任务详情</h3>
+                <button class="popup-modal-close" data-action="close-current-task-detail" aria-label="关闭">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="popup-modal-body">
+                ${isManageBacSource ? '<p class="source-readonly-hint">ManageBac 来源内容只读；可修改本地状态、优先级和开始日期。</p>' : ''}
+                <label>任务标题<input type="text" id="detailTaskTitle" value="${escapeAttribute(task.title || '')}" ${isManageBacSource ? 'readonly' : ''}></label>
+                <div class="popup-detail-grid">
+                    <label>状态<select id="detailTaskProgress">
+                        <option value="not_started" ${task.progress === 'not_started' ? 'selected' : ''}>未开始</option>
+                        <option value="in_progress" ${task.progress === 'in_progress' ? 'selected' : ''}>进行中</option>
+                        <option value="completed" ${task.progress === 'completed' ? 'selected' : ''}>已完成</option>
+                    </select></label>
+                    <label>优先级<select id="detailTaskPriority">
+                        <option value="urgent" ${task.priority === 'urgent' ? 'selected' : ''}>P1</option>
+                        <option value="important" ${task.priority === 'important' ? 'selected' : ''}>P2</option>
+                        <option value="medium" ${!task.priority || task.priority === 'medium' ? 'selected' : ''}>P3</option>
+                        <option value="low" ${task.priority === 'low' ? 'selected' : ''}>P4</option>
+                    </select></label>
+                </div>
+                <div class="popup-detail-grid">
+                    <label>开始日期<input type="date" id="detailTaskStartDate" value="${escapeAttribute(task.start_date || '')}"></label>
+                    <label>截止日期<input type="date" id="detailTaskDueDate" value="${escapeAttribute(task.due_date || task.deadline || '')}" ${isManageBacSource ? 'disabled' : ''}></label>
+                </div>
+                <div class="popup-detail-grid">
+                    <label>定时时间<input type="time" id="detailTaskScheduleTime" value="${escapeAttribute(task.schedule_time || '')}" ${isManageBacSource ? 'disabled' : ''}></label>
+                    <label>时长<input type="number" id="detailTaskDuration" value="${escapeAttribute(String(task.duration || 45))}" min="5" max="480" step="5" ${isManageBacSource ? 'disabled' : ''}></label>
+                </div>
+                <label>说明<textarea id="detailTaskNotes" rows="3" ${isManageBacSource ? 'readonly' : ''}>${escapeHTML(task.notes || task.description || '')}</textarea></label>
+            </div>
+            <div class="popup-modal-footer">
+                <button class="btn-micro" data-action="close-current-task-detail">取消</button>
+                <button class="btn-micro primary" data-action="save-current-task-detail">保存</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+    setTimeout(() => document.getElementById('detailTaskTitle')?.focus(), 50);
+}
+
+function closeCurrentTaskDetailModal() {
+    const modal = document.getElementById('currentTaskDetailModal');
+    if (modal) modal.remove();
+}
+
+async function saveCurrentTaskDetailModal() {
+    const modal = document.getElementById('currentTaskDetailModal');
+    const taskId = modal?.dataset?.taskId;
+    if (!taskId) return;
+    const task = await TimeWhereDB.getTaskById(taskId);
+    if (!task) {
+        closeCurrentTaskDetailModal();
+        showToast('任务不存在或已删除', 'error');
+        return;
+    }
+    const isManageBacSource = TimeWhereDB.isManageBacSourceTask?.(task) === true;
+    const progress = document.getElementById('detailTaskProgress')?.value || 'not_started';
+    const updates = {
+        progress,
+        priority: document.getElementById('detailTaskPriority')?.value || 'medium',
+        start_date: document.getElementById('detailTaskStartDate')?.value || null,
+        completed_at: progress === 'completed' ? (task.completed_at || new Date().toISOString()) : null
+    };
+    if (!isManageBacSource) {
+        const title = document.getElementById('detailTaskTitle')?.value?.trim();
+        if (!title) throw new Error('请输入任务标题');
+        updates.title = title;
+        updates.due_date = document.getElementById('detailTaskDueDate')?.value || null;
+        updates.schedule_time = document.getElementById('detailTaskScheduleTime')?.value || null;
+        updates.duration = parseInt(document.getElementById('detailTaskDuration')?.value || '45', 10) || 45;
+        updates.notes = document.getElementById('detailTaskNotes')?.value || '';
+    }
+    await TimeWhereDB.updateTask(taskId, updates);
+    closeCurrentTaskDetailModal();
+    showToast('任务详情已更新', 'success');
 }
 
 async function startTask(taskId) {

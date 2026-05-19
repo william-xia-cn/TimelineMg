@@ -252,35 +252,83 @@
         return normalizeSubjectKey(task?.subject || task?.plan_subject || '');
     }
 
+    function getTaskSubjectInMatrixView(task) {
+        return normalizeSubjectKey(task?.subject_in_matrixview || task?.plan_subject_in_matrixview || '');
+    }
+
+    function getEventSubjectInMatrixView(event) {
+        return normalizeSubjectKey(event?.subject_in_matrixview || '');
+    }
+
     function eventSubjectCandidates(event) {
         return [
-            event?.subject_in_matrixview,
-            event?.subject,
-            event?.title,
-            event?.name,
-            event?.description
-        ].filter(Boolean).map(normalizeSubjectKey).filter(Boolean);
+            { value: event?.subject_in_matrixview, trusted: true },
+            { value: event?.subject, trusted: true },
+            { value: event?.title, trusted: false },
+            { value: event?.name, trusted: false },
+            { value: event?.description, trusted: false }
+        ].map(candidate => ({
+            value: normalizeSubjectKey(candidate.value),
+            trusted: Boolean(candidate.trusted)
+        })).filter(candidate => candidate.value);
+    }
+
+    function isSpecificSubjectCandidate(candidate) {
+        if (!candidate) return false;
+        const tokens = candidate.split(/\s+/).filter(Boolean);
+        return candidate.length >= 16 || tokens.length >= 3;
     }
 
     function eventMatchesSubject(event, subject) {
         if (!subject) return false;
         const candidates = eventSubjectCandidates(event);
         if (!candidates.length) return false;
-        if (candidates.some(candidate => candidate === subject)) return true;
-        return candidates.some(candidate => candidate.includes(subject) || subject.includes(candidate));
+        if (candidates.some(candidate => candidate.value === subject)) return true;
+        return candidates.some(candidate => {
+            if (candidate.value.includes(subject)) return true;
+            return candidate.trusted
+                && isSpecificSubjectCandidate(candidate.value)
+                && subject.includes(candidate.value);
+        });
     }
 
-    function findNextSubjectTimetableDate(task, timetableEvents, todayStr) {
+    function findNextSubjectTimetableDate(task, timetableEvents, minDate) {
         const subject = getTaskSubject(task);
-        if (!subject) return null;
-        const minDate = task?.start_date && task.start_date < todayStr ? todayStr : todayStr;
+        const subjectInMatrixView = getTaskSubjectInMatrixView(task);
+        if (!subject && !subjectInMatrixView) return null;
+        const normalizedMin = normalizeTaskDate(minDate);
         const dates = (timetableEvents || [])
             .filter(event => event?.source === 'timetable')
-            .filter(event => event?.date && event.date >= minDate)
-            .filter(event => eventMatchesSubject(event, subject))
+            .filter(event => event?.date && (!normalizedMin || event.date > normalizedMin))
+            .filter(event => {
+                if (subjectInMatrixView) {
+                    return getEventSubjectInMatrixView(event) === subjectInMatrixView;
+                }
+                return eventMatchesSubject(event, subject);
+            })
             .map(event => event.date)
             .sort();
         return dates[0] || null;
+    }
+
+    function findNextAnyTimetableDate(timetableEvents, minDate) {
+        const normalizedMin = normalizeTaskDate(minDate);
+        const dates = (timetableEvents || [])
+            .filter(event => event?.source === 'timetable')
+            .filter(event => event?.date && (!normalizedMin || event.date > normalizedMin))
+            .map(event => event.date)
+            .sort();
+        return dates[0] || null;
+    }
+
+    function getNoTimetableFallbackStartDate(task, baseStartDate) {
+        const dueDate = normalizeTaskDate(task?.due_date || task?.deadline);
+        const startDate = normalizeTaskDate(baseStartDate);
+        if (!dueDate || !startDate) return startDate;
+        const spanDays = daysBetweenISO(startDate, dueDate);
+        if (spanDays === null) return startDate;
+        const offsetDays = spanDays >= 3 ? -3 : -1;
+        return addDaysISO(dueDate, offsetDays) || startDate;
     }
 
     function arrangeTaskStartDates(tasks, timetableEvents, today) {
@@ -296,15 +344,17 @@
             const baseStartDate = getArrangeBaseStartDate(task, todayStr);
             let nextStartDate = null;
             const nextClassDate = getTaskSubject(task)
-                ? findNextSubjectTimetableDate(task, timetableEvents, todayStr)
+                ? findNextSubjectTimetableDate(task, timetableEvents, baseStartDate)
                 : null;
+            const isUrgent = nextPriority === 'urgent';
 
-            if (prioritySortValue(nextPriority) <= prioritySortValue('important')) {
+            if (isUrgent) {
                 nextStartDate = todayStr;
             } else if (nextClassDate) {
                 nextStartDate = nextClassDate;
             } else {
-                nextStartDate = getDefaultStartDate(task, todayStr);
+                nextStartDate = findNextAnyTimetableDate(timetableEvents, baseStartDate)
+                    || getNoTimetableFallbackStartDate(task, baseStartDate);
             }
             nextStartDate = constrainArrangeStartDate(task, nextStartDate, todayStr, baseStartDate);
 
@@ -334,6 +384,51 @@
         };
     }
 
+    function resolvePlanSubjectInMatrixView(plan, matrixMappings) {
+        if (plan?.subject_in_matrixview) return plan.subject_in_matrixview;
+        const subjectKey = normalizeSubjectKey(plan?.subject || plan?.name || '');
+        if (!subjectKey) return null;
+        const matched = (matrixMappings || []).find(mapping => {
+            const mappingSubject = normalizeSubjectKey(mapping.subject || mapping.plan_name || '');
+            const mappingPlanName = normalizeSubjectKey(mapping.plan_name || '');
+            return mappingSubject === subjectKey || mappingPlanName === subjectKey;
+        });
+        return matched?.subject_in_matrixview || null;
+    }
+
+    function subjectIdSegments(value) {
+        const raw = String(value || '');
+        const candidates = new Set();
+        const dashParts = raw.split(/\s+[-–—|]\s+/).map(part => part.trim()).filter(Boolean);
+        for (let i = 0; i < dashParts.length; i++) {
+            candidates.add(normalizeSubjectKey(dashParts.slice(i).join(' ')));
+        }
+        for (const part of raw.split(/\s+[-–—|]\s+|\s*:\s*/)) {
+            candidates.add(normalizeSubjectKey(part));
+        }
+        return Array.from(candidates).filter(Boolean);
+    }
+
+    function subjectIdMatchesPlan(subjectInMatrixView, plan) {
+        const matrixKey = normalizeSubjectKey(subjectInMatrixView);
+        if (!matrixKey || !plan) return false;
+        const planKeys = [
+            normalizeSubjectKey(plan.subject),
+            normalizeSubjectKey(plan.name)
+        ].filter(Boolean);
+        if (!planKeys.length) return false;
+        const segments = subjectIdSegments(subjectInMatrixView);
+        return planKeys.some(planKey => matrixKey === planKey || segments.includes(planKey));
+    }
+
+    function resolvePlanSubjectInMatrixViewFromEvents(plan, timetableEvents) {
+        if (!plan) return null;
+        const candidates = Array.from(new Set((timetableEvents || [])
+            .map(event => event.subject_in_matrixview)
+            .filter(Boolean)));
+        return candidates.find(subjectInMatrixView => subjectIdMatchesPlan(subjectInMatrixView, plan)) || null;
+    }
+
     function formatArrangeConfirmation(summary) {
         return [
             'Task Date Arrange 检测到任务日期/优先级调整。',
@@ -355,7 +450,7 @@
      * @param {Array} taskPool - 当日任务池（start_date <= today 且未完成）
      * @param {Array} todayContainers - 今日生效的容器列表
      * @param {Date}  now - 当前时间
-     * @returns {{ result, activeContainer, containerInfo, currentTasks, unassigned, sortedPool, allContainers }}
+     * @returns {{ result, activeContainer, containerInfo, currentContainerInfo, currentTasks, displayTasks, unassigned, sortedPool, allContainers }}
      */
     function dailySettle(taskPool, todayContainers, now) {
         const todayStr = formatDateISO(now);
@@ -388,8 +483,9 @@
         const allSorted = [...todayContainers].sort((a, b) =>
             timeToMinutes(a.time_start) - timeToMinutes(b.time_start));
 
-        const layer1 = allSorted.filter(c => getContainerLayer(c) === 1);
-        const layer2 = allSorted.filter(c => getContainerLayer(c) !== 1);
+        const assignableContainers = allSorted.filter(c => timeToMinutes(c.time_end) > nowMin);
+        const layer1 = assignableContainers.filter(c => getContainerLayer(c) === 1);
+        const layer2 = assignableContainers.filter(c => getContainerLayer(c) !== 1);
 
         const l1StartMin = layer1.length ? timeToMinutes(layer1[0].time_start) : 1440;
         const l1EndMin = layer1.length ? timeToMinutes(layer1[layer1.length - 1].time_end) : 0;
@@ -442,19 +538,67 @@
             }
         }
 
-        let currentTasks, containerInfo = null;
+        let currentTasks, containerInfo = null, currentContainerInfo = null;
         if (activeContainer) {
             containerInfo = result.get(activeContainer.id);
-            currentTasks = containerInfo.tasks;
+            if (containerInfo.tasks.length > 0) {
+                currentContainerInfo = containerInfo;
+                currentTasks = containerInfo.tasks;
+            } else {
+                currentContainerInfo = allSorted
+                    .map(c => result.get(c.id))
+                    .find(info => info && info.tasks.length > 0 && timeToMinutes(info.container.time_end) > nowMin) || null;
+                currentTasks = currentContainerInfo ? currentContainerInfo.tasks : sorted;
+            }
         } else {
             currentTasks = sorted; // 无容器时段 → 显示完整池
         }
+
+        const assignmentByTaskId = new Map();
+        for (const info of result.values()) {
+            for (const task of info.tasks) {
+                const isCurrent = activeContainer && info.container.id === activeContainer.id;
+                assignmentByTaskId.set(task.id, {
+                    status: isCurrent ? 'current' : 'upcoming',
+                    label: isCurrent ? '当前' : '后续',
+                    container_id: info.container.id,
+                    container_name: info.container.name || '',
+                    time_start: info.container.time_start || '',
+                    time_end: info.container.time_end || '',
+                    color: info.container.color || '',
+                    capacity: info.capacity,
+                    used: info.used
+                });
+            }
+        }
+        const displayRank = { current: 0, upcoming: 1, unassigned: 2 };
+        const displayTasks = sorted
+            .map((task, index) => {
+                const assignment = assignmentByTaskId.get(task.id) || {
+                    status: 'unassigned',
+                    label: '当前未分配',
+                    reason: '当前未分配'
+                };
+                return { ...task, assignment, __dailySettleOrder: index };
+            })
+            .sort((a, b) => {
+                const ar = displayRank[a.assignment?.status] ?? 2;
+                const br = displayRank[b.assignment?.status] ?? 2;
+                if (ar !== br) return ar - br;
+                return a.__dailySettleOrder - b.__dailySettleOrder;
+            })
+            .map(task => {
+                const { __dailySettleOrder, ...cleanTask } = task;
+                return cleanTask;
+            });
 
         return {
             result,
             activeContainer,
             containerInfo,
+            currentContainerInfo,
             currentTasks,
+            displayTasks,
             unassigned: [...remaining],
             sortedPool: sorted,
             allContainers: allSorted
@@ -516,20 +660,27 @@
         }
         const tasks = await db.getAllTasks();
         const plans = typeof db.getPlans === 'function' ? await db.getPlans() : [];
-        const plansById = new Map((plans || []).map(plan => [String(plan.id), plan]));
-        const enrichedTasks = (tasks || []).map(task => {
-            const plan = plansById.get(String(task.plan_id));
-            if (!plan) return task;
-            return {
-                ...task,
-                subject: plan.subject || null,
-                plan_subject_active: plan.subject ? plan.subject_active !== false : null
-            };
-        });
+        const matrixMappings = typeof db.getSetting === 'function'
+            ? await db.getSetting('matrixview_subject_mappings')
+            : [];
         const events = typeof db.getEvents === 'function'
             ? await db.getEvents()
             : [];
         const timetableEvents = (events || []).filter(event => event.source === 'timetable');
+        const plansById = new Map((plans || []).map(plan => [String(plan.id), plan]));
+        const enrichedTasks = (tasks || []).map(task => {
+            const plan = plansById.get(String(task.plan_id));
+            if (!plan) return task;
+            const subjectInMatrixView = task.subject_in_matrixview
+                || resolvePlanSubjectInMatrixView(plan, matrixMappings)
+                || resolvePlanSubjectInMatrixViewFromEvents(plan, timetableEvents);
+            return {
+                ...task,
+                subject: plan.subject || null,
+                subject_in_matrixview: subjectInMatrixView,
+                plan_subject_active: plan.subject ? plan.subject_active !== false : null
+            };
+        });
         const plan = arrangeTaskStartDates(enrichedTasks, timetableEvents, todayStr);
         const changes = plan.filter(item => item.changed);
         const summary = summarizeArrangePlan(plan);

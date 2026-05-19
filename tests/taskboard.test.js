@@ -16,6 +16,7 @@ const stateJs = fs.readFileSync(path.join(root, 'extension', 'pages', 'tasks', '
 const scriptJs = fs.readFileSync(path.join(root, 'extension', 'pages', 'tasks', 'script.js'), 'utf8');
 const tasksHtml = fs.readFileSync(path.join(root, 'extension', 'pages', 'tasks', 'tasks.html'), 'utf8');
 const dbJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'db.js'), 'utf8');
+const matrixViewJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'matrixview.js'), 'utf8');
 const taskArrangeAutoJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'task-arrange-auto.js'), 'utf8');
 const iconsJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'icons.js'), 'utf8');
 const boardCss = fs.readFileSync(path.join(root, 'extension', 'pages', 'tasks', 'styles.css'), 'utf8');
@@ -161,17 +162,31 @@ assert('quick-add can create weekly or monthly recurring task series',
     && boardJs.includes('TimeWhereDB.addRecurringTaskSeries(normalizedPayload'));
 assert('DB addTask derives subject from selected Plan only', /const subject = plan\?\.subject \|\| null;/.test(dbJs)
     && !/let subject = task\.subject/.test(dbJs));
+assert('DB addTask derives subject_in_matrixview from selected Plan or MatrixView mapping',
+    dbJs.includes('resolvePlanSubjectInMatrixView(plan, task.subject_in_matrixview || null)')
+    && dbJs.includes('subject_in_matrixview: subjectInMatrixView'));
+assert('DB can backfill historical Plan and Task subject_in_matrixview from timetable events',
+    dbJs.includes('async backfillMatrixViewSubjectIds')
+    && dbJs.includes('resolvePlanSubjectInMatrixViewFromEvents')
+    && dbJs.includes('subjectIdMatchesPlan')
+    && dbJs.includes("await this.backfillMatrixViewSubjectIds({ source: 'init_default_settings' })")
+    && dbJs.includes("source: 'matrixview_backfill'")
+    && dbJs.includes("await this.markTaskArrangeDirty('matrixview_subject_id_backfill'"));
+assert('MatrixView import immediately backfills subject_in_matrixview to existing tasks',
+    matrixViewJs.includes('db.backfillMatrixViewSubjectIds')
+    && matrixViewJs.includes("source: 'matrixview_initialize'"));
 assert('DB addTask initializes start_date from due date rules and no longer defaults to today',
     dbJs.includes('getInitialTaskStartDate(task = {}, referenceDate = new Date())')
     && dbJs.includes('const leadDays = this.isManageBacSourceTask(task) ? 14 : 7')
     && dbJs.includes('start_date: normalizedTask.start_date || null')
     && !dbJs.includes('start_date: task.start_date || this.formatDateISO(new Date())'));
 assert('DB updateTask recalculates subject when plan_id changes', dbJs.includes("Object.prototype.hasOwnProperty.call(data, 'plan_id')")
-    && dbJs.includes('updateData.subject = nextPlan?.subject || null'));
+    && dbJs.includes('updateData.subject = nextPlan?.subject || null')
+    && dbJs.includes('updateData.subject_in_matrixview = await this.resolvePlanSubjectInMatrixView'));
 assert('DB marks Task Arrange dirty for task date or plan changes only', taskArrangeAutoJs.includes("task_arrange_dirty_at")
     && dbJs.includes('markTaskArrangeDirty')
     && dbJs.includes('hasArrangeRelevantTaskUpdate')
-    && dbJs.includes("['start_date', 'due_date', 'deadline', 'plan_id']")
+    && dbJs.includes("['start_date', 'due_date', 'deadline', 'plan_id', 'subject_in_matrixview']")
     && dbJs.includes('task_created_with_arrange_date')
     && dbJs.includes('task_arrange_field_changed')
     && !/if \(data\.progress\)[\s\S]{0,120}markTaskArrangeDirty/.test(dbJs));

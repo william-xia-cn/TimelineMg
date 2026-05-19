@@ -357,6 +357,61 @@ section('TC-S-10 dailySettle — 场景L：Layer2 接收普通溢出定时任务
     assert("普通 Layer2 定时任务不再留在 unassigned", r.unassigned.map(t => t.id), []);
 }
 
+section('TC-S-10 dailySettle — 场景L2：当前容器为空时显示后续已安排任务');
+{
+    const l1 = { id:'l1', name:'学习', time_start:'18:00', time_end:'19:00', repeat:'daily', layer:1 };
+    const l2 = { id:'l2', name:'自由', time_start:'20:00', time_end:'21:00', repeat:'daily', layer:2 };
+    const tasks = [
+        { id:'timed-layer2', priority:'low', duration:30, progress:'not_started', start_date:'2026-04-15', schedule_time:'20:15' }
+    ];
+    const now = new Date('2026-04-15T18:30:00');
+    const r = S.dailySettle(tasks, [l1, l2], now);
+    assert("当前仍处于 l1", r.activeContainer.id, 'l1');
+    assert("l1 当前容器无任务", r.containerInfo.tasks.map(t => t.id), []);
+    assert("后续 l2 有任务时 currentTasks 不为空", r.currentTasks.map(t => t.id), ['timed-layer2']);
+    assert("currentContainerInfo 指向后续有任务容器", r.currentContainerInfo.container.id, 'l2');
+}
+
+section('TC-S-10 dailySettle — 场景L3：已结束容器不再吃掉当前任务，当前容器接收并溢出');
+{
+    const past = { id:'past', name:'已结束学习', time_start:'16:00', time_end:'17:00', repeat:'daily', layer:1 };
+    const active = { id:'active', name:'当前学习', time_start:'18:00', time_end:'19:00', repeat:'daily', layer:1 };
+    const later = { id:'later', name:'后续自由', time_start:'20:00', time_end:'21:00', repeat:'daily', layer:2 };
+    const tasks = [
+        { id:'t1', priority:'urgent', duration:30, progress:'not_started', start_date:'2026-04-15' },
+        { id:'t2', priority:'urgent', duration:30, progress:'not_started', start_date:'2026-04-15' },
+        { id:'t3', priority:'medium', duration:30, progress:'not_started', start_date:'2026-04-15' }
+    ];
+    const now = new Date('2026-04-15T18:30:00');
+    const r = S.dailySettle(tasks, [past, active, later], now);
+    assert("已结束容器不分配任务", r.result.get('past').tasks.map(t => t.id), []);
+    assert("当前容器先接收任务", r.result.get('active').tasks.map(t => t.id), ['t1', 't2']);
+    assert("当前容器容量外任务溢出到后续容器", r.result.get('later').tasks.map(t => t.id), ['t3']);
+    assert("当前显示仍指向当前容器", r.currentContainerInfo.container.id, 'active');
+    assert("当前任务显示当前容器任务", r.currentTasks.map(t => t.id), ['t1', 't2']);
+    assert("displayTasks 显示当天所有任务并按当前/后续排序", r.displayTasks.map(t => t.id), ['t1', 't2', 't3']);
+    assert("displayTasks 当前任务标记 current", r.displayTasks[0].assignment.status, 'current');
+    assert("displayTasks 溢出任务标记 upcoming", r.displayTasks[2].assignment.status, 'upcoming');
+}
+
+section('TC-S-10 dailySettle — 场景L4：未分配任务仍进入 displayTasks 并排在最后');
+{
+    const active = { id:'active', name:'当前学习', time_start:'18:00', time_end:'19:00', repeat:'daily', layer:1 };
+    const later = { id:'later', name:'后续自由', time_start:'20:00', time_end:'21:00', repeat:'daily', layer:2 };
+    const tasks = [
+        { id:'active-task', priority:'urgent', duration:30, progress:'not_started', start_date:'2026-04-15' },
+        { id:'later-task', priority:'medium', duration:45, progress:'not_started', start_date:'2026-04-15' },
+        { id:'unassigned-timed', priority:'low', duration:30, progress:'not_started', start_date:'2026-04-15', schedule_time:'22:00' }
+    ];
+    const now = new Date('2026-04-15T18:30:00');
+    const r = S.dailySettle(tasks, [active, later], now);
+    assert("displayTasks 包含已分配和未分配任务", r.displayTasks.map(t => t.id), ['active-task', 'later-task', 'unassigned-timed']);
+    assert("当前容器任务标记 current", r.displayTasks[0].assignment.status, 'current');
+    assert("后续容器任务标记 upcoming", r.displayTasks[1].assignment.status, 'upcoming');
+    assert("无法匹配时间容器的任务标记 unassigned", r.displayTasks[2].assignment.status, 'unassigned');
+    assert("未分配任务保留在 unassigned 结果中", r.unassigned.map(t => t.id), ['unassigned-timed']);
+}
+
 section('TC-S-10 dailySettle — 场景M：多 Layer1 + Layer2 before/between/after 下按时间匹配定时任务');
 {
     const l2Before = { id:'l2Before', name:'早自由', time_start:'07:00', time_end:'08:00', repeat:'daily', layer:2 };
@@ -427,7 +482,8 @@ async function runAsyncChecks() {
 
     const timetable = [
         { id:'e1', source:'timetable', subject_in_matrixview:'English Language Acquisition Phase 5', title:'English Language', date:'2026-05-16' },
-        { id:'e2', source:'timetable', title:'Math Analysis', date:'2026-05-17' }
+        { id:'e2', source:'timetable', title:'Math Analysis', date:'2026-05-17' },
+        { id:'e3', source:'timetable', title:'General Study Block', date:'2026-05-26' }
     ];
     const plan = S.arrangeTaskStartDates([
         { id:'subject', subject:'English Language Acquisition Phase 5', progress:'not_started', priority:'medium', due_date:'2026-06-01' },
@@ -442,22 +498,45 @@ async function runAsyncChecks() {
         { id:'done', subject:'Math', progress:'completed', priority:'urgent', due_date:'2026-05-15' }
     ], timetable, '2026-05-14');
     const byId = new Map(plan.map(row => [row.task_id, row]));
-    assert("有 subject 普通任务先初始化，课表不能拉早到初始化日期之前", byId.get('subject').start_date, '2026-05-25');
+    assert("有 subject 普通任务先初始化，早于初始化日的课表不生效，改走后续可用课表日", byId.get('subject').start_date, '2026-05-26');
     const tolerantMatch = S.arrangeTaskStartDates([
         { id:'tolerant', subject:'English: Language Acquisition Phase 5', progress:'not_started', priority:'medium', due_date:'2026-06-01' }
     ], timetable, '2026-05-14');
-    assert("SubjectInMatrixView 标准化后仍受初始化开始日期下界约束", tolerantMatch[0].start_date, '2026-05-25');
+    assert("SubjectInMatrixView 标准化后仍受初始化开始日期下界约束并向后寻找可用课表日", tolerantMatch[0].start_date, '2026-05-26');
     assert("start_date 等于 due_date 视为未初始化，urgent 不能早于初始化日期", byId.get('urgent').start_date, '2026-05-14');
     assert("important/urgent 任务写入 urgent priority", byId.get('urgent').priority, 'urgent');
-    assert("明确开始日期窗口的 important 任务不能被拉早到今天", byId.get('explicit-important').start_date, '2026-05-16');
+    assert("明确开始日期窗口的 important 任务不能被拉早到今天，但可向后到下一个可用课表日", byId.get('explicit-important').start_date, '2026-05-17');
     assert("明确开始日期窗口的 important 任务仍可升级 priority", byId.get('explicit-important').priority, 'important');
-    assert("无 subject 任务使用默认 start_date", byId.get('nosubject').start_date, '2026-05-23');
-    assert("有 subject 但无课表匹配的任务使用默认 start_date", byId.get('unmatched-subject').start_date, '2026-05-25');
-    assert("有 subject 且 start_date 等于 due_date 时先初始化为默认 start_date", byId.get('unmatched-subject-due-start').start_date, '2026-05-25');
-    assert("ManageBac 无课表匹配使用 14 天默认 start_date", byId.get('unmatched-managebac').start_date, '2026-05-18');
+    assert("无 subject 任务也使用下一个可用课表日", byId.get('nosubject').start_date, '2026-05-26');
+    assert("有 subject 但无课表匹配的任务使用下一个可用课表日", byId.get('unmatched-subject').start_date, '2026-05-26');
+    assert("有 subject 且 start_date 等于 due_date 时先初始化再排到下一个可用课表日", byId.get('unmatched-subject-due-start').start_date, '2026-05-26');
+    assert("ManageBac 无课表匹配不再使用 14 天 fallback，而是排到下一个可用课表日", byId.get('unmatched-managebac').start_date, '2026-05-26');
     assertBool("无 due_date 任务不参与 Task Arrange", byId.has('no-due'), false);
     assertBool("逾期未完成任务不参与 Task Arrange", byId.has('overdue-no-start'), false);
     assertBool("completed 任务不参与 Arrange", byId.has('done'), false);
+
+    const broadTitleMatch = S.arrangeTaskStartDates([
+        { id:'managebac-engla-broad-title', subject:'English Language Acquisition Phase 5', source:'managebac', progress:'not_started', priority:'medium', due_date:'2026-06-05' }
+    ], [
+        { id:'generic-english', source:'timetable', title:'English', date:'2026-05-19' },
+        { id:'future-general', source:'timetable', title:'General Study Block', date:'2026-05-25' }
+    ], '2026-05-19');
+    assert("短泛称课表标题不能误匹配完整 EngLA 学科，改走下一个可用课表日", broadTitleMatch[0].start_date, '2026-05-25');
+
+    const exactMatrixMatch = S.arrangeTaskStartDates([
+        { id:'managebac-engla-exact', subject:'English Language Acquisition Phase 5', source:'managebac', progress:'not_started', priority:'medium', due_date:'2026-06-05' }
+    ], [
+        { id:'exact-engla', source:'timetable', subject_in_matrixview:'English Language Acquisition Phase 5', date:'2026-05-25' }
+    ], '2026-05-19');
+    assert("SubjectInMatrixView 精确匹配仍可作为课表日期来源", exactMatrixMatch[0].start_date, '2026-05-25');
+
+    const subjectIdMismatch = S.arrangeTaskStartDates([
+        { id:'managebac-engla-id', subject:'English Language Acquisition Phase 5', subject_in_matrixview:'English Language Acquisition Phase 5', source:'managebac', progress:'not_started', priority:'medium', due_date:'2026-06-05' }
+    ], [
+        { id:'generic-title-wrong-id', source:'timetable', subject_in_matrixview:'Mathematics Analysis HL', title:'English', date:'2026-05-19' },
+        { id:'future-general-wrong-id', source:'timetable', subject_in_matrixview:'Mathematics Analysis HL', title:'General Study Block', date:'2026-05-25' }
+    ], '2026-05-19');
+    assert("有 Subject ID 时不再用泛称 title 误匹配不同课表学科，改走下一个可用课表日", subjectIdMismatch[0].start_date, '2026-05-25');
 
     const explicitWindow = S.arrangeTaskStartDates([
         { id:'subject-window', subject:'English Language Acquisition Phase 5', progress:'not_started', priority:'medium', due_date:'2026-05-25', start_date:'2026-05-18' },
@@ -468,7 +547,7 @@ async function runAsyncChecks() {
         { id:'late', source:'timetable', title:'Math Analysis', date:'2026-05-30' }
     ], '2026-05-14');
     const explicitById = new Map(explicitWindow.map(row => [row.task_id, row]));
-    assert("明确开始日期窗口不能被课表调早", explicitById.get('subject-window').start_date, '2026-05-18');
+    assert("明确开始日期窗口不能被课表调早；无后续匹配时按后续可用课表日并受 due 约束", explicitById.get('subject-window').start_date, '2026-05-25');
     assert("明确开始日期窗口允许在窗口内向后移动", explicitById.get('clamp-due').start_date, '2026-05-25');
     assert("start_date 晚于 due_date 的异常窗口限制到 due_date", explicitById.get('invalid-window').start_date, '2026-05-15');
     assert("异常窗口仍可更新 priority", explicitById.get('invalid-window').priority, 'urgent');
@@ -480,15 +559,38 @@ async function runAsyncChecks() {
         { id:'too-late', source:'timetable', title:'Math Analysis', date:'2026-06-10' }
     ], '2026-05-20');
     const expiredById = new Map(expiredWindow.map(row => [row.task_id, row]));
-    assert("明确窗口且 today 晚于 start_date 时后调到 today", expiredById.get('move-today').start_date, '2026-05-20');
+    assert("明确窗口且 today 晚于 start_date 时仍按下一个可用课表日向后安排", expiredById.get('move-today').start_date, '2026-05-25');
     assert("明确窗口且候选晚于 due_date 时限制到 due_date", expiredById.get('late-class-clamp').start_date, '2026-06-01');
+
+    const sameDayAnyTimetable = S.arrangeTaskStartDates([
+        { id:'music-no-subject-match', subject:'Music', source:'managebac', progress:'not_started', priority:'medium', due_date:'2026-05-28', start_date:'2026-05-20' }
+    ], [
+        { id:'same-day-math', source:'timetable', subject_in_matrixview:'Mathematics Analysis HL', title:'Math', date:'2026-05-20' }
+    ], '2026-05-20');
+    assert("无学科匹配时当天任意课表不能作为原地 fallback", sameDayAnyTimetable[0].start_date, '2026-05-25');
+
+    const sameDaySubjectTimetable = S.arrangeTaskStartDates([
+        { id:'music-same-day-subject', subject:'Music', subject_in_matrixview:'Music', source:'managebac', progress:'not_started', priority:'medium', due_date:'2026-05-28', start_date:'2026-05-20' }
+    ], [
+        { id:'same-day-music', source:'timetable', subject_in_matrixview:'Music', title:'Music', date:'2026-05-20' }
+    ], '2026-05-20');
+    assert("当天同学科课表也不能作为 Arrange 原地依据", sameDaySubjectTimetable[0].start_date, '2026-05-25');
+
+    const laterSubjectTimetable = S.arrangeTaskStartDates([
+        { id:'music-later-subject', subject:'Music', subject_in_matrixview:'Music', source:'managebac', progress:'not_started', priority:'medium', due_date:'2026-05-28', start_date:'2026-05-20' }
+    ], [
+        { id:'later-music', source:'timetable', subject_in_matrixview:'Music', title:'Music', date:'2026-05-22' }
+    ], '2026-05-20');
+    assert("start_date 之后的同学科课表仍可作为 Arrange 日期", laterSubjectTimetable[0].start_date, '2026-05-22');
 
     const noTimetable = S.arrangeTaskStartDates([
         { id:'keep', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-06-01', start_date:'2026-05-22' },
+        { id:'short-window', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-06-01', start_date:'2026-05-30' },
         { id:'fallback-urgent', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-05-16', start_date:'2026-05-22' }
     ], [], '2026-05-14');
     const noTableById = new Map(noTimetable.map(row => [row.task_id, row]));
-    assert("无 timetable 且未过开始日期的明确窗口可按 fallback 向后调整", noTableById.get('keep').start_date, '2026-05-25');
+    assert("无 timetable 且开始到截止大于等于 3 天时调整到截止前 3 天", noTableById.get('keep').start_date, '2026-05-29');
+    assert("无 timetable 且开始到截止小于 3 天时调整到截止前 1 天", noTableById.get('short-window').start_date, '2026-05-31');
     assert("无 timetable 且异常明确窗口的 urgent 任务限制到 due_date", noTableById.get('fallback-urgent').start_date, '2026-05-16');
 
     section('TC-S-12 arrangeTasks / maybeRunTaskArrange — preview/apply 与 6 小时节流');
@@ -533,12 +635,45 @@ async function runAsyncChecks() {
         confirmFn: () => true
     });
     assert("用户确认后 Arrange 更新两个未完成任务", arrangeResult.arranged, 2);
-    assert("arrangeTasks subject 任务先初始化且不被课表拉早", fakeDb.tasks.find(t => t.id === 'a').start_date, '2026-05-25');
+    assert("arrangeTasks subject 任务先初始化且不被课表拉早，无后续课表时走 due-relative fallback", fakeDb.tasks.find(t => t.id === 'a').start_date, '2026-05-29');
     assert("arrangeTasks ManageBac 异常明确窗口限制到 due_date", fakeDb.tasks.find(t => t.id === 'b').start_date, '2026-05-16');
     assert("arrangeTasks ManageBac 异常明确窗口仍升级 priority", fakeDb.tasks.find(t => t.id === 'b').priority, 'important');
     assert("arrangeTasks 不处理 completed", fakeDb.tasks.find(t => t.id === 'c').start_date, '2026-05-20');
     assert("arrangeTasks 不处理停用学科 Plan 下任务", fakeDb.tasks.find(t => t.id === 'inactive').start_date, '2026-05-22');
     assertBool("用户确认后写入 last_run_at", !!fakeDb.settings.task_arrange_last_run_at, true);
+
+    const mappingDb = {
+        settings: {
+            matrixview_subject_mappings: [
+                { plan_name: 'EngLA', subject: 'English Language Acquisition Phase 5', subject_in_matrixview: 'English Language Acquisition Phase 5' }
+            ]
+        },
+        tasks: [{ id:'legacy-task', plan_id: 1, subject:'English Language Acquisition Phase 5', source:'managebac', progress:'not_started', priority:'medium', due_date:'2026-06-05' }],
+        events: [{ id:'engla-class', source:'timetable', subject_in_matrixview:'English Language Acquisition Phase 5', title:'English', date:'2026-05-25' }],
+        plans: [{ id: 1, name: 'EngLA', subject: 'English Language Acquisition Phase 5' }],
+        async getAllTasks() { return this.tasks.map(t => ({ ...t })); },
+        async getEvents() { return this.events.map(e => ({ ...e })); },
+        async getPlans() { return this.plans.map(p => ({ ...p })); },
+        async getSetting(key) { return this.settings[key]; }
+    };
+    const mappingResult = await S.arrangeTasks(mappingDb, new Date('2026-05-19T09:00:00'));
+    assert("旧任务可通过 Plan/MatrixView mapping 解析 Subject ID 后匹配课表", mappingResult.changes[0].start_date, '2026-05-25');
+
+    const eventDerivedSubjectDb = {
+        settings: {},
+        tasks: [{ id:'legacy-music-task', plan_id: 3, subject:'Chinese Performing Arts: Music 9', source:'managebac', progress:'not_started', priority:'medium', due_date:'2026-05-28', start_date:'2026-05-20' }],
+        events: [
+            { id:'music-class', source:'timetable', subject_in_matrixview:'Arts - Chinese Performing Arts: Music 9', title:'Arts', date:'2026-05-21' },
+            { id:'generic-next', source:'timetable', subject_in_matrixview:'ComTime - Community Time', title:'ComTime', date:'2026-05-22' }
+        ],
+        plans: [{ id: 3, name: 'Chinese Arts: Music 9', subject: 'Chinese Performing Arts: Music 9' }],
+        async getAllTasks() { return this.tasks.map(t => ({ ...t })); },
+        async getEvents() { return this.events.map(e => ({ ...e })); },
+        async getPlans() { return this.plans.map(p => ({ ...p })); },
+        async getSetting(key) { return this.settings[key]; }
+    };
+    const eventDerivedResult = await S.arrangeTasks(eventDerivedSubjectDb, new Date('2026-05-20T09:00:00'));
+    assert("旧 Plan/Task 没有 Subject ID 时可从课表 subject_in_matrixview 后缀解析并精确匹配", eventDerivedResult.changes[0].start_date, '2026-05-21');
 
     const fresh = await S.maybeRunTaskArrange(fakeDb, { now: new Date('2026-05-14T12:00:00') });
     assertBool("6 小时内不重复 Arrange", fresh.ran, false);

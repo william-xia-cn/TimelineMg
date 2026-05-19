@@ -2,8 +2,8 @@
 
 ## Active Target
 
-- Baseline Stabilized
-- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, and documentation baseline cleanup are complete. TimeWhere `0.2.0` CWS Private testing material preparation is approved by D-023. Actual CWS upload / Submit for Review / publish / public listing / tag / push / merge / deploy remain unapproved.
+- Baseline Stabilized; `0.2.1` internal stabilization sync
+- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, and TimeWhere `0.2.0` CWS Private testing material preparation are complete. Product Owner approved this `0.2.1` GitHub sync/push only. Actual CWS upload / Submit for Review / publish / public listing / tag / merge / deploy remain unapproved.
 
 ## Active Collaboration Model
 
@@ -28,7 +28,8 @@
 
 - [x] Import governance template into new project documents.
 - [x] Product Owner confirms governance mode, active release target, version naming, and current scope.
-- [x] releaseMg prepared TimeWhere `0.2.0` Chrome Web Store Private testing materials, package evidence, and readiness report under D-023.
+- [x] releaseMg regenerated TimeWhere `0.2.0` Chrome Web Store Private testing package/materials from latest clean HEAD `753ac44` under D-023. Tests were not run per Product Owner instruction. CWS upload package was sanitized to remove manifest `key`.
+- [x] Build&Test prepared `0.2.1` stabilization code/docs sync with full `npm test` passing; no `0.2.1` CWS package generated.
 
 ## NEXT
 
@@ -77,12 +78,13 @@
 - [x] Product&Project Mg creates docs cleanup handoff: `docs/handoffs/outbox/HANDOFF-DOCS-BASELINE-CLEANUP-001.md`.
 - [x] Product&Project Mg performs documentation baseline cleanup in `docs/handoffs/outbox/REVIEW-DOCS-BASELINE-CLEANUP-001.md`.
 - [x] Build&Test implemented Task Board manual task creation and quick-add due-date rules from D-016.
+- [x] Build&Test completed `0.2.1` stabilization changes: Task Arrange subject matching, MatrixView Subject ID source writes/backfill, Dashboard/Popup current task display, Daily Settle displayTasks behavior, readable Google Sync conflicts, and version/documentation sync.
 
 ## LATER
 
 - [ ] Reload the unpacked extension with the fixed ID and run Google data sync v1 real-auth smoke against a test Google account.
-- [ ] Product Owner decides whether to approve CWS Developer Dashboard upload / Submit for Review for the `0.2.0` Private testing candidate.
-- [ ] Product Owner / Build&Test resolves candidate source traceability by approving a commit/staging path or explicitly accepting the dirty-worktree artifact risk before any CWS upload/submit.
+- [ ] Product Owner decides whether to approve CWS Developer Dashboard upload / Submit for Review for the historical `0.2.0` Private testing candidate or request a new `0.2.1` package.
+- [ ] Product Owner confirms risk acceptance for the regenerated `0.2.0` package being prepared without automated/browser tests.
 - [ ] Add feature specs only when scope/risk requires durable boundaries.
 - [ ] Create formal handoffs only for cross-session, release, privacy/security, high-risk, or Product Owner-requested work.
 
@@ -91,8 +93,9 @@
 | Blocker | Owner | Required action |
 |---|---|---|
 | Product Owner authority label/name not recorded | Product Owner | Confirm preferred authority label/name when needed. |
-| Public release boundary | Build&Test / releaseMg | D-023 approves CWS Private material preparation only. Do not upload, Submit for Review, publish, public-list, tag, push, merge, deploy, or release without explicit Product Owner approval. |
-| Candidate source traceability | Product Owner / Build&Test / releaseMg | `0.2.0` CWS Private artifact was generated from a dirty working tree. Resolve commit/staging path or record Product Owner risk acceptance before any upload/submit. |
+| Public release boundary | Build&Test / releaseMg | D-023 approves CWS Private material preparation only. Current PO approval covers this GitHub push only. Do not upload, Submit for Review, publish, public-list, tag, merge, deploy, or release without explicit Product Owner approval. |
+| Test waiver for regenerated package | Product Owner / releaseMg | `0.2.0` CWS Private artifact was regenerated without automated/browser tests per Product Owner instruction. Record this as a waiver/risk, not as PASS evidence. |
+| CWS OAuth extension ID follow-up | Product Owner / Build&Test | Sanitized CWS package removes manifest `key` because CWS rejects it. If the uploaded item receives a different extension ID, update the Google OAuth Chrome Extension client before validating Google Drive sync. |
 | Manual browser validation not run | CLOSED | releaseMg executed `docs/TEST_PLAN.md` L3 checklist and recorded results in `docs/release/RELEASE_GATE_REPORT_INTERNAL_MVP_2026-05-11.md`. |
 | Container id documentation mismatch | Product&Project Mg / Build&Test | Product Owner approved UUID/string ids for tasks, containers, events, and habits; planner helper records may remain numeric. Documentation cleanup remains pending. |
 | P1 baseline behavior risks | CLOSED | Build&Test fix passed Product&Project Mg review and releaseMg narrow recheck returned PASS. |

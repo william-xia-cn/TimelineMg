@@ -5,9 +5,13 @@
 - Date: 2026-05-18
 - Target: Chrome Web Store Private testing listing materials
 - Candidate version: `0.2.0`
-- Package: `dist/TimeWhere-0.2.0-private-cws-20260518-011449.zip`
-- SHA256: `62DCB492E94CC0D20E6BB690906A4246024C9741D6FC049766CC5AE6780F95BF`
-- Extension ID observed in unpacked smoke: `ogdjmelmfkfahppahhkkggdejjainbnd`
+- Historical note: current source/package version has moved to `0.2.1` for internal stabilization; no `0.2.1` CWS package has been generated from these materials.
+- Package: `dist/TimeWhere-0.2.0-private-cws-sanitized-20260519-012614.zip`
+- SHA256: `4A77450F9378185B9269A42453EF848939EF745037A3FC9155E0E60F9C8E7D3B`
+- Candidate commit: `753ac44`
+- Extension ID: `ogdjmelmfkfahppahhkkggdejjainbnd`
+- Test status: Automated and browser tests were not run for this regenerated package per Product Owner instruction.
+- CWS packaging note: The CWS upload package is generated from a package copy with manifest `key` removed, because Chrome Web Store rejects submitted manifests containing `key`. Source `extension/manifest.json` still keeps `key` for local fixed-ID OAuth testing.
 - Boundary: Do not upload, Submit for Review, publish, public-list, tag, push, merge, deploy, or release without explicit Product Owner approval.
 
 ## Store Listing Draft
@@ -125,4 +129,5 @@ Privacy-sensitive features:
 - Approve or reject actual Chrome Web Store Developer Dashboard upload.
 - Approve or reject Submit for Review after dashboard fields are filled.
 - Confirm trusted tester accounts in the Developer Dashboard without recording them in repo evidence.
-- Resolve candidate source traceability: commit/stage the `0.2.0` source state before upload, or explicitly accept the dirty-worktree artifact risk.
+- Accept or reject the risk of using the regenerated package without automated/browser tests.
+- After CWS upload assigns/confirms the store item ID, update Google OAuth Chrome Extension client configuration if the CWS extension ID differs from the local fixed development ID.

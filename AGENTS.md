@@ -101,7 +101,24 @@ Forbidden in repo evidence unless explicitly redacted:
 - raw production database rows with private identifiers;
 - screenshots containing private account or user data.
 
-## 9. Approved Governance Files
+## 9. Browser Control For Store Consoles
+
+For Chrome Web Store, vendor dashboards, or similar authenticated release
+consoles, prefer the dedicated Chrome remote-debugging workflow documented in
+`docs/release/CWS_BROWSER_CONTROL_RUNBOOK.md`.
+
+- Use a dedicated temporary Chrome profile and `agent-browser --cdp` after the
+  Product Owner logs in.
+- Do not use the Product Owner's daily Chrome profile unless explicitly
+  approved for that session.
+- Do not submit, publish, cancel review, withdraw review, or change release
+  state without explicit Product Owner approval.
+- Do not record account emails, tester accounts, cookies, tokens, passwords, or
+  local user profile paths in repository evidence.
+- Treat CWS pending-review locks as release-state boundaries; ask before
+  canceling review or creating a replacement draft.
+
+## 10. Approved Governance Files
 
 | File | Purpose |
 |---|---|
@@ -116,5 +133,6 @@ Forbidden in repo evidence unless explicitly redacted:
 | `docs/specs/FEATURE_SPEC_TEMPLATE.md` | Feature specification template. |
 | `docs/release/RELEASE_CHECKLIST.md` | Release checklist baseline. |
 | `docs/release/RELEASE_GATE_REPORT_TEMPLATE.md` | Release gate report template. |
+| `docs/release/CWS_BROWSER_CONTROL_RUNBOOK.md` | Browser-control runbook for CWS and similar authenticated store-console work. |
 
 Do not create new governance documents when an existing authority file can hold the update.

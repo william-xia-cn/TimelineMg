@@ -38,6 +38,7 @@ class FakeDB {
         this.buckets = [];
         this.tasks = [];
         this.settings = {};
+        this.backfillSubjectCalls = [];
     }
 
     async getPlans() {
@@ -50,6 +51,7 @@ class FakeDB {
             id,
             name: plan.name,
             subject: plan.subject || null,
+            subject_in_matrixview: plan.subject_in_matrixview || null,
             subject_active: plan.subject ? plan.subject_active !== false : null,
             matrixview_managed: plan.matrixview_managed === true,
             source: plan.source || null,
@@ -98,6 +100,11 @@ class FakeDB {
 
     async setSetting(key, value) {
         this.settings[key] = value;
+    }
+
+    async backfillMatrixViewSubjectIds(options = {}) {
+        this.backfillSubjectCalls.push(options);
+        return { plan_updates: 0, task_updates: 0, mappings: 0 };
     }
 }
 
@@ -222,6 +229,8 @@ async function run() {
     assert('plan init preserves non-subject Plans', ['Personal', 'Projects', '大学申请'].every(name => planNamesAfterFirst.includes(name)));
     assert('plan init keeps uncertain Plans and reports them', planNamesAfterFirst.includes('Mystery Club') && first.uncertainPlans.some(plan => plan.name === 'Mystery Club'));
     assert('plan init treats Plan display name separately from SubjectInMatrixView', plansAfterFirst.some(plan => plan.name === 'English Language Acquisition Phase 5' && plan.subject === 'English Language Acquisition Phase 5' && plan.subject_active === true));
+    assert('plan init stores subject_in_matrixview on subject Plans', plansAfterFirst.some(plan => plan.name === 'English Language Acquisition Phase 5' && plan.subject_in_matrixview === 'English Language Acquisition Phase 5'));
+    assert('plan init immediately triggers subject_in_matrixview backfill for existing tasks', db.backfillSubjectCalls.some(call => call.source === 'matrixview_initialize'));
 
     for (const plan of plansAfterFirst.filter(plan => ['Biology HL', 'English Language Acquisition Phase 5', 'Mathematics Analysis HL'].includes(plan.name))) {
         const bucketNames = (await db.getBucketsByPlan(plan.id)).map(bucket => bucket.name);
@@ -239,6 +248,7 @@ async function run() {
         return acc;
     }, {});
     assert('plan init is idempotent for subject and Other School Plan names', ['Biology HL', 'English Language Acquisition Phase 5', 'Mathematics Analysis HL', MatrixView.OTHER_SCHOOL_PLAN_NAME].every(name => counts[name] === 1));
+    assert('plan init keeps subject_in_matrixview when updating existing subject Plans', plansAfterSecond.some(plan => plan.name === 'English Language Acquisition Phase 5' && plan.subject_in_matrixview === 'English Language Acquisition Phase 5'));
     const otherSchoolPlan = plansAfterSecond.find(plan => plan.name === MatrixView.OTHER_SCHOOL_PLAN_NAME);
     const otherBuckets = await db.getBucketsByPlan(otherSchoolPlan.id);
     assertEqual('idempotent run does not duplicate Other School Plan buckets', otherBuckets.length, MatrixView.OTHER_SCHOOL_DEFAULT_BUCKETS.length);

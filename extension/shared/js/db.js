@@ -127,6 +127,145 @@ const TimeWhereDB = {
         return this.formatDateISO(date);
     },
 
+    normalizeSubjectKey(value) {
+        return String(value || '')
+            .toLowerCase()
+            .replace(/&/g, ' and ')
+            .replace(/[^a-z0-9\u4e00-\u9fff]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    },
+
+    getSubjectIdSegments(value) {
+        const raw = String(value || '');
+        const candidates = new Set();
+        const dashParts = raw.split(/\s+[-–—|]\s+/).map(part => part.trim()).filter(Boolean);
+        for (let i = 0; i < dashParts.length; i++) {
+            candidates.add(this.normalizeSubjectKey(dashParts.slice(i).join(' ')));
+        }
+        for (const part of raw.split(/\s+[-–—|]\s+|\s*:\s*/)) {
+            candidates.add(this.normalizeSubjectKey(part));
+        }
+        return Array.from(candidates).filter(Boolean);
+    },
+
+    subjectIdMatchesPlan(subjectInMatrixView, plan) {
+        const matrixKey = this.normalizeSubjectKey(subjectInMatrixView);
+        if (!matrixKey || !plan) return false;
+        const planKeys = [
+            this.normalizeSubjectKey(plan.subject),
+            this.normalizeSubjectKey(plan.name)
+        ].filter(Boolean);
+        if (!planKeys.length) return false;
+        const matrixSegments = this.getSubjectIdSegments(subjectInMatrixView);
+        return planKeys.some(planKey =>
+            matrixKey === planKey ||
+            matrixSegments.includes(planKey)
+        );
+    },
+
+    async resolvePlanSubjectInMatrixViewFromEvents(plan) {
+        if (!plan) return null;
+        const events = await this.getEvents();
+        const candidates = Array.from(new Set((events || [])
+            .filter(event => event.source === 'timetable')
+            .map(event => event.subject_in_matrixview)
+            .filter(Boolean)));
+        const exact = candidates.find(subjectInMatrixView => this.subjectIdMatchesPlan(subjectInMatrixView, plan));
+        return exact || null;
+    },
+
+    async resolvePlanSubjectInMatrixView(plan, explicitValue = null) {
+        if (explicitValue) return explicitValue;
+        if (plan?.subject_in_matrixview) return plan.subject_in_matrixview;
+        const subjectKey = this.normalizeSubjectKey(plan?.subject || plan?.name || '');
+        if (!subjectKey) return null;
+        const mappings = await this.getSetting('matrixview_subject_mappings');
+        const matched = (mappings || []).find(mapping => {
+            const mappingSubject = this.normalizeSubjectKey(mapping.subject || mapping.plan_name || '');
+            const mappingPlanName = this.normalizeSubjectKey(mapping.plan_name || '');
+            return mappingSubject === subjectKey || mappingPlanName === subjectKey;
+        });
+        return matched?.subject_in_matrixview || await this.resolvePlanSubjectInMatrixViewFromEvents(plan);
+    },
+
+    async backfillMatrixViewSubjectIds(options = {}) {
+        const now = this.getNowISO();
+        const plans = await this.getPlans();
+        const planUpdates = [];
+        const existingMappings = await this.getSetting('matrixview_subject_mappings');
+        const mappings = Array.isArray(existingMappings)
+            ? [...existingMappings]
+            : [];
+        const mappingKeys = new Set(mappings.map(mapping => [
+            this.normalizeSubjectKey(mapping.plan_name || ''),
+            this.normalizeSubjectKey(mapping.subject || ''),
+            this.normalizeSubjectKey(mapping.subject_in_matrixview || '')
+        ].join('|')));
+
+        for (const plan of plans) {
+            if (!plan?.subject || plan.subject_in_matrixview) continue;
+            const subjectInMatrixView = await this.resolvePlanSubjectInMatrixViewFromEvents(plan);
+            if (!subjectInMatrixView) continue;
+            const updated = await this.updatePlan(plan.id, {
+                subject_in_matrixview: subjectInMatrixView,
+                matrixview_managed: plan.matrixview_managed === true,
+                source: plan.source || 'matrixview_backfill'
+            });
+            planUpdates.push(updated);
+            const mapping = {
+                plan_name: plan.name || plan.subject,
+                subject: plan.subject,
+                subject_in_matrixview: subjectInMatrixView,
+                source: 'matrixview_backfill',
+                updated_at: now
+            };
+            const key = [
+                this.normalizeSubjectKey(mapping.plan_name),
+                this.normalizeSubjectKey(mapping.subject),
+                this.normalizeSubjectKey(mapping.subject_in_matrixview)
+            ].join('|');
+            if (!mappingKeys.has(key)) {
+                mappings.push(mapping);
+                mappingKeys.add(key);
+            }
+        }
+
+        if (planUpdates.length > 0) {
+            await this.setSetting('matrixview_subject_mappings', mappings);
+        }
+
+        const latestPlans = await this.getPlans();
+        const plansById = new Map(latestPlans.map(plan => [String(plan.id), plan]));
+        const tasks = await this.getAllTasks();
+        const taskUpdates = [];
+        for (const task of tasks) {
+            if (task.subject_in_matrixview || !task.plan_id) continue;
+            const plan = plansById.get(String(task.plan_id));
+            const subjectInMatrixView = await this.resolvePlanSubjectInMatrixView(plan);
+            if (!subjectInMatrixView) continue;
+            const updateData = {
+                subject_in_matrixview: subjectInMatrixView,
+                updated_at: now
+            };
+            await db.tasks.update(task.id, updateData);
+            const updatedTask = await db.tasks.get(task.id);
+            await this.addSyncLog('task', 'update', updatedTask);
+            await this.markGoogleSyncDirty('tasks', task.id, updatedTask, options);
+            taskUpdates.push(updatedTask);
+        }
+
+        if ((planUpdates.length || taskUpdates.length) && !options.skipTaskArrangeDirty) {
+            await this.markTaskArrangeDirty('matrixview_subject_id_backfill', options);
+        }
+
+        return {
+            plan_updates: planUpdates.length,
+            task_updates: taskUpdates.length,
+            mappings: mappings.length
+        };
+    },
+
     getInitialTaskStartDate(task = {}, referenceDate = new Date()) {
         const dueDate = task.due_date || task.deadline || null;
         if (!dueDate) return task.start_date || null;
@@ -226,7 +365,7 @@ const TimeWhereDB = {
     },
 
     hasArrangeRelevantTaskUpdate(data = {}) {
-        return ['start_date', 'due_date', 'deadline', 'plan_id'].some(field =>
+        return ['start_date', 'due_date', 'deadline', 'plan_id', 'subject_in_matrixview'].some(field =>
             Object.prototype.hasOwnProperty.call(data || {}, field)
         );
     },
@@ -298,6 +437,7 @@ const TimeWhereDB = {
             color: plan.color || '#2b56e3',
             icon_char: plan.icon_char || (plan.name ? plan.name.charAt(0) : 'P'),
             subject: plan.subject || null,
+            subject_in_matrixview: plan.subject_in_matrixview || null,
             subject_active: plan.subject ? plan.subject_active !== false : null,
             matrixview_managed: plan.matrixview_managed === true,
             source: plan.source || null,
@@ -316,7 +456,7 @@ const TimeWhereDB = {
         await db.plans.update(id, updateData);
         const updated = await db.plans.get(id);
         await this.markGoogleSyncDirty('plans', id, updated);
-        if (['subject', 'subject_active', 'matrixview_managed'].some(field => Object.prototype.hasOwnProperty.call(data || {}, field))) {
+        if (['subject', 'subject_in_matrixview', 'subject_active', 'matrixview_managed'].some(field => Object.prototype.hasOwnProperty.call(data || {}, field))) {
             await this.markTaskArrangeDirty('plan_subject_changed');
         }
         return updated;
@@ -618,6 +758,7 @@ const TimeWhereDB = {
         const plan = task.plan_id ? await db.plans.get(task.plan_id) : await this.ensureDefaultPlan();
         const planId = task.plan_id || plan.id;
         const subject = plan?.subject || null;
+        const subjectInMatrixView = await this.resolvePlanSubjectInMatrixView(plan, task.subject_in_matrixview || null);
         const progressVal = task.progress || 'not_started';
         const newTask = {
             // Use UUID for consistency with existing tasks
@@ -636,6 +777,7 @@ const TimeWhereDB = {
             schedule_time: task.schedule_time || null,
             duration: task.duration || 45,
             subject: subject,
+            subject_in_matrixview: subjectInMatrixView,
             deferred_until: task.deferred_until || null,
             completed_at: null,
             google_task_id: null,
@@ -873,6 +1015,7 @@ const TimeWhereDB = {
         if (Object.prototype.hasOwnProperty.call(data, 'plan_id')) {
             const nextPlan = data.plan_id ? await db.plans.get(data.plan_id) : null;
             updateData.subject = nextPlan?.subject || null;
+            updateData.subject_in_matrixview = await this.resolvePlanSubjectInMatrixView(nextPlan, data.subject_in_matrixview || null);
         }
         // Bidirectional sync: progress ↔ status
         if (data.progress) {
@@ -1493,6 +1636,7 @@ const TimeWhereDB = {
             }
 
             await this.ensureBucketTemplatesForExistingPlans();
+            await this.backfillMatrixViewSubjectIds({ source: 'init_default_settings' });
             
             return defaults;
         } catch(e) {

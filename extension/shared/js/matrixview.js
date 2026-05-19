@@ -1168,6 +1168,7 @@
                 const updates = {
                     name: mapping.plan_name,
                     subject: mapping.subject,
+                    subject_in_matrixview: mapping.subject_in_matrixview,
                     subject_active: true,
                     matrixview_managed: true,
                     source: 'matrixview'
@@ -1214,6 +1215,7 @@
             const plan = await db.addPlan({
                 name: mapping.plan_name,
                 subject: mapping.subject,
+                subject_in_matrixview: mapping.subject_in_matrixview,
                 subject_active: true,
                 matrixview_managed: true,
                 source: 'matrixview',
@@ -1239,6 +1241,9 @@
 
         if (typeof db.setSetting === 'function') {
             await db.setSetting(SETTINGS_MAPPING_KEY, mappings);
+        }
+        if (typeof db.backfillMatrixViewSubjectIds === 'function') {
+            await db.backfillMatrixViewSubjectIds({ source: 'matrixview_initialize' });
         }
 
         return {
