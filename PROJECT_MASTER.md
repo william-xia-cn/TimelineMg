@@ -5,8 +5,8 @@
 - **Project**: TimeWhere
 - **Version**: package / extension release version `0.2.1`; design-doc version `v2.3`
 - **Stage**: Baseline Stabilized; `0.2.1` internal stabilization sync
-- **Active release/deployment target**: Sync TimeWhere `0.2.1` stabilization code/docs to GitHub. Internal MVP acceptance, Phase 1, Phase 2A, documentation baseline cleanup, and `0.2.0` CWS Private material preparation are complete.
-- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-023 approves CWS Private testing material preparation for `0.2.0` only. Product Owner approved this `0.2.1` GitHub sync/push only. Actual Chrome Web Store upload, Submit for Review, publish, public listing, tag, merge, deploy, release, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
+- **Active release/deployment target**: TimeWhere `0.2.1` CWS Private testing Purple Potassium policy-fix submitted to review.
+- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-025 approved CWS cancel-review, fixed package upload, and Submit for Review for the `0.2.1` Purple Potassium permission fix only; that resubmission is now pending CWS review. Automatic publish after review, public listing, tag, merge, deploy, release, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
 
 ## Collaboration Model
 
@@ -81,23 +81,23 @@ Escalate to external advisor for:
 - Recording secrets, OAuth client secrets, cookies, tokens, private account data, or private user identifiers in repository documents.
 - Changing product scope, data model, sync behavior, privacy posture, or release standards without Product Owner decision.
 - Google Calendar / Google Tasks integration; Google data sync v1 uses Drive `appDataFolder` only.
-- Background alarm based Arrange automation; current Task Date Arrange is checked from Dashboard entry only, previews changes, and writes only through the unified management confirmation page after user confirmation.
-- Automatic priority downgrade; current Task Date Arrange may only upgrade priority according to D-017.
+- Background alarm based Arrange automation. Current Task Date Arrange is page-open automation only for Dashboard / Focus, Planner / Task Board, and Calendar; it has no six-hour throttle and may directly apply eligible local scheduling updates. It does not run from Popup or background alarms.
+- Automatic priority downgrade; current Task Date Arrange may only upgrade priority according to D-024.
 - Defense / squeezing rules.
 - Background alarm usage outside local task reminders. D-021 approves alarms only for local task reminder notifications.
 - Background alarm based ManageBac ICS subscription sync. Current ManageBac follow-up supports saved link configuration, Dashboard-entry management checks, manual sync, and user-confirmed task creation only.
-- Actual Chrome Web Store upload, Submit for Review, publish, or public listing. D-023 approves Private testing material preparation only.
+- Any further Chrome Web Store upload, Submit for Review, publish, or public listing without explicit Product Owner approval. D-025 covered only the completed `0.2.1` Purple Potassium resubmission.
 
 ## Release / Deployment State
 
 | Item | Status |
 |---|---|
-| Candidate version | `0.2.1` internal stabilization sync |
+| Candidate version | `0.2.1` CWS Purple Potassium policy-fix resubmission |
 | Candidate commit | Pending current GitHub sync commit |
-| Package/artifact | No `0.2.1` package generated; latest CWS historical package remains `dist/TimeWhere-0.2.0-private-cws-sanitized-20260519-012614.zip` |
-| Artifact hash | Not applicable for `0.2.1`; latest `0.2.0` CWS SHA256 `4A77450F9378185B9269A42453EF848939EF745037A3FC9155E0E60F9C8E7D3B` |
-| Deployment channel | GitHub source sync only |
-| Review status | Build&Test full `npm test` passed for `0.2.1` stabilization changes; no CWS upload/submit approved |
+| Package/artifact | `dist/TimeWhere-0.2.1-private-cws-sanitized-20260520-214913.zip` |
+| Artifact hash | `258CED7F544D8953A883EC01E28B6BF87691A9592D7AC2A2FA95B13D32F7DF23` |
+| Deployment channel | Chrome Web Store Private testing |
+| Review status | Submitted to CWS review; dashboard status verified as pending review |
 | Public release | NOT_STARTED; explicitly out of MVP scope |
 | Tag | NOT_APPROVED |
 
@@ -117,7 +117,8 @@ Escalate to external advisor for:
 | Phase 2A safety hardening | CLOSED | Product&Project Mg | Build&Test completed Phase 2A; Product&Project Mg review passed; releaseMg narrow recheck returned PASS_WITH_MANUAL_EVIDENCE. |
 | Documentation baseline drift | CLOSED | Product&Project Mg | Product docs now distinguish current local-first MVP baseline from future/out-of-scope Google Sync, Arrange, notifications, ManageBac, CWS, and public release work. |
 | Google data sync scope creep | OPEN | Product&Project Mg / Build&Test | D-019/D-020 approve optional Drive `appDataFolder` bidirectional sync only. Do not turn Google account into a product login requirement; local IndexedDB remains the runtime source of truth. |
-| `0.2.1` stabilization scope | OPEN | Build&Test | Current sync includes Task Arrange subject matching, MatrixView Subject ID inheritance/backfill, Daily Settle display model, Dashboard/Popup task UI, readable Google Sync conflicts, and documentation/version updates. No `0.2.1` CWS package was generated. |
+| `0.2.1` stabilization scope | OPEN | Build&Test | Current sync includes Task Arrange same-day subject matching, no-throttle page-open Arrange apply, Calendar/Plan Arrange diagnostic snapshots, MatrixView Subject ID inheritance/backfill, Daily Settle display model, Dashboard/Popup task UI, readable Google Sync conflicts, and documentation/version updates. No `0.2.1` CWS package was generated. |
+| CWS Purple Potassium `tabs` permission finding | SUBMITTED | releaseMg / Product Owner | `tabs` permission removed from source and CWS package; lightweight verification passed; fixed package uploaded and submitted to CWS review with automatic publish disabled. |
 
 ## Current Evidence
 
@@ -154,12 +155,16 @@ Escalate to external advisor for:
   - `docs/release/RELEASE_GATE_REPORT_CWS_PRIVATE_0.2.0_2026-05-18.md`
   - `docs/release/CWS_PRIVATE_SUBMISSION_MATERIALS_0.2.0_2026-05-18.md`
   - `docs/release/cws-assets/0.2.0-private/`
+- CWS Private `0.2.1` Purple Potassium policy-fix resubmission:
+  - `docs/release/RELEASE_GATE_REPORT_CWS_PRIVATE_0.2.1_2026-05-20.md`
+  - `docs/release/CWS_PRIVATE_SUBMISSION_MATERIALS_0.2.1_2026-05-20.md`
+  - `dist/TimeWhere-0.2.1-private-cws-sanitized-20260520-214913.zip`
 - `0.2.1` stabilization sync evidence:
-  - Full `npm test` passed on 2026-05-20 before commit/push.
+  - Full `npm test` passed on 2026-05-20 after Task Arrange same-day subject matching, no-throttle auto Arrange, and Calendar/Plan diagnostic snapshot changes.
   - No `0.2.1` package or CWS submission artifact was generated.
 
 ## Product Owner Decisions Needed
 
 1. Confirm Product Owner name or preferred authority label.
-2. Decide whether to approve CWS Developer Dashboard upload / Submit for Review for the historical `0.2.0` Private testing candidate or request a new `0.2.1` package.
-3. Confirm whether a separate `0.2.1` CWS/private testing package should be generated later.
+2. Confirm final CWS review outcome after `0.2.1` Purple Potassium fix resubmission.
+3. Decide whether and when to approve automatic publish or manual staged publish after review.

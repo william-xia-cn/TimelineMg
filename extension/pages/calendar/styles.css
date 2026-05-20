@@ -238,6 +238,29 @@ body::before {
     color: var(--text-main);
 }
 
+.calendar-debug-snapshot-btn {
+    width: auto;
+    min-width: 28px;
+    padding: 0 10px;
+    gap: 5px;
+    border-radius: var(--radius-xl);
+    border: 1px solid rgba(29, 140, 248, 0.22);
+    background: #f4f9ff;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.calendar-debug-snapshot-btn:hover {
+    border-color: rgba(29, 140, 248, 0.45);
+    background: #eaf5ff;
+    color: var(--accent);
+}
+
+.calendar-debug-snapshot-btn .material-symbols-outlined {
+    font-size: 17px;
+}
+
 .current-date {
     font-size: 15px;
     font-weight: 600;

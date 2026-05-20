@@ -2,8 +2,8 @@
 
 ## Active Target
 
-- Baseline Stabilized; `0.2.1` internal stabilization sync
-- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, and TimeWhere `0.2.0` CWS Private testing material preparation are complete. Product Owner approved this `0.2.1` GitHub sync/push only. Actual CWS upload / Submit for Review / publish / public listing / tag / merge / deploy remain unapproved.
+- Baseline Stabilized; `0.2.1` CWS Private testing Purple Potassium policy-fix pending review
+- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, and TimeWhere `0.2.0` CWS Private testing material preparation are complete. Product Owner approved `0.2.1` CWS cancel-review, fixed package upload, and Submit for Review for the Purple Potassium permission fix only; the fixed package is now submitted and pending CWS review. Automatic publish after review / public listing / tag / merge / deploy remain unapproved.
 
 ## Active Collaboration Model
 
@@ -30,6 +30,8 @@
 - [x] Product Owner confirms governance mode, active release target, version naming, and current scope.
 - [x] releaseMg regenerated TimeWhere `0.2.0` Chrome Web Store Private testing package/materials from latest clean HEAD `753ac44` under D-023. Tests were not run per Product Owner instruction. CWS upload package was sanitized to remove manifest `key`.
 - [x] Build&Test prepared `0.2.1` stabilization code/docs sync with full `npm test` passing; no `0.2.1` CWS package generated.
+- [x] releaseMg prepared `0.2.1` Purple Potassium policy-fix CWS package: removed unnecessary `tabs` permission, regenerated sanitized zip, and passed lightweight verification.
+- [x] releaseMg submitted the fixed `0.2.1` package to CWS review and verified dashboard status as pending review; automatic publish after review remains disabled/unapproved.
 
 ## NEXT
 
@@ -42,7 +44,7 @@
 - [x] ManageBac real My Classes MHTML left-navigation parser compatibility pass completed and accepted; real sample now parses to 13 subject records without committing private sample content.
 - [x] Build&Test updated ManageBac task sync to use one saved remote subscription link only: local `.ics` file choice removed, extension-context remote fetch fixed through background relay, and host permission narrowed to Keystone ManageBac events path.
 - [x] Build&Test changed ManageBac ICS sync so new events are not auto-created; sync now surfaces pending event mappings for user confirmation, and existing ManageBac source tasks continue to update by UID. Product&Project Mg accepted tests; real UI confirmation pass remains user-side validation.
-- [x] Unified six-hour management review flow implemented and committed: Dashboard entry previews Task Date Arrange + ManageBac new events, opens a full confirmation page, and writes only selected user-confirmed items. Popup / Calendar / Planner no longer run distributed automatic checks.
+- [x] Task Arrange automation simplified from six-hour management review to no-throttle page-open writes: Dashboard / Focus, Planner / Task Board, and Calendar run the shared auto helper and apply eligible local scheduling changes; Popup remains no automatic Arrange. ManageBac new-event creation remains user-confirmed.
 - [x] Product Owner confirmed Google data sync product definition: TimeWhere remains fully local-first without Google; Google account is optional and used only for cloud persistence and cross-device sync.
 - [x] Build&Test completed Google data sync v0.1 foundation: auth adapter, local snapshot export/import, Drive `appDataFolder` adapter, Settings UI, manual backup/restore, and preview-first conflict confirmation. Product&Project Mg review passed with real OAuth smoke blocked by missing OAuth client ID.
 - [x] Development extension ID fixed through manifest public key for Google OAuth testing: `ogdjmelmfkfahppahhkkggdejjainbnd`. The corresponding private key is local-only and must not be committed.
@@ -78,12 +80,12 @@
 - [x] Product&Project Mg creates docs cleanup handoff: `docs/handoffs/outbox/HANDOFF-DOCS-BASELINE-CLEANUP-001.md`.
 - [x] Product&Project Mg performs documentation baseline cleanup in `docs/handoffs/outbox/REVIEW-DOCS-BASELINE-CLEANUP-001.md`.
 - [x] Build&Test implemented Task Board manual task creation and quick-add due-date rules from D-016.
-- [x] Build&Test completed `0.2.1` stabilization changes: Task Arrange subject matching, MatrixView Subject ID source writes/backfill, Dashboard/Popup current task display, Daily Settle displayTasks behavior, readable Google Sync conflicts, and version/documentation sync.
+- [x] Build&Test completed `0.2.1` stabilization changes: Task Arrange same-day subject matching, no-throttle page-open Arrange apply, Calendar/Plan Arrange diagnostic snapshots, MatrixView Subject ID source writes/backfill, Dashboard/Popup current task display, Daily Settle displayTasks behavior, readable Google Sync conflicts, and version/documentation sync.
 
 ## LATER
 
 - [ ] Reload the unpacked extension with the fixed ID and run Google data sync v1 real-auth smoke against a test Google account.
-- [ ] Product Owner decides whether to approve CWS Developer Dashboard upload / Submit for Review for the historical `0.2.0` Private testing candidate or request a new `0.2.1` package.
+- [x] releaseMg completes CWS cancel-review, fixed package upload, and Submit for Review for the `0.2.1` Purple Potassium fix.
 - [ ] Product Owner confirms risk acceptance for the regenerated `0.2.0` package being prepared without automated/browser tests.
 - [ ] Add feature specs only when scope/risk requires durable boundaries.
 - [ ] Create formal handoffs only for cross-session, release, privacy/security, high-risk, or Product Owner-requested work.
@@ -93,7 +95,7 @@
 | Blocker | Owner | Required action |
 |---|---|---|
 | Product Owner authority label/name not recorded | Product Owner | Confirm preferred authority label/name when needed. |
-| Public release boundary | Build&Test / releaseMg | D-023 approves CWS Private material preparation only. Current PO approval covers this GitHub push only. Do not upload, Submit for Review, publish, public-list, tag, merge, deploy, or release without explicit Product Owner approval. |
+| Public release boundary | Build&Test / releaseMg | D-025 approves CWS cancel-review, fixed package upload, and Submit for Review for the `0.2.1` Purple Potassium fix only. Do not auto-publish, public-list, tag, merge, deploy, or release without explicit Product Owner approval. |
 | Test waiver for regenerated package | Product Owner / releaseMg | `0.2.0` CWS Private artifact was regenerated without automated/browser tests per Product Owner instruction. Record this as a waiver/risk, not as PASS evidence. |
 | CWS OAuth extension ID follow-up | Product Owner / Build&Test | Sanitized CWS package removes manifest `key` because CWS rejects it. If the uploaded item receives a different extension ID, update the Google OAuth Chrome Extension client before validating Google Drive sync. |
 | Manual browser validation not run | CLOSED | releaseMg executed `docs/TEST_PLAN.md` L3 checklist and recorded results in `docs/release/RELEASE_GATE_REPORT_INTERNAL_MVP_2026-05-11.md`. |

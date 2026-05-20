@@ -505,7 +505,7 @@ async function runAsyncChecks() {
     assert("SubjectInMatrixView 标准化后仍受初始化开始日期下界约束并向后寻找可用课表日", tolerantMatch[0].start_date, '2026-05-26');
     assert("start_date 等于 due_date 视为未初始化，urgent 不能早于初始化日期", byId.get('urgent').start_date, '2026-05-14');
     assert("important/urgent 任务写入 urgent priority", byId.get('urgent').priority, 'urgent');
-    assert("明确开始日期窗口的 important 任务不能被拉早到今天，但可向后到下一个可用课表日", byId.get('explicit-important').start_date, '2026-05-17');
+    assert("明确开始日期窗口的 important 任务不能被拉早到今天，且当天同学科课表可原地匹配", byId.get('explicit-important').start_date, '2026-05-16');
     assert("明确开始日期窗口的 important 任务仍可升级 priority", byId.get('explicit-important').priority, 'important');
     assert("无 subject 任务也使用下一个可用课表日", byId.get('nosubject').start_date, '2026-05-26');
     assert("有 subject 但无课表匹配的任务使用下一个可用课表日", byId.get('unmatched-subject').start_date, '2026-05-26');
@@ -574,7 +574,15 @@ async function runAsyncChecks() {
     ], [
         { id:'same-day-music', source:'timetable', subject_in_matrixview:'Music', title:'Music', date:'2026-05-20' }
     ], '2026-05-20');
-    assert("当天同学科课表也不能作为 Arrange 原地依据", sameDaySubjectTimetable[0].start_date, '2026-05-25');
+    assert("当天同学科课表可作为 Arrange 依据且原地不动", sameDaySubjectTimetable[0].start_date, '2026-05-20');
+    assertBool("当天同学科课表原地不动不产生日期变更", sameDaySubjectTimetable[0].changed, false);
+
+    const sameDayInitializedSubject = S.arrangeTaskStartDates([
+        { id:'chinese-uninitialized', subject:'Chinese Language & Literature 9', subject_in_matrixview:'Chinese - Chinese Language & Literature 9', progress:'not_started', priority:'medium', due_date:'2026-05-22', start_date:'2026-05-22' }
+    ], [
+        { id:'same-day-chinese', source:'timetable', subject_in_matrixview:'Chinese - Chinese Language & Literature 9', title:'Chinese', date:'2026-05-20' }
+    ], '2026-05-20');
+    assert("未初始化任务可排到初始化基准日当天同学科课表", sameDayInitializedSubject[0].start_date, '2026-05-20');
 
     const laterSubjectTimetable = S.arrangeTaskStartDates([
         { id:'music-later-subject', subject:'Music', subject_in_matrixview:'Music', source:'managebac', progress:'not_started', priority:'medium', due_date:'2026-05-28', start_date:'2026-05-20' }
@@ -593,7 +601,7 @@ async function runAsyncChecks() {
     assert("无 timetable 且开始到截止小于 3 天时调整到截止前 1 天", noTableById.get('short-window').start_date, '2026-05-31');
     assert("无 timetable 且异常明确窗口的 urgent 任务限制到 due_date", noTableById.get('fallback-urgent').start_date, '2026-05-16');
 
-    section('TC-S-12 arrangeTasks / maybeRunTaskArrange — preview/apply 与 6 小时节流');
+    section('TC-S-12 arrangeTasks / maybeRunTaskArrange — preview/apply 与无节流自动检查');
     const fakeDb = {
         settings: {},
         tasks: [
@@ -675,13 +683,14 @@ async function runAsyncChecks() {
     const eventDerivedResult = await S.arrangeTasks(eventDerivedSubjectDb, new Date('2026-05-20T09:00:00'));
     assert("旧 Plan/Task 没有 Subject ID 时可从课表 subject_in_matrixview 后缀解析并精确匹配", eventDerivedResult.changes[0].start_date, '2026-05-21');
 
-    const fresh = await S.maybeRunTaskArrange(fakeDb, { now: new Date('2026-05-14T12:00:00') });
-    assertBool("6 小时内不重复 Arrange", fresh.ran, false);
-    const stale = await S.maybeRunTaskArrange(fakeDb, {
+    const rerunNoChanges = await S.maybeRunTaskArrange(fakeDb, { now: new Date('2026-05-14T12:00:00') });
+    assertBool("6 小时内仍执行 Arrange 检测", rerunNoChanges.ran, true);
+    assertBool("重复执行无变更时返回 no_changes", rerunNoChanges.no_changes, true);
+    const laterNoThrottle = await S.maybeRunTaskArrange(fakeDb, {
         now: new Date('2026-05-14T16:00:00'),
         confirmFn: () => true
     });
-    assertBool("超过 6 小时执行 Arrange 检测", stale.ran, true);
+    assertBool("超过 6 小时同样执行 Arrange 检测", laterNoThrottle.ran, true);
 
     const failingDb = {
         settings: {},

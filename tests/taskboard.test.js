@@ -682,14 +682,45 @@ assert('Planner opening triggers automatic Task Arrange review without confirmat
     && scriptJs.includes('TimeWhereTaskArrangeAuto.runTaskArrangeAutoReview')
     && scriptJs.includes("source: 'planner_auto'")
     && !scriptJs.includes('task-arrange.html?source=planner_auto'));
-assert('Shared Task Arrange auto helper honors dirty throttle and writes review log', taskArrangeAutoJs.includes("const DIRTY_KEY = 'task_arrange_dirty_at'")
+
+assert('Planner exposes diagnostic snapshot copy action', tasksHtml.includes('id="btnCopyPlannerDebugSnapshot"')
+    && tasksHtml.includes('复制 Plan 诊断快照')
+    && tasksHtml.includes('诊断快照')
+    && boardCss.includes('.planner-debug-snapshot-btn')
+    && scriptJs.includes('copyPlannerDebugSnapshot(debugSnapshotBtn)'));
+
+assert('Planner diagnostic snapshot includes task, plan, event, arrange, and DOM context', scriptJs.includes('async function buildPlannerDebugSnapshot()')
+    && scriptJs.includes("schema: 'timewhere-planner-debug-v1'")
+    && scriptJs.includes('sanitizePlannerTask')
+    && scriptJs.includes('sanitizePlannerPlan')
+    && scriptJs.includes('sanitizePlannerEvent')
+    && scriptJs.includes('sanitizePlannerArrangeChange')
+    && scriptJs.includes('change.title || task.title')
+    && scriptJs.includes('change.source || task.source')
+    && scriptJs.includes('change.old_start_date || task.start_date')
+    && scriptJs.includes('getPlannerDomSnapshot')
+    && scriptJs.includes('TaskApp.getFilteredTasks()')
+    && scriptJs.includes('TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false })')
+    && scriptJs.includes('navigator.clipboard.writeText(text)'));
+
+assert('Planner diagnostic snapshot redacts private source details and keeps safe setting summaries', scriptJs.includes('has_source_url: Boolean(task.source_url)')
+    && !scriptJs.includes('source_url: task.source_url')
+    && scriptJs.includes('managebac_pending_event_count')
+    && scriptJs.includes('matrixview_subject_mappings')
+    && !scriptJs.includes('managebac_ics_url')
+    && !scriptJs.includes('managebac_ics_token'));
+assert('Shared Task Arrange auto helper runs every open and writes review log', taskArrangeAutoJs.includes("const DIRTY_KEY = 'task_arrange_dirty_at'")
     && taskArrangeAutoJs.includes('async function runTaskArrangeAutoReview')
     && taskArrangeAutoJs.includes('async function shouldRunTaskArrange')
-    && taskArrangeAutoJs.includes('if (dirtyAt) return { run: true, dirty: true }')
-    && taskArrangeAutoJs.includes("reason: 'new_day'")
+    && taskArrangeAutoJs.includes('return { run: true, dirty: Boolean(dirtyAt), last: last || null }')
+    && !taskArrangeAutoJs.includes("reason: 'fresh'")
+    && !taskArrangeAutoJs.includes('DEFAULT_INTERVAL_HOURS')
     && taskArrangeAutoJs.includes('appendTaskArrangeReviewRecord')
     && taskArrangeAutoJs.includes('clearTaskArrangeDirty(db)')
     && taskArrangeAutoJs.includes('no_changes: true'));
+
+assert('Shared Task Arrange auto helper no longer performs fresh-window preview fallback', !taskArrangeAutoJs.includes("const preview = await global.TimeWhereScheduling.arrangeTasks(db, now, { apply: false })")
+    && taskArrangeAutoJs.includes("const result = await global.TimeWhereScheduling.arrangeTasks(db, now, { apply: true })"));
 
 assert('Task Board preferences are stored in settings', stateJs.includes("const TASK_BOARD_PREFS_KEY = 'task_board_preferences'")
     && stateJs.includes('TimeWhereDB.getSetting(TASK_BOARD_PREFS_KEY)')

@@ -15,11 +15,13 @@
     "alarms",
     "notifications",
     "storage",
-    "tabs",
     "unlimitedStorage"
   ],
   "host_permissions": [
-    "https://keystoneacademy.managebac.cn/student/events/*",
+    "https://managebac.com/student/events/*",
+    "https://*.managebac.com/student/events/*",
+    "https://managebac.cn/student/events/*",
+    "https://*.managebac.cn/student/events/*",
     "https://www.googleapis.com/drive/v3/*",
     "https://www.googleapis.com/upload/drive/v3/*"
   ],

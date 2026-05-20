@@ -21,15 +21,15 @@
 
 ## Cross-Module: Task Date Arrange
 
-Task Date Arrange 负责决定任务“哪天做”，通过 preview / 用户确认后更新未完成任务的 `start_date` 和可升级 priority。它不是后台 alarm，也不是静默自动写库。
+Task Date Arrange 负责决定任务“哪天做”，可更新未完成任务的本地 `start_date` 和可升级 priority。它不是后台 alarm，也不修改来源事实字段。
 
-- 触发入口：Dashboard / Focus 页面进入时检查 6 小时节流。
-- Popup 本身、Calendar 页面打开、Planner Task Board 页面打开、Planner `my ManageBac` 视图打开，都不得触发 6 小时自动 Arrange 或 ManageBac sync 检查。
-- Dashboard 检查只运行 preview / dry-run；如果没有待确认项，不打扰用户并记录本次检查时间。
-- 如果有待确认项，必须打开统一确认页，展示 Arrange task 列表和新增 ManageBac task 列表。
-- 用户确认选中项后才应用变更；用户选择全部跳过时不写入任务变更。
-- 统一确认页完成后才更新 `management_review_last_checked_at` 并清空 `management_review_pending`；未完成 pending 必须可恢复继续处理。
-- Planner `my ManageBac` 的手动 `[同步]` 是 ManageBac-only 检查，复用统一确认页，不顺带执行 Arrange。
+- 触发入口：Dashboard / Focus、Planner / Task Board、Calendar 页面打开时运行共享自动 helper；不再使用 6 小时节流。
+- 自动 helper 可直接 apply 合格的本地调度变更；无变更时只写检查时间作为诊断信息。
+- Popup 打开不运行自动 Arrange；Planner `my ManageBac` 的手动 `[同步]` 是 ManageBac-only 检查，不顺带执行 Arrange。
+- ManageBac 新事件创建仍必须走用户确认；Arrange 的页面打开自动 apply 只覆盖本地调度字段，不自动创建来源任务。
+- 学科课表匹配优先使用 `subject_in_matrixview`。同学科精确匹配允许当天课表作为候选（`>=` 初始化/当前基准日）；任意课表 fallback 仍只能使用未来日期（`>`），避免“当天任意课表”造成无意义兜底。
+- 已有明确 `start_date` 且当天正好有同学科课表时，目标日期等于当前日期属于正确的无变更结果。
+- Calendar / Plan 诊断快照应包含 Arrange preview，并保留 `title`、`source`、`old_start_date`、`new_start_date`、priority 等业务字段，方便判断调度原因。
 - Daily Settle 的 Layer 2 仍是所有溢出任务的接收层；Task Date Arrange 不改变该语义。
 
 ---
@@ -704,7 +704,7 @@ my ManageBac 视图
 
 同步行为边界：
 
-- `my ManageBac` 在 Planner 侧栏中是普通导航项；打开该视图不得触发 6 小时自动同步。使用本地图标系统时，所有 `material-symbols-outlined` 名称必须有本地 SVG 映射，缺失映射导致原始图标名显示属于 UI bug。
+- `my ManageBac` 在 Planner 侧栏中是普通导航项；打开该视图不得触发 ManageBac 自动同步或顺带执行 Arrange。使用本地图标系统时，所有 `material-symbols-outlined` 名称必须有本地 SVG 映射，缺失映射导致原始图标名显示属于 UI bug。
 - Planner 中的 `[同步]` 是 `my ManageBac` 视图工具栏动作，不是侧栏导航文本。点击后必须复用 Settings → Plan → ManageBac 链接 的同一条事件同步 / 新增任务确认流程，打开独立的统一管理确认页面；该手动同步只处理 ManageBac，不顺带执行 Arrange。
 - Planner 发起同步不得绕过新增事件确认直接创建 ManageBac 来源任务；已存在任务可以按 ICS UID 自动更新，但新增事件仍必须由用户在确认页选择 Plan 后才创建。
 - ManageBac 订阅链接本身是敏感配置，不应写入公开文档或测试 fixture；本地保存时应作为用户私有设置处理。

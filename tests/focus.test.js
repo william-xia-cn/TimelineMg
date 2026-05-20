@@ -129,7 +129,7 @@ assert('Focus action runner prevents duplicate clicks', focusScript.includes('da
     && focusScript.includes('control.disabled = true')
     && focusScript.includes('control.disabled = false'));
 assert('Focus no longer exports handlers for inline events', !/window\.(startTaskNow|pauseTask|completeTaskNow|deferTask|toggleWeekTask|openAddTaskModal|saveNewTask)/.test(focusScript));
-assert('Dashboard owns six-hour automatic Task Arrange review trigger', focusHtml.includes('../../shared/js/managebac.js')
+assert('Dashboard owns automatic Task Arrange review trigger without fresh throttle', focusHtml.includes('../../shared/js/managebac.js')
     && focusHtml.includes('../../shared/js/task-arrange-auto.js')
     && focusScript.includes('runManagementReviewCheck()')
     && focusScript.includes('TimeWhereTaskArrangeAuto.runTaskArrangeAutoReview')

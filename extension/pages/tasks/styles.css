@@ -398,6 +398,17 @@ body::before {
 .icon-btn .material-symbols-outlined { font-size: 18px; }
 .icon-btn.filter-active { background: #eaf5ff; color: var(--accent); border-color: var(--accent); }
 
+.planner-debug-snapshot-btn {
+    border-color: rgba(29, 140, 248, 0.22);
+    color: var(--accent);
+    background: #f4f9ff;
+}
+
+.planner-debug-snapshot-btn:hover {
+    border-color: rgba(29, 140, 248, 0.45);
+    background: #eaf5ff;
+}
+
 .view-tabs {
     padding: 0 32px;
     display: flex;

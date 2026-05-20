@@ -245,6 +245,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         groupByBtn.addEventListener('click', showGroupByMenu);
     }
 
+    const debugSnapshotBtn = document.getElementById('btnCopyPlannerDebugSnapshot');
+    if (debugSnapshotBtn) {
+        debugSnapshotBtn.addEventListener('click', () => {
+            copyPlannerDebugSnapshot(debugSnapshotBtn);
+        });
+    }
+
     // View tabs
     document.querySelectorAll('.btn-tab').forEach(tab => {
         tab.addEventListener('click', () => {
@@ -290,6 +297,245 @@ async function runPlannerTaskArrangeCheck() {
         }
     } catch (error) {
         console.warn('[Tasks] Task Arrange check skipped:', error);
+    }
+}
+
+// ========== Planner Diagnostics ==========
+
+function sanitizePlannerTask(task) {
+    if (!task) return null;
+    return {
+        id: task.id || null,
+        title: task.title || '',
+        progress: task.progress || null,
+        status: task.status || null,
+        priority: task.priority || null,
+        plan_id: task.plan_id ?? null,
+        bucket_id: task.bucket_id ?? null,
+        start_date: task.start_date || null,
+        due_date: task.due_date || task.deadline || null,
+        schedule_time: task.schedule_time || null,
+        duration: task.duration ?? null,
+        source: task.source || task.source_type || null,
+        subject: task.subject || null,
+        subject_in_matrixview: task.subject_in_matrixview || null,
+        managebac_subject: task.managebac_subject || null,
+        readonly: task.readonly === true,
+        has_source_url: Boolean(task.source_url),
+        checklist_count: Array.isArray(task.checklist) ? task.checklist.length : 0,
+        checklist_checked_count: Array.isArray(task.checklist)
+            ? task.checklist.filter(item => item && item.checked === true).length
+            : 0,
+        recurrence_series_id: task.recurrence_series_id || null,
+        recurrence_index: task.recurrence_index || null,
+        recurrence_count: task.recurrence_count || null,
+        recurrence_frequency: task.recurrence_frequency || null
+    };
+}
+
+function sanitizePlannerPlan(plan) {
+    if (!plan) return null;
+    return {
+        id: plan.id ?? null,
+        name: plan.name || '',
+        subject: plan.subject || null,
+        subject_in_matrixview: plan.subject_in_matrixview || null,
+        subject_active: plan.subject ? plan.subject_active !== false : null,
+        matrixview_managed: plan.matrixview_managed === true,
+        source: plan.source || null
+    };
+}
+
+function sanitizePlannerBucket(bucket) {
+    if (!bucket) return null;
+    return {
+        id: bucket.id ?? null,
+        plan_id: bucket.plan_id ?? null,
+        name: bucket.name || '',
+        sort_order: bucket.sort_order ?? null
+    };
+}
+
+function sanitizePlannerLabel(label) {
+    if (!label) return null;
+    return {
+        id: label.id ?? null,
+        plan_id: label.plan_id ?? null,
+        name: label.name || '',
+        color: label.color || null
+    };
+}
+
+function sanitizePlannerEvent(event) {
+    if (!event) return null;
+    return {
+        id: event.id || null,
+        title: event.title || event.name || '',
+        source: event.source || null,
+        type: event.type || null,
+        date: event.date || null,
+        time_start: event.time_start || null,
+        time_end: event.time_end || null,
+        subject: event.subject || null,
+        subject_in_matrixview: event.subject_in_matrixview || null,
+        repeat: event.repeat || null,
+        repeat_days: Array.isArray(event.repeat_days) ? event.repeat_days : null
+    };
+}
+
+function sanitizePlannerArrangeChange(change) {
+    if (!change) return null;
+    const task = change.task || {};
+    return {
+        task_id: change.task_id || null,
+        title: change.title || task.title || '',
+        source: change.source || task.source || task.source_type || null,
+        old_start_date: change.old_start_date || task.start_date || null,
+        new_start_date: change.new_start_date || change.start_date || null,
+        old_priority: change.old_priority || task.priority || null,
+        new_priority: change.new_priority || change.priority || null,
+        updates: {
+            start_date: change.updates?.start_date || null,
+            priority: change.updates?.priority || null
+        }
+    };
+}
+
+function sanitizePlannerSettings(settings = {}) {
+    const matrixMappings = Array.isArray(settings.matrixview_subject_mappings)
+        ? settings.matrixview_subject_mappings.map(mapping => ({
+            plan_name: mapping.plan_name || null,
+            subject: mapping.subject || null,
+            subject_in_matrixview: mapping.subject_in_matrixview || null,
+            source: mapping.source || null,
+            updated_at: mapping.updated_at || null
+        }))
+        : [];
+    return {
+        task_arrange_dirty_at: settings.task_arrange_dirty_at || null,
+        task_arrange_last_checked_at: settings.task_arrange_last_checked_at || null,
+        task_arrange_last_run_at: settings.task_arrange_last_run_at || null,
+        matrixview_subject_mappings: matrixMappings,
+        managebac_pending_event_count: Array.isArray(settings.managebac_pending_event_mappings)
+            ? settings.managebac_pending_event_mappings.length
+            : 0,
+        task_board_preferences: settings.task_board_preferences || null
+    };
+}
+
+function getPlannerDomSnapshot() {
+    const cards = Array.from(document.querySelectorAll('.task-card')).slice(0, 20).map(card => ({
+        task_id: card.dataset.taskId || null,
+        class_name: card.className || '',
+        text: (card.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 180)
+    }));
+    const rows = Array.from(document.querySelectorAll('.task-list-row')).slice(0, 20).map(row => ({
+        task_id: row.dataset.taskId || null,
+        class_name: row.className || '',
+        text: (row.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 180)
+    }));
+    const calendarItems = Array.from(document.querySelectorAll('.task-calendar-item')).slice(0, 20).map(item => ({
+        task_id: item.dataset.taskId || null,
+        class_name: item.className || '',
+        text: (item.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120)
+    }));
+    return {
+        current_plan_title: document.querySelector('.bc-current')?.textContent?.trim() || '',
+        visible_task_cards: cards,
+        visible_list_rows: rows,
+        visible_calendar_items: calendarItems
+    };
+}
+
+async function buildPlannerDebugSnapshot() {
+    const now = new Date();
+    const [allTasks, plans, events, settings] = await Promise.all([
+        TimeWhereDB.getAllTasks(),
+        TimeWhereDB.getPlans(),
+        typeof TimeWhereDB.getEvents === 'function' ? TimeWhereDB.getEvents() : Promise.resolve([]),
+        typeof TimeWhereDB.getSettings === 'function' ? TimeWhereDB.getSettings() : Promise.resolve({})
+    ]);
+    const buckets = [];
+    const labels = [];
+    for (const plan of plans || []) {
+        const [planBuckets, planLabels] = await Promise.all([
+            TimeWhereDB.getBucketsByPlan(plan.id),
+            TimeWhereDB.getLabelsByPlan(plan.id)
+        ]);
+        buckets.push(...(planBuckets || []));
+        labels.push(...(planLabels || []));
+    }
+
+    let arrangePreview = null;
+    if (window.TimeWhereScheduling?.arrangeTasks) {
+        try {
+            const preview = await TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false });
+            arrangePreview = {
+                proposed: preview.proposed || 0,
+                summary: preview.summary || null,
+                changes: (preview.changes || []).map(sanitizePlannerArrangeChange)
+            };
+        } catch (error) {
+            arrangePreview = { error: error.message || String(error) };
+        }
+    }
+
+    return {
+        schema: 'timewhere-planner-debug-v1',
+        generated_at: now.toISOString(),
+        page: {
+            url: window.location.href,
+            title: document.title,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            today: typeof formatDateISO === 'function' ? formatDateISO(now) : now.toISOString().slice(0, 10),
+            now_local: now.toString()
+        },
+        state: {
+            view_mode: TaskApp.viewMode,
+            current_view: TaskApp.currentView,
+            current_plan_id: TaskApp.currentPlanId,
+            group_by: TaskApp.groupBy,
+            search_query: TaskApp.searchQuery,
+            filters: TaskApp.filters,
+            selected_task_id: TaskApp.selectedTaskId,
+            current_plan_task_count: TaskApp.currentPlanTasks.length,
+            filtered_task_count: TaskApp.getFilteredTasks().length
+        },
+        counts: {
+            all_tasks: allTasks.length,
+            current_tasks: TaskApp.currentPlanTasks.length,
+            filtered_tasks: TaskApp.getFilteredTasks().length,
+            plans: plans.length,
+            buckets: buckets.length,
+            labels: labels.length,
+            events: events.length,
+            timetable_events: events.filter(event => event.source === 'timetable').length
+        },
+        plans: plans.map(sanitizePlannerPlan),
+        buckets: buckets.map(sanitizePlannerBucket),
+        labels: labels.map(sanitizePlannerLabel),
+        current_tasks: TaskApp.currentPlanTasks.map(sanitizePlannerTask),
+        filtered_tasks: TaskApp.getFilteredTasks().map(sanitizePlannerTask),
+        all_tasks: allTasks.map(sanitizePlannerTask),
+        events: events.map(sanitizePlannerEvent),
+        settings: sanitizePlannerSettings(settings),
+        arrange_preview: arrangePreview,
+        dom: getPlannerDomSnapshot()
+    };
+}
+
+async function copyPlannerDebugSnapshot(button = null) {
+    try {
+        if (button) button.disabled = true;
+        const snapshot = await buildPlannerDebugSnapshot();
+        const text = JSON.stringify(snapshot, null, 2);
+        await navigator.clipboard.writeText(text);
+        showToast('Plan 诊断快照已复制，可直接粘贴给我', 'success');
+    } catch (error) {
+        console.error('[Tasks] debug snapshot failed:', error);
+        showToast(`复制诊断快照失败：${error.message}`, 'error');
+    } finally {
+        if (button) button.disabled = false;
     }
 }
 

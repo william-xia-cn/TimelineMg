@@ -299,7 +299,7 @@
         const normalizedMin = normalizeTaskDate(minDate);
         const dates = (timetableEvents || [])
             .filter(event => event?.source === 'timetable')
-            .filter(event => event?.date && (!normalizedMin || event.date > normalizedMin))
+            .filter(event => event?.date && (!normalizedMin || event.date >= normalizedMin))
             .filter(event => {
                 if (subjectInMatrixView) {
                     return getEventSubjectInMatrixView(event) === subjectInMatrixView;
@@ -731,25 +731,7 @@
 
     async function maybeRunTaskArrange(db, options = {}) {
         const now = options.now || new Date();
-        const intervalHours = options.intervalHours ?? 6;
-        const force = options.force === true;
         const confirmChanges = options.confirmChanges !== false;
-        const todayStr = formatDateISO(now);
-        if (!force && typeof db.getSetting === 'function') {
-            const last = await db.getSetting('task_arrange_last_run_at');
-            if (last) {
-                const elapsedMs = now.getTime() - new Date(last).getTime();
-                if (elapsedMs >= 0 && elapsedMs < intervalHours * 3600000) {
-                    return {
-                        ran: false,
-                        skipped: true,
-                        reason: 'fresh',
-                        last_run_at: last,
-                        today: todayStr
-                    };
-                }
-            }
-        }
         const preview = await arrangeTasks(db, now, { apply: false });
         if (preview.proposed === 0) {
             if (typeof db.setSetting === 'function') {

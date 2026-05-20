@@ -41,6 +41,253 @@ async function runCalendarArrangeCheck() {
     }
 }
 
+// ========== Calendar Diagnostics ==========
+
+function sanitizeCalendarTask(task) {
+    if (!task) return null;
+    return {
+        id: task.id || null,
+        title: task.title || '',
+        progress: task.progress || null,
+        status: task.status || null,
+        priority: task.priority || null,
+        plan_id: task.plan_id ?? null,
+        bucket_id: task.bucket_id ?? null,
+        start_date: task.start_date || null,
+        due_date: task.due_date || task.deadline || null,
+        schedule_time: task.schedule_time || null,
+        duration: task.duration ?? null,
+        source: task.source || task.source_type || null,
+        subject: task.subject || null,
+        subject_in_matrixview: task.subject_in_matrixview || null,
+        managebac_subject: task.managebac_subject || null,
+        readonly: task.readonly === true,
+        has_source_url: Boolean(task.source_url),
+        checklist_count: Array.isArray(task.checklist) ? task.checklist.length : 0,
+        checklist_checked_count: Array.isArray(task.checklist)
+            ? task.checklist.filter(item => item && item.checked === true).length
+            : 0,
+        recurrence_series_id: task.recurrence_series_id || null,
+        recurrence_index: task.recurrence_index || null,
+        recurrence_count: task.recurrence_count || null,
+        recurrence_frequency: task.recurrence_frequency || null
+    };
+}
+
+function sanitizeCalendarPlan(plan) {
+    if (!plan) return null;
+    return {
+        id: plan.id ?? null,
+        name: plan.name || '',
+        subject: plan.subject || null,
+        subject_in_matrixview: plan.subject_in_matrixview || null,
+        subject_active: plan.subject ? plan.subject_active !== false : null,
+        matrixview_managed: plan.matrixview_managed === true,
+        source: plan.source || null
+    };
+}
+
+function sanitizeCalendarContainer(container) {
+    if (!container) return null;
+    return {
+        id: container.id || null,
+        name: container.name || '',
+        type: container.type || null,
+        layer: container.layer ?? null,
+        enabled: container.enabled !== false,
+        date: container.date || null,
+        repeat: container.repeat || null,
+        repeat_days: Array.isArray(container.repeat_days) ? container.repeat_days : null,
+        time_start: container.time_start || null,
+        time_end: container.time_end || null,
+        color: container.color || null
+    };
+}
+
+function sanitizeCalendarEvent(event) {
+    if (!event) return null;
+    return {
+        id: event.id || null,
+        title: event.title || event.name || '',
+        source: event.source || null,
+        type: event.type || null,
+        date: event.date || null,
+        time_start: event.time_start || null,
+        time_end: event.time_end || null,
+        all_day: event.all_day === true,
+        subject: event.subject || null,
+        subject_in_matrixview: event.subject_in_matrixview || null,
+        repeat: event.repeat || null,
+        repeat_days: Array.isArray(event.repeat_days) ? event.repeat_days : null,
+        container_id: event.container_id || null,
+        color: event.color || null
+    };
+}
+
+function sanitizeCalendarArrangeChange(change) {
+    if (!change) return null;
+    const task = change.task || {};
+    return {
+        task_id: change.task_id || null,
+        title: change.title || task.title || '',
+        source: change.source || task.source || task.source_type || null,
+        old_start_date: change.old_start_date || task.start_date || null,
+        new_start_date: change.new_start_date || change.start_date || null,
+        old_priority: change.old_priority || task.priority || null,
+        new_priority: change.new_priority || change.priority || null,
+        updates: {
+            start_date: change.updates?.start_date || null,
+            priority: change.updates?.priority || null
+        }
+    };
+}
+
+function sanitizeCalendarSettings(settings = {}) {
+    const matrixMappings = Array.isArray(settings.matrixview_subject_mappings)
+        ? settings.matrixview_subject_mappings.map(mapping => ({
+            plan_name: mapping.plan_name || null,
+            subject: mapping.subject || null,
+            subject_in_matrixview: mapping.subject_in_matrixview || null,
+            source: mapping.source || null,
+            updated_at: mapping.updated_at || null
+        }))
+        : [];
+    return {
+        calendar_view: settings.calendar_view || null,
+        task_arrange_dirty_at: settings.task_arrange_dirty_at || null,
+        task_arrange_last_checked_at: settings.task_arrange_last_checked_at || null,
+        task_arrange_last_run_at: settings.task_arrange_last_run_at || null,
+        matrixview_subject_mappings: matrixMappings,
+        managebac_pending_event_count: Array.isArray(settings.managebac_pending_event_mappings)
+            ? settings.managebac_pending_event_mappings.length
+            : 0
+    };
+}
+
+function getCalendarVisibleRange() {
+    if (currentView === 'week') {
+        const start = getStartOfWeek(currentDate);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        return {
+            start: formatDateISO(start),
+            end: formatDateISO(end)
+        };
+    }
+    const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+    const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    return {
+        start: formatDateISO(start),
+        end: formatDateISO(end)
+    };
+}
+
+function getCalendarDomSnapshot() {
+    const eventCards = Array.from(document.querySelectorAll('.gcal-event, .month-event')).slice(0, 40).map(card => ({
+        id: card.dataset.id || null,
+        type: card.dataset.type || null,
+        source: card.dataset.source || null,
+        layer: card.dataset.layer || null,
+        date: card.dataset.date || null,
+        class_name: card.className || '',
+        text: (card.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 160)
+    }));
+    const taskItems = Array.from(document.querySelectorAll('.container-task-item, .month-task-item')).slice(0, 40).map(item => ({
+        task_id: item.dataset.taskId || null,
+        class_name: item.className || '',
+        text: (item.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120)
+    }));
+    return {
+        current_date_label: document.getElementById('currentDate')?.textContent?.trim() || '',
+        view_panel: currentView,
+        visible_events: eventCards,
+        visible_task_items: taskItems
+    };
+}
+
+async function buildCalendarDebugSnapshot() {
+    const now = new Date();
+    const [allTasks, plans, containers, events, settings] = await Promise.all([
+        typeof TimeWhereDB.getAllTasks === 'function' ? TimeWhereDB.getAllTasks() : Promise.resolve([]),
+        typeof TimeWhereDB.getPlans === 'function' ? TimeWhereDB.getPlans() : Promise.resolve([]),
+        typeof TimeWhereDB.getContainers === 'function' ? TimeWhereDB.getContainers({ enabled: true }) : Promise.resolve([]),
+        typeof TimeWhereDB.getEvents === 'function' ? TimeWhereDB.getEvents() : Promise.resolve([]),
+        typeof TimeWhereDB.getSettings === 'function' ? TimeWhereDB.getSettings() : Promise.resolve({})
+    ]);
+    const range = getCalendarVisibleRange();
+    const visibleEvents = expandEventsForDateRange(events || [], range.start, range.end);
+    const visibleTasks = (allTasks || []).filter(task => {
+        const due = task.due_date || task.deadline;
+        const start = task.start_date;
+        return (start && start >= range.start && start <= range.end)
+            || (due && due >= range.start && due <= range.end);
+    });
+
+    let arrangePreview = null;
+    if (window.TimeWhereScheduling?.arrangeTasks) {
+        try {
+            const preview = await TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false });
+            arrangePreview = {
+                proposed: preview.proposed || 0,
+                summary: preview.summary || null,
+                changes: (preview.changes || []).map(sanitizeCalendarArrangeChange)
+            };
+        } catch (error) {
+            arrangePreview = { error: error.message || String(error) };
+        }
+    }
+
+    return {
+        schema: 'timewhere-calendar-debug-v1',
+        generated_at: now.toISOString(),
+        page: {
+            url: window.location.href,
+            title: document.title,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            today: formatDateISO(now),
+            now_local: now.toString()
+        },
+        state: {
+            current_view: currentView,
+            current_date: formatDateISO(currentDate),
+            visible_range: range
+        },
+        counts: {
+            all_tasks: allTasks.length,
+            visible_tasks: visibleTasks.length,
+            plans: plans.length,
+            enabled_containers: containers.length,
+            events: events.length,
+            timetable_events: events.filter(event => event.source === 'timetable').length,
+            visible_events: visibleEvents.length
+        },
+        plans: plans.map(sanitizeCalendarPlan),
+        containers: containers.map(sanitizeCalendarContainer),
+        visible_tasks: visibleTasks.map(sanitizeCalendarTask),
+        all_tasks: allTasks.map(sanitizeCalendarTask),
+        visible_events: visibleEvents.map(sanitizeCalendarEvent),
+        events: events.map(sanitizeCalendarEvent),
+        settings: sanitizeCalendarSettings(settings),
+        arrange_preview: arrangePreview,
+        dom: getCalendarDomSnapshot()
+    };
+}
+
+async function copyCalendarDebugSnapshot(button = null) {
+    try {
+        if (button) button.disabled = true;
+        const snapshot = await buildCalendarDebugSnapshot();
+        const text = JSON.stringify(snapshot, null, 2);
+        await navigator.clipboard.writeText(text);
+        showToast('Calendar 诊断快照已复制，可直接粘贴给我', 'success');
+    } catch (error) {
+        console.error('[Calendar] debug snapshot failed:', error);
+        showToast(`复制诊断快照失败：${error.message}`, 'error');
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
 async function initApp() {
     if (typeof TimeWhereDB !== 'undefined') {
         await TimeWhereDB.initDefaultSettings();
@@ -1007,6 +1254,11 @@ function setupCalendar() {
     });
     document.getElementById('searchInput')?.addEventListener('input', e => {
         _filterEvents(e.target.value.trim().toLowerCase());
+    });
+
+    const debugSnapshotBtn = document.getElementById('btnCopyCalendarDebugSnapshot');
+    debugSnapshotBtn?.addEventListener('click', () => {
+        copyCalendarDebugSnapshot(debugSnapshotBtn);
     });
 
     document.getElementById('calModalClose')?.addEventListener('click', closeCalModal);

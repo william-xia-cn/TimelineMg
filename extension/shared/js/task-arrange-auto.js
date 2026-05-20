@@ -7,7 +7,6 @@
     const DIRTY_KEY = 'task_arrange_dirty_at';
     const REVIEW_LOG_KEY = 'task_arrange_review_log';
     const REVIEW_LOG_LIMIT = 20;
-    const DEFAULT_INTERVAL_HOURS = 6;
 
     function hasArrangeWork(pending) {
         return Array.isArray(pending?.arrange_changes) && pending.arrange_changes.length > 0;
@@ -119,19 +118,8 @@
 
     async function shouldRunTaskArrange(db, now, options = {}) {
         const dirtyAt = await db.getSetting(DIRTY_KEY);
-        if (dirtyAt) return { run: true, dirty: true };
         const last = await db.getSetting(LAST_CHECKED_KEY);
-        if (!last) return { run: true, dirty: false };
-        if (formatDateISO(new Date(last)) !== formatDateISO(now)) {
-            return { run: true, dirty: false, reason: 'new_day', last };
-        }
-        const elapsedMs = now.getTime() - new Date(last).getTime();
-        const intervalHours = options.intervalHours ?? DEFAULT_INTERVAL_HOURS;
-        return {
-            run: !(elapsedMs >= 0 && elapsedMs < intervalHours * 3600000),
-            dirty: false,
-            last
-        };
+        return { run: true, dirty: Boolean(dirtyAt), last: last || null };
     }
 
     async function runTaskArrangeAutoReview(db, options = {}) {
@@ -144,10 +132,7 @@
             return await applyPendingTaskArrangeReview(db, existing, now);
         }
 
-        const shouldRun = await shouldRunTaskArrange(db, now, options);
-        if (!shouldRun.run && options.force !== true) {
-            return { ran: false, reason: 'fresh', last_checked_at: shouldRun.last };
-        }
+        await shouldRunTaskArrange(db, now, options);
 
         const result = await global.TimeWhereScheduling.arrangeTasks(db, now, { apply: true });
         await db.setSetting(LAST_CHECKED_KEY, now.toISOString(), { skipTaskArrangeDirty: true });

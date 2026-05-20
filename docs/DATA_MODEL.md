@@ -110,16 +110,21 @@ interface Task {
 
 手动创建任务的产品规则：`due_date` 必填；如果用户没有填写 `start_date`，创建时应把 `start_date` 设置为同一个 `due_date`。该规则约束 Task Board / Planner 的手动创建和快捷新增入口，不要求立刻执行 DB schema migration；历史任务、导入任务和来源同步任务可按各自来源规则保留兼容字段。
 
-Task Date Arrange 可更新未完成任务的本地 `start_date`，并根据 `due_date` 将 `priority` 升级到 `important` 或 `urgent`。Arrange 不应降低用户已经设置得更高的 `priority`，也不应处理 `progress='completed'` 的任务。Arrange 写入必须通过 preview / 用户确认流程触发，不能在页面打开时静默修改任务。
+Task Date Arrange 可更新未完成任务的本地 `start_date`，并根据 `due_date` 将 `priority` 升级到 `important` 或 `urgent`。Arrange 不应降低用户已经设置得更高的 `priority`，也不应处理 `progress='completed'` 的任务。Dashboard / Focus、Planner / Task Board、Calendar 页面打开时可运行无 6 小时节流的自动 Arrange，并直接 apply 合格的本地调度字段变更；Popup 打开不运行自动 Arrange。Arrange 不得覆盖 ManageBac / MatrixView 等来源事实字段。
 
-统一管理检查使用 `settings` 表保存本地 pending 状态：
+Task Arrange 与管理确认流程使用 `settings` 表保存本地诊断 / pending 状态：
 
 | Setting key | 用途 |
 |-------------|------|
-| `management_review_pending` | Dashboard / manual ManageBac sync 生成的待确认状态，包含 Arrange preview changes、ManageBac pending event mappings、source、created_at。存在未完成 pending 时应恢复确认页继续处理。 |
-| `management_review_last_checked_at` | Dashboard 六小时管理检查的最近完成时间。只有没有待确认项、确认导入完成、或全部跳过完成后才更新。 |
+| `task_arrange_last_checked_at` | 最近一次页面打开自动 Arrange 检查时间。仅用于诊断，不再作为 6 小时节流 gate。 |
+| `task_arrange_last_run_at` | 最近一次 Arrange 执行 / apply 时间。仅用于诊断，不再作为 6 小时节流 gate。 |
+| `task_arrange_dirty_at` | Arrange 相关数据变动提示时间；当前保留为诊断 / 兼容字段，不决定是否运行自动 Arrange。 |
+| `task_arrange_review_log` | Arrange 自动 review/apply 的本地日志，用于诊断最近变更。 |
+| `task_arrange_pending` | 兼容旧确认流的 pending 状态；当前页面打开自动 Arrange 不依赖 6 小时 pending gate。 |
+| `management_review_pending` | Manual ManageBac sync / legacy management review 生成的待确认状态，主要用于 ManageBac pending event mappings、source、created_at。存在未完成 pending 时应恢复确认页继续处理。 |
+| `management_review_last_checked_at` | Legacy management review 最近完成时间。当前 Task Arrange 自动页面打开流程不使用该字段做节流。 |
 
-Popup、Calendar、Planner 页面打开不得写入这些 key 触发六小时自动检查；Planner `my ManageBac` 手动同步可以写入 `management_review_pending`，但只包含 ManageBac 待确认项，不包含 Arrange changes。
+Planner `my ManageBac` 手动同步可以写入 `management_review_pending`，但只包含 ManageBac 待确认项，不包含 Arrange changes。
 
 **优先级映射**（v4 ↔ v2 兼容）：
 

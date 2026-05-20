@@ -4,7 +4,7 @@
 **日期**: 2026-04-14  
 **状态**: Internal MVP accepted; baseline stabilized for local-first MVP. Not public release ready.
 
-> Current baseline note (2026-05-16): TimeWhere is a local-first Chrome extension MVP. Task Date Arrange is approved for current baseline stabilization with preview / user-confirmed writes only. ManageBac ICS import is an extension-side source import using a saved link plus manual/user-confirmed sync; it is not a cloud sync backend. D-019/D-020 approve optional Google Drive `appDataFolder` data sync v1 while all core features remain fully usable without Google. D-021 approves Chrome system reminder notifications for local tasks only. Chrome Web Store submission and public release still require explicit Product Owner approval.
+> Current baseline note (2026-05-20): TimeWhere is a local-first Chrome extension MVP. Task Date Arrange is approved for no-throttle page-open automation on Dashboard / Focus, Planner / Task Board, and Calendar, limited to local scheduling fields and still without background alarms. ManageBac ICS import is an extension-side source import using a saved link plus manual/user-confirmed new-event creation; it is not a cloud sync backend. D-019/D-020 approve optional Google Drive `appDataFolder` data sync v1 while all core features remain fully usable without Google. D-021 approves Chrome system reminder notifications for local tasks only. Chrome Web Store submission and public release still require explicit Product Owner approval.
 
 ---
 

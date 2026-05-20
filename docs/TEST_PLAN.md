@@ -2,7 +2,7 @@
 
 > 版本：v1.0  
 > 覆盖范围：scheduling.js 单元测试、baseline-safety 静态检查、所有模块静态分析、手动验证检查表。
-> 当前基线：Internal MVP accepted / local-first MVP。Task Date Arrange 已进入 baseline stabilization 测试目标，要求 preview / 用户确认后才写入；六小时管理检查统一由 Dashboard 入口触发，并在同一确认页处理 Arrange 变更与 ManageBac 新事件。系统任务提醒已进入测试目标，仅用于本地任务通知。Chrome Web Store/public release 不属于当前测试目标。
+> 当前基线：Internal MVP accepted / local-first MVP。Task Date Arrange 已进入 baseline stabilization 测试目标；Dashboard / Focus、Planner / Task Board、Calendar 页面打开时不再使用六小时节流，可直接 apply 合格的本地调度字段变更。ManageBac 新事件创建仍走用户确认流程。系统任务提醒已进入测试目标，仅用于本地任务通知。Chrome Web Store/public release 不属于当前测试目标。
 
 ---
 
