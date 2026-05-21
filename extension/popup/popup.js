@@ -21,6 +21,11 @@ const {
     escapeAttribute
 } = TimeWhereScheduling;
 
+const SIDEPANEL_QUICK_ADD_DEFAULT_PLAN_KEYWORD = 'English';
+const SIDEPANEL_QUICK_ADD_BUCKET_NAME = '作业';
+const SIDEPANEL_SUBJECT_BUCKET_TEMPLATE = ['上课', '作业', '单元测试', '阶段考试'];
+const SIDEPANEL_OTHER_SCHOOL_BUCKET_TEMPLATE = ['事项', '活动', '申请', '其他'];
+
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         await initApp();
@@ -55,7 +60,8 @@ function runGoogleSyncCheck() {
 async function reloadPopup() {
     await Promise.all([
         loadCurrentTasks(),
-        loadHeaderCounts()
+        loadHeaderCounts(),
+        renderSidepanelBottomActions()
     ]);
 }
 
@@ -211,6 +217,50 @@ function renderNoTask() {
         </div>`;
 }
 
+async function renderSidepanelBottomActions() {
+    const container = document.getElementById('sidepanelBottomActions');
+    if (!container || typeof TimeWhereDB === 'undefined') return;
+
+    const now = new Date();
+    const todayStr = formatDateISO(now);
+    if (TimeWhereDB.ensureDailyJournalSnapshot && now.getHours() >= 6) {
+        await TimeWhereDB.ensureDailyJournalSnapshot(todayStr, now).catch(error => {
+            console.warn('[Popup] Daily journal snapshot skipped:', error);
+        });
+    }
+    const journal = TimeWhereDB.getDailyJournal ? await TimeWhereDB.getDailyJournal(todayStr) : null;
+    const status = journal?.status || (journal?.snapshot_at ? 'snapshot' : 'none');
+    const labelMap = {
+        none: '未生成计划快照',
+        snapshot: '待整理',
+        draft: '草稿',
+        submitted: '已提交'
+    };
+    const buttonText = status === 'submitted' ? '查看今日总结' : '整理今日总结';
+
+    container.innerHTML = `
+        <div class="current-task-quick-add" data-quick-add-date="${escapeAttribute(todayStr)}">
+            <div class="current-task-quick-add-main">
+                <div class="current-task-quick-add-icon"><span class="material-symbols-outlined">playlist_add</span></div>
+                <div class="current-task-quick-add-copy">
+                    <h3>未计划的任务添加</h3>
+                    <p>比如课后作业及其他临时任务</p>
+                </div>
+            </div>
+            <button class="btn-micro primary current-task-quick-add-action" type="button" data-action="quick-add-current-task" data-quick-add-date="${escapeAttribute(todayStr)}">临时添加任务</button>
+        </div>
+        <div class="daily-journal-entry" data-journal-date="${escapeAttribute(todayStr)}">
+            <div class="daily-journal-main">
+                <div class="daily-journal-icon"><span class="material-symbols-outlined">edit</span></div>
+                <div class="daily-journal-copy">
+                    <h3>今日总结</h3>
+                    <p>${escapeHTML(formatDate(todayStr))} · ${escapeHTML(labelMap[status] || labelMap.none)}</p>
+                </div>
+            </div>
+            <button class="btn-micro primary" data-action="open-today-journal" data-journal-date="${escapeAttribute(todayStr)}">${buttonText}</button>
+        </div>`;
+}
+
 function formatDate(dateStr) {
     const date = new Date(dateStr);
     const today = new Date();
@@ -245,6 +295,7 @@ function setupEventListeners() {
         taskList.addEventListener('toggle', handleTaskCardToggle, true);
     }
     document.addEventListener('click', handleTaskActionClick);
+    document.addEventListener('change', handlePopupDelegatedChange);
 
     const btnSettings = document.getElementById('btnSettings');
     if (btnSettings) {
@@ -253,12 +304,56 @@ function setupEventListeners() {
         });
     }
 
+    const btnOpenDashboard = document.getElementById('btnOpenDashboard');
+    if (btnOpenDashboard) {
+        btnOpenDashboard.addEventListener('click', function() {
+            openExtensionPage('pages/focus/focus.html');
+        });
+    }
+
+    const btnOpenTasks = document.getElementById('btnOpenTasks');
+    if (btnOpenTasks) {
+        btnOpenTasks.addEventListener('click', function() {
+            openExtensionPage('pages/tasks/tasks.html');
+        });
+    }
+
+    const btnOpenCalendar = document.getElementById('btnOpenCalendar');
+    if (btnOpenCalendar) {
+        btnOpenCalendar.addEventListener('click', function() {
+            openExtensionPage('pages/calendar/calendar.html');
+        });
+    }
+
     const btnOpenFull = document.getElementById('btnOpenFull');
     if (btnOpenFull) {
         btnOpenFull.addEventListener('click', function() {
-            chrome.tabs.create({ url: chrome.runtime.getURL('pages/focus/focus.html') });
+            openExtensionPage('pages/focus/focus.html');
         });
     }
+
+    const btnOpenPopup = document.getElementById('btnOpenPopup');
+    if (btnOpenPopup) {
+        btnOpenPopup.addEventListener('click', openPopupWindow);
+    }
+}
+
+function openExtensionPage(path) {
+    chrome.tabs.create({ url: chrome.runtime.getURL(path) });
+}
+
+function openPopupWindow() {
+    const url = chrome.runtime.getURL('popup/popup.html');
+    if (chrome.windows?.create) {
+        chrome.windows.create({
+            url,
+            type: 'popup',
+            width: 380,
+            height: 620
+        });
+        return;
+    }
+    chrome.tabs.create({ url });
 }
 
 function handleTaskCardToggle(event) {
@@ -282,6 +377,46 @@ async function handleTaskActionClick(event) {
     event.preventDefault();
     event.stopPropagation();
 
+    if (actionEl.dataset.action === 'quick-add-current-task') {
+        await openSidepanelQuickAddTaskModal();
+        return;
+    }
+    if (actionEl.dataset.action === 'close-sidepanel-quick-add-task') {
+        closeSidepanelQuickAddTaskModal();
+        return;
+    }
+    if (actionEl.dataset.action === 'save-sidepanel-quick-add-task') {
+        await runPopupAction(actionEl, saveSidepanelQuickAddTask);
+        return;
+    }
+    if (actionEl.dataset.action === 'sidepanel-quick-add-label') {
+        actionEl.classList.toggle('selected');
+        return;
+    }
+    if (actionEl.dataset.action === 'sidepanel-quick-add-checklist-add') {
+        addSidepanelQuickAddChecklistItem();
+        return;
+    }
+    if (actionEl.dataset.action === 'sidepanel-quick-add-checklist-delete') {
+        actionEl.closest('.sidepanel-checklist-item')?.remove();
+        return;
+    }
+    if (actionEl.dataset.action === 'open-today-journal') {
+        await openDailyJournalModal(actionEl.dataset.journalDate || formatDateISO(new Date()));
+        return;
+    }
+    if (actionEl.dataset.action === 'close-daily-journal') {
+        closeDailyJournalModal();
+        return;
+    }
+    if (actionEl.dataset.action === 'save-daily-journal-draft') {
+        await runPopupAction(actionEl, async () => saveDailyJournalFromModal(false));
+        return;
+    }
+    if (actionEl.dataset.action === 'submit-daily-journal') {
+        await runPopupAction(actionEl, async () => saveDailyJournalFromModal(true));
+        return;
+    }
     if (actionEl.dataset.action === 'open-current-task-detail') {
         await openCurrentTaskDetailModal(actionEl.dataset.taskId);
         return;
@@ -305,6 +440,17 @@ async function handleTaskActionClick(event) {
     });
 }
 
+async function handlePopupDelegatedChange(event) {
+    const actionEl = event.target.closest('[data-change-action]');
+    if (!actionEl) return;
+    if (actionEl.dataset.changeAction === 'sidepanel-quick-add-plan-change') {
+        await refreshSidepanelQuickAddPlanFields(actionEl.value);
+    }
+    if (actionEl.dataset.changeAction === 'sidepanel-quick-add-recurrence-change') {
+        updateSidepanelQuickAddRecurrenceControls();
+    }
+}
+
 async function runPopupAction(control, action) {
     if (control?.dataset?.busy === 'true') return;
     control.dataset.busy = 'true';
@@ -320,6 +466,390 @@ async function runPopupAction(control, action) {
             control.disabled = false;
         }
     }
+}
+
+async function ensureSidepanelQuickAddPlanAndBucket() {
+    let plans = await TimeWhereDB.getPlans();
+    let plan = findSidepanelQuickAddDefaultPlan(plans);
+    if (!plan) {
+        plan = await TimeWhereDB.ensureDefaultPlan();
+    }
+
+    if (TimeWhereDB.ensureBucketTemplateForPlan) {
+        await TimeWhereDB.ensureBucketTemplateForPlan(plan.id, getSidepanelQuickAddBucketTemplateForPlan(plan));
+    }
+
+    plans = await TimeWhereDB.getPlans();
+    let buckets = await TimeWhereDB.getBucketsByPlan(plan.id);
+    let bucket = buckets.find(item => item.name === SIDEPANEL_QUICK_ADD_BUCKET_NAME) || null;
+    const labels = await TimeWhereDB.getLabelsByPlan?.(plan.id) || [];
+    return { plan, bucket, plans, buckets, labels };
+}
+
+function findSidepanelQuickAddDefaultPlan(plans = []) {
+    const keyword = SIDEPANEL_QUICK_ADD_DEFAULT_PLAN_KEYWORD.toLowerCase();
+    return (plans || []).find(plan => {
+        const values = [plan.name, plan.subject, plan.subject_in_matrixview]
+            .filter(Boolean)
+            .map(value => String(value).toLowerCase());
+        return values.some(value => value.includes(keyword) || value.includes('英文'));
+    }) || (plans || [])[0] || null;
+}
+
+function getSidepanelQuickAddBucketTemplateForPlan(plan) {
+    return plan?.name === 'Other School Plan'
+        ? SIDEPANEL_OTHER_SCHOOL_BUCKET_TEMPLATE
+        : SIDEPANEL_SUBJECT_BUCKET_TEMPLATE;
+}
+
+function renderSidepanelQuickAddPlanOptions(plans, selectedPlanId) {
+    return (plans || []).map(plan => {
+        const selected = String(plan.id) === String(selectedPlanId) ? 'selected' : '';
+        return `<option value="${escapeAttribute(plan.id)}" ${selected}>${escapeHTML(plan.name || 'Untitled Plan')}</option>`;
+    }).join('');
+}
+
+function renderSidepanelQuickAddBucketOptions(buckets, selectedBucketId) {
+    return [
+        '<option value="">No bucket</option>',
+        ...(buckets || []).map(bucket => {
+            const selected = String(bucket.id) === String(selectedBucketId) ? 'selected' : '';
+            return `<option value="${escapeAttribute(bucket.id)}" ${selected}>${escapeHTML(bucket.name || 'Untitled Bucket')}</option>`;
+        })
+    ].join('');
+}
+
+function getSidepanelQuickAddPlanSubject(plan) {
+    return plan?.subject || plan?.subject_in_matrixview || plan?.name || 'No subject';
+}
+
+function renderSidepanelQuickAddLabelChips(labels = [], selectedIds = []) {
+    if (!labels.length) return '<span class="text-muted">No labels defined for this plan</span>';
+    const selectedSet = new Set(selectedIds.map(String));
+    return labels.map(label => `
+        <button
+            type="button"
+            class="sidepanel-label-chip ${selectedSet.has(String(label.id)) ? 'selected' : ''}"
+            data-action="sidepanel-quick-add-label"
+            data-label-id="${escapeAttribute(label.id)}"
+            style="--label-color:${escapeAttribute(label.color || '#94a3b8')}"
+        >${escapeHTML(label.name || label.color || 'Label')}</button>`).join('');
+}
+
+function renderSidepanelQuickAddChecklistItems(items = []) {
+    return (items || []).map(item => `
+        <div class="sidepanel-checklist-item" data-item-id="${escapeAttribute(item.id)}">
+            <input type="checkbox" class="sidepanel-checklist-checkbox" ${item.checked ? 'checked' : ''}>
+            <span class="sidepanel-checklist-text">${escapeHTML(item.title || '')}</span>
+            <button type="button" class="sidepanel-checklist-delete" data-action="sidepanel-quick-add-checklist-delete" title="Delete">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>`).join('');
+}
+
+async function openSidepanelQuickAddTaskModal() {
+    closeSidepanelQuickAddTaskModal();
+    const todayStr = formatDateISO(new Date());
+    const { plan, bucket, plans, buckets, labels } = await ensureSidepanelQuickAddPlanAndBucket();
+    const modal = document.createElement('div');
+    modal.className = 'popup-modal-overlay';
+    modal.id = 'sidepanelQuickAddTaskModal';
+    modal.innerHTML = `
+        <div class="popup-task-detail-modal sidepanel-quick-add-modal">
+            <div class="popup-modal-header">
+                <h3>Task Details</h3>
+                <button class="popup-modal-close" data-action="close-sidepanel-quick-add-task" aria-label="关闭">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="popup-modal-body">
+                <label>任务标题<input type="text" id="sidepanelQuickAddTitle" placeholder="Task title"></label>
+                <div class="popup-detail-grid">
+                    <label>状态<select id="sidepanelQuickAddProgress">
+                        <option value="not_started" selected>未开始</option>
+                        <option value="in_progress">进行中</option>
+                        <option value="completed">已完成</option>
+                    </select></label>
+                    <label>优先级<select id="sidepanelQuickAddPriority">
+                        <option value="urgent">P1</option>
+                        <option value="important">P2</option>
+                        <option value="medium" selected>P3</option>
+                        <option value="low">P4</option>
+                    </select></label>
+                </div>
+                <div class="popup-detail-grid">
+                    <label>TimeWhere Plan<select id="sidepanelQuickAddPlan" data-change-action="sidepanel-quick-add-plan-change">
+                        ${renderSidepanelQuickAddPlanOptions(plans, plan.id)}
+                    </select></label>
+                    <label>Subject<input type="text" id="sidepanelQuickAddSubject" value="${escapeAttribute(getSidepanelQuickAddPlanSubject(plan))}" readonly></label>
+                </div>
+                <label>Bucket<select id="sidepanelQuickAddBucket">
+                    ${renderSidepanelQuickAddBucketOptions(buckets, bucket?.id || null)}
+                </select></label>
+                <div class="popup-detail-grid">
+                    <label>开始日期<input type="date" id="sidepanelQuickAddStartDate" value="${escapeAttribute(todayStr)}"></label>
+                    <label>截止日期<input type="date" id="sidepanelQuickAddDueDate" value="${escapeAttribute(todayStr)}"></label>
+                </div>
+                <div class="popup-detail-grid">
+                    <label>定时时间<input type="time" id="sidepanelQuickAddScheduleTime" value=""></label>
+                    <label>时长<input type="number" id="sidepanelQuickAddDuration" value="30" min="5" max="480" step="5"></label>
+                </div>
+                <label>说明<textarea id="sidepanelQuickAddNotes" rows="3" placeholder="Add notes..."></textarea></label>
+                <label>Checklist
+                    <div class="sidepanel-checklist-list" id="sidepanelQuickAddChecklistItems">${renderSidepanelQuickAddChecklistItems([])}</div>
+                    <div class="sidepanel-checklist-add">
+                        <input type="text" id="sidepanelQuickAddChecklistNewItem" placeholder="Add an item...">
+                        <button type="button" class="btn-micro" data-action="sidepanel-quick-add-checklist-add">添加</button>
+                    </div>
+                </label>
+                <div class="popup-detail-grid">
+                    <label>周期任务<select id="sidepanelQuickAddRecurrenceFrequency" data-change-action="sidepanel-quick-add-recurrence-change">
+                        <option value="none" selected>不重复</option>
+                        <option value="weekly">每周</option>
+                        <option value="monthly">每月</option>
+                    </select></label>
+                    <label>次数<input type="number" id="sidepanelQuickAddRecurrenceCount" min="2" max="12" value="2" disabled></label>
+                </div>
+                <label>Labels
+                    <div class="sidepanel-labels-picker" id="sidepanelQuickAddLabels">${renderSidepanelQuickAddLabelChips(labels, [])}</div>
+                </label>
+            </div>
+            <div class="popup-modal-footer">
+                <button class="btn-micro" data-action="close-sidepanel-quick-add-task">取消</button>
+                <button class="btn-micro primary" data-action="save-sidepanel-quick-add-task">保存任务</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+    setTimeout(() => document.getElementById('sidepanelQuickAddTitle')?.focus(), 50);
+}
+
+function closeSidepanelQuickAddTaskModal() {
+    const modal = document.getElementById('sidepanelQuickAddTaskModal');
+    if (modal) modal.remove();
+}
+
+async function refreshSidepanelQuickAddPlanFields(planIdValue) {
+    const planId = parseInt(planIdValue, 10);
+    if (!planId) return;
+    const plans = await TimeWhereDB.getPlans();
+    const plan = plans.find(item => String(item.id) === String(planId));
+    if (plan && TimeWhereDB.ensureBucketTemplateForPlan) {
+        await TimeWhereDB.ensureBucketTemplateForPlan(planId, getSidepanelQuickAddBucketTemplateForPlan(plan));
+    }
+    const buckets = await TimeWhereDB.getBucketsByPlan(planId);
+    const preferredBucket = buckets.find(item => item.name === SIDEPANEL_QUICK_ADD_BUCKET_NAME) || null;
+    const bucketSelect = document.getElementById('sidepanelQuickAddBucket');
+    if (bucketSelect) {
+        bucketSelect.innerHTML = renderSidepanelQuickAddBucketOptions(buckets, preferredBucket?.id || null);
+    }
+    const subjectInput = document.getElementById('sidepanelQuickAddSubject');
+    if (subjectInput) subjectInput.value = getSidepanelQuickAddPlanSubject(plan);
+    const labels = await TimeWhereDB.getLabelsByPlan?.(planId) || [];
+    const labelsEl = document.getElementById('sidepanelQuickAddLabels');
+    if (labelsEl) labelsEl.innerHTML = renderSidepanelQuickAddLabelChips(labels, []);
+}
+
+function updateSidepanelQuickAddRecurrenceControls() {
+    const recurrenceFrequency = document.getElementById('sidepanelQuickAddRecurrenceFrequency');
+    const recurrenceCount = document.getElementById('sidepanelQuickAddRecurrenceCount');
+    if (!recurrenceFrequency || !recurrenceCount) return;
+    recurrenceCount.disabled = !['weekly', 'monthly'].includes(recurrenceFrequency.value);
+}
+
+function addSidepanelQuickAddChecklistItem() {
+    const input = document.getElementById('sidepanelQuickAddChecklistNewItem');
+    const list = document.getElementById('sidepanelQuickAddChecklistItems');
+    const title = input?.value?.trim() || '';
+    if (!input || !list || !title) return;
+    const item = {
+        id: globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `checklist-${Date.now()}`,
+        title,
+        checked: false
+    };
+    list.insertAdjacentHTML('beforeend', renderSidepanelQuickAddChecklistItems([item]));
+    input.value = '';
+}
+
+function readSidepanelQuickAddChecklist() {
+    return Array.from(document.querySelectorAll('#sidepanelQuickAddChecklistItems .sidepanel-checklist-item')).map(item => ({
+        id: item.dataset.itemId || (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `checklist-${Date.now()}`),
+        title: item.querySelector('.sidepanel-checklist-text')?.textContent?.trim() || '',
+        checked: item.querySelector('.sidepanel-checklist-checkbox')?.checked === true
+    })).filter(item => item.title);
+}
+
+function readSidepanelQuickAddLabels() {
+    return Array.from(document.querySelectorAll('#sidepanelQuickAddLabels .sidepanel-label-chip.selected'))
+        .map(chip => parseInt(chip.dataset.labelId || '', 10))
+        .filter(Number.isFinite);
+}
+
+async function saveSidepanelQuickAddTask() {
+    const title = document.getElementById('sidepanelQuickAddTitle')?.value?.trim();
+    if (!title) throw new Error('请输入任务标题');
+
+    const todayStr = formatDateISO(new Date());
+    const planId = parseInt(document.getElementById('sidepanelQuickAddPlan')?.value || '', 10);
+    if (!planId) throw new Error('请选择计划');
+    const bucketValue = document.getElementById('sidepanelQuickAddBucket')?.value || '';
+    const progress = document.getElementById('sidepanelQuickAddProgress')?.value || 'not_started';
+
+    const payload = {
+        title,
+        plan_id: planId,
+        bucket_id: bucketValue ? parseInt(bucketValue, 10) : null,
+        start_date: document.getElementById('sidepanelQuickAddStartDate')?.value || todayStr,
+        due_date: document.getElementById('sidepanelQuickAddDueDate')?.value || todayStr,
+        schedule_time: document.getElementById('sidepanelQuickAddScheduleTime')?.value || null,
+        priority: document.getElementById('sidepanelQuickAddPriority')?.value || 'medium',
+        duration: parseInt(document.getElementById('sidepanelQuickAddDuration')?.value || '30', 10) || 30,
+        progress,
+        completed_at: progress === 'completed' ? new Date().toISOString() : null,
+        checklist: readSidepanelQuickAddChecklist(),
+        labels: readSidepanelQuickAddLabels(),
+        notes: document.getElementById('sidepanelQuickAddNotes')?.value || ''
+    };
+    const recurrenceFrequency = document.getElementById('sidepanelQuickAddRecurrenceFrequency')?.value || 'none';
+    const recurrenceCount = parseInt(document.getElementById('sidepanelQuickAddRecurrenceCount')?.value || '2', 10) || 2;
+    if (recurrenceFrequency === 'weekly' || recurrenceFrequency === 'monthly') {
+        await TimeWhereDB.addRecurringTaskSeries(payload, {
+            frequency: recurrenceFrequency,
+            count: Math.max(2, Math.min(12, recurrenceCount))
+        });
+    } else {
+        await TimeWhereDB.addTask(payload);
+    }
+
+    closeSidepanelQuickAddTaskModal();
+    showToast('任务已添加到今天', 'success');
+}
+
+function renderJournalTaskList(tasks, emptyText) {
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+        return `<p class="journal-empty">${escapeHTML(emptyText)}</p>`;
+    }
+    return `<ul class="journal-task-list">${tasks.map(task => `
+        <li>
+            <span>${escapeHTML(task.title || '无标题任务')}</span>
+            ${task.due_date ? `<small>截止 ${escapeHTML(formatDate(task.due_date))}</small>` : ''}
+        </li>`).join('')}</ul>`;
+}
+
+function renderJournalPlannedTaskReview(draft) {
+    const planned = Array.isArray(draft.planned_task_snapshots) ? draft.planned_task_snapshots : [];
+    if (planned.length === 0) {
+        return '<p class="journal-empty">今天没有冻结的计划任务。</p>';
+    }
+
+    const completedIds = new Set((draft.completed_task_snapshots || []).map(task => String(task.id)));
+    const delayedIds = new Set((draft.delayed_task_snapshots || []).map(task => String(task.id)));
+
+    return `<ul class="journal-task-list journal-review-task-list">${planned.map(task => {
+        const taskId = String(task.id);
+        let statusClass = 'pending';
+        let statusIcon = 'help';
+        let statusLabel = '待确认';
+        if (completedIds.has(taskId)) {
+            statusClass = 'completed';
+            statusIcon = 'check_circle';
+            statusLabel = '任务完成';
+        } else if (delayedIds.has(taskId)) {
+            statusClass = 'delayed';
+            statusIcon = 'close';
+            statusLabel = '任务延误';
+        }
+
+        return `
+            <li class="journal-task-status ${statusClass}">
+                <span class="journal-task-status-main">
+                    <span class="material-symbols-outlined journal-task-status-icon">${statusIcon}</span>
+                    <span>${escapeHTML(task.title || '无标题任务')}</span>
+                </span>
+                <small>${escapeHTML(statusLabel)}</small>
+            </li>`;
+    }).join('')}</ul>`;
+}
+
+function journalTextarea(name, label, value) {
+    return `
+        <label class="journal-note-card">
+            <span class="journal-note-title">${escapeHTML(label)}</span>
+            <textarea data-journal-field="${escapeAttribute(name)}" rows="3" aria-label="${escapeAttribute(label)}" placeholder="补充说明...">${escapeHTML(value || '')}</textarea>
+        </label>`;
+}
+
+async function openDailyJournalModal(date = formatDateISO(new Date())) {
+    closeDailyJournalModal();
+    if (TimeWhereDB.ensureDailyJournalSnapshot && new Date().getHours() >= 6) {
+        await TimeWhereDB.ensureDailyJournalSnapshot(date, new Date()).catch(error => {
+            console.warn('[Popup] Daily journal snapshot skipped:', error);
+        });
+    }
+    const draft = await TimeWhereDB.buildDailyJournalDraft(date, new Date());
+    const statusText = draft.status === 'submitted' ? '已提交' : draft.status === 'draft' ? '草稿' : draft.snapshot_at ? '待整理' : '未生成计划快照';
+    const modal = document.createElement('div');
+    modal.className = 'popup-modal-overlay';
+    modal.id = 'dailyJournalModal';
+    modal.dataset.journalDate = date;
+    modal.innerHTML = `
+        <div class="popup-task-detail-modal sidepanel-daily-journal-modal">
+            <div class="popup-modal-header">
+                <h3>今日总结 · ${escapeHTML(date)}</h3>
+                <button class="popup-modal-close" data-action="close-daily-journal" aria-label="关闭">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="popup-modal-body sidepanel-journal-body">
+                <div class="journal-status-row">
+                    <span class="task-tag assigned">${escapeHTML(statusText)}</span>
+                    <span>${escapeHTML(draft.snapshot_at ? `计划快照 ${formatDate(draft.date || date)}` : '6 点后首次可用时生成计划快照')}</span>
+                </div>
+                <div class="journal-review-layout">
+                    <section class="journal-section">
+                        <h4>今日任务 <strong>${draft.planned_task_snapshots?.length || 0}</strong></h4>
+                        ${renderJournalPlannedTaskReview(draft)}
+                    </section>
+                    ${journalTextarea('delayed_notes', '计划延误说明', draft.delayed_notes)}
+                    <section class="journal-section">
+                        <h4>计划外完成 <strong>${draft.extra_done_task_snapshots?.length || 0}</strong></h4>
+                        ${renderJournalTaskList(draft.extra_done_task_snapshots, '没有计划外完成任务。')}
+                    </section>
+                    ${journalTextarea('extra_done_notes', '计划外完成说明', draft.extra_done_notes)}
+                    <div class="journal-summary-field">
+                        ${journalTextarea('general_notes', '今日总结', draft.general_notes)}
+                    </div>
+                </div>
+            </div>
+            <div class="popup-modal-footer">
+                <button class="btn-micro" data-action="close-daily-journal">取消</button>
+                <button class="btn-micro" data-action="save-daily-journal-draft">保存草稿</button>
+                <button class="btn-micro primary" data-action="submit-daily-journal">提交总结</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+}
+
+function closeDailyJournalModal() {
+    const modal = document.getElementById('dailyJournalModal');
+    if (modal) modal.remove();
+}
+
+async function saveDailyJournalFromModal(submit) {
+    const modal = document.getElementById('dailyJournalModal');
+    if (!modal) return;
+    const date = modal.dataset.journalDate || formatDateISO(new Date());
+    const payload = {};
+    modal.querySelectorAll('[data-journal-field]').forEach(field => {
+        payload[field.dataset.journalField] = field.value || '';
+    });
+    if (submit) {
+        await TimeWhereDB.submitDailyJournal(date, payload);
+        showToast('今日总结已提交', 'success');
+    } else {
+        await TimeWhereDB.saveDailyJournalDraft(date, payload);
+        showToast('今日总结草稿已保存', 'success');
+    }
+    closeDailyJournalModal();
 }
 
 async function openCurrentTaskDetailModal(taskId) {

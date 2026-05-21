@@ -95,6 +95,7 @@ assert('material icon placeholders hide raw ligature text before SVG replacement
 
 const brandedHtmlPages = [
     'extension/popup/popup.html',
+    'extension/popup/sidepanel.html',
     'extension/pages/focus/focus.html',
     'extension/pages/calendar/calendar.html',
     'extension/pages/tasks/tasks.html',

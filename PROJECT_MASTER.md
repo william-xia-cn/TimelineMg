@@ -4,9 +4,9 @@
 
 - **Project**: TimeWhere
 - **Version**: package / extension release version `0.2.1`; design-doc version `v2.3`
-- **Stage**: Baseline Stabilized; `0.2.1` internal stabilization sync
-- **Active release/deployment target**: TimeWhere `0.2.1` CWS Private testing Purple Potassium policy-fix submitted to review.
-- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-025 approved CWS cancel-review, fixed package upload, and Submit for Review for the `0.2.1` Purple Potassium permission fix only; that resubmission is now pending CWS review. Automatic publish after review, public listing, tag, merge, deploy, release, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
+- **Stage**: Baseline Stabilized; post-CWS-review source/documentation sync
+- **Active release/deployment target**: TimeWhere `0.2.1` CWS Private testing Purple Potassium policy-fix remains pending review; current source has moved ahead with Side Panel / quick-add work.
+- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-025 approved and completed CWS cancel-review, fixed package upload, and Submit for Review for the `0.2.1` Purple Potassium permission fix only; that uploaded package remains pending CWS review. D-026 records current source using Chrome Side Panel as the primary toolbar surface. Any further CWS package upload / Submit for Review, automatic publish after review, public listing, tag, merge, deploy, release, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
 
 ## Collaboration Model
 
@@ -86,7 +86,7 @@ Escalate to external advisor for:
 - Defense / squeezing rules.
 - Background alarm usage outside local task reminders. D-021 approves alarms only for local task reminder notifications.
 - Background alarm based ManageBac ICS subscription sync. Current ManageBac follow-up supports saved link configuration, Dashboard-entry management checks, manual sync, and user-confirmed task creation only.
-- Any further Chrome Web Store upload, Submit for Review, publish, or public listing without explicit Product Owner approval. D-025 covered only the completed `0.2.1` Purple Potassium resubmission.
+- Any further Chrome Web Store upload, Submit for Review, publish, or public listing without explicit Product Owner approval. D-025 covered only the completed `0.2.1` Purple Potassium resubmission; current source has moved ahead of that submitted package.
 
 ## Release / Deployment State
 
@@ -97,7 +97,7 @@ Escalate to external advisor for:
 | Package/artifact | `dist/TimeWhere-0.2.1-private-cws-sanitized-20260520-214913.zip` |
 | Artifact hash | `258CED7F544D8953A883EC01E28B6BF87691A9592D7AC2A2FA95B13D32F7DF23` |
 | Deployment channel | Chrome Web Store Private testing |
-| Review status | Submitted to CWS review; dashboard status verified as pending review |
+| Review status | Submitted CWS package is pending review; current source now includes post-submission Side Panel / quick-add changes not present in that uploaded package |
 | Public release | NOT_STARTED; explicitly out of MVP scope |
 | Tag | NOT_APPROVED |
 
@@ -119,6 +119,7 @@ Escalate to external advisor for:
 | Google data sync scope creep | OPEN | Product&Project Mg / Build&Test | D-019/D-020 approve optional Drive `appDataFolder` bidirectional sync only. Do not turn Google account into a product login requirement; local IndexedDB remains the runtime source of truth. |
 | `0.2.1` stabilization scope | OPEN | Build&Test | Current sync includes Task Arrange same-day subject matching, no-throttle page-open Arrange apply, Calendar/Plan Arrange diagnostic snapshots, MatrixView Subject ID inheritance/backfill, Daily Settle display model, Dashboard/Popup task UI, readable Google Sync conflicts, and documentation/version updates. No `0.2.1` CWS package was generated. |
 | CWS Purple Potassium `tabs` permission finding | SUBMITTED | releaseMg / Product Owner | `tabs` permission removed from source and CWS package; lightweight verification passed; fixed package uploaded and submitted to CWS review with automatic publish disabled. |
+| CWS/source drift after submission | OPEN | Product Owner / Build&Test / releaseMg | Current source now adds Chrome Side Panel and Dashboard/Side Panel quick-add surfaces after the submitted CWS package. A future CWS update must regenerate the package and update permission/privacy evidence for `sidePanel`. |
 
 ## Current Evidence
 
@@ -168,3 +169,4 @@ Escalate to external advisor for:
 1. Confirm Product Owner name or preferred authority label.
 2. Confirm final CWS review outcome after `0.2.1` Purple Potassium fix resubmission.
 3. Decide whether and when to approve automatic publish or manual staged publish after review.
+4. Decide whether Side Panel / quick-add changes should be packaged for a later CWS update after the current pending review resolves.

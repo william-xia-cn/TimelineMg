@@ -2,7 +2,7 @@
 
 > 版本：v1.0  
 > 覆盖范围：scheduling.js 单元测试、baseline-safety 静态检查、所有模块静态分析、手动验证检查表。
-> 当前基线：Internal MVP accepted / local-first MVP。Task Date Arrange 已进入 baseline stabilization 测试目标；Dashboard / Focus、Planner / Task Board、Calendar 页面打开时不再使用六小时节流，可直接 apply 合格的本地调度字段变更。ManageBac 新事件创建仍走用户确认流程。系统任务提醒已进入测试目标，仅用于本地任务通知。Chrome Web Store/public release 不属于当前测试目标。
+> 当前基线：Internal MVP accepted / local-first MVP。Task Date Arrange 已进入 baseline stabilization 测试目标；Dashboard / Focus、Planner / Task Board、Calendar 页面打开时不再使用六小时节流，可直接 apply 合格的本地调度字段变更。ManageBac 新事件创建仍走用户确认流程。系统任务提醒已进入测试目标，仅用于本地任务通知。Chrome Side Panel 是当前工具栏主入口。Chrome Web Store/public release 不属于当前测试目标；当前源码已超前于待审核 CWS 包。
 
 ---
 
@@ -181,6 +181,7 @@ npm test
 - [ ] focus.html: icons → dexie → db → scheduling → script
 - [ ] calendar.html: icons → dexie → db → scheduling → script
 - [ ] popup.html: icons → dexie → db → scheduling → popup
+- [ ] popup/sidepanel.html: icons → dexie → db → google-sync → scheduling → popup
 - [ ] settings.html: icons → dexie → db → scheduling → ics → script
 - [ ] tasks.html: dexie → db → state → board → sidebar → detail-panel → dialogs → script
 
@@ -224,6 +225,16 @@ npm test
 - [ ] `loadCurrentTask` 使用 `getAllTasks`（非 `getInProgressTask`）
 - [ ] `todayContainers` 过滤逻辑正确（用 containerAppliesToDate）
 - [ ] fallback 逻辑：`currentTasks[0] || sortedPool[0]`
+
+### TC-A-08B Side Panel / toolbar 路径
+- [ ] manifest 包含 `sidePanel` 权限和 `side_panel.default_path = popup/sidepanel.html`
+- [ ] manifest `action` 不再声明 `default_popup`
+- [ ] background 使用 `chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: true })`，并有能力检测/异常保护
+- [ ] `sidepanel.html` 复用 popup assets/runtime，并提供 Dashboard / Task Board / Calendar / Settings 四个底部导航入口
+- [ ] Side Panel 当前任务列表与 Popup/Dashboard 当前任务投影一致
+- [ ] Side Panel 临时添加任务在侧边栏内完成，默认 English Plan / `作业` Bucket，但允许用户编辑完整任务字段
+- [ ] Side Panel 今日总结可在侧边栏内保存草稿或提交
+- [ ] Dashboard 当前任务列显示“未计划的任务添加”卡片，点击后打开任务详情式创建面板，不使用 inline handler
 
 ### TC-A-09 calendar createEventCard
 - [ ] source='container' + layer=1 → class='gcal-event layer-1'，实色背景

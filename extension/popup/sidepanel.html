@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeWhere</title>
+    <link rel="icon" type="image/png" href="../icons/icon48.png">
+    <link rel="stylesheet" href="../shared/styles/fonts.css">
+    <link rel="stylesheet" href="../shared/styles/icons.css">
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body class="popup-body sidepanel-body">
+    <div class="popup-container">
+        <header class="popup-header">
+            <div class="logo-row">
+                <div class="logo-icon"><img src="../icons/icon128.png" alt="TimeWhere" class="logo-mark"></div>
+                <span class="app-name">TimeWhere</span>
+            </div>
+            <div class="task-summary" id="taskSummary" aria-label="今日任务统计">
+                <span class="summary-chip"><span>今日完成</span><strong id="todayCompletedCount">0</strong></span>
+                <span class="summary-chip"><span>今日待办</span><strong id="todayPendingCount">0</strong></span>
+            </div>
+        </header>
+
+        <section class="current-task-section">
+            <div class="section-label">
+                <span class="material-symbols-outlined">play_circle</span>
+                <span>当前任务</span>
+            </div>
+            <div class="task-list" id="currentTaskList">
+                <div class="task-placeholder">
+                    <span class="material-symbols-outlined">add_circle</span>
+                    <span>暂无待办任务</span>
+                </div>
+            </div>
+            <div class="sidepanel-fixed-actions" id="sidepanelBottomActions" aria-label="临时任务与今日总结"></div>
+        </section>
+
+        <footer class="popup-footer sidepanel-footer">
+            <button class="footer-btn sidepanel-nav-btn" id="btnOpenDashboard">
+                <span class="material-symbols-outlined">grid_view</span>
+                <span>仪表盘</span>
+            </button>
+            <button class="footer-btn sidepanel-nav-btn" id="btnOpenTasks">
+                <span class="material-symbols-outlined">task</span>
+                <span>任务</span>
+            </button>
+            <button class="footer-btn sidepanel-nav-btn" id="btnOpenCalendar">
+                <span class="material-symbols-outlined">calendar_today</span>
+                <span>日历</span>
+            </button>
+            <button class="footer-btn" id="btnSettings">
+                <span class="material-symbols-outlined">settings</span>
+                <span>设置</span>
+            </button>
+        </footer>
+    </div>
+
+    <script src="../shared/js/icons.js"></script>
+    <script src="../shared/js/dexie.js"></script>
+    <script src="../shared/js/db.js"></script>
+    <script src="../shared/js/google-sync.js"></script>
+    <script src="../shared/js/scheduling.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>

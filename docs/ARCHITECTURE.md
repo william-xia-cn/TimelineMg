@@ -1,10 +1,10 @@
 # TimeWhere 架构设计
 
 **版本**: v2.3  
-**日期**: 2026-04-14  
+**日期**: 2026-05-22
 **状态**: Internal MVP accepted; baseline stabilized for local-first MVP. Not public release ready.
 
-> Current baseline note (2026-05-20): TimeWhere is a local-first Chrome extension MVP. Task Date Arrange is approved for no-throttle page-open automation on Dashboard / Focus, Planner / Task Board, and Calendar, limited to local scheduling fields and still without background alarms. ManageBac ICS import is an extension-side source import using a saved link plus manual/user-confirmed new-event creation; it is not a cloud sync backend. D-019/D-020 approve optional Google Drive `appDataFolder` data sync v1 while all core features remain fully usable without Google. D-021 approves Chrome system reminder notifications for local tasks only. Chrome Web Store submission and public release still require explicit Product Owner approval.
+> Current baseline note (2026-05-22): TimeWhere is a local-first Chrome extension MVP. Task Date Arrange is approved for no-throttle page-open automation on Dashboard / Focus, Planner / Task Board, and Calendar, limited to local scheduling fields and still without background alarms. ManageBac ICS import is an extension-side source import using a saved link plus manual/user-confirmed new-event creation; it is not a cloud sync backend. D-019/D-020 approve optional Google Drive `appDataFolder` data sync v1 while all core features remain fully usable without Google. D-021 approves Chrome system reminder notifications for local tasks only. D-026 records Chrome Side Panel as the primary toolbar surface. The current source is ahead of the CWS package pending review; any further Chrome Web Store submission or public release still requires explicit Product Owner approval.
 
 ---
 
@@ -102,8 +102,10 @@ extension/
 ├── manifest.json              # 扩展配置 (MV3)
 ├── background.js              # Service Worker
 │
-├── popup/                     # 弹出窗口
+├── popup/                     # Toolbar quick surfaces
 │   ├── popup.html
+│   ├── sidepanel.html         # Chrome Side Panel primary toolbar surface
+│   ├── popup.css              # Shared popup/side-panel styles
 │   └── popup.js
 │
 ├── pages/                     # 独立页面（每个模块独立目录）
@@ -291,17 +293,34 @@ D-019 defines the next Google data sync direction:
 {
   "manifest_version": 3,
   "name": "TimeWhere",
-  "version": "0.1.0",
-  "description": "个人时间管理与任务规划系统",
+  "version": "0.2.1",
+  "description": "个人时间管理与任务规划系统 - TimeWhere for IB Students",
 
   "permissions": [
+    "identity",
+    "identity.email",
+    "alarms",
+    "notifications",
+    "sidePanel",
     "storage",
-    "tabs",
     "unlimitedStorage"
   ],
 
+  "host_permissions": [
+    "https://managebac.com/student/events/*",
+    "https://*.managebac.com/student/events/*",
+    "https://managebac.cn/student/events/*",
+    "https://*.managebac.cn/student/events/*",
+    "https://www.googleapis.com/drive/v3/*",
+    "https://www.googleapis.com/upload/drive/v3/*"
+  ],
+
+  "side_panel": {
+    "default_path": "popup/sidepanel.html"
+  },
+
   "action": {
-    "default_popup": "popup/popup.html",
+    "default_title": "TimeWhere",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -315,7 +334,7 @@ D-019 defines the next Google data sync direction:
 
   "web_accessible_resources": [
     {
-      "resources": ["pages/*.html", "shared/**/*"],
+      "resources": ["shared/**/*", "popup/**/*", "pages/**/*", "fonts/**/*"],
       "matches": ["<all_urls>"]
     }
   ]

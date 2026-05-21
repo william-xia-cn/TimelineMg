@@ -2,8 +2,8 @@
 
 ## Active Target
 
-- Baseline Stabilized; `0.2.1` CWS Private testing Purple Potassium policy-fix pending review
-- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, and TimeWhere `0.2.0` CWS Private testing material preparation are complete. Product Owner approved `0.2.1` CWS cancel-review, fixed package upload, and Submit for Review for the Purple Potassium permission fix only; the fixed package is now submitted and pending CWS review. Automatic publish after review / public listing / tag / merge / deploy remain unapproved.
+- Baseline Stabilized; `0.2.1` CWS Private testing Purple Potassium policy-fix pending review; current source/documentation sync covers Side Panel / quick-add follow-up.
+- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, and TimeWhere `0.2.0` CWS Private testing material preparation are complete. Product Owner approved `0.2.1` CWS cancel-review, fixed package upload, and Submit for Review for the Purple Potassium permission fix only; the fixed package is submitted and pending CWS review. Current source has moved ahead with Chrome Side Panel and quick-add surfaces, so any future CWS update requires fresh approval, package generation, and permission/privacy evidence. Automatic publish after review / public listing / tag / merge / deploy remain unapproved.
 
 ## Active Collaboration Model
 
@@ -32,6 +32,7 @@
 - [x] Build&Test prepared `0.2.1` stabilization code/docs sync with full `npm test` passing; no `0.2.1` CWS package generated.
 - [x] releaseMg prepared `0.2.1` Purple Potassium policy-fix CWS package: removed unnecessary `tabs` permission, regenerated sanitized zip, and passed lightweight verification.
 - [x] releaseMg submitted the fixed `0.2.1` package to CWS review and verified dashboard status as pending review; automatic publish after review remains disabled/unapproved.
+- [x] Documentation aligned to current Side Panel / Dashboard quick-add source state and recorded source drift from the pending CWS package.
 
 ## NEXT
 
@@ -46,6 +47,7 @@
 - [x] Build&Test changed ManageBac ICS sync so new events are not auto-created; sync now surfaces pending event mappings for user confirmation, and existing ManageBac source tasks continue to update by UID. Product&Project Mg accepted tests; real UI confirmation pass remains user-side validation.
 - [x] Task Arrange automation simplified from six-hour management review to no-throttle page-open writes: Dashboard / Focus, Planner / Task Board, and Calendar run the shared auto helper and apply eligible local scheduling changes; Popup remains no automatic Arrange. ManageBac new-event creation remains user-confirmed.
 - [x] Product Owner confirmed Google data sync product definition: TimeWhere remains fully local-first without Google; Google account is optional and used only for cloud persistence and cross-device sync.
+- [x] Chrome toolbar action now opens TimeWhere Side Panel; Side Panel reuses Popup runtime assets and adds current-task, navigation, temporary task, and Daily Journal surfaces.
 - [x] Build&Test completed Google data sync v0.1 foundation: auth adapter, local snapshot export/import, Drive `appDataFolder` adapter, Settings UI, manual backup/restore, and preview-first conflict confirmation. Product&Project Mg review passed with real OAuth smoke blocked by missing OAuth client ID.
 - [x] Development extension ID fixed through manifest public key for Google OAuth testing: `ogdjmelmfkfahppahhkkggdejjainbnd`. The corresponding private key is local-only and must not be committed.
 - [x] Google Cloud project and Chrome Extension OAuth client created for the fixed development extension ID; Google Drive API enabled; manifest now uses the configured OAuth client ID with Drive `appDataFolder` scope only.
@@ -86,6 +88,7 @@
 
 - [ ] Reload the unpacked extension with the fixed ID and run Google data sync v1 real-auth smoke against a test Google account.
 - [x] releaseMg completes CWS cancel-review, fixed package upload, and Submit for Review for the `0.2.1` Purple Potassium fix.
+- [ ] Decide whether Side Panel / quick-add changes should be packaged for a later CWS update after the current pending review resolves.
 - [ ] Product Owner confirms risk acceptance for the regenerated `0.2.0` package being prepared without automated/browser tests.
 - [ ] Add feature specs only when scope/risk requires durable boundaries.
 - [ ] Create formal handoffs only for cross-session, release, privacy/security, high-risk, or Product Owner-requested work.
@@ -98,6 +101,7 @@
 | Public release boundary | Build&Test / releaseMg | D-025 approves CWS cancel-review, fixed package upload, and Submit for Review for the `0.2.1` Purple Potassium fix only. Do not auto-publish, public-list, tag, merge, deploy, or release without explicit Product Owner approval. |
 | Test waiver for regenerated package | Product Owner / releaseMg | `0.2.0` CWS Private artifact was regenerated without automated/browser tests per Product Owner instruction. Record this as a waiver/risk, not as PASS evidence. |
 | CWS OAuth extension ID follow-up | Product Owner / Build&Test | Sanitized CWS package removes manifest `key` because CWS rejects it. If the uploaded item receives a different extension ID, update the Google OAuth Chrome Extension client before validating Google Drive sync. |
+| CWS/source drift follow-up | Product Owner / Build&Test / releaseMg | Current source now includes `sidePanel` permission and Side Panel UI after the pending CWS package was submitted. Do not upload a replacement package or cancel pending review without fresh Product Owner approval. |
 | Manual browser validation not run | CLOSED | releaseMg executed `docs/TEST_PLAN.md` L3 checklist and recorded results in `docs/release/RELEASE_GATE_REPORT_INTERNAL_MVP_2026-05-11.md`. |
 | Container id documentation mismatch | Product&Project Mg / Build&Test | Product Owner approved UUID/string ids for tasks, containers, events, and habits; planner helper records may remain numeric. Documentation cleanup remains pending. |
 | P1 baseline behavior risks | CLOSED | Build&Test fix passed Product&Project Mg review and releaseMg narrow recheck returned PASS. |

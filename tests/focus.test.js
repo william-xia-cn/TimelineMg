@@ -10,10 +10,14 @@ const root = path.join(__dirname, '..');
 const focusHtml = fs.readFileSync(path.join(root, 'extension', 'pages', 'focus', 'focus.html'), 'utf8');
 const focusCss = fs.readFileSync(path.join(root, 'extension', 'pages', 'focus', 'styles.css'), 'utf8');
 const focusScript = fs.readFileSync(path.join(root, 'extension', 'pages', 'focus', 'script.js'), 'utf8');
+const manifest = JSON.parse(fs.readFileSync(path.join(root, 'extension', 'manifest.json'), 'utf8'));
+const backgroundScript = fs.readFileSync(path.join(root, 'extension', 'background.js'), 'utf8');
 const popupHtml = fs.readFileSync(path.join(root, 'extension', 'popup', 'popup.html'), 'utf8');
+const sidepanelHtml = fs.readFileSync(path.join(root, 'extension', 'popup', 'sidepanel.html'), 'utf8');
 const popupCss = fs.readFileSync(path.join(root, 'extension', 'popup', 'popup.css'), 'utf8');
 const popupScript = fs.readFileSync(path.join(root, 'extension', 'popup', 'popup.js'), 'utf8');
 const calendarScript = fs.readFileSync(path.join(root, 'extension', 'pages', 'calendar', 'script.js'), 'utf8');
+const dashboardQuickAddPanelBlock = (focusScript.match(/async function openDashboardQuickAddTaskPanel[\s\S]*?function closeDashboardQuickAddTaskPanel/) || [''])[0];
 
 let passed = 0;
 let failed = 0;
@@ -33,6 +37,87 @@ console.log('\nTimeWhere Focus Dashboard tests\n' + '='.repeat(44));
 assert('Focus dynamic UI does not use inline onclick handlers', !/onclick\s*=/.test(focusScript));
 assert('Focus dynamic UI does not use inline onchange handlers', !/onchange\s*=/.test(focusScript));
 assert('Popup UI does not use inline onclick/onchange handlers', !/onclick\s*=|onchange\s*=/.test(popupHtml + popupScript));
+assert('Extension action opens Side Panel by default, not default popup',
+    manifest.permissions.includes('sidePanel')
+    && manifest.side_panel?.default_path === 'popup/sidepanel.html'
+    && !Object.prototype.hasOwnProperty.call(manifest.action || {}, 'default_popup'));
+assert('Background configures toolbar click to open Side Panel with capability guard',
+    backgroundScript.includes('chrome.sidePanel?.setPanelBehavior')
+    && backgroundScript.includes('openPanelOnActionClick: true')
+    && backgroundScript.includes('configureSidePanel()'));
+assert('Side Panel page reuses Popup assets and runtime dependencies',
+    sidepanelHtml.includes('class="popup-body sidepanel-body"')
+    && sidepanelHtml.includes('<link rel="stylesheet" href="popup.css">')
+    && sidepanelHtml.includes('../shared/js/icons.js')
+    && sidepanelHtml.includes('../shared/js/dexie.js')
+    && sidepanelHtml.includes('../shared/js/db.js')
+    && sidepanelHtml.includes('../shared/js/google-sync.js')
+    && sidepanelHtml.includes('../shared/js/scheduling.js')
+    && sidepanelHtml.includes('<script src="popup.js"></script>'));
+assert('Side Panel keeps Popup menu content and exposes four bottom navigation entries',
+    sidepanelHtml.includes('id="taskSummary"')
+    && sidepanelHtml.includes('id="currentTaskList"')
+    && sidepanelHtml.includes('id="sidepanelBottomActions"')
+    && sidepanelHtml.includes('id="btnOpenDashboard"')
+    && sidepanelHtml.includes('仪表盘')
+    && sidepanelHtml.includes('id="btnOpenTasks"')
+    && sidepanelHtml.includes('任务')
+    && sidepanelHtml.includes('id="btnOpenCalendar"')
+    && sidepanelHtml.includes('日历')
+    && sidepanelHtml.includes('id="btnSettings"')
+    && sidepanelHtml.includes('设置')
+    && !sidepanelHtml.includes('btnOpenPopup')
+    && !sidepanelHtml.includes('打开浮窗')
+    && !sidepanelHtml.includes('btnOpenFull')
+    && popupScript.includes('function openExtensionPage')
+    && popupScript.includes("openExtensionPage('pages/focus/focus.html')")
+    && popupScript.includes("openExtensionPage('pages/tasks/tasks.html')")
+    && popupScript.includes("openExtensionPage('pages/calendar/calendar.html')")
+    && popupScript.includes('chrome.runtime.openOptionsPage()'));
+assert('Side Panel renders Dashboard-style temporary task and journal entries before footer only in sidepanel',
+    /id="currentTaskList"[\s\S]*id="sidepanelBottomActions"[\s\S]*<footer class="popup-footer sidepanel-footer"/.test(sidepanelHtml)
+    && !popupHtml.includes('sidepanelBottomActions')
+    && popupScript.includes('function renderSidepanelBottomActions')
+    && popupScript.includes('未计划的任务添加')
+    && popupScript.includes('比如课后作业及其他临时任务')
+    && popupScript.includes('临时添加任务')
+    && popupScript.includes('今日总结')
+    && popupScript.includes('整理今日总结')
+    && popupScript.includes('查看今日总结'));
+assert('Side Panel temporary task add runs in place with English homework defaults',
+    popupScript.includes("const SIDEPANEL_QUICK_ADD_DEFAULT_PLAN_KEYWORD = 'English'")
+    && popupScript.includes("const SIDEPANEL_QUICK_ADD_BUCKET_NAME = '作业'")
+    && popupScript.includes("actionEl.dataset.action === 'quick-add-current-task'")
+    && popupScript.includes('openSidepanelQuickAddTaskModal')
+    && popupScript.includes('saveSidepanelQuickAddTask')
+    && popupScript.includes('TimeWhereDB.ensureBucketTemplateForPlan(plan.id, getSidepanelQuickAddBucketTemplateForPlan(plan))')
+    && /const payload|await TimeWhereDB\.addTask\(\{[\s\S]*plan_id:\s*planId[\s\S]*bucket_id:\s*bucketValue \? parseInt\(bucketValue, 10\) : null[\s\S]*start_date:\s*document\.getElementById\('sidepanelQuickAddStartDate'\)\?\.value \|\| todayStr[\s\S]*due_date:\s*document\.getElementById\('sidepanelQuickAddDueDate'\)\?\.value \|\| todayStr[\s\S]*duration:\s*parseInt\(document\.getElementById\('sidepanelQuickAddDuration'\)\?\.value \|\| '30', 10\) \|\| 30/.test(popupScript));
+assert('Side Panel today journal opens and saves in place', popupScript.includes("actionEl.dataset.action === 'open-today-journal'")
+    && popupScript.includes('openDailyJournalModal')
+    && popupScript.includes('buildDailyJournalDraft')
+    && popupScript.includes('data-action="save-daily-journal-draft"')
+    && popupScript.includes('data-action="submit-daily-journal"')
+    && popupScript.includes('TimeWhereDB.saveDailyJournalDraft')
+    && popupScript.includes('TimeWhereDB.submitDailyJournal'));
+assert('Popup CSS keeps fixed popup size and adds Side Panel adaptive layout',
+    /body\s*\{[\s\S]*width:\s*360px;[\s\S]*height:\s*560px;/.test(popupCss)
+    && popupCss.includes('body.sidepanel-body')
+    && popupCss.includes('width: 100vw')
+    && popupCss.includes('height: 100vh')
+    && popupCss.includes('min-width: 320px')
+    && popupCss.includes('.sidepanel-body .popup-container')
+    && popupCss.includes('grid-template-columns: repeat(4, minmax(0, 1fr))')
+    && popupCss.includes('.sidepanel-body .footer-btn')
+    && popupCss.includes('flex-direction: row')
+    && popupCss.includes('background: rgba(29, 140, 248, 0.08)')
+    && popupCss.includes('.sidepanel-fixed-actions')
+    && popupCss.includes('.sidepanel-body .current-task-quick-add')
+    && popupCss.includes('.sidepanel-body .daily-journal-entry')
+    && popupCss.includes('.sidepanel-daily-journal-modal')
+    && /sidepanel-daily-journal-modal[\s\S]*height:\s*calc\(100vh - 24px\)/.test(popupCss)
+    && /sidepanel-journal-body[\s\S]*flex:\s*1 1 auto[\s\S]*min-height:\s*0[\s\S]*overflow-y:\s*auto/.test(popupCss)
+    && /sidepanel-daily-journal-modal \.popup-modal-footer[\s\S]*position:\s*sticky[\s\S]*bottom:\s*0/.test(popupCss)
+    && popupCss.includes('.sidepanel-body .popup-task-detail-modal'));
 assert('Dashboard title uses 当前任务 and not 当下任务', focusHtml.includes('<h2>当前任务</h2>')
     && !/当下任务/.test(focusHtml + focusScript));
 assert('Focus pomodoro widget and init path are removed', !/pomodoroWidget|pomo|Pomodoro|initPomodoro|renderPomodoro|togglePomodoro/.test(focusHtml + focusScript + focusCss));
@@ -281,9 +366,84 @@ assert('Dashboard current task column appends today journal entry', focusScript.
     && focusScript.includes('daily-journal-entry')
     && focusScript.includes('data-action="open-today-journal"')
     && focusScript.includes('今日总结'));
+assert('Dashboard current task column renders quick add before today journal', focusScript.includes('const quickAddHTML = renderCurrentTaskQuickAdd(todayStr)')
+    && focusScript.includes('current-task-quick-add')
+    && focusScript.includes('<div class="current-task-quick-add-icon"><span class="material-symbols-outlined">playlist_add</span></div>')
+    && focusScript.includes('current-task-quick-add-copy')
+    && focusScript.includes('未计划的任务添加')
+    && focusScript.includes('比如课后作业及其他临时任务')
+    && focusScript.includes('current-task-quick-add-action')
+    && focusScript.includes('临时添加任务')
+    && !focusScript.includes('Other School · 事项 · 今天')
+    && !focusScript.includes('current-task-quick-add-meta')
+    && /current-task-scroll-body custom-scrollbar[\s\S]*\$\{html\}[\s\S]*<\/div>[\s\S]*\$\{quickAddHTML\}[\s\S]*\$\{journalEntryHTML\}/.test(focusScript)
+    && /current-task-scroll-body custom-scrollbar[\s\S]*empty-state[\s\S]*<\/div>[\s\S]*\$\{quickAddHTML\}[\s\S]*\$\{journalEntryHTML\}/.test(focusScript));
+assert('Dashboard quick add uses delegated action without inline handler', focusScript.includes('data-action="quick-add-current-task"')
+    && focusScript.includes("action === 'quick-add-current-task'")
+    && !/current-task-quick-add[\s\S]{0,500}onclick\s*=/.test(focusScript));
+assert('Dashboard quick add opens task detail style panel inside current task column', focusScript.includes("const DASHBOARD_QUICK_ADD_DEFAULT_PLAN_KEYWORD = 'English'")
+    && focusScript.includes("const DASHBOARD_QUICK_ADD_BUCKET_NAME = '作业'")
+    && focusScript.includes("const DASHBOARD_SUBJECT_BUCKET_TEMPLATE = ['上课', '作业', '单元测试', '阶段考试']")
+    && focusScript.includes('findDashboardQuickAddDefaultPlan')
+    && focusScript.includes('ensureDashboardQuickAddPlanAndBucket')
+    && focusScript.includes('openDashboardQuickAddTaskPanel')
+    && focusScript.includes("panel.id = 'dashboardQuickAddTaskPanel'")
+    && focusScript.includes("section.appendChild(panel)")
+    && focusScript.includes('dashboard-task-detail-panel open')
+    && focusScript.includes('detail-header')
+    && focusScript.includes('detail-body custom-scrollbar')
+    && focusScript.includes('detail-title')
+    && focusScript.includes('data-field="plan_id"')
+    && focusScript.includes('data-action="dashboard-quick-add-plan-change"')
+    && focusScript.includes('data-field="bucket_id"')
+    && focusScript.includes('data-field="start_date"')
+    && focusScript.includes('data-field="due_date"')
+    && focusScript.includes('data-field="recurrence_frequency"')
+    && focusScript.includes('data-field="recurrence_count"')
+    && focusScript.includes('id="dashboardChecklistItems"')
+    && focusScript.includes('id="dashboardChecklistNewItem"')
+    && focusScript.includes('data-field="labels"')
+    && focusScript.includes('data-field="notes"')
+    && focusScript.includes('progress-picker')
+    && focusScript.includes('priority-picker')
+    && focusScript.includes('TimeWhereDB.ensureBucketTemplateForPlan(plan.id, getDashboardQuickAddBucketTemplateForPlan(plan))')
+    && focusScript.includes('${renderDashboardQuickAddPlanOptions(plans, plan.id)}')
+    && focusScript.includes('${renderDashboardQuickAddBucketOptions(buckets, bucket?.id || null)}')
+    && !dashboardQuickAddPanelBlock.includes('modal-overlay'));
+assert('Dashboard quick add save uses full detail fields and recurrence when selected', focusScript.includes('saveDashboardQuickAddTask')
+    && /const payload = \{[\s\S]*title,[\s\S]*plan_id:\s*planId,[\s\S]*bucket_id:\s*bucketValue \? parseInt\(bucketValue, 10\) : null,[\s\S]*start_date:\s*panel\.querySelector\('\[data-field="start_date"\]'\)\?\.value \|\| todayStr,[\s\S]*due_date:\s*panel\.querySelector\('\[data-field="due_date"\]'\)\?\.value \|\| todayStr,[\s\S]*schedule_time:\s*scheduleTime,[\s\S]*priority:\s*panel\.querySelector\('\.priority-option\.active'\)\?\.dataset\.priority \|\| 'medium',[\s\S]*duration:\s*parseInt\(panel\.querySelector\('\[data-field="duration"\]'\)\?\.value \|\| '30', 10\) \|\| 30,[\s\S]*progress:\s*panel\.querySelector\('\.progress-option\.active'\)\?\.dataset\.progress \|\| 'not_started',[\s\S]*checklist:\s*readDashboardQuickAddChecklist\(panel\),[\s\S]*labels:\s*readDashboardQuickAddLabels\(panel\),[\s\S]*notes:\s*panel\.querySelector\('\[data-field="notes"\]'\)\?\.value \|\| ''/.test(focusScript)
+    && focusScript.includes('refreshDashboardQuickAddPlanFields')
+    && focusScript.includes('TimeWhereDB.getBucketsByPlan(planId)')
+    && focusScript.includes('TimeWhereDB.getLabelsByPlan?.(planId)')
+    && focusScript.includes("if (recurrenceFrequency === 'weekly' || recurrenceFrequency === 'monthly')")
+    && focusScript.includes('TimeWhereDB.addRecurringTaskSeries(payload')
+    && focusScript.includes('await TimeWhereDB.addTask(payload)'));
+assert('Dashboard quick add supports button open Enter save refresh and toast', focusScript.includes("document.addEventListener('keydown', handleFocusDelegatedKeydown)")
+    && focusScript.includes("if (e.key !== 'Enter') return")
+    && focusScript.includes("action === 'quick-add-current-task'")
+    && focusScript.includes('addDashboardQuickAddChecklistItem()')
+    && focusScript.includes("querySelector('[data-action=\"save-dashboard-quick-add-task\"]')")
+    && focusScript.includes("showToast('请输入任务标题', 'error')")
+    && focusScript.includes('closeDashboardQuickAddTaskPanel()')
+    && focusScript.includes('await loadDashboardData()')
+    && focusScript.includes("showToast('任务已添加到今天', 'success')"));
+assert('Dashboard quick add CSS defines fixed compact card controls', focusCss.includes('.current-task-quick-add')
+    && focusCss.includes('.current-task-quick-add-main')
+    && focusCss.includes('.current-task-quick-add-copy h3')
+    && focusCss.includes('.current-task-quick-add-action')
+    && !focusCss.includes('.current-task-quick-add-submit')
+    && !focusCss.includes('.current-task-quick-add-meta')
+    && focusCss.includes('.dashboard-task-detail-panel')
+    && focusCss.includes('.dashboard-task-detail-panel .detail-header')
+    && focusCss.includes('.dashboard-task-detail-panel .detail-title')
+    && focusCss.includes('.dashboard-task-detail-panel .recurrence-detail-section')
+    && focusCss.includes('.dashboard-task-detail-panel .checklist-list')
+    && focusCss.includes('.dashboard-task-detail-panel .labels-picker')
+    && focusCss.includes('.dashboard-task-detail-panel .detail-textarea')
+    && /current-task-quick-add\s*\{[\s\S]*flex-shrink:\s*0/.test(focusCss));
 assert('Dashboard current task body scrolls separately from fixed today journal entry', focusScript.includes('current-task-scroll-body custom-scrollbar')
-    && /current-task-scroll-body custom-scrollbar[\s\S]*\$\{html\}[\s\S]*<\/div>[\s\S]*\$\{journalEntryHTML\}/.test(focusScript)
-    && /current-task-scroll-body custom-scrollbar[\s\S]*empty-state[\s\S]*<\/div>[\s\S]*\$\{journalEntryHTML\}/.test(focusScript));
+    && /current-task-scroll-body custom-scrollbar[\s\S]*\$\{html\}[\s\S]*<\/div>[\s\S]*\$\{quickAddHTML\}[\s\S]*\$\{journalEntryHTML\}/.test(focusScript)
+    && /current-task-scroll-body custom-scrollbar[\s\S]*empty-state[\s\S]*<\/div>[\s\S]*\$\{quickAddHTML\}[\s\S]*\$\{journalEntryHTML\}/.test(focusScript));
 assert('Dashboard today journal uses delegated actions and URL parameter', focusScript.includes("action === 'open-today-journal'")
     && focusScript.includes("new URLSearchParams(window.location.search).get('journal_date')")
     && focusScript.includes('openDailyJournalModal(date)'));

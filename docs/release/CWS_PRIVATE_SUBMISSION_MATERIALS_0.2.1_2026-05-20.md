@@ -15,6 +15,7 @@
 - Package verification: root `manifest.json` is present; submitted manifest version is `0.2.1`; submitted manifest has no `key`; submitted manifest has no `tabs` permission.
 - CWS status: submitted to review; dashboard status verified as pending review.
 - Boundary: Product Owner approved canceling the current CWS review, uploading the fixed `0.2.1` package, and resubmitting for review. Automatic publish after review remains unapproved and was disabled during submission.
+- Post-submission source drift: current source now includes Chrome `sidePanel` permission and Side Panel / quick-add UI. Those changes are not part of the uploaded CWS package described by this material file; any future CWS update needs fresh package and permission/privacy evidence.
 
 ## Store Listing Draft
 

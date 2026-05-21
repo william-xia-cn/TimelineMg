@@ -21,6 +21,7 @@ const DAILY_JOURNAL_PROMPT_HOUR = 21;
 const DAILY_JOURNAL_PROMPT_MINUTE = 30;
 
 chrome.runtime.onInstalled.addListener(async (details) => {
+    await configureSidePanel();
     await bootstrapTaskReminders();
     await bootstrapDailyJournal();
     if (details.reason === 'install') {
@@ -29,12 +30,23 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
+    configureSidePanel();
     bootstrapTaskReminders();
     bootstrapDailyJournal();
 });
 
+configureSidePanel();
 bootstrapTaskReminders();
 bootstrapDailyJournal();
+
+async function configureSidePanel() {
+    if (!chrome.sidePanel?.setPanelBehavior) return;
+    try {
+        await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    } catch (error) {
+        console.warn('TimeWhere: side panel behavior setup skipped', error);
+    }
+}
 
 async function initializeOnFirstInstall() {
     try {

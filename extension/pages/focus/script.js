@@ -4,6 +4,16 @@
 // ============================================================
 
 const PX_PER_HOUR = 40;
+const DASHBOARD_QUICK_ADD_DEFAULT_PLAN_KEYWORD = 'English';
+const DASHBOARD_QUICK_ADD_BUCKET_NAME = '作业';
+const DASHBOARD_SUBJECT_BUCKET_TEMPLATE = ['上课', '作业', '单元测试', '阶段考试'];
+const DASHBOARD_OTHER_SCHOOL_BUCKET_TEMPLATE = ['事项', '活动', '申请', '其他'];
+const DASHBOARD_DETAIL_PRIORITIES = [
+    { key: 'urgent', label: 'Urgent', color: '#ef4444', bgColor: '#fef2f2' },
+    { key: 'important', label: 'Important', color: '#f59e0b', bgColor: '#fffbeb' },
+    { key: 'medium', label: 'Medium', color: '#1d8cf8', bgColor: '#eff6ff' },
+    { key: 'low', label: 'Low', color: '#64748b', bgColor: '#f8fafc' }
+];
 
 function formatDateISO(date) {
     const y = date.getFullYear();
@@ -207,6 +217,7 @@ async function loadTaskColumn() {
     // 执行 Daily Settle
     const settle = dailySettle(taskPool, todayContainers, now);
     const journalEntryHTML = await renderTodayJournalEntry(todayStr, now);
+    const quickAddHTML = renderCurrentTaskQuickAdd(todayStr);
 
     // 更新 header badge — 容器状态 or 任务计数
     const badge = document.querySelector('.column-now .badge');
@@ -246,6 +257,7 @@ async function loadTaskColumn() {
                     </button>
                 </div>
             </div>
+            ${quickAddHTML}
             ${journalEntryHTML}`;
         return;
     }
@@ -277,10 +289,25 @@ async function loadTaskColumn() {
         <div class="current-task-scroll-body custom-scrollbar">
             ${html}
         </div>
+        ${quickAddHTML}
         ${journalEntryHTML}`;
     if (targetTaskId) {
         section.querySelector(`[data-task-card-id="${CSS.escape(targetTaskId)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
+}
+
+function renderCurrentTaskQuickAdd(todayStr) {
+    return `
+        <div class="current-task-quick-add" data-quick-add-date="${escapeAttribute(todayStr)}">
+            <div class="current-task-quick-add-main">
+                <div class="current-task-quick-add-icon"><span class="material-symbols-outlined">playlist_add</span></div>
+                <div class="current-task-quick-add-copy">
+                    <h3>未计划的任务添加</h3>
+                    <p>比如课后作业及其他临时任务</p>
+                </div>
+            </div>
+            <button class="btn-micro primary current-task-quick-add-action" type="button" data-action="quick-add-current-task" data-quick-add-date="${escapeAttribute(todayStr)}">临时添加任务</button>
+        </div>`;
 }
 
 async function renderTodayJournalEntry(todayStr, now = new Date()) {
@@ -1192,6 +1219,7 @@ function setupEventListeners() {
 
     document.addEventListener('click', handleFocusDelegatedClick);
     document.addEventListener('change', handleFocusDelegatedChange);
+    document.addEventListener('keydown', handleFocusDelegatedKeydown);
 
     // Habit check buttons (delegated)
     const feedColumn = document.querySelector('.column-feed');
@@ -1231,6 +1259,41 @@ function handleFocusDelegatedClick(e) {
     if (!actionEl) return;
 
     const { action, taskId } = actionEl.dataset;
+    if (action === 'quick-add-current-task') {
+        e.preventDefault();
+        runFocusAction(actionEl, async () => quickAddCurrentTask());
+        return;
+    }
+    if (action === 'dashboard-quick-add-progress') {
+        e.preventDefault();
+        setDashboardQuickAddActiveOption(actionEl, '.progress-option');
+        return;
+    }
+    if (action === 'dashboard-quick-add-priority') {
+        e.preventDefault();
+        setDashboardQuickAddActiveOption(actionEl, '.priority-option');
+        return;
+    }
+    if (action === 'dashboard-quick-add-label') {
+        e.preventDefault();
+        actionEl.classList.toggle('selected');
+        return;
+    }
+    if (action === 'dashboard-quick-add-checklist-delete') {
+        e.preventDefault();
+        actionEl.closest('.checklist-item')?.remove();
+        return;
+    }
+    if (action === 'save-dashboard-quick-add-task') {
+        e.preventDefault();
+        runFocusAction(actionEl, saveDashboardQuickAddTask);
+        return;
+    }
+    if (action === 'close-dashboard-quick-add-task') {
+        e.preventDefault();
+        closeDashboardQuickAddTaskPanel();
+        return;
+    }
     if (action === 'add-task') {
         e.preventDefault();
         openAddTaskModal();
@@ -1267,6 +1330,7 @@ function handleFocusDelegatedClick(e) {
         e.preventDefault();
         closeAddTaskModal();
         closeCurrentTaskDetailModal();
+        closeDashboardQuickAddTaskPanel();
         closeDailyJournalModal();
         closeTaskArrangeReviewModal();
         return;
@@ -1322,7 +1386,46 @@ function handleFocusDelegatedClick(e) {
     }
 }
 
-function handleFocusDelegatedChange() {}
+function handleFocusDelegatedChange(e) {
+    const actionEl = e.target.closest('[data-action]');
+    if (!actionEl) return;
+    if (actionEl.dataset.action === 'dashboard-quick-add-plan-change') {
+        runFocusAction(actionEl, async () => refreshDashboardQuickAddPlanFields(actionEl.value));
+    }
+    if (actionEl.dataset.action === 'dashboard-quick-add-recurrence-change') {
+        updateDashboardQuickAddRecurrenceControls();
+    }
+}
+
+function handleFocusDelegatedKeydown(e) {
+    if (e.key === 'Escape' && e.target.closest?.('#dashboardQuickAddTaskPanel')) {
+        e.preventDefault();
+        closeDashboardQuickAddTaskPanel();
+        return;
+    }
+    if (e.key !== 'Enter') return;
+
+    const panel = e.target.closest?.('#dashboardQuickAddTaskPanel');
+    if (panel && !e.target.matches('textarea')) {
+        if (e.target.matches('#dashboardChecklistNewItem')) {
+            e.preventDefault();
+            addDashboardQuickAddChecklistItem();
+            return;
+        }
+        e.preventDefault();
+        const button = panel.querySelector('[data-action="save-dashboard-quick-add-task"]');
+        runFocusAction(button, saveDashboardQuickAddTask);
+        return;
+    }
+
+}
+
+function setDashboardQuickAddActiveOption(button, selector) {
+    const group = button.closest('.progress-picker, .priority-picker');
+    if (!group) return;
+    group.querySelectorAll(selector).forEach(item => item.classList.remove('active'));
+    button.classList.add('active');
+}
 
 function renderTaskArrangeReviewRows(records) {
     const rows = (records || []).flatMap(record => (record.changes || []).map(change => ({ record, change })));
@@ -1593,6 +1696,354 @@ async function saveCurrentTaskDetailModal() {
     closeCurrentTaskDetailModal();
     await loadDashboardData();
     showToast('任务详情已更新', 'success');
+}
+
+async function ensureDashboardQuickAddPlanAndBucket() {
+    let plans = await TimeWhereDB.getPlans();
+    let plan = findDashboardQuickAddDefaultPlan(plans);
+    if (!plan) {
+        plan = await TimeWhereDB.ensureDefaultPlan();
+    }
+
+    if (TimeWhereDB.ensureBucketTemplateForPlan) {
+        await TimeWhereDB.ensureBucketTemplateForPlan(plan.id, getDashboardQuickAddBucketTemplateForPlan(plan));
+    }
+
+    let buckets = await TimeWhereDB.getBucketsByPlan(plan.id);
+    let bucket = buckets.find(item => item.name === DASHBOARD_QUICK_ADD_BUCKET_NAME) || null;
+    let labels = await TimeWhereDB.getLabelsByPlan?.(plan.id) || [];
+
+    plans = await TimeWhereDB.getPlans();
+    buckets = await TimeWhereDB.getBucketsByPlan(plan.id);
+    bucket = buckets.find(item => item.name === DASHBOARD_QUICK_ADD_BUCKET_NAME) || bucket || null;
+    labels = await TimeWhereDB.getLabelsByPlan?.(plan.id) || labels;
+    return { plan, bucket, plans, buckets, labels };
+}
+
+async function quickAddCurrentTask() {
+    await openDashboardQuickAddTaskPanel();
+}
+
+function findDashboardQuickAddDefaultPlan(plans = []) {
+    const candidates = plans || [];
+    const keyword = DASHBOARD_QUICK_ADD_DEFAULT_PLAN_KEYWORD.toLowerCase();
+    return candidates.find(plan => {
+        const values = [plan.name, plan.subject, plan.subject_in_matrixview].filter(Boolean).map(value => String(value).toLowerCase());
+        return values.some(value => value.includes(keyword) || value.includes('英文'));
+    }) || candidates[0] || null;
+}
+
+function getDashboardQuickAddBucketTemplateForPlan(plan) {
+    return plan?.name === 'Other School Plan'
+        ? DASHBOARD_OTHER_SCHOOL_BUCKET_TEMPLATE
+        : DASHBOARD_SUBJECT_BUCKET_TEMPLATE;
+}
+
+function renderDashboardQuickAddPlanOptions(plans, selectedPlanId) {
+    return (plans || []).map(plan => {
+        const selected = String(plan.id) === String(selectedPlanId) ? 'selected' : '';
+        return `<option value="${escapeAttribute(plan.id)}" ${selected}>${escapeHTML(plan.name || 'Untitled Plan')}</option>`;
+    }).join('');
+}
+
+function renderDashboardQuickAddBucketOptions(buckets, selectedBucketId) {
+    return [
+        `<option value="">No bucket</option>`,
+        ...(buckets || []).map(bucket => {
+            const selected = String(bucket.id) === String(selectedBucketId) ? 'selected' : '';
+            return `<option value="${escapeAttribute(bucket.id)}" ${selected}>${escapeHTML(bucket.name || 'Untitled Bucket')}</option>`;
+        })
+    ].join('');
+}
+
+function getDashboardQuickAddPlanSubject(plan) {
+    return plan?.subject || plan?.subject_in_matrixview || plan?.name || 'No subject';
+}
+
+function renderDashboardQuickAddProgressOptions(selectedProgress = 'not_started') {
+    const progresses = [
+        { key: 'not_started', label: 'Not started', icon: 'radio_button_unchecked' },
+        { key: 'in_progress', label: 'In progress', icon: 'timelapse' },
+        { key: 'completed', label: 'Completed', icon: 'check_circle' }
+    ];
+    return progresses.map(item => `
+        <button type="button" class="progress-option ${item.key === selectedProgress ? 'active' : ''}" data-action="dashboard-quick-add-progress" data-progress="${item.key}">
+            <span class="material-symbols-outlined">${item.icon}</span> ${item.label}
+        </button>`).join('');
+}
+
+function renderDashboardQuickAddPriorityOptions(selectedPriority = 'medium') {
+    return DASHBOARD_DETAIL_PRIORITIES.map(item => `
+        <button
+            type="button"
+            class="priority-option ${item.key === selectedPriority ? 'active' : ''}"
+            data-action="dashboard-quick-add-priority"
+            data-priority="${item.key}"
+            style="--pri-color:${item.color};--pri-bg:${item.bgColor}"
+        >${item.label}</button>`).join('');
+}
+
+function renderDashboardQuickAddLabelChips(labels = [], selectedIds = []) {
+    if (!labels.length) return '<span class="text-muted">No labels defined for this plan</span>';
+    const selectedSet = new Set(selectedIds.map(String));
+    return labels.map(label => `
+        <button
+            type="button"
+            class="label-chip ${selectedSet.has(String(label.id)) ? 'selected' : ''}"
+            data-action="dashboard-quick-add-label"
+            data-label-id="${escapeAttribute(label.id)}"
+            style="--label-color:${escapeAttribute(label.color || '#94a3b8')}"
+        >${escapeHTML(label.name || label.color || 'Label')}</button>`).join('');
+}
+
+function renderDashboardQuickAddChecklistItems(items = []) {
+    return (items || []).map(item => `
+        <div class="checklist-item" data-item-id="${escapeAttribute(item.id)}">
+            <input type="checkbox" class="checklist-checkbox" ${item.checked ? 'checked' : ''}>
+            <span class="checklist-text ${item.checked ? 'checked' : ''}">${escapeHTML(item.title || '')}</span>
+            <button type="button" class="checklist-delete" data-action="dashboard-quick-add-checklist-delete" title="Delete">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>`).join('');
+}
+
+async function openDashboardQuickAddTaskPanel(prefillTitle = '') {
+    closeDashboardQuickAddTaskPanel();
+    const todayStr = formatDateISO(new Date());
+    const { plan, bucket, plans, buckets, labels } = await ensureDashboardQuickAddPlanAndBucket();
+    const section = document.querySelector('.column-now .column-content');
+    if (!section) return;
+
+    const panel = document.createElement('div');
+    panel.className = 'dashboard-task-detail-panel open';
+    panel.id = 'dashboardQuickAddTaskPanel';
+    panel.innerHTML = `
+        <div class="detail-header">
+            <div class="detail-header-title">
+                <h2>Task Details</h2>
+                <span class="source-badge">New</span>
+            </div>
+            <div class="detail-header-actions">
+                <button type="button" class="task-detail-menu-btn" title="More task actions" disabled>
+                    <span class="material-symbols-outlined">more_horiz</span>
+                </button>
+                <button type="button" class="detail-close-btn" data-action="close-dashboard-quick-add-task" title="Close">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="detail-body custom-scrollbar">
+            <div class="detail-field">
+                <div class="detail-title" contenteditable="true" data-field="title" placeholder="Task title">${escapeHTML(prefillTitle)}</div>
+            </div>
+
+            <div class="detail-field">
+                <label>Progress</label>
+                <div class="progress-picker">${renderDashboardQuickAddProgressOptions('not_started')}</div>
+            </div>
+
+            <div class="detail-field detail-field-row">
+                <div class="detail-field-half">
+                    <label>TimeWhere Plan</label>
+                    <select class="detail-select" data-field="plan_id" data-action="dashboard-quick-add-plan-change">
+                        ${renderDashboardQuickAddPlanOptions(plans, plan.id)}
+                    </select>
+                </div>
+                <div class="detail-field-half">
+                    <label>Subject</label>
+                    <div class="detail-readonly-value" data-field="subject">${escapeHTML(getDashboardQuickAddPlanSubject(plan))}</div>
+                </div>
+            </div>
+
+            <div class="detail-field">
+                <label>Priority</label>
+                <div class="priority-picker">${renderDashboardQuickAddPriorityOptions('medium')}</div>
+            </div>
+
+            <div class="detail-field">
+                <label>Bucket</label>
+                <select class="detail-select" data-field="bucket_id">
+                    ${renderDashboardQuickAddBucketOptions(buckets, bucket?.id || null)}
+                </select>
+            </div>
+
+            <div class="detail-field detail-field-row">
+                <div class="detail-field-half">
+                    <label>Start date</label>
+                    <input type="date" class="detail-date" data-field="start_date" value="${escapeAttribute(todayStr)}">
+                </div>
+                <div class="detail-field-half">
+                    <label>Due date</label>
+                    <input type="date" class="detail-date" data-field="due_date" value="${escapeAttribute(todayStr)}">
+                </div>
+            </div>
+
+            <div class="detail-field detail-field-row">
+                <div class="detail-field-half">
+                    <label>定时时间</label>
+                    <input type="time" class="detail-date" data-field="schedule_time" value="">
+                </div>
+                <div class="detail-field-half">
+                    <label>预计时长 (分钟)</label>
+                    <input type="number" class="detail-date" data-field="duration" value="30" min="5" max="480" step="5">
+                </div>
+            </div>
+
+            <div class="detail-field">
+                <label>Checklist</label>
+                <div class="checklist-list" id="dashboardChecklistItems">${renderDashboardQuickAddChecklistItems([])}</div>
+                <div class="checklist-add">
+                    <input type="text" class="checklist-add-input" id="dashboardChecklistNewItem" placeholder="Add an item...">
+                </div>
+            </div>
+
+            <div class="detail-field recurrence-detail-section" data-recurrence-section>
+                <label>周期任务</label>
+                <div class="recurrence-create-panel">
+                    <select class="detail-select" data-field="recurrence_frequency" data-action="dashboard-quick-add-recurrence-change">
+                        <option value="none">不重复</option>
+                        <option value="weekly">每周</option>
+                        <option value="monthly">每月</option>
+                    </select>
+                    <input type="number" class="detail-date recurrence-count-input" data-field="recurrence_count" min="2" max="12" value="2" disabled>
+                </div>
+                <p class="source-readonly-hint">周期任务必须有截止日期，最多生成 12 个实例。</p>
+            </div>
+
+            <div class="detail-field">
+                <label>Labels</label>
+                <div class="labels-picker" data-field="labels">${renderDashboardQuickAddLabelChips(labels, [])}</div>
+            </div>
+
+            <div class="detail-field">
+                <label>Notes</label>
+                <textarea class="detail-textarea" data-field="notes" placeholder="Add notes..." rows="4"></textarea>
+            </div>
+        </div>
+
+        <div class="detail-footer dashboard-task-detail-footer">
+            <button type="button" class="btn-secondary" data-action="close-dashboard-quick-add-task">Cancel</button>
+            <button type="button" class="btn-primary" data-action="save-dashboard-quick-add-task">Save task</button>
+        </div>`;
+    section.appendChild(panel);
+    setTimeout(() => panel.querySelector('[data-field="title"]')?.focus(), 100);
+}
+
+function closeDashboardQuickAddTaskPanel() {
+    const panel = document.getElementById('dashboardQuickAddTaskPanel');
+    if (panel) panel.remove();
+}
+
+async function refreshDashboardQuickAddPlanFields(planIdValue) {
+    const panel = document.getElementById('dashboardQuickAddTaskPanel');
+    const bucketSelect = panel?.querySelector('[data-field="bucket_id"]');
+    const labelsEl = panel?.querySelector('[data-field="labels"]');
+    if (!bucketSelect) return;
+    const planId = parseInt(planIdValue, 10);
+    if (!planId) {
+        bucketSelect.innerHTML = renderDashboardQuickAddBucketOptions([], null);
+        if (labelsEl) labelsEl.innerHTML = renderDashboardQuickAddLabelChips([], []);
+        return;
+    }
+    const plans = await TimeWhereDB.getPlans();
+    const plan = plans.find(item => String(item.id) === String(planId));
+    if (plan && TimeWhereDB.ensureBucketTemplateForPlan) {
+        await TimeWhereDB.ensureBucketTemplateForPlan(planId, getDashboardQuickAddBucketTemplateForPlan(plan));
+    }
+    const buckets = await TimeWhereDB.getBucketsByPlan(planId);
+    const preferredBucket = buckets.find(item => item.name === DASHBOARD_QUICK_ADD_BUCKET_NAME) || null;
+    bucketSelect.innerHTML = renderDashboardQuickAddBucketOptions(buckets, preferredBucket?.id || null);
+    const subjectEl = panel?.querySelector('[data-field="subject"]');
+    if (subjectEl) subjectEl.textContent = getDashboardQuickAddPlanSubject(plan);
+    const labels = await TimeWhereDB.getLabelsByPlan?.(planId) || [];
+    if (labelsEl) labelsEl.innerHTML = renderDashboardQuickAddLabelChips(labels, []);
+}
+
+function updateDashboardQuickAddRecurrenceControls() {
+    const panel = document.getElementById('dashboardQuickAddTaskPanel');
+    const recurrenceFrequency = panel?.querySelector('[data-field="recurrence_frequency"]');
+    const recurrenceCount = panel?.querySelector('[data-field="recurrence_count"]');
+    if (!recurrenceFrequency || !recurrenceCount) return;
+    recurrenceCount.disabled = !['weekly', 'monthly'].includes(recurrenceFrequency.value);
+}
+
+function addDashboardQuickAddChecklistItem() {
+    const panel = document.getElementById('dashboardQuickAddTaskPanel');
+    const input = panel?.querySelector('#dashboardChecklistNewItem');
+    const list = panel?.querySelector('#dashboardChecklistItems');
+    const title = input?.value?.trim() || '';
+    if (!input || !list || !title) return;
+    const item = {
+        id: globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `checklist-${Date.now()}`,
+        title,
+        checked: false
+    };
+    list.insertAdjacentHTML('beforeend', renderDashboardQuickAddChecklistItems([item]));
+    input.value = '';
+}
+
+function readDashboardQuickAddChecklist(panel) {
+    return Array.from(panel.querySelectorAll('#dashboardChecklistItems .checklist-item')).map(item => ({
+        id: item.dataset.itemId || (globalThis.crypto?.randomUUID ? globalThis.crypto.randomUUID() : `checklist-${Date.now()}`),
+        title: item.querySelector('.checklist-text')?.textContent?.trim() || '',
+        checked: item.querySelector('.checklist-checkbox')?.checked === true
+    })).filter(item => item.title);
+}
+
+function readDashboardQuickAddLabels(panel) {
+    return Array.from(panel.querySelectorAll('.label-chip.selected'))
+        .map(chip => parseInt(chip.dataset.labelId || '', 10))
+        .filter(Number.isFinite);
+}
+
+async function saveDashboardQuickAddTask() {
+    const panel = document.getElementById('dashboardQuickAddTaskPanel');
+    if (!panel) return;
+    const title = panel.querySelector('[data-field="title"]')?.textContent?.trim() || '';
+    if (!title) {
+        showToast('请输入任务标题', 'error');
+        panel.querySelector('[data-field="title"]')?.focus();
+        return;
+    }
+
+    const todayStr = formatDateISO(new Date());
+    const planId = parseInt(panel.querySelector('[data-field="plan_id"]')?.value || '', 10);
+    if (!planId) {
+        showToast('请选择计划', 'error');
+        panel.querySelector('[data-field="plan_id"]')?.focus();
+        return;
+    }
+    const bucketValue = panel.querySelector('[data-field="bucket_id"]')?.value || '';
+    const scheduleTime = panel.querySelector('[data-field="schedule_time"]')?.value || null;
+    const payload = {
+        title,
+        plan_id: planId,
+        bucket_id: bucketValue ? parseInt(bucketValue, 10) : null,
+        start_date: panel.querySelector('[data-field="start_date"]')?.value || todayStr,
+        due_date: panel.querySelector('[data-field="due_date"]')?.value || todayStr,
+        schedule_time: scheduleTime,
+        priority: panel.querySelector('.priority-option.active')?.dataset.priority || 'medium',
+        duration: parseInt(panel.querySelector('[data-field="duration"]')?.value || '30', 10) || 30,
+        progress: panel.querySelector('.progress-option.active')?.dataset.progress || 'not_started',
+        checklist: readDashboardQuickAddChecklist(panel),
+        labels: readDashboardQuickAddLabels(panel),
+        notes: panel.querySelector('[data-field="notes"]')?.value || ''
+    };
+    const recurrenceFrequency = panel.querySelector('[data-field="recurrence_frequency"]')?.value || 'none';
+    const recurrenceCount = parseInt(panel.querySelector('[data-field="recurrence_count"]')?.value || '0', 10);
+    if (recurrenceFrequency === 'weekly' || recurrenceFrequency === 'monthly') {
+        await TimeWhereDB.addRecurringTaskSeries(payload, {
+            frequency: recurrenceFrequency,
+            count: recurrenceCount
+        });
+    } else {
+        await TimeWhereDB.addTask(payload);
+    }
+
+    closeDashboardQuickAddTaskPanel();
+    await loadDashboardData();
+    showToast('任务已添加到今天', 'success');
 }
 
 async function saveNewTask() {

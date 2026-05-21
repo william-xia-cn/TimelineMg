@@ -117,6 +117,7 @@ Notes:
 
 - Full automated tests and browser smoke are waived for this CWS policy-fix resubmission.
 - CWS-sanitized upload package strips manifest `key`; Google OAuth must be rechecked if CWS item ID differs from the local fixed development ID.
+- After this submission, current source moved ahead with Chrome `sidePanel` permission and Side Panel / quick-add UI. Those changes are not part of the uploaded CWS package recorded in this report; a future CWS update must regenerate package and permission evidence.
 - Trusted tester emails and any Developer Dashboard account details must remain outside repository evidence.
 
 ## Release Readiness Recommendation
