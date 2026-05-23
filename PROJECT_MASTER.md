@@ -3,10 +3,10 @@
 ## Project Status
 
 - **Project**: TimeWhere
-- **Version**: package / extension release version `0.2.1`; design-doc version `v2.3`
-- **Stage**: Baseline Stabilized; post-CWS-review source/documentation sync
-- **Active release/deployment target**: TimeWhere `0.2.1` CWS Private testing Purple Potassium policy-fix remains pending review; current source has moved ahead with Side Panel / quick-add work.
-- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-025 approved and completed CWS cancel-review, fixed package upload, and Submit for Review for the `0.2.1` Purple Potassium permission fix only; that uploaded package remains pending CWS review. D-026 records current source using Chrome Side Panel as the primary toolbar surface. Any further CWS package upload / Submit for Review, automatic publish after review, public listing, tag, merge, deploy, release, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
+- **Version**: package / extension release version `0.2.2`; design-doc version `v2.3`
+- **Stage**: Baseline Stabilized; CWS Private testing Side Panel update in progress
+- **Active release/deployment target**: TimeWhere `0.2.2` CWS Private testing Side Panel / quick-add update after the accepted `0.2.1` Private testing package was published.
+- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-025 approved the `0.2.1` Purple Potassium permission fix; D-026 records current source using Chrome Side Panel as the primary toolbar surface. D-027 approves publishing the accepted `0.2.1` Private testing package, bumping Side Panel source/package to `0.2.2`, uploading the sanitized CWS package, submitting it for review, and enabling automatic publish after review. Public listing expansion, tag, merge, deploy, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
 
 ## Collaboration Model
 
@@ -92,12 +92,12 @@ Escalate to external advisor for:
 
 | Item | Status |
 |---|---|
-| Candidate version | `0.2.1` CWS Purple Potassium policy-fix resubmission |
+| Candidate version | `0.2.2` CWS Private Side Panel update |
 | Candidate commit | Pending current GitHub sync commit |
-| Package/artifact | `dist/TimeWhere-0.2.1-private-cws-sanitized-20260520-214913.zip` |
-| Artifact hash | `258CED7F544D8953A883EC01E28B6BF87691A9592D7AC2A2FA95B13D32F7DF23` |
+| Package/artifact | `dist/TimeWhere-0.2.2-private-cws-sanitized-20260523-224444.zip` |
+| Artifact hash | `486AFF60126AD5E0C38AD1A7102EC0F5DA4D641BD672BEE7C8A1D1479ADBC612` |
 | Deployment channel | Chrome Web Store Private testing |
-| Review status | Submitted CWS package is pending review; current source now includes post-submission Side Panel / quick-add changes not present in that uploaded package |
+| Review status | Accepted `0.2.1` Private testing package was published; `0.2.2` Side Panel update is approved for regenerated package upload and review submission with automatic publish after review |
 | Public release | NOT_STARTED; explicitly out of MVP scope |
 | Tag | NOT_APPROVED |
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TimeWhere",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "个人时间管理与任务规划系统 - TimeWhere for IB Students",
   "options_page": "pages/settings/settings.html",
   "icons": {

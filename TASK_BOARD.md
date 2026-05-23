@@ -2,8 +2,8 @@
 
 ## Active Target
 
-- Baseline Stabilized; `0.2.1` CWS Private testing Purple Potassium policy-fix pending review; current source/documentation sync covers Side Panel / quick-add follow-up.
-- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, and TimeWhere `0.2.0` CWS Private testing material preparation are complete. Product Owner approved `0.2.1` CWS cancel-review, fixed package upload, and Submit for Review for the Purple Potassium permission fix only; the fixed package is submitted and pending CWS review. Current source has moved ahead with Chrome Side Panel and quick-add surfaces, so any future CWS update requires fresh approval, package generation, and permission/privacy evidence. Automatic publish after review / public listing / tag / merge / deploy remain unapproved.
+- Baseline Stabilized; `0.2.2` CWS Private testing Side Panel / quick-add update is approved for package regeneration, review submission, and automatic publish after review.
+- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, TimeWhere `0.2.0` CWS Private testing material preparation, and the accepted `0.2.1` Purple Potassium Private testing publication are complete. Product Owner approved bumping the current Side Panel source/package to `0.2.2` because CWS rejects same-version uploads after publishing `0.2.1`. Public listing expansion / tag / merge / deploy remain unapproved.
 
 ## Active Collaboration Model
 

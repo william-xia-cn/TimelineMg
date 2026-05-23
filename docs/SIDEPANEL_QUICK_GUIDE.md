@@ -1,8 +1,8 @@
 # TimeWhere Side Panel 快速使用手册
 
-适用版本：当前 `0.2.1` 源码基线的 Side Panel / quick-add 功能。
+适用版本：当前 `0.2.2` 源码基线的 Side Panel / quick-add 功能。
 
-> 注意：当前 Chrome Web Store 待审核包可能仍是较早的 `0.2.1` policy-fix 包。本文面向当前源码或后续包含 Side Panel 的测试包。
+> 注意：Chrome Web Store 首个 Private 测试发布包为 `0.2.1` policy-fix 包；本文面向 `0.2.2` 及后续包含 Side Panel 的测试包。
 
 ## 1. 打开侧边栏
 
