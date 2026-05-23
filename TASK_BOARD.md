@@ -3,7 +3,7 @@
 ## Active Target
 
 - Baseline Stabilized; `0.2.2` CWS Private testing Side Panel / quick-add update is approved for package regeneration, review submission, and automatic publish after review.
-- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, TimeWhere `0.2.0` CWS Private testing material preparation, and the accepted `0.2.1` Purple Potassium Private testing publication are complete. Product Owner approved bumping the current Side Panel source/package to `0.2.2` because CWS rejects same-version uploads after publishing `0.2.1`. Public listing expansion / tag / merge / deploy remain unapproved.
+- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, TimeWhere `0.2.0` CWS Private testing material preparation, and the accepted `0.2.1` Purple Potassium Private testing publication are complete. Current Side Panel source/package was bumped to `0.2.2`, regenerated, uploaded, and submitted to CWS review with automatic publish after review enabled. Public listing expansion / tag / merge / deploy remain unapproved.
 
 ## Active Collaboration Model
 
@@ -98,10 +98,10 @@
 | Blocker | Owner | Required action |
 |---|---|---|
 | Product Owner authority label/name not recorded | Product Owner | Confirm preferred authority label/name when needed. |
-| Public release boundary | Build&Test / releaseMg | D-025 approves CWS cancel-review, fixed package upload, and Submit for Review for the `0.2.1` Purple Potassium fix only. Do not auto-publish, public-list, tag, merge, deploy, or release without explicit Product Owner approval. |
+| Public release boundary | Build&Test / releaseMg | D-027 approves the `0.2.2` CWS Private Side Panel update submission and automatic publish after review only. Do not public-list, tag, merge, deploy, or release without explicit Product Owner approval. |
 | Test waiver for regenerated package | Product Owner / releaseMg | `0.2.0` CWS Private artifact was regenerated without automated/browser tests per Product Owner instruction. Record this as a waiver/risk, not as PASS evidence. |
 | CWS OAuth extension ID follow-up | Product Owner / Build&Test | Sanitized CWS package removes manifest `key` because CWS rejects it. If the uploaded item receives a different extension ID, update the Google OAuth Chrome Extension client before validating Google Drive sync. |
-| CWS/source drift follow-up | Product Owner / Build&Test / releaseMg | Current source now includes `sidePanel` permission and Side Panel UI after the pending CWS package was submitted. Do not upload a replacement package or cancel pending review without fresh Product Owner approval. |
+| CWS review follow-up | Product Owner / releaseMg | Monitor the `0.2.2` CWS Private Side Panel update review outcome. Automatic publish after review is approved for this update; public listing expansion, tag, merge, deploy, and release remain unapproved. |
 | Manual browser validation not run | CLOSED | releaseMg executed `docs/TEST_PLAN.md` L3 checklist and recorded results in `docs/release/RELEASE_GATE_REPORT_INTERNAL_MVP_2026-05-11.md`. |
 | Container id documentation mismatch | Product&Project Mg / Build&Test | Product Owner approved UUID/string ids for tasks, containers, events, and habits; planner helper records may remain numeric. Documentation cleanup remains pending. |
 | P1 baseline behavior risks | CLOSED | Build&Test fix passed Product&Project Mg review and releaseMg narrow recheck returned PASS. |

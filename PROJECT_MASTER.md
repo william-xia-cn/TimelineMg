@@ -93,11 +93,11 @@ Escalate to external advisor for:
 | Item | Status |
 |---|---|
 | Candidate version | `0.2.2` CWS Private Side Panel update |
-| Candidate commit | Pending current GitHub sync commit |
+| Candidate commit | `03a979f` |
 | Package/artifact | `dist/TimeWhere-0.2.2-private-cws-sanitized-20260523-224444.zip` |
 | Artifact hash | `486AFF60126AD5E0C38AD1A7102EC0F5DA4D641BD672BEE7C8A1D1479ADBC612` |
 | Deployment channel | Chrome Web Store Private testing |
-| Review status | Accepted `0.2.1` Private testing package was published; `0.2.2` Side Panel update is approved for regenerated package upload and review submission with automatic publish after review |
+| Review status | Accepted `0.2.1` Private testing package was published to Private testers; `0.2.2` Side Panel update was submitted to CWS review with automatic publish after review enabled |
 | Public release | NOT_STARTED; explicitly out of MVP scope |
 | Tag | NOT_APPROVED |
 
@@ -118,8 +118,8 @@ Escalate to external advisor for:
 | Documentation baseline drift | CLOSED | Product&Project Mg | Product docs now distinguish current local-first MVP baseline from future/out-of-scope Google Sync, Arrange, notifications, ManageBac, CWS, and public release work. |
 | Google data sync scope creep | OPEN | Product&Project Mg / Build&Test | D-019/D-020 approve optional Drive `appDataFolder` bidirectional sync only. Do not turn Google account into a product login requirement; local IndexedDB remains the runtime source of truth. |
 | `0.2.1` stabilization scope | OPEN | Build&Test | Current sync includes Task Arrange same-day subject matching, no-throttle page-open Arrange apply, Calendar/Plan Arrange diagnostic snapshots, MatrixView Subject ID inheritance/backfill, Daily Settle display model, Dashboard/Popup task UI, readable Google Sync conflicts, and documentation/version updates. No `0.2.1` CWS package was generated. |
-| CWS Purple Potassium `tabs` permission finding | SUBMITTED | releaseMg / Product Owner | `tabs` permission removed from source and CWS package; lightweight verification passed; fixed package uploaded and submitted to CWS review with automatic publish disabled. |
-| CWS/source drift after submission | OPEN | Product Owner / Build&Test / releaseMg | Current source now adds Chrome Side Panel and Dashboard/Side Panel quick-add surfaces after the submitted CWS package. A future CWS update must regenerate the package and update permission/privacy evidence for `sidePanel`. |
+| CWS Purple Potassium `tabs` permission finding | PUBLISHED | releaseMg / Product Owner | `tabs` permission removed from source and CWS package; fixed `0.2.1` Private testing package was accepted and published before the `0.2.2` Side Panel update submission. |
+| CWS/source drift after submission | CLOSED | Product Owner / Build&Test / releaseMg | Current Side Panel / quick-add source was bumped to `0.2.2`, regenerated as a sanitized CWS package, uploaded, and submitted to CWS review with `sidePanel` permission/privacy disclosure. |
 
 ## Current Evidence
 
