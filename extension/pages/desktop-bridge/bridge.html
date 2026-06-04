@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeWhere Desktop Bridge</title>
+    <link rel="icon" type="image/png" href="../../icons/icon48.png">
+    <style>
+        body {
+            align-items: center;
+            background: #f8fafc;
+            color: #1e293b;
+            display: flex;
+            font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        main {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: white;
+            max-width: 420px;
+            padding: 20px;
+            width: calc(100% - 32px);
+        }
+        h1 {
+            font-size: 18px;
+            margin: 0 0 8px;
+        }
+        p {
+            color: #64748b;
+            margin: 0;
+        }
+        #status {
+            color: #0f766e;
+            font-weight: 700;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>TimeWhere Desktop Bridge</h1>
+        <p>正在与 TimeWhere Windows 版建立一次性连接。</p>
+        <p id="status">等待连接...</p>
+    </main>
+    <script src="bridge.js"></script>
+</body>
+</html>

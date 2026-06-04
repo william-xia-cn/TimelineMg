@@ -35,10 +35,10 @@ function normalizeRoute(route = defaultRoute) {
   if (/^(https?:|chrome-extension:)/i.test(raw)) {
     throw new Error('External routes are not allowed in the desktop shell');
   }
-  const alias = routeMap[raw.replace(/^\\/+/, '')] || raw;
+  const alias = routeMap[raw.replace(/^\/+/, '')] || raw;
   return alias.startsWith('extension/')
     ? alias.slice('extension/'.length)
-    : alias.replace(/^\\+/, '');
+    : alias.replace(/^\/+/, '');
 }
 
 function splitRoute(route) {

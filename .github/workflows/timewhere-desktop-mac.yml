@@ -1,0 +1,37 @@
+name: Build TimeWhere Desktop macOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install desktop electron dependencies
+        run: npm --prefix platforms/desktop-electron install
+
+      - name: Build macOS package
+        run: npm run electron:package:mac
+
+      - name: Upload macOS package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TimeWhere-mac-package
+          path: platforms/desktop-electron/dist/*.zip
+          if-no-files-found: error
