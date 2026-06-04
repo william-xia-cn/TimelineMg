@@ -1,0 +1,64 @@
+{
+  "name": "timewhere-desktop-electron",
+  "version": "0.2.3",
+  "private": true,
+  "description": "TimeWhere standalone desktop Electron app",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "smoke": "electron .",
+    "package:win": "electron-builder --win portable --x64",
+    "package:mac": "electron-builder --mac zip --x64"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "electron-builder": "^26.0.12",
+    "electron": "^42.3.2"
+  },
+  "build": {
+    "appId": "cn.williamxia.timewhere",
+    "productName": "TimeWhere",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "desktop-auth.js",
+      "chrome-bridge.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../extension",
+        "to": "extension"
+      }
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false,
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "TimeWhere-0.2.3-win-portable.exe"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "TimeWhere-0.2.3-mac-x64.zip"
+    }
+  }
+}
