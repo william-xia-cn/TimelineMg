@@ -35,6 +35,14 @@ Current development OAuth client:
 - Google Drive API: enabled
 - OAuth scope: `https://www.googleapis.com/auth/drive.appdata`
 
+Current CWS OAuth client:
+
+- Project: `TimeWhere`
+- Extension ID: `bokjekfjghliieopghopibmhjokgkjkb`
+- OAuth client ID: `541406150907-u6pvenpfdpgfmgnv8h9f126l4hc4oru9.apps.googleusercontent.com`
+- Google Drive API: enabled
+- OAuth scope: `https://www.googleapis.com/auth/drive.appdata`
+
 ---
 
 ## 二、配置 Manifest
@@ -77,6 +85,41 @@ ogdjmelmfkfahppahhkkggdejjainbnd
 ```
 
 如果未来重新生成 key，扩展 ID 会改变，必须同步重建 Google Cloud Chrome Extension OAuth client。
+
+### 2.3 CWS 包 OAuth 配置
+
+源码 `extension/manifest.json` 保留开发扩展 ID 对应的 OAuth client 和 `key`，用于未发布 / unpacked 扩展真实授权测试。Chrome Web Store 上传包必须移除 `key`，因此 CWS 包需要使用商店扩展 ID 对应的 OAuth client。
+
+生成 CWS 包时使用：
+
+```powershell
+npm run package:cws
+```
+
+该脚本会在 staging manifest 中：
+
+- 移除 `key`；
+- 设置 CWS OAuth client ID；
+- 保留 Drive `appDataFolder` scope；
+- 输出 `dist/TimeWhere-[version]-private-cws-sanitized-[timestamp].zip`。
+
+### 2.4 少量可信测试者本地包
+
+给少量可信测试者临时使用时，不要分发 CWS sanitized zip。应生成 local unpacked 包：
+
+```powershell
+npm run package:local
+```
+
+该包会输出 `dist/TimeWhere-[version]-local-unpacked-[timestamp].zip`，zip 内只有一个 `extension/` 文件夹。测试者应解压后在 `chrome://extensions` 开启开发者模式，选择解压后的 `extension` 文件夹进行“加载已解压的扩展程序”。
+
+安装后必须确认扩展 ID 为：
+
+```text
+ogdjmelmfkfahppahhkkggdejjainbnd
+```
+
+如果显示其他 ID，说明加载错包、加载错目录或 `manifest.key` 丢失；不要继续测试 Google 同步。
 
 ---
 

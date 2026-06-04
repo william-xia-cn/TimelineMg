@@ -217,19 +217,31 @@ assert('background can schedule a diagnostic alarm event notification',
     && background.includes('TASK_REMINDER_DIAGNOSTIC_STATE_KEY'));
 assert('background registers daily journal snapshot and prompt alarms',
     background.includes("const DAILY_JOURNAL_SNAPSHOT_ALARM = 'timewhere-daily-journal-snapshot'")
+    && background.includes("const DAILY_JOURNAL_COMPLETION_ALARM = 'timewhere-daily-journal-completion'")
     && background.includes("const DAILY_JOURNAL_PROMPT_ALARM = 'timewhere-daily-journal-prompt'")
-    && background.includes('DAILY_JOURNAL_SNAPSHOT_HOUR = 6')
+    && background.includes('DAILY_JOURNAL_SNAPSHOT_HOUR = 0')
+    && background.includes('DAILY_JOURNAL_COMPLETION_HOUR = 0')
+    && background.includes('DAILY_JOURNAL_COMPLETION_MINUTE = 5')
     && background.includes('DAILY_JOURNAL_PROMPT_HOUR = 21')
     && background.includes('DAILY_JOURNAL_PROMPT_MINUTE = 30')
     && background.includes('ensureDailyJournalAlarms()'));
 assert('background daily journal prompt opens Dashboard journal URL',
     background.includes('timewhere-daily-journal:')
     && background.includes('focus.html?journal_date='));
-assert('background daily journal snapshot freezes planned tasks after 6',
+assert('background daily journal snapshot freezes planned tasks after local midnight',
     background.includes('ensureTodayDailyJournalSnapshot')
-    && background.includes("task.start_date === date")
+    && background.includes('buildDailyJournalSettleSnapshot(tasks, containers, date, now)')
+    && background.includes('scheduling.buildDailyTaskPool(tasks || [], now)')
+    && background.includes('scheduling.dailySettle(taskPool, todayContainers, now)')
     && background.includes('planned_task_snapshots')
     && background.includes('daily_pool_snapshots'));
+assert('background creates previous-day completion snapshot after local midnight',
+    background.includes('ensurePreviousDailyJournalCompletionSnapshot')
+    && background.includes('ensureDailyJournalCompletionSnapshot(getPreviousDateString(now), now)')
+    && background.includes('completion_snapshot_at')
+    && background.includes('completion_task_snapshots')
+    && background.includes('completion_extra_task_snapshots')
+    && background.includes('alarm?.name === DAILY_JOURNAL_COMPLETION_ALARM'));
 
 const settingsHtml = fs.readFileSync(path.join(__dirname, '../extension/pages/settings/settings.html'), 'utf8');
 const settingsJs = fs.readFileSync(path.join(__dirname, '../extension/pages/settings/script.js'), 'utf8');

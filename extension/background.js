@@ -15,8 +15,11 @@ const TASK_REMINDER_DIAGNOSTIC_DELAY_MINUTES = 0.5;
 const TASK_REMINDER_DIAGNOSTIC_STATE_KEY = 'timewhere_task_reminder_diagnostic_state';
 const TIMEWHERE_DB_VERSION = 5;
 const DAILY_JOURNAL_SNAPSHOT_ALARM = 'timewhere-daily-journal-snapshot';
+const DAILY_JOURNAL_COMPLETION_ALARM = 'timewhere-daily-journal-completion';
 const DAILY_JOURNAL_PROMPT_ALARM = 'timewhere-daily-journal-prompt';
-const DAILY_JOURNAL_SNAPSHOT_HOUR = 6;
+const DAILY_JOURNAL_SNAPSHOT_HOUR = 0;
+const DAILY_JOURNAL_COMPLETION_HOUR = 0;
+const DAILY_JOURNAL_COMPLETION_MINUTE = 5;
 const DAILY_JOURNAL_PROMPT_HOUR = 21;
 const DAILY_JOURNAL_PROMPT_MINUTE = 30;
 
@@ -83,6 +86,7 @@ async function bootstrapDailyJournal() {
     try {
         await ensureDailyJournalAlarms();
         await ensureTodayDailyJournalSnapshot();
+        await ensurePreviousDailyJournalCompletionSnapshot();
     } catch (error) {
         console.warn('TimeWhere: daily journal bootstrap skipped', error);
     }
@@ -135,12 +139,17 @@ async function ensureDailyJournalAlarms() {
         when: nextDailyAlarmTime(DAILY_JOURNAL_SNAPSHOT_HOUR),
         periodInMinutes: 24 * 60
     });
+    await createAlarm(DAILY_JOURNAL_COMPLETION_ALARM, {
+        when: nextDailyAlarmTime(DAILY_JOURNAL_COMPLETION_HOUR, DAILY_JOURNAL_COMPLETION_MINUTE),
+        periodInMinutes: 24 * 60
+    });
     await createAlarm(DAILY_JOURNAL_PROMPT_ALARM, {
         when: nextDailyAlarmTime(DAILY_JOURNAL_PROMPT_HOUR, DAILY_JOURNAL_PROMPT_MINUTE),
         periodInMinutes: 24 * 60
     });
     return {
         snapshot: normalizeAlarm(await getAlarm(DAILY_JOURNAL_SNAPSHOT_ALARM)),
+        completion: normalizeAlarm(await getAlarm(DAILY_JOURNAL_COMPLETION_ALARM)),
         prompt: normalizeAlarm(await getAlarm(DAILY_JOURNAL_PROMPT_ALARM))
     };
 }
@@ -274,6 +283,7 @@ async function readReminderData() {
 }
 
 function createJournalTaskSnapshot(task) {
+    const checklistBaseline = createJournalChecklistBaseline(task);
     return {
         id: task.id,
         title: task.title || '',
@@ -288,7 +298,115 @@ function createJournalTaskSnapshot(task) {
         source: task.source || null,
         source_uid: task.source_uid || null,
         duration: task.duration || null,
-        schedule_time: task.schedule_time || null
+        schedule_time: task.schedule_time || null,
+        assignment: task.assignment ? {
+            status: task.assignment.status || null,
+            label: task.assignment.label || null,
+            reason: task.assignment.reason || null,
+            container_id: task.assignment.container_id || null,
+            container_name: task.assignment.container_name || null,
+            time_start: task.assignment.time_start || null,
+            time_end: task.assignment.time_end || null
+        } : null,
+        ...checklistBaseline
+    };
+}
+
+function normalizeJournalChecklistItem(item, index = 0) {
+    return {
+        id: String(item?.id ?? `index:${index}`),
+        title: String(item?.title || item?.text || ''),
+        checked: item?.checked === true,
+        type: item?.type || null,
+        partial_group_id: item?.partial_group_id || null,
+        partial_role: item?.partial_role || null,
+        partial_percent: Number.isFinite(Number(item?.partial_percent))
+            ? Number(item.partial_percent)
+            : null
+    };
+}
+
+function createJournalChecklistBaseline(task = {}) {
+    const items = Array.isArray(task.checklist)
+        ? task.checklist.map((item, index) => normalizeJournalChecklistItem(item, index))
+        : [];
+    const checkedItems = items.filter(item => item.checked);
+    const partialDone = items
+        .filter(item => item.type === 'partial_completion' && item.partial_role === 'done')
+        .map(item => item.partial_percent)
+        .filter(value => value != null);
+    const fingerprintItems = items.map(item => ({
+        id: item.id,
+        title: item.title,
+        checked: item.checked,
+        type: item.type,
+        partial_group_id: item.partial_group_id,
+        partial_role: item.partial_role,
+        partial_percent: item.partial_percent
+    }));
+    return {
+        checklist_total_count: items.length,
+        checklist_checked_count: checkedItems.length,
+        checklist_checked_ids: checkedItems.map(item => item.id).sort(),
+        checklist_fingerprint: JSON.stringify(fingerprintItems),
+        checklist_partial_percent: partialDone.length > 0 ? Math.max(...partialDone) : null
+    };
+}
+
+function getLocalDateFromISO(value) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+    return formatDateISOFallback(date);
+}
+
+function getPreviousDateString(now = new Date()) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - 1);
+    return formatDateISOFallback(date);
+}
+
+function hasChecklistProgressSinceSnapshot(snapshot = {}, currentTask = {}) {
+    const current = createJournalChecklistBaseline(currentTask);
+    const baselineChecked = Number(snapshot.checklist_checked_count || 0);
+    const currentChecked = Number(current.checklist_checked_count || 0);
+    const baselinePartial = snapshot.checklist_partial_percent != null && Number.isFinite(Number(snapshot.checklist_partial_percent))
+        ? Number(snapshot.checklist_partial_percent)
+        : null;
+    const currentPartial = current.checklist_partial_percent != null && Number.isFinite(Number(current.checklist_partial_percent))
+        ? Number(current.checklist_partial_percent)
+        : null;
+    return currentChecked > baselineChecked
+        || (currentPartial != null && (baselinePartial == null || currentPartial > baselinePartial));
+}
+
+function getJournalTaskCompletionStatus(snapshot = {}, currentTask = null, journalDate = null) {
+    const progress = currentTask?.progress || currentTask?.status || snapshot?.progress || 'not_started';
+    const completedAt = currentTask?.completed_at || snapshot?.completed_at || null;
+    const completedOnDate = journalDate ? getLocalDateFromISO(completedAt) === journalDate : !!completedAt;
+    if (progress === 'completed' || completedOnDate) {
+        return { status: 'completed', label: '完成' };
+    }
+    const partialPercent = snapshot?.checklist_partial_percent != null && Number.isFinite(Number(snapshot.checklist_partial_percent))
+        ? Number(snapshot.checklist_partial_percent)
+        : null;
+    const checkedCount = Number.isFinite(Number(snapshot?.checklist_checked_count))
+        ? Number(snapshot.checklist_checked_count)
+        : 0;
+    if (hasChecklistProgressSinceSnapshot(snapshot, currentTask || snapshot)
+        || (partialPercent != null && partialPercent > 0)
+        || checkedCount > 0) {
+        return { status: 'partial', label: '部分完成' };
+    }
+    return { status: 'incomplete', label: '未完成' };
+}
+
+function withJournalTaskCompletionStatus(snapshot, currentTask = null, journalDate = null) {
+    const completion = getJournalTaskCompletionStatus(snapshot, currentTask, journalDate);
+    return {
+        ...snapshot,
+        journal_status: completion.status,
+        journal_status_label: completion.label
     };
 }
 
@@ -300,10 +418,56 @@ function buildDailyJournalPoolSnapshot(tasks, date, now) {
         .map(createJournalTaskSnapshot);
 }
 
-async function ensureTodayDailyJournalSnapshot(now = new Date()) {
-    if (now.getHours() < DAILY_JOURNAL_SNAPSHOT_HOUR) {
-        return { status: 'too_early' };
+function getDailyJournalContainersForDate(containers = [], date) {
+    const scheduling = globalThis.TimeWhereScheduling;
+    if (!scheduling?.containerAppliesToDate) return [];
+    const dateObj = new Date(`${date}T00:00:00`);
+    const dow = dateObj.getDay();
+    const isWeekday = dow >= 1 && dow <= 5;
+    const isWeekend = dow === 0 || dow === 6;
+    return (containers || [])
+        .filter(container => container?.enabled !== false)
+        .filter(container => scheduling.containerAppliesToDate(container, dateObj, date, dow, isWeekday, isWeekend));
+}
+
+function buildDailyJournalSettleSnapshot(tasks, containers, date, now) {
+    const scheduling = globalThis.TimeWhereScheduling;
+    if (!scheduling?.buildDailyTaskPool || !scheduling?.dailySettle) {
+        return buildDailyJournalPoolSnapshot(tasks, date, now);
     }
+    const taskPool = scheduling.buildDailyTaskPool(tasks || [], now);
+    const todayContainers = getDailyJournalContainersForDate(containers || [], date);
+    const settle = scheduling.dailySettle(taskPool, todayContainers, now);
+    const displayTasks = settle?.displayTasks || settle?.currentTasks || taskPool;
+    return displayTasks.map(createJournalTaskSnapshot);
+}
+
+function buildDailyJournalExtraTaskSnapshots(tasks, plannedIds, snapshotAt) {
+    const snapshotTime = snapshotAt ? new Date(snapshotAt).getTime() : null;
+    if (!Number.isFinite(snapshotTime)) return [];
+    return (tasks || [])
+        .filter(task => !plannedIds.has(String(task.id)))
+        .filter(task => {
+            const createdTime = new Date(task.created_at || task.createdAt || 0).getTime();
+            return Number.isFinite(createdTime) && createdTime > snapshotTime;
+        })
+        .map(createJournalTaskSnapshot);
+}
+
+function buildDailyJournalCompletionSnapshots(journal, tasks, journalDate) {
+    const taskById = new Map((tasks || []).map(task => [String(task.id), task]));
+    const plannedSnapshots = Array.isArray(journal?.planned_task_snapshots) ? journal.planned_task_snapshots : [];
+    const plannedIds = new Set(plannedSnapshots.map(task => String(task.id)));
+    return {
+        completion_task_snapshots: plannedSnapshots.map(snapshot =>
+            withJournalTaskCompletionStatus(snapshot, taskById.get(String(snapshot.id)) || null, journalDate)
+        ),
+        completion_extra_task_snapshots: buildDailyJournalExtraTaskSnapshots(tasks, plannedIds, journal?.snapshot_at)
+            .map(snapshot => withJournalTaskCompletionStatus(snapshot, taskById.get(String(snapshot.id)) || null, journalDate))
+    };
+}
+
+async function ensureTodayDailyJournalSnapshot(now = new Date()) {
     const date = formatDateISOFallback(now);
     const db = await openExistingTimeWhereDB();
     if (!db) return { status: 'no_db' };
@@ -312,15 +476,17 @@ async function ensureTodayDailyJournalSnapshot(now = new Date()) {
         if (existing?.snapshot_at && Array.isArray(existing.planned_task_snapshots)) {
             return { status: 'exists', journal: existing };
         }
-        const tasks = await getAllFromStore(db, 'tasks');
+        const [tasks, containers] = await Promise.all([
+            getAllFromStore(db, 'tasks'),
+            getAllFromStore(db, 'containers')
+        ]);
         const nowISO = now.toISOString();
+        const planned = buildDailyJournalSettleSnapshot(tasks, containers, date, now);
         const journal = {
             ...(existing || {}),
             date,
             status: existing?.status || 'snapshot',
-            planned_task_snapshots: tasks
-                .filter(task => task.start_date === date)
-                .map(createJournalTaskSnapshot),
+            planned_task_snapshots: planned,
             daily_pool_snapshots: buildDailyJournalPoolSnapshot(tasks, date, now),
             completed_task_snapshots: existing?.completed_task_snapshots || [],
             delayed_task_snapshots: existing?.delayed_task_snapshots || [],
@@ -339,6 +505,60 @@ async function ensureTodayDailyJournalSnapshot(now = new Date()) {
     } finally {
         db.close();
     }
+}
+
+async function ensureDailyJournalCompletionSnapshot(date, now = new Date()) {
+    const db = await openExistingTimeWhereDB();
+    if (!db) return { status: 'no_db' };
+    try {
+        let journal = await getFromStore(db, 'daily_journals', date);
+        if (journal?.completion_snapshot_at && Array.isArray(journal.completion_task_snapshots)) {
+            return { status: 'exists', journal };
+        }
+
+        const [tasks, containers] = await Promise.all([
+            getAllFromStore(db, 'tasks'),
+            getAllFromStore(db, 'containers')
+        ]);
+        if (!journal?.snapshot_at || !Array.isArray(journal.planned_task_snapshots)) {
+            const dayEnd = new Date(`${date}T23:59:00`);
+            const dayEndISO = dayEnd.toISOString();
+            journal = {
+                ...(journal || {}),
+                date,
+                status: journal?.status || 'snapshot',
+                planned_task_snapshots: buildDailyJournalSettleSnapshot(tasks, containers, date, dayEnd),
+                daily_pool_snapshots: buildDailyJournalPoolSnapshot(tasks, date, dayEnd),
+                completed_task_snapshots: journal?.completed_task_snapshots || [],
+                delayed_task_snapshots: journal?.delayed_task_snapshots || [],
+                extra_done_task_snapshots: journal?.extra_done_task_snapshots || [],
+                planned_notes: journal?.planned_notes || '',
+                delayed_notes: journal?.delayed_notes || '',
+                extra_done_notes: journal?.extra_done_notes || '',
+                general_notes: journal?.general_notes || '',
+                snapshot_at: dayEndISO,
+                created_at: journal?.created_at || dayEndISO,
+                updated_at: dayEndISO,
+                submitted_at: journal?.submitted_at || null
+            };
+        }
+
+        const completion = buildDailyJournalCompletionSnapshots(journal, tasks, date);
+        const updated = {
+            ...journal,
+            ...completion,
+            completion_snapshot_at: now.toISOString(),
+            updated_at: now.toISOString()
+        };
+        await putToStore(db, 'daily_journals', updated);
+        return { status: 'created', journal: updated };
+    } finally {
+        db.close();
+    }
+}
+
+async function ensurePreviousDailyJournalCompletionSnapshot(now = new Date()) {
+    return ensureDailyJournalCompletionSnapshot(getPreviousDateString(now), now);
 }
 
 async function createDailyJournalPromptNotification(now = new Date()) {
@@ -602,6 +822,12 @@ chrome.alarms?.onAlarm.addListener(alarm => {
     if (alarm?.name === DAILY_JOURNAL_SNAPSHOT_ALARM) {
         ensureTodayDailyJournalSnapshot().catch(error => {
             console.error('TimeWhere: daily journal snapshot failed', error);
+        });
+        return;
+    }
+    if (alarm?.name === DAILY_JOURNAL_COMPLETION_ALARM) {
+        ensurePreviousDailyJournalCompletionSnapshot().catch(error => {
+            console.error('TimeWhere: daily journal completion snapshot failed', error);
         });
         return;
     }

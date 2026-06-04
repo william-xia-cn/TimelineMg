@@ -517,3 +517,240 @@ function getDetailRecurrenceScope(panel) {
     return panel?.querySelector('[data-field="recurrence_scope"]')?.value || 'single';
 }
 
+const PARTIAL_COMPLETION_RATIOS = [10, 20, 30, 50, 70, 80, 90];
+
+function isPartialCompletionChecklistItem(item) {
+    return item?.type === 'partial_completion'
+        && !!item.partial_group_id
+        && (item.partial_role === 'done' || item.partial_role === 'remaining');
+}
+
+function findPartialCompletionGroup(checklist = []) {
+    const groups = new Map();
+    (checklist || []).filter(isPartialCompletionChecklistItem).forEach(item => {
+        const groupId = item.partial_group_id;
+        const group = groups.get(groupId) || { partial_group_id: groupId, doneItem: null, remainingItem: null };
+        if (item.partial_role === 'done') group.doneItem = item;
+        if (item.partial_role === 'remaining') group.remainingItem = item;
+        groups.set(groupId, group);
+    });
+
+    for (const group of groups.values()) {
+        if (group.doneItem && group.remainingItem) {
+            const parsedPercent = parseInt(group.doneItem.partial_percent, 10);
+            group.partial_percent = PARTIAL_COMPLETION_RATIOS.includes(parsedPercent) ? parsedPercent : 50;
+            return group;
+        }
+    }
+    return null;
+}
+
+function generatePartialCompletionId(role) {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `partial-${role}-${Date.now()}`;
+}
+
+function buildPartialCompletionChecklist(percent, existingGroup = null) {
+    const safePercent = PARTIAL_COMPLETION_RATIOS.includes(parseInt(percent, 10)) ? parseInt(percent, 10) : 50;
+    const groupId = existingGroup?.partial_group_id
+        || existingGroup?.doneItem?.partial_group_id
+        || existingGroup?.remainingItem?.partial_group_id
+        || generatePartialCompletionId('group');
+    const doneItem = existingGroup?.doneItem || {};
+    const remainingItem = existingGroup?.remainingItem || {};
+    return [
+        {
+            ...doneItem,
+            id: doneItem.id || generatePartialCompletionId('done'),
+            title: `已完成占比 ${safePercent}%`,
+            checked: true,
+            type: 'partial_completion',
+            partial_group_id: groupId,
+            partial_role: 'done',
+            partial_percent: safePercent
+        },
+        {
+            ...remainingItem,
+            id: remainingItem.id || generatePartialCompletionId('remaining'),
+            title: `未完成占比 ${100 - safePercent}%`,
+            checked: false,
+            type: 'partial_completion',
+            partial_group_id: groupId,
+            partial_role: 'remaining',
+            partial_percent: safePercent
+        }
+    ];
+}
+
+function replacePartialCompletionChecklistGroup(checklist = [], existingGroup, partialItems) {
+    if (!existingGroup) return [...(checklist || []), ...partialItems];
+    const replaceById = new Map(partialItems.map(item => [String(item.id), item]));
+    const existingIds = new Set([
+        existingGroup.doneItem?.id,
+        existingGroup.remainingItem?.id
+    ].filter(Boolean).map(String));
+    const nextChecklist = (checklist || []).map(item => {
+        if (!existingIds.has(String(item.id))) return item;
+        return replaceById.get(String(item.id)) || item;
+    });
+    partialItems.forEach(item => {
+        if (!nextChecklist.some(existing => String(existing.id) === String(item.id))) {
+            nextChecklist.push(item);
+        }
+    });
+    return nextChecklist;
+}
+
+let partialCompletePanelNeedsRefresh = false;
+
+async function openPartialCompleteDialog(taskId, anchor = null) {
+    const task = await TimeWhereDB.getTaskById(taskId);
+    if (!task) {
+        showToast('找不到任务', 'error');
+        return;
+    }
+    if (TimeWhereManageBac?.isManageBacTask(task)) {
+        showToast('ManageBac 来源任务不能使用部分完成', 'error');
+        return;
+    }
+
+    closePartialCompletePanel({ refresh: false });
+    const checklist = Array.isArray(task.checklist) ? task.checklist : [];
+    const partialGroup = findPartialCompletionGroup(checklist);
+    const panel = document.createElement('div');
+    panel.className = 'partial-complete-floating-panel';
+    panel.id = 'partialCompletePanel';
+    panel.dataset.taskId = String(task.id);
+    panel.innerHTML = partialGroup || checklist.length === 0
+        ? renderPartialCompleteRatioPanel(task, partialGroup)
+        : renderPartialCompleteChecklistPanel(task, checklist);
+    panel.addEventListener('click', handlePartialCompletePanelClick);
+    panel.addEventListener('change', handlePartialCompletePanelChange);
+    document.body.appendChild(panel);
+    positionPartialCompletePanel(panel, anchor);
+
+    setTimeout(() => {
+        document.addEventListener('click', closePartialCompletePanelOnOutside);
+    }, 0);
+}
+
+function renderPartialCompleteChecklistPanel(task, checklist) {
+    const taskId = escapeAttribute(task.id);
+    const items = checklist.map(item => `
+        <label class="partial-complete-check-item">
+            <input type="checkbox" data-partial-action="checklist" data-task-id="${taskId}" data-partial-checklist-id="${escapeAttribute(item.id)}" ${item.checked ? 'checked' : ''}>
+            <span>${escapeHTML(item.title || '未命名清单项')}</span>
+        </label>`).join('');
+    return `
+        <div class="partial-complete-dialog" data-mode="checklist" data-task-id="${taskId}">
+            <p class="partial-complete-hint">勾选已完成的清单项，会立即保存并联动任务状态。</p>
+            <div class="partial-complete-check-list">${items}</div>
+        </div>`;
+}
+
+function renderPartialCompleteRatioPanel(task, partialGroup = null) {
+    const taskId = escapeAttribute(task.id);
+    const selectedPercent = partialGroup?.partial_percent || 50;
+    const options = PARTIAL_COMPLETION_RATIOS.map(percent => `
+        <button type="button" class="partial-complete-ratio-option" data-partial-action="ratio" data-task-id="${taskId}" data-percent="${percent}" aria-pressed="${percent === selectedPercent ? 'true' : 'false'}">
+            ${percent}%
+        </button>`).join('');
+    return `
+        <div class="partial-complete-dialog" data-mode="ratio" data-task-id="${taskId}">
+            <p class="partial-complete-hint">选择完成比例，会立即用两条 checklist 模拟进度。</p>
+            <div class="partial-complete-ratio-grid">${options}</div>
+        </div>`;
+}
+
+function positionPartialCompletePanel(panel, anchor) {
+    const rect = anchor && typeof anchor.getBoundingClientRect === 'function'
+        ? anchor.getBoundingClientRect()
+        : anchor;
+    const fallback = document.querySelector(`[data-task-id="${CSS.escape(String(panel.dataset.taskId))}"]`)?.getBoundingClientRect();
+    const sourceRect = rect || fallback || { top: 120, bottom: 120, left: window.innerWidth / 2 - 140 };
+    const width = Math.min(320, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(sourceRect.left, window.innerWidth - width - 12));
+    const top = Math.max(12, Math.min((sourceRect.bottom || sourceRect.top) + 6, window.innerHeight - 240));
+    panel.style.width = `${width}px`;
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+}
+
+function closePartialCompletePanel(options = {}) {
+    const panel = document.getElementById('partialCompletePanel');
+    if (panel) panel.remove();
+    document.removeEventListener('click', closePartialCompletePanelOnOutside);
+    if (options.refresh !== false && partialCompletePanelNeedsRefresh) {
+        partialCompletePanelNeedsRefresh = false;
+        TaskApp.refresh();
+    }
+}
+
+function closePartialCompletePanelOnOutside(event) {
+    if (event.target.closest('#partialCompletePanel')
+        || event.target.closest('[data-task-menu-action="partial-complete"]')
+        || event.target.closest('.task-card-menu-btn')
+        || event.target.closest('.task-detail-menu-btn')) {
+        return;
+    }
+    closePartialCompletePanel();
+}
+
+async function handlePartialCompletePanelClick(event) {
+    const ratioButton = event.target.closest('[data-partial-action="ratio"]');
+    if (!ratioButton) return;
+    event.preventDefault();
+    event.stopPropagation();
+    await savePartialCompleteRatio(ratioButton.dataset.taskId, parseInt(ratioButton.dataset.percent || '50', 10));
+}
+
+async function handlePartialCompletePanelChange(event) {
+    const checkbox = event.target.closest('[data-partial-action="checklist"]');
+    if (!checkbox) return;
+    await savePartialCompleteChecklistItem(
+        checkbox.dataset.taskId,
+        checkbox.dataset.partialChecklistId,
+        checkbox.checked
+    );
+}
+
+async function savePartialCompleteRatio(taskId, percent) {
+    const task = await TimeWhereDB.getTaskById(taskId);
+    if (!task) return false;
+    if (TimeWhereManageBac?.isManageBacTask(task)) {
+        showToast('ManageBac 来源任务不能使用部分完成', 'error');
+        return false;
+    }
+
+    const currentChecklist = Array.isArray(task.checklist) ? task.checklist : [];
+    const partialGroup = findPartialCompletionGroup(currentChecklist);
+    const partialItems = buildPartialCompletionChecklist(percent, partialGroup);
+    const nextChecklist = replacePartialCompletionChecklistGroup(currentChecklist, partialGroup, partialItems);
+
+    await TimeWhereDB.updateChecklist(taskId, nextChecklist);
+    closePartialCompletePanel({ refresh: false });
+    await TaskApp.refresh();
+    showToast('部分完成已更新', 'success');
+    return true;
+}
+
+async function savePartialCompleteChecklistItem(taskId, checklistId, checked) {
+    const task = await TimeWhereDB.getTaskById(taskId);
+    if (!task) return false;
+    if (TimeWhereManageBac?.isManageBacTask(task)) {
+        showToast('ManageBac 来源任务不能使用部分完成', 'error');
+        return false;
+    }
+
+    const nextChecklist = (task.checklist || []).map(item => ({
+        ...item,
+        checked: String(item.id) === String(checklistId) ? !!checked : !!item.checked
+    }));
+    await TimeWhereDB.updateChecklist(taskId, nextChecklist);
+    partialCompletePanelNeedsRefresh = true;
+    showToast('部分完成已更新', 'success');
+    return true;
+}
+

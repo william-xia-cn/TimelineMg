@@ -99,6 +99,34 @@ assert('Side Panel today journal opens and saves in place', popupScript.includes
     && popupScript.includes('data-action="submit-daily-journal"')
     && popupScript.includes('TimeWhereDB.saveDailyJournalDraft')
     && popupScript.includes('TimeWhereDB.submitDailyJournal'));
+assert('Popup and Side Panel current task cards use expandable partial complete panels',
+    popupScript.includes('const partialCompleteBtn = !isManageBacSource')
+    && popupScript.includes('data-action="toggle-partial-complete-menu"')
+    && popupScript.includes('data-partial-complete-menu-for')
+    && popupScript.includes('popup-partial-complete-panel')
+    && popupScript.includes("actionEl.dataset.action === 'toggle-partial-complete-menu'")
+    && popupScript.includes('togglePopupTaskPartialCompleteMenu(actionEl.dataset.taskId)')
+    && popupScript.includes("actionEl.dataset.action === 'partial-complete-ratio'")
+    && popupScript.includes('savePopupTaskPartialCompleteRatio')
+    && popupScript.includes('data-action="toggle-partial-complete-checklist"')
+    && popupScript.includes('savePopupTaskPartialCompleteChecklistItem')
+    && popupScript.includes('const checklistActionEl = event.target.closest(\'[data-action="toggle-partial-complete-checklist"]\')')
+    && popupScript.includes('checklistActionEl.checked'));
+assert('Popup partial complete uses checklist metadata and updateChecklist',
+    popupScript.includes('const PARTIAL_COMPLETION_RATIOS = [10, 20, 30, 50, 70, 80, 90]')
+    && popupScript.includes("type: 'partial_completion'")
+    && popupScript.includes('partial_group_id')
+    && popupScript.includes("partial_role: 'done'")
+    && popupScript.includes("partial_role: 'remaining'")
+    && popupScript.includes('partial_percent: safePercent')
+    && popupScript.includes('replacePartialCompletionChecklistGroup')
+    && popupScript.includes('TimeWhereDB.updateChecklist(taskId, nextChecklist)')
+    && popupScript.includes("showToast('ManageBac 来源任务不能使用部分完成', 'error')"));
+assert('Popup partial complete checklist saves only from change with current checked state',
+    popupScript.includes("if (actionEl.dataset.action === 'toggle-partial-complete-checklist')")
+    && !/actionEl\.dataset\.action === 'toggle-partial-complete-checklist'[\s\S]{0,240}savePopupTaskPartialCompleteChecklistItem/.test(popupScript)
+    && !popupScript.includes('!actionEl.checked')
+    && /const checklistActionEl = event\.target\.closest\('\[data-action="toggle-partial-complete-checklist"\]'\)[\s\S]*savePopupTaskPartialCompleteChecklistItem\([\s\S]*checklistActionEl\.checked/.test(popupScript));
 assert('Popup CSS keeps fixed popup size and adds Side Panel adaptive layout',
     /body\s*\{[\s\S]*width:\s*360px;[\s\S]*height:\s*560px;/.test(popupCss)
     && popupCss.includes('body.sidepanel-body')
@@ -117,7 +145,9 @@ assert('Popup CSS keeps fixed popup size and adds Side Panel adaptive layout',
     && /sidepanel-daily-journal-modal[\s\S]*height:\s*calc\(100vh - 24px\)/.test(popupCss)
     && /sidepanel-journal-body[\s\S]*flex:\s*1 1 auto[\s\S]*min-height:\s*0[\s\S]*overflow-y:\s*auto/.test(popupCss)
     && /sidepanel-daily-journal-modal \.popup-modal-footer[\s\S]*position:\s*sticky[\s\S]*bottom:\s*0/.test(popupCss)
-    && popupCss.includes('.sidepanel-body .popup-task-detail-modal'));
+    && popupCss.includes('.sidepanel-body .popup-task-detail-modal')
+    && popupCss.includes('.popup-partial-complete-panel')
+    && popupCss.includes('.partial-complete-ratio-grid'));
 assert('Dashboard title uses 当前任务 and not 当下任务', focusHtml.includes('<h2>当前任务</h2>')
     && !/当下任务/.test(focusHtml + focusScript));
 assert('Focus pomodoro widget and init path are removed', !/pomodoroWidget|pomo|Pomodoro|initPomodoro|renderPomodoro|togglePomodoro/.test(focusHtml + focusScript + focusCss));
@@ -126,7 +156,60 @@ assert('Focus static add task buttons use delegated action', !/onclick\s*=/.test
 assert('current task card actions use data-action', /data-action="start"/.test(focusScript)
     && /data-action="pause"/.test(focusScript)
     && /data-action="complete"/.test(focusScript));
-assert('current task defer buttons use data-task-id and data-days', /data-action="defer"[\s\S]*data-task-id/.test(focusScript)
+assert('Current task action buttons are neutral by default and only busy/pressed turns dark',
+    !focusScript.includes('btn-micro primary" data-action="start"')
+    && !focusScript.includes('btn-micro primary" data-action="complete"')
+    && !popupScript.includes('btn-micro primary" data-action="start"')
+    && !popupScript.includes('btn-micro primary" data-action="complete"')
+    && focusCss.includes('.task-action-controls .btn-micro[data-busy="true"]')
+    && focusCss.includes('.task-action-controls .btn-micro:active')
+    && popupCss.includes('.task-action-controls .btn-micro[data-busy="true"]')
+    && popupCss.includes('.task-action-controls .btn-micro:active')
+    && focusScript.includes('btn-micro primary current-task-quick-add-action')
+    && popupScript.includes('btn-micro primary current-task-quick-add-action')
+    && focusScript.includes('btn-micro primary" data-action="open-today-journal"')
+    && popupScript.includes('btn-micro primary" data-action="open-today-journal"'));
+assert('Dashboard current task cards expose partial complete for local tasks',
+    focusScript.includes('data-action="toggle-partial-complete-menu"')
+    && focusScript.includes('data-partial-complete-menu-for')
+    && focusScript.includes('partial-complete-panel')
+    && focusScript.includes('部分完成')
+    && focusScript.includes('!isManageBacSource')
+    && focusScript.includes("action === 'toggle-partial-complete-menu'")
+    && focusScript.includes('toggleCurrentTaskPartialCompleteMenu(taskId)')
+    && focusScript.includes("action === 'partial-complete-ratio'")
+    && focusScript.includes('saveCurrentTaskPartialCompleteRatio')
+    && focusScript.includes('data-action="toggle-partial-complete-checklist"')
+    && focusScript.includes('saveCurrentTaskPartialCompleteChecklistItem'));
+assert('Dashboard partial complete uses checklist metadata and immediate updateChecklist',
+    focusScript.includes('const PARTIAL_COMPLETION_RATIOS = [10, 20, 30, 50, 70, 80, 90]')
+    && focusScript.includes("type: 'partial_completion'")
+    && focusScript.includes('partial_group_id')
+    && focusScript.includes("partial_role: 'done'")
+    && focusScript.includes("partial_role: 'remaining'")
+    && focusScript.includes('partial_percent: safePercent')
+    && focusScript.includes('replacePartialCompletionChecklistGroup')
+    && focusScript.includes('TimeWhereDB.updateChecklist(taskId, nextChecklist)')
+    && focusScript.includes('TimeWhereDB.updateChecklist(taskId, checklist)')
+    && focusScript.includes("showToast('ManageBac 来源任务不能使用部分完成', 'error')"));
+assert('Current task partial complete preserves expanded task while reloading',
+    focusScript.includes('let dashboardCurrentTaskExpandedTaskId = null')
+    && focusScript.includes('const requestedExpandedTaskId = targetTaskId || dashboardCurrentTaskExpandedTaskId')
+    && focusScript.includes('dashboardCurrentTaskExpandedTaskId = String(taskId)')
+    && focusScript.includes('reopenCurrentTaskPartialCompleteMenu(taskId)')
+    && focusScript.includes('ensureDashboardCurrentTaskVisible(taskId)')
+    && popupScript.includes('let popupCurrentTaskExpandedTaskId = null')
+    && popupScript.includes('const anchoredIndex = popupCurrentTaskExpandedTaskId')
+    && popupScript.includes('const expandedIndex = anchoredIndex >= 0 ? anchoredIndex : (inProgressIndex >= 0 ? inProgressIndex : 0)')
+    && popupScript.includes('popupCurrentTaskExpandedTaskId = String(taskId)')
+    && popupScript.includes('popupPartialCompleteReopenTaskId = String(taskId)'));
+assert('Dashboard current task defer uses expandable menu with dated options', focusScript.includes('data-action="toggle-defer-menu"')
+    && focusScript.includes('aria-expanded="false"')
+    && focusScript.includes('data-defer-menu-for')
+    && focusScript.includes('延后会向后修改任务截止日期')
+    && focusScript.includes("action === 'toggle-defer-menu'")
+    && focusScript.includes('toggleCurrentTaskDeferMenu(taskId)')
+    && /data-action="defer"[\s\S]*data-task-id/.test(focusScript)
     && /data-days="1"/.test(focusScript)
     && /data-days="3"/.test(focusScript)
     && /data-days="7"/.test(focusScript));
@@ -145,16 +228,24 @@ assert('Dashboard checklist toggle uses delegated action and updateChecklist',
     focusScript.includes("action === 'toggle-current-checklist'")
     && focusScript.includes('toggleCurrentTaskChecklist')
     && focusScript.includes('TimeWhereDB.updateChecklist(taskId, checklist)'));
-assert('Dashboard defer buttons are in right-aligned action controls',
+assert('Dashboard defer toggle is in right-aligned action controls and options render below',
     focusScript.includes('task-action-controls')
-    && focusScript.includes('defer-button-group')
-    && focusScript.includes('defer-label')
+    && focusScript.includes('task-action-stack')
+    && focusScript.includes('deferToggleHtml')
+    && focusScript.includes('deferMenuHtml')
+    && focusScript.includes('defer-options-panel')
     && focusScript.includes('defer-options')
     && focusScript.includes('>1天</button>')
-    && /task-action-controls[\s\S]*progressBtns[\s\S]*deferHtml/.test(focusScript));
+    && /task-action-controls[\s\S]*progressBtns[\s\S]*deferToggleHtml/.test(focusScript)
+    && /task-action-stack[\s\S]*task-action-controls[\s\S]*deferMenuHtml/.test(focusScript));
 assert('Dashboard current task card opens local detail modal from content area',
     focusScript.includes('task-detail-open-zone')
     && focusScript.includes('data-action="open-current-task-detail"')
+    && /<div class="task-title" data-task-id="\$\{taskId\}">/.test(focusScript)
+    && !/<div class="task-title"[^>]*data-action="open-current-task-detail"/.test(focusScript)
+    && focusScript.includes("const detailZone = actionEl.closest('.task-detail-open-zone')")
+    && focusScript.includes("const taskDetails = actionEl.closest('details')")
+    && focusScript.includes('if (!detailZone || !taskDetails?.open) return')
     && focusScript.includes('openCurrentTaskDetailModal')
     && focusScript.includes('saveCurrentTaskDetailModal')
     && focusScript.includes('currentTaskDetailModal')
@@ -191,16 +282,21 @@ assert('ManageBac source tasks render non-clickable defer blocked text', focusSc
     && focusScript.includes('defer-blocked-text')
     && focusScript.includes('ManageBac 来源任务不能延后'));
 assert('ManageBac source defer branch does not render defer buttons',
-    /const deferHtml = isManageBacSource[\s\S]*defer-blocked-text[\s\S]*: `<div class="defer-button-group"[\s\S]*data-action="defer"/.test(focusScript));
+    /const deferBlockedHtml = isManageBacSource[\s\S]*defer-blocked-text/.test(focusScript)
+    && /const deferToggleHtml = !isManageBacSource[\s\S]*data-action="toggle-defer-menu"/.test(focusScript)
+    && /const deferMenuHtml = !isManageBacSource[\s\S]*data-action="defer"/.test(focusScript));
 assert('Dashboard current task CSS defines status checklist and action alignment',
     focusCss.includes('.task-status-label.not-started')
     && focusCss.includes('.task-status-label.in-progress')
     && focusCss.includes('.task-status-label.completed')
     && focusCss.includes('.current-task-checklist')
     && focusCss.includes('.task-action-controls')
-    && focusCss.includes('.defer-button-group')
+    && focusCss.includes('.task-action-stack')
+    && focusCss.includes('.defer-options-panel')
+    && focusCss.includes('.defer-hint')
     && focusCss.includes('.defer-options')
-    && /\.defer-button-group\s*\{[\s\S]*border: 1px dashed/.test(focusCss)
+    && /\.defer-options-panel\s*\{[\s\S]*border: 1px solid/.test(focusCss)
+    && /\.defer-options-panel\[hidden\]\s*\{[\s\S]*display:\s*none/.test(focusCss)
     && focusCss.includes('min-height: 24px'));
 assert('async task actions use try/catch and toast failure paths', /async function startTaskNow[\s\S]*try[\s\S]*catch/.test(focusScript)
     && /async function pauseTask[\s\S]*try[\s\S]*catch/.test(focusScript)
@@ -342,8 +438,9 @@ assert('Popup current task list marks unassigned tasks from Daily Settle display
     && popupScript.includes('当前未分配'));
 assert('Popup does not fallback to one current task or sorted pool', !popupScript.includes('currentTasks[0] || sortedPool[0]')
     && !popupScript.includes('sortedPool[0]'));
-assert('Popup current task list expands only one task, preferring in-progress task', popupScript.includes('const inProgressIndex = tasks.findIndex')
-    && popupScript.includes('const expandedIndex = inProgressIndex >= 0 ? inProgressIndex : 0')
+assert('Popup current task list expands only one task, preferring current anchor then in-progress task', popupScript.includes('const anchoredIndex = popupCurrentTaskExpandedTaskId')
+    && popupScript.includes('const inProgressIndex = tasks.findIndex')
+    && popupScript.includes('const expandedIndex = anchoredIndex >= 0 ? anchoredIndex : (inProgressIndex >= 0 ? inProgressIndex : 0)')
     && popupScript.includes('const isExpanded = index === expandedIndex')
     && popupScript.includes('class="task-card popup-task-card${assignment.status'));
 assert('Popup expanding one task collapses other tasks and auto-scrolls it into view', popupScript.includes("taskList.addEventListener('toggle', handleTaskCardToggle, true)")
@@ -440,6 +537,8 @@ assert('Dashboard quick add CSS defines fixed compact card controls', focusCss.i
     && focusCss.includes('.dashboard-task-detail-panel .checklist-list')
     && focusCss.includes('.dashboard-task-detail-panel .labels-picker')
     && focusCss.includes('.dashboard-task-detail-panel .detail-textarea')
+    && focusCss.includes('.partial-complete-panel')
+    && focusCss.includes('.partial-complete-ratio-grid')
     && /current-task-quick-add\s*\{[\s\S]*flex-shrink:\s*0/.test(focusCss));
 assert('Dashboard current task body scrolls separately from fixed today journal entry', focusScript.includes('current-task-scroll-body custom-scrollbar')
     && /current-task-scroll-body custom-scrollbar[\s\S]*\$\{html\}[\s\S]*<\/div>[\s\S]*\$\{quickAddHTML\}[\s\S]*\$\{journalEntryHTML\}/.test(focusScript)
@@ -464,7 +563,11 @@ assert('Dashboard today journal modal uses aligned review layout', focusScript.i
     && focusScript.includes('aria-label="${escapeAttribute(label)}"')
     && focusScript.includes('placeholder="补充说明..."')
     && focusScript.includes('计划延误说明')
-    && focusScript.includes('计划外完成说明')
+    && focusScript.includes('计划外任务说明')
+    && popupScript.includes('计划外任务说明')
+    && popupScript.includes('没有计划外任务。')
+    && !focusScript.includes('计划外完成说明')
+    && !popupScript.includes('计划外完成说明')
     && focusCss.includes('grid-template-columns: repeat(2, minmax(0, 1fr))')
     && /journal-section[\s\S]*height:\s*100%/.test(focusCss)
     && /journal-note-card[\s\S]*display:\s*flex[\s\S]*flex-direction:\s*column[\s\S]*min-height:\s*120px[\s\S]*height:\s*100%/.test(focusCss)
@@ -472,14 +575,24 @@ assert('Dashboard today journal modal uses aligned review layout', focusScript.i
     && /journal-note-card textarea[\s\S]*flex:\s*1/.test(focusCss)
     && /journal-summary-field[\s\S]*grid-column:\s*1 \/ -1/.test(focusCss)
     && /@media \(max-width:\s*720px\)[\s\S]*journal-review-layout[\s\S]*grid-template-columns:\s*1fr/.test(focusCss));
-assert('Dashboard today journal task statuses use green completed and red delayed markers', focusScript.includes("statusClass = 'completed'")
-    && focusScript.includes("statusIcon = 'check_circle'")
-    && focusScript.includes("statusClass = 'delayed'")
-    && focusScript.includes("statusIcon = 'close'")
+assert('Dashboard today journal task statuses use bordered completed partial and incomplete markers',
+    focusScript.includes('renderJournalStatusTaskList')
+    && popupScript.includes('renderJournalStatusTaskList')
+    && focusScript.includes("statusClass: 'completed'")
+    && focusScript.includes("statusIcon: 'check_circle'")
+    && focusScript.includes("statusClass: 'partial'")
+    && focusScript.includes("statusIcon: 'rule'")
+    && focusScript.includes("statusClass: 'incomplete'")
+    && focusScript.includes("statusIcon: 'close'")
     && focusCss.includes('.journal-task-status.completed')
+    && focusCss.includes('.journal-task-status.partial')
+    && focusCss.includes('.journal-task-status.incomplete')
+    && focusCss.includes('border: 1px solid var(--border)')
     && focusCss.includes('color: #047857')
-    && focusCss.includes('.journal-task-status.delayed')
-    && focusCss.includes('color: #dc2626'));
+    && focusCss.includes('color: #2563eb')
+    && focusCss.includes('color: #dc2626')
+    && popupCss.includes('.journal-task-status.partial')
+    && popupCss.includes('border: 1px solid var(--border)'));
 assert('Dashboard week progress includes weekly journal summary area', focusHtml.includes('weekly-journal-section')
     && focusHtml.includes('本周总结')
     && focusHtml.includes('weekly-journal-grid'));
@@ -532,11 +645,16 @@ assert('Popup checklist toggle uses delegated action and updateChecklist',
     popupScript.includes("action === 'toggle-popup-checklist'")
     && popupScript.includes('togglePopupTaskChecklist')
     && popupScript.includes('TimeWhereDB.updateChecklist(taskId, checklist)'));
-assert('Popup normal task actions and defer buttons are inside card', popupScript.includes('data-action="start"')
+assert('Popup normal task actions and expandable defer menu are inside card', popupScript.includes('data-action="start"')
     && popupScript.includes('data-action="pause"')
     && popupScript.includes('data-action="complete"')
-    && popupScript.includes('defer-label')
+    && popupScript.includes('data-action="toggle-partial-complete-menu"')
+    && popupScript.includes('data-action="toggle-defer-menu"')
+    && popupScript.includes('aria-expanded="false"')
+    && popupScript.includes('popup-defer-panel')
+    && popupScript.includes('延后会向后修改任务截止日期')
     && popupScript.includes('defer-options')
+    && popupScript.includes('togglePopupTaskDeferMenu')
     && popupScript.includes('data-action="defer"')
     && popupScript.includes('data-days="1"')
     && popupScript.includes('data-days="3"')
@@ -544,6 +662,11 @@ assert('Popup normal task actions and defer buttons are inside card', popupScrip
 assert('Popup current task card opens local detail modal from content area',
     popupScript.includes('task-detail-open-zone')
     && popupScript.includes('data-action="open-current-task-detail"')
+    && /<div class="task-title-row" data-task-id="\$\{taskId\}">/.test(popupScript)
+    && !/<div class="task-title-row"[^>]*data-action="open-current-task-detail"/.test(popupScript)
+    && popupScript.includes("const detailZone = actionEl.closest('.task-detail-open-zone')")
+    && popupScript.includes("const taskDetails = actionEl.closest('details')")
+    && popupScript.includes('if (!detailZone || !taskDetails?.open) return')
     && popupScript.includes('openCurrentTaskDetailModal')
     && popupScript.includes('saveCurrentTaskDetailModal')
     && popupScript.includes('currentTaskDetailModal')
@@ -556,16 +679,22 @@ assert('Popup defer updates due_date instead of start_date', /async function def
     && !/async function deferTask[\s\S]*updateTask\(taskId, \{ start_date: nextStartDate \}\)/.test(popupScript));
 assert('Popup ManageBac branch renders blocked defer text and no defer buttons', popupScript.includes('isManageBacSourceTask')
     && popupScript.includes('defer-blocked-text')
-    && /const deferHtml = isManageBacSource[\s\S]*defer-blocked-text[\s\S]*: `<div class="popup-defer-group"[\s\S]*data-action="defer"/.test(popupScript));
+    && /const deferBlockedHtml = isManageBacSource[\s\S]*defer-blocked-text/.test(popupScript)
+    && /const deferToggleHtml = !isManageBacSource[\s\S]*data-action="toggle-defer-menu"/.test(popupScript)
+    && /const deferMenuHtml = !isManageBacSource[\s\S]*data-action="defer"/.test(popupScript));
 assert('Popup CSS defines status checklist and compact action controls',
     popupCss.includes('.popup-task-status-label.not-started')
     && popupCss.includes('.popup-task-status-label.in-progress')
     && popupCss.includes('.popup-task-status-label.completed')
     && popupCss.includes('.popup-task-checklist')
     && popupCss.includes('.task-action-controls')
-    && popupCss.includes('.popup-defer-group')
+    && popupCss.includes('.task-action-stack')
+    && popupCss.includes('.popup-defer-panel')
+    && popupCss.includes('.popup-partial-complete-panel')
+    && popupCss.includes('.defer-hint')
     && popupCss.includes('.defer-options')
-    && /\.popup-defer-group\s*\{[\s\S]*border: 1px dashed/.test(popupCss)
+    && /\.popup-defer-panel\s*\{[\s\S]*border: 1px solid/.test(popupCss)
+    && /\.popup-defer-panel\[hidden\]\s*\{[\s\S]*display:\s*none/.test(popupCss)
     && popupCss.includes('min-height: 32px'));
 assert('Popup action success reloads task and header counts', popupScript.includes('await reloadPopup()'));
 assert('Popup action failure shows toast', popupScript.includes('showToast(`操作失败：${error.message}`'));

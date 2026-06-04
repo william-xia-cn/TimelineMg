@@ -8,12 +8,14 @@ const DASHBOARD_QUICK_ADD_DEFAULT_PLAN_KEYWORD = 'English';
 const DASHBOARD_QUICK_ADD_BUCKET_NAME = '作业';
 const DASHBOARD_SUBJECT_BUCKET_TEMPLATE = ['上课', '作业', '单元测试', '阶段考试'];
 const DASHBOARD_OTHER_SCHOOL_BUCKET_TEMPLATE = ['事项', '活动', '申请', '其他'];
+const PARTIAL_COMPLETION_RATIOS = [10, 20, 30, 50, 70, 80, 90];
 const DASHBOARD_DETAIL_PRIORITIES = [
     { key: 'urgent', label: 'Urgent', color: '#ef4444', bgColor: '#fef2f2' },
     { key: 'important', label: 'Important', color: '#f59e0b', bgColor: '#fffbeb' },
     { key: 'medium', label: 'Medium', color: '#1d8cf8', bgColor: '#eff6ff' },
     { key: 'low', label: 'Low', color: '#64748b', bgColor: '#f8fafc' }
 ];
+let dashboardCurrentTaskExpandedTaskId = null;
 
 function formatDateISO(date) {
     const y = date.getFullYear();
@@ -265,6 +267,13 @@ async function loadTaskColumn() {
     // 渲染任务卡片
     let html = '';
     const targetTaskId = new URLSearchParams(window.location.search).get('task_id');
+    const requestedExpandedTaskId = targetTaskId || dashboardCurrentTaskExpandedTaskId;
+    const hasExpandedTask = requestedExpandedTaskId
+        ? displayTasks.some(task => String(task.id) === String(requestedExpandedTaskId))
+        : false;
+    if (dashboardCurrentTaskExpandedTaskId && !hasExpandedTask && !targetTaskId) {
+        dashboardCurrentTaskExpandedTaskId = null;
+    }
     displayTasks.forEach((task, index) => {
         const isFirst = index === 0;
         const dueDate = task.due_date || task.deadline || '';
@@ -275,7 +284,7 @@ async function loadTaskColumn() {
         const assignment = task.assignment || { status: 'unassigned', label: '当前未分配' };
 
         html += createTaskCard(task, {
-            expanded: task.id === targetTaskId || isFirst || isInProgress,
+            expanded: hasExpandedTask ? String(task.id) === String(requestedExpandedTaskId) : (isFirst || isInProgress),
             isOverdue,
             isDueToday,
             isTimed,
@@ -311,7 +320,7 @@ function renderCurrentTaskQuickAdd(todayStr) {
 }
 
 async function renderTodayJournalEntry(todayStr, now = new Date()) {
-    if (TimeWhereDB.ensureDailyJournalSnapshot && now.getHours() >= 6) {
+    if (TimeWhereDB.ensureDailyJournalSnapshot) {
         await TimeWhereDB.ensureDailyJournalSnapshot(todayStr, now).catch(error => {
             console.warn('[Focus] Daily journal snapshot skipped:', error);
         });
@@ -370,27 +379,47 @@ function createTaskCard(task, opts = {}) {
     }
 
     // 操作按钮
+    const partialCompleteToggleHtml = !isManageBacSource
+        ? `<button class="btn-micro" data-action="toggle-partial-complete-menu" data-task-id="${taskId}" aria-expanded="false">部分完成</button>`
+        : '';
+    const checklist = Array.isArray(task.checklist) ? task.checklist : [];
+    const partialGroup = findPartialCompletionGroup(checklist);
+    const partialCompleteMenuHtml = !isManageBacSource
+        ? `<div class="partial-complete-panel" data-partial-complete-menu-for="${taskId}" hidden>
+            ${partialGroup || checklist.length === 0
+                ? renderPartialCompleteRatioBody(taskId, partialGroup)
+                : renderPartialCompleteChecklistBody(taskId, checklist)}
+        </div>`
+        : '';
     const progressBtns = isInProgress
         ? `<button class="btn-micro" data-action="pause" data-task-id="${taskId}">暂停</button>
-           <button class="btn-micro primary" data-action="complete" data-task-id="${taskId}">完成</button>`
-        : `<button class="btn-micro primary" data-action="start" data-task-id="${taskId}">开始</button>
+           ${partialCompleteToggleHtml}
+           <button class="btn-micro" data-action="complete" data-task-id="${taskId}">完成</button>`
+        : `<button class="btn-micro" data-action="start" data-task-id="${taskId}">开始</button>
+           ${partialCompleteToggleHtml}
            <button class="btn-micro" data-action="complete" data-task-id="${taskId}">完成</button>`;
 
-    const deferHtml = isManageBacSource
+    const deferBlockedHtml = isManageBacSource
         ? `<span class="defer-blocked-text">ManageBac 来源任务不能延后</span>`
-        : `<div class="defer-button-group" aria-label="延后">
-            <span class="defer-label">延后</span>
-            <div class="defer-options">
+        : '';
+    const deferToggleHtml = !isManageBacSource
+        ? `<button class="btn-micro" data-action="toggle-defer-menu" data-task-id="${taskId}" aria-expanded="false">延后</button>`
+        : '';
+    const deferMenuHtml = !isManageBacSource
+        ? `<div class="defer-options-panel" data-defer-menu-for="${taskId}" hidden>
+            <p class="defer-hint">延后会向后修改任务截止日期</p>
+            <div class="defer-options" aria-label="选择延后天数">
                 <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="1">1天</button>
                 <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="3">3天</button>
                 <button class="btn-defer" data-action="defer" data-task-id="${taskId}" data-days="7">7天</button>
             </div>
-        </div>`;
+        </div>`
+        : '';
     return `
         <div class="accordion-task${isOverdue ? ' task-overdue' : ''}${assignment?.status === 'unassigned' ? ' task-unassigned' : ''}" data-task-card-id="${taskId}">
             <details${openAttr}>
                 <summary>
-                    <div class="task-title" data-action="open-current-task-detail" data-task-id="${taskId}" title="打开任务详情">
+                    <div class="task-title" data-task-id="${taskId}">
                         <span class="status-dot ${dotClass}"></span>
                         <h4>${title}</h4>
                         <span class="task-status-label ${statusLabel.className}">${statusLabel.text}</span>
@@ -410,10 +439,14 @@ function createTaskCard(task, opts = {}) {
                         </div>
                     </div>
                     <div class="task-action-row">
-                        <div class="task-action-left">${isManageBacSource ? deferHtml : ''}</div>
-                        <div class="task-action-controls">
-                            ${progressBtns}
-                            ${!isManageBacSource ? deferHtml : ''}
+                        <div class="task-action-left">${deferBlockedHtml}</div>
+                        <div class="task-action-stack">
+                            <div class="task-action-controls">
+                                ${progressBtns}
+                                ${deferToggleHtml}
+                            </div>
+                            ${partialCompleteMenuHtml}
+                            ${deferMenuHtml}
                         </div>
                     </div>
                 </div>
@@ -678,6 +711,7 @@ async function deferTask(taskId, days) {
         const targetStr = formatDateISO(target);
         await TimeWhereDB.updateTask(taskId, { due_date: targetStr });
         await loadDashboardData();
+        requestAnimationFrame(() => ensureDashboardCurrentTaskVisible(taskId));
         showToast(`任务已延后 ${days} 天`, 'info');
     } catch (error) {
         showToast(`延后任务失败：${error.message}`, 'error');
@@ -695,6 +729,231 @@ async function toggleCurrentTaskChecklist(taskId, checklistId) {
     } catch (error) {
         showToast(`更新清单失败：${error.message}`, 'error');
     }
+}
+
+function toggleCurrentTaskDeferMenu(taskId) {
+    const targetMenu = document.querySelector(`[data-defer-menu-for="${CSS.escape(String(taskId))}"]`);
+    const targetButton = document.querySelector(`[data-action="toggle-defer-menu"][data-task-id="${CSS.escape(String(taskId))}"]`);
+    if (!targetMenu || !targetButton) return;
+    const shouldOpen = targetMenu.hasAttribute('hidden');
+
+    closeCurrentTaskPartialCompleteMenus();
+    document.querySelectorAll('[data-defer-menu-for]').forEach(menu => {
+        menu.setAttribute('hidden', '');
+    });
+    document.querySelectorAll('[data-action="toggle-defer-menu"]').forEach(button => {
+        button.setAttribute('aria-expanded', 'false');
+    });
+
+    if (shouldOpen) {
+        dashboardCurrentTaskExpandedTaskId = String(taskId);
+        targetMenu.removeAttribute('hidden');
+        targetButton.setAttribute('aria-expanded', 'true');
+    } else if (dashboardCurrentTaskExpandedTaskId === String(taskId)) {
+        dashboardCurrentTaskExpandedTaskId = null;
+    }
+}
+
+function closeCurrentTaskPartialCompleteMenus() {
+    document.querySelectorAll('[data-partial-complete-menu-for]').forEach(menu => {
+        menu.setAttribute('hidden', '');
+    });
+    document.querySelectorAll('[data-action="toggle-partial-complete-menu"]').forEach(button => {
+        button.setAttribute('aria-expanded', 'false');
+    });
+}
+
+function reopenCurrentTaskPartialCompleteMenu(taskId) {
+    const escapedTaskId = CSS.escape(String(taskId));
+    const targetMenu = document.querySelector(`[data-partial-complete-menu-for="${escapedTaskId}"]`);
+    const targetButton = document.querySelector(`[data-action="toggle-partial-complete-menu"][data-task-id="${escapedTaskId}"]`);
+    if (!targetMenu || !targetButton) return;
+    targetMenu.removeAttribute('hidden');
+    targetButton.setAttribute('aria-expanded', 'true');
+    ensureDashboardCurrentTaskVisible(taskId);
+}
+
+function ensureDashboardCurrentTaskVisible(taskId) {
+    const escapedTaskId = CSS.escape(String(taskId));
+    document.querySelector(`[data-task-card-id="${escapedTaskId}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+function toggleCurrentTaskPartialCompleteMenu(taskId) {
+    const escapedTaskId = CSS.escape(String(taskId));
+    const targetMenu = document.querySelector(`[data-partial-complete-menu-for="${escapedTaskId}"]`);
+    const targetButton = document.querySelector(`[data-action="toggle-partial-complete-menu"][data-task-id="${escapedTaskId}"]`);
+    if (!targetMenu || !targetButton) return;
+    const shouldOpen = targetMenu.hasAttribute('hidden');
+
+    document.querySelectorAll('[data-defer-menu-for]').forEach(menu => {
+        menu.setAttribute('hidden', '');
+    });
+    document.querySelectorAll('[data-action="toggle-defer-menu"]').forEach(button => {
+        button.setAttribute('aria-expanded', 'false');
+    });
+    closeCurrentTaskPartialCompleteMenus();
+
+    if (shouldOpen) {
+        dashboardCurrentTaskExpandedTaskId = String(taskId);
+        targetMenu.removeAttribute('hidden');
+        targetButton.setAttribute('aria-expanded', 'true');
+    } else if (dashboardCurrentTaskExpandedTaskId === String(taskId)) {
+        dashboardCurrentTaskExpandedTaskId = null;
+    }
+}
+
+function isPartialCompletionChecklistItem(item) {
+    return item?.type === 'partial_completion'
+        && !!item.partial_group_id
+        && (item.partial_role === 'done' || item.partial_role === 'remaining');
+}
+
+function findPartialCompletionGroup(checklist = []) {
+    const groups = new Map();
+    (checklist || []).filter(isPartialCompletionChecklistItem).forEach(item => {
+        const groupId = item.partial_group_id;
+        const group = groups.get(groupId) || { partial_group_id: groupId, doneItem: null, remainingItem: null };
+        if (item.partial_role === 'done') group.doneItem = item;
+        if (item.partial_role === 'remaining') group.remainingItem = item;
+        groups.set(groupId, group);
+    });
+
+    for (const group of groups.values()) {
+        if (group.doneItem && group.remainingItem) {
+            const parsedPercent = parseInt(group.doneItem.partial_percent, 10);
+            group.partial_percent = PARTIAL_COMPLETION_RATIOS.includes(parsedPercent) ? parsedPercent : 50;
+            return group;
+        }
+    }
+    return null;
+}
+
+function generatePartialCompletionId(role) {
+    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+    return `partial-${role}-${Date.now()}`;
+}
+
+function buildPartialCompletionChecklist(percent, existingGroup = null) {
+    const safePercent = PARTIAL_COMPLETION_RATIOS.includes(parseInt(percent, 10)) ? parseInt(percent, 10) : 50;
+    const groupId = existingGroup?.partial_group_id
+        || existingGroup?.doneItem?.partial_group_id
+        || existingGroup?.remainingItem?.partial_group_id
+        || generatePartialCompletionId('group');
+    const doneItem = existingGroup?.doneItem || {};
+    const remainingItem = existingGroup?.remainingItem || {};
+    return [
+        {
+            ...doneItem,
+            id: doneItem.id || generatePartialCompletionId('done'),
+            title: `已完成占比 ${safePercent}%`,
+            checked: true,
+            type: 'partial_completion',
+            partial_group_id: groupId,
+            partial_role: 'done',
+            partial_percent: safePercent
+        },
+        {
+            ...remainingItem,
+            id: remainingItem.id || generatePartialCompletionId('remaining'),
+            title: `未完成占比 ${100 - safePercent}%`,
+            checked: false,
+            type: 'partial_completion',
+            partial_group_id: groupId,
+            partial_role: 'remaining',
+            partial_percent: safePercent
+        }
+    ];
+}
+
+function replacePartialCompletionChecklistGroup(checklist = [], existingGroup, partialItems) {
+    if (!existingGroup) return [...(checklist || []), ...partialItems];
+    const replaceById = new Map(partialItems.map(item => [String(item.id), item]));
+    const existingIds = new Set([
+        existingGroup.doneItem?.id,
+        existingGroup.remainingItem?.id
+    ].filter(Boolean).map(String));
+    const nextChecklist = (checklist || []).map(item => {
+        if (!existingIds.has(String(item.id))) return item;
+        return replaceById.get(String(item.id)) || item;
+    });
+    partialItems.forEach(item => {
+        if (!nextChecklist.some(existing => String(existing.id) === String(item.id))) {
+            nextChecklist.push(item);
+        }
+    });
+    return nextChecklist;
+}
+
+async function saveCurrentTaskPartialCompleteRatio(taskId, percent) {
+    dashboardCurrentTaskExpandedTaskId = String(taskId);
+    const task = await TimeWhereDB.getTaskById(taskId);
+    if (!task) {
+        showToast('任务不存在或已删除', 'error');
+        return;
+    }
+    if (TimeWhereDB.isManageBacSourceTask?.(task)) {
+        showToast('ManageBac 来源任务不能使用部分完成', 'error');
+        return;
+    }
+
+    const currentChecklist = Array.isArray(task.checklist) ? task.checklist : [];
+    const partialGroup = findPartialCompletionGroup(currentChecklist);
+    const partialItems = buildPartialCompletionChecklist(percent, partialGroup);
+    const nextChecklist = replacePartialCompletionChecklistGroup(currentChecklist, partialGroup, partialItems);
+    await TimeWhereDB.updateChecklist(taskId, nextChecklist);
+    closeCurrentTaskPartialCompleteMenus();
+    await loadDashboardData();
+    requestAnimationFrame(() => ensureDashboardCurrentTaskVisible(taskId));
+    showToast('部分完成已更新', 'success');
+}
+
+async function saveCurrentTaskPartialCompleteChecklistItem(taskId, checklistId, checked) {
+    dashboardCurrentTaskExpandedTaskId = String(taskId);
+    const task = await TimeWhereDB.getTaskById(taskId);
+    if (!task) {
+        showToast('任务不存在或已删除', 'error');
+        return;
+    }
+    if (TimeWhereDB.isManageBacSourceTask?.(task)) {
+        showToast('ManageBac 来源任务不能使用部分完成', 'error');
+        return;
+    }
+
+    const checklist = (task.checklist || []).map(item =>
+        String(item.id) === String(checklistId) ? { ...item, checked: !!checked } : item
+    );
+    await TimeWhereDB.updateChecklist(taskId, checklist);
+    await loadDashboardData();
+    requestAnimationFrame(() => reopenCurrentTaskPartialCompleteMenu(taskId));
+    showToast('部分完成已更新', 'success');
+}
+
+function renderPartialCompleteChecklistBody(taskId, checklist) {
+    const safeTaskId = escapeAttribute(taskId);
+    const items = checklist.map(item => `
+        <label class="partial-complete-check-item">
+            <input type="checkbox" data-action="toggle-partial-complete-checklist" data-task-id="${safeTaskId}" data-checklist-id="${escapeAttribute(item.id || '')}" ${item.checked ? 'checked' : ''}>
+            <span>${escapeHTML(item.title || '未命名清单项')}</span>
+        </label>`).join('');
+    return `
+        <div class="partial-complete-dialog" data-mode="checklist" data-task-id="${safeTaskId}">
+            <p class="partial-complete-hint">勾选已完成的清单项，会立即保存并联动任务状态。</p>
+            <div class="partial-complete-check-list">${items}</div>
+        </div>`;
+}
+
+function renderPartialCompleteRatioBody(taskId, partialGroup) {
+    const safeTaskId = escapeAttribute(taskId);
+    const selectedPercent = partialGroup?.partial_percent || 50;
+    const options = PARTIAL_COMPLETION_RATIOS.map(percent => `
+        <button type="button" class="partial-complete-ratio-option" data-action="partial-complete-ratio" data-task-id="${safeTaskId}" data-percent="${percent}" aria-pressed="${percent === selectedPercent ? 'true' : 'false'}">
+            ${percent}%
+        </button>`).join('');
+    return `
+        <div class="partial-complete-dialog" data-mode="ratio" data-task-id="${safeTaskId}">
+            <p class="partial-complete-hint">选择完成比例，会立即用两条 checklist 模拟进度。</p>
+            <div class="partial-complete-ratio-grid">${options}</div>
+        </div>`;
 }
 
 // ============================================================
@@ -1306,6 +1565,9 @@ function handleFocusDelegatedClick(e) {
     }
     if (action === 'open-current-task-detail') {
         e.preventDefault();
+        const detailZone = actionEl.closest('.task-detail-open-zone');
+        const taskDetails = actionEl.closest('details');
+        if (!detailZone || !taskDetails?.open) return;
         runFocusAction(actionEl, async () => openCurrentTaskDetailModal(taskId));
         return;
     }
@@ -1333,6 +1595,7 @@ function handleFocusDelegatedClick(e) {
         closeDashboardQuickAddTaskPanel();
         closeDailyJournalModal();
         closeTaskArrangeReviewModal();
+        closeCurrentTaskPartialCompleteMenus();
         return;
     }
     if (action === 'close-current-task-detail') {
@@ -1375,6 +1638,21 @@ function handleFocusDelegatedClick(e) {
         runFocusAction(actionEl, async () => toggleCurrentTaskChecklist(taskId, actionEl.dataset.checklistId));
         return;
     }
+    if (action === 'toggle-partial-complete-menu') {
+        e.preventDefault();
+        toggleCurrentTaskPartialCompleteMenu(taskId);
+        return;
+    }
+    if (action === 'partial-complete-ratio') {
+        e.preventDefault();
+        runFocusAction(actionEl, async () => saveCurrentTaskPartialCompleteRatio(taskId, parseInt(actionEl.dataset.percent || '50', 10)));
+        return;
+    }
+    if (action === 'toggle-defer-menu') {
+        e.preventDefault();
+        toggleCurrentTaskDeferMenu(taskId);
+        return;
+    }
     if (['start', 'pause', 'complete', 'defer'].includes(action)) {
         e.preventDefault();
         runFocusAction(actionEl, async () => {
@@ -1389,6 +1667,14 @@ function handleFocusDelegatedClick(e) {
 function handleFocusDelegatedChange(e) {
     const actionEl = e.target.closest('[data-action]');
     if (!actionEl) return;
+    if (actionEl.dataset.action === 'toggle-partial-complete-checklist') {
+        runFocusAction(actionEl, async () => saveCurrentTaskPartialCompleteChecklistItem(
+            actionEl.dataset.taskId,
+            actionEl.dataset.checklistId,
+            actionEl.checked
+        ));
+        return;
+    }
     if (actionEl.dataset.action === 'dashboard-quick-add-plan-change') {
         runFocusAction(actionEl, async () => refreshDashboardQuickAddPlanFields(actionEl.value));
     }
@@ -2084,15 +2370,36 @@ function openJournalFromUrl() {
     });
 }
 
-function renderJournalTaskList(tasks, emptyText) {
+function getJournalTaskStatusRender(task, fallback = {}) {
+    if (task?.journal_status === 'completed') {
+        return { statusClass: 'completed', statusIcon: 'check_circle', statusLabel: '完成' };
+    }
+    if (task?.journal_status === 'partial') {
+        return { statusClass: 'partial', statusIcon: 'rule', statusLabel: '部分完成' };
+    }
+    if (task?.journal_status === 'incomplete') {
+        return { statusClass: 'incomplete', statusIcon: 'close', statusLabel: '未完成' };
+    }
+    if (fallback.completed) return { statusClass: 'completed', statusIcon: 'check_circle', statusLabel: '完成' };
+    if (fallback.partial) return { statusClass: 'partial', statusIcon: 'rule', statusLabel: '部分完成' };
+    return { statusClass: 'incomplete', statusIcon: 'close', statusLabel: '未完成' };
+}
+
+function renderJournalStatusTaskList(tasks, emptyText, statusResolver = () => ({})) {
     if (!Array.isArray(tasks) || tasks.length === 0) {
         return `<p class="journal-empty">${escapeHTML(emptyText)}</p>`;
     }
-    return `<ul class="journal-task-list">${tasks.map(task => `
-        <li>
-            <span>${escapeHTML(task.title || '无标题任务')}</span>
-            ${task.due_date ? `<small>截止 ${escapeHTML(formatDate(task.due_date))}</small>` : ''}
-        </li>`).join('')}</ul>`;
+    return `<ul class="journal-task-list journal-review-task-list">${tasks.map(task => {
+        const status = getJournalTaskStatusRender(task, statusResolver(task));
+        return `
+            <li class="journal-task-status ${status.statusClass}">
+                <span class="journal-task-status-main">
+                    <span class="material-symbols-outlined journal-task-status-icon">${status.statusIcon}</span>
+                    <span>${escapeHTML(task.title || '无标题任务')}</span>
+                </span>
+                <small>${escapeHTML(status.statusLabel)}</small>
+            </li>`;
+    }).join('')}</ul>`;
 }
 
 function renderJournalPlannedTaskReview(draft) {
@@ -2103,31 +2410,16 @@ function renderJournalPlannedTaskReview(draft) {
 
     const completedIds = new Set((draft.completed_task_snapshots || []).map(task => String(task.id)));
     const delayedIds = new Set((draft.delayed_task_snapshots || []).map(task => String(task.id)));
+    const progressedIds = new Set((draft.progressed_task_ids || []).map(String));
 
-    return `<ul class="journal-task-list journal-review-task-list">${planned.map(task => {
+    return renderJournalStatusTaskList(planned, '今天没有冻结的计划任务。', task => {
         const taskId = String(task.id);
-        let statusClass = 'pending';
-        let statusIcon = 'help';
-        let statusLabel = '待确认';
-        if (completedIds.has(taskId)) {
-            statusClass = 'completed';
-            statusIcon = 'check_circle';
-            statusLabel = '任务完成';
-        } else if (delayedIds.has(taskId)) {
-            statusClass = 'delayed';
-            statusIcon = 'close';
-            statusLabel = '任务延误';
-        }
-
-        return `
-            <li class="journal-task-status ${statusClass}">
-                <span class="journal-task-status-main">
-                    <span class="material-symbols-outlined journal-task-status-icon">${statusIcon}</span>
-                    <span>${escapeHTML(task.title || '无标题任务')}</span>
-                </span>
-                <small>${escapeHTML(statusLabel)}</small>
-            </li>`;
-    }).join('')}</ul>`;
+        return {
+            completed: completedIds.has(taskId),
+            partial: progressedIds.has(taskId),
+            incomplete: delayedIds.has(taskId)
+        };
+    });
 }
 
 function journalTextarea(name, label, value) {
@@ -2141,7 +2433,7 @@ function journalTextarea(name, label, value) {
 async function openDailyJournalModal(date = formatDateISO(new Date())) {
     closeDailyJournalModal();
     const today = new Date(`${date}T12:00:00`);
-    if (TimeWhereDB.ensureDailyJournalSnapshot && new Date().getHours() >= 6) {
+    if (TimeWhereDB.ensureDailyJournalSnapshot) {
         await TimeWhereDB.ensureDailyJournalSnapshot(date, new Date()).catch(error => {
             console.warn('[Focus] Daily journal snapshot skipped:', error);
         });
@@ -2163,7 +2455,7 @@ async function openDailyJournalModal(date = formatDateISO(new Date())) {
             <div class="modal-body">
                 <div class="journal-status-row">
                     <span class="badge">${escapeHTML(statusText)}</span>
-                    <span>${escapeHTML(draft.snapshot_at ? `计划快照 ${relativeTime(draft.snapshot_at)}` : '6 点后首次可用时生成计划快照')}</span>
+                    <span>${escapeHTML(draft.snapshot_at ? `计划快照 ${relativeTime(draft.snapshot_at)}` : '当天 0 点后首次可用时生成计划快照')}</span>
                 </div>
                 <div class="journal-review-layout">
                     <section class="journal-section">
@@ -2172,10 +2464,10 @@ async function openDailyJournalModal(date = formatDateISO(new Date())) {
                     </section>
                     ${journalTextarea('delayed_notes', '计划延误说明', draft.delayed_notes)}
                     <section class="journal-section">
-                        <h4>计划外完成 <strong>${draft.extra_done_task_snapshots?.length || 0}</strong></h4>
-                        ${renderJournalTaskList(draft.extra_done_task_snapshots, '没有计划外完成任务。')}
+                        <h4>计划外任务 <strong>${draft.extra_done_task_snapshots?.length || 0}</strong></h4>
+                        ${renderJournalStatusTaskList(draft.extra_done_task_snapshots, '没有计划外任务。')}
                     </section>
-                    ${journalTextarea('extra_done_notes', '计划外完成说明', draft.extra_done_notes)}
+                    ${journalTextarea('extra_done_notes', '计划外任务说明', draft.extra_done_notes)}
                     <div class="journal-summary-field">
                     ${journalTextarea('general_notes', '今日总结', draft.general_notes)}
                     </div>

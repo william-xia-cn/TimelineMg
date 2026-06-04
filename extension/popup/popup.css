@@ -602,8 +602,15 @@ body.sidepanel-body {
     flex-wrap: wrap;
 }
 
-.task-action-controls,
-.popup-defer-group {
+.task-action-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    min-width: 0;
+}
+
+.task-action-controls {
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -611,28 +618,47 @@ body.sidepanel-body {
     flex-wrap: wrap;
 }
 
-.popup-defer-group {
-    padding: 4px;
-    border: 1px dashed rgba(148, 163, 184, 0.75);
-    border-radius: 8px;
+.popup-defer-panel {
+    width: min(260px, 100%);
+    padding: 8px;
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    border-radius: 10px;
+    background: #f8fafc;
+    display: grid;
+    gap: 7px;
+    box-shadow: var(--shadow-sm);
 }
 
-.defer-label {
-    min-height: 24px;
-    padding: 0 7px;
-    border-radius: 8px;
+.popup-defer-panel[hidden] {
+    display: none;
+}
+
+.popup-partial-complete-panel {
+    width: min(300px, 100%);
+    padding: 8px;
     border: 1px solid rgba(226, 232, 240, 0.9);
-    background: white;
+    border-radius: 10px;
+    background: #f8fafc;
+    display: grid;
+    gap: 8px;
+    box-shadow: var(--shadow-sm);
+}
+
+.popup-partial-complete-panel[hidden] {
+    display: none;
+}
+
+.defer-hint {
+    margin: 0;
     color: var(--text-sub);
     font-size: 11px;
-    font-weight: 700;
-    display: inline-flex;
-    align-items: center;
+    line-height: 1.35;
 }
 
 .defer-options {
-    display: inline-flex;
+    display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 4px;
 }
 
@@ -658,6 +684,13 @@ body.sidepanel-body {
 .btn-micro:hover {
     transform: translateY(-1px);
     box-shadow: var(--shadow-sm);
+}
+
+.task-action-controls .btn-micro[data-busy="true"],
+.task-action-controls .btn-micro:active {
+    background: var(--color-sidebar);
+    color: white;
+    border-color: var(--color-sidebar);
 }
 
 .btn-defer {
@@ -886,6 +919,82 @@ body.sidepanel-body {
     line-height: 1.4;
 }
 
+.partial-complete-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.partial-complete-hint {
+    margin: 0;
+    color: var(--text-sub);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.partial-complete-check-list {
+    display: grid;
+    gap: 7px;
+    max-height: 170px;
+    overflow-y: auto;
+}
+
+.partial-complete-check-item {
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    border-radius: 10px;
+    background: white;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 9px;
+    color: var(--text-main);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.partial-complete-check-item input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    flex-shrink: 0;
+}
+
+.partial-complete-check-item input:checked + span {
+    color: var(--text-sub);
+    text-decoration: line-through;
+}
+
+.partial-complete-ratio-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.partial-complete-ratio-option {
+    min-height: 38px;
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    border-radius: 10px;
+    background: white;
+    display: grid;
+    place-items: center;
+    color: var(--text-main);
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.partial-complete-ratio-option[aria-pressed="true"],
+.partial-complete-ratio-option:hover {
+    border-color: var(--accent);
+    background: #eaf5ff;
+    color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(29, 140, 248, 0.16);
+}
+
 .sidepanel-daily-journal-modal {
     max-width: min(620px, calc(100vw - 24px));
     height: calc(100vh - 24px);
@@ -952,6 +1061,10 @@ body.sidepanel-body {
     gap: 8px;
     font-size: 12px;
     color: var(--text-main);
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.75);
 }
 
 .journal-review-task-list li {
@@ -982,8 +1095,23 @@ body.sidepanel-body {
     color: #047857;
 }
 
+.journal-task-status.progressed,
+.journal-task-status.progressed small {
+    color: #0f766e;
+}
+
+.journal-task-status.partial,
+.journal-task-status.partial small {
+    color: #2563eb;
+}
+
 .journal-task-status.delayed,
 .journal-task-status.delayed small {
+    color: #dc2626;
+}
+
+.journal-task-status.incomplete,
+.journal-task-status.incomplete small {
     color: #dc2626;
 }
 

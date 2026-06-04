@@ -1,6 +1,6 @@
 # TimeWhere Side Panel 快速使用手册
 
-适用版本：当前 `0.2.2` 源码基线的 Side Panel / quick-add 功能。
+适用版本：当前 `0.2.3` 源码基线的 Side Panel / quick-add 功能。
 
 > 注意：Chrome Web Store 首个 Private 测试发布包为 `0.2.1` policy-fix 包；本文面向 `0.2.2` 及后续包含 Side Panel 的测试包。
 
@@ -70,7 +70,7 @@ Side Panel 可以直接整理 Daily Journal：
 2. 查看今天计划任务的完成/延误情况。
 3. 填写：
    - 计划延误说明
-   - 计划外完成说明
+   - 计划外任务说明
    - 今日总结
 4. 点击 `保存草稿` 或 `提交总结`。
 
@@ -109,7 +109,7 @@ Side Panel 可以直接整理 Daily Journal：
 
 1. 打开 `今日总结`。
 2. 检查计划任务完成情况。
-3. 写下延误原因、计划外完成和今日总结。
+3. 写下延误原因、计划外任务和今日总结。
 4. 提交总结。
 
 ## 8. 常见问题

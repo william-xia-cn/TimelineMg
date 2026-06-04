@@ -3,10 +3,10 @@
 ## Project Status
 
 - **Project**: TimeWhere
-- **Version**: package / extension release version `0.2.2`; design-doc version `v2.3`
-- **Stage**: Baseline Stabilized; CWS Private testing Side Panel update in progress
-- **Active release/deployment target**: TimeWhere `0.2.2` CWS Private testing Side Panel / quick-add update after the accepted `0.2.1` Private testing package was published.
-- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-025 approved the `0.2.1` Purple Potassium permission fix; D-026 records current source using Chrome Side Panel as the primary toolbar surface. D-027 approves publishing the accepted `0.2.1` Private testing package, bumping Side Panel source/package to `0.2.2`, uploading the sanitized CWS package, submitting it for review, and enabling automatic publish after review. Public listing expansion, tag, merge, deploy, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
+- **Version**: package / extension release version `0.2.3`; design-doc version `v2.3`
+- **Stage**: Baseline Stabilized; CWS Private testing `0.2.3` OAuth correction submitted for review
+- **Active release/deployment target**: TimeWhere `0.2.3` CWS Private testing OAuth correction after the `0.2.2` Side Panel update exposed a CWS OAuth client mismatch.
+- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-025 approved the `0.2.1` Purple Potassium permission fix; D-026 records current source using Chrome Side Panel as the primary toolbar surface. D-027 approved the `0.2.2` Side Panel CWS update. D-029 approves the `0.2.3` CWS OAuth correction upload / Submit for Review and automatic publish after review. Public listing expansion, tag, merge, deploy, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
 
 ## Collaboration Model
 
@@ -92,12 +92,12 @@ Escalate to external advisor for:
 
 | Item | Status |
 |---|---|
-| Candidate version | `0.2.2` CWS Private Side Panel update |
+| Candidate version | `0.2.3` CWS Private OAuth correction |
 | Candidate commit | `03a979f` |
-| Package/artifact | `dist/TimeWhere-0.2.2-private-cws-sanitized-20260523-224444.zip` |
-| Artifact hash | `486AFF60126AD5E0C38AD1A7102EC0F5DA4D641BD672BEE7C8A1D1479ADBC612` |
+| Package/artifact | `dist/TimeWhere-0.2.3-private-cws-sanitized-20260524-041047.zip` |
+| Artifact hash | `F51880F8BE68A6B607B586EB58D1871D2F5DA06580F2E9387BABB122FCBBDA1B` |
 | Deployment channel | Chrome Web Store Private testing |
-| Review status | Accepted `0.2.1` Private testing package was published to Private testers; `0.2.2` Side Panel update was submitted to CWS review with automatic publish after review enabled |
+| Review status | `0.2.3` OAuth correction was submitted to CWS review on 2026-05-24 after canceling the pending `0.2.2` draft review; automatic publish after review was enabled. CWS status verified as `待审核`; do not claim publication until CWS accepts it. |
 | Public release | NOT_STARTED; explicitly out of MVP scope |
 | Tag | NOT_APPROVED |
 
@@ -120,6 +120,7 @@ Escalate to external advisor for:
 | `0.2.1` stabilization scope | OPEN | Build&Test | Current sync includes Task Arrange same-day subject matching, no-throttle page-open Arrange apply, Calendar/Plan Arrange diagnostic snapshots, MatrixView Subject ID inheritance/backfill, Daily Settle display model, Dashboard/Popup task UI, readable Google Sync conflicts, and documentation/version updates. No `0.2.1` CWS package was generated. |
 | CWS Purple Potassium `tabs` permission finding | PUBLISHED | releaseMg / Product Owner | `tabs` permission removed from source and CWS package; fixed `0.2.1` Private testing package was accepted and published before the `0.2.2` Side Panel update submission. |
 | CWS/source drift after submission | CLOSED | Product Owner / Build&Test / releaseMg | Current Side Panel / quick-add source was bumped to `0.2.2`, regenerated as a sanitized CWS package, uploaded, and submitted to CWS review with `sidePanel` permission/privacy disclosure. |
+| CWS OAuth client mismatch | SUBMITTED TO CWS REVIEW | Product Owner / releaseMg | CWS package strips manifest `key`, so the CWS installed extension uses store ID `bokjekfjghliieopghopibmhjokgkjkb` rather than the fixed development ID. Product Owner authorized the `0.2.3` OAuth correction upload / Submit for Review; CWS status is `待审核` with automatic publish after review enabled. |
 
 ## Current Evidence
 
@@ -160,6 +161,15 @@ Escalate to external advisor for:
   - `docs/release/RELEASE_GATE_REPORT_CWS_PRIVATE_0.2.1_2026-05-20.md`
   - `docs/release/CWS_PRIVATE_SUBMISSION_MATERIALS_0.2.1_2026-05-20.md`
   - `dist/TimeWhere-0.2.1-private-cws-sanitized-20260520-214913.zip`
+- CWS Private `0.2.3` OAuth correction local package preparation:
+  - `dist/TimeWhere-0.2.3-private-cws-sanitized-20260524-041047.zip`
+  - SHA256 `F51880F8BE68A6B607B586EB58D1871D2F5DA06580F2E9387BABB122FCBBDA1B`
+  - Zip inspection: manifest version `0.2.3`, `key` absent, `tabs` absent, CWS OAuth client ID present, Drive `appDataFolder` scope unchanged.
+  - CWS dashboard: pending `0.2.2` draft review canceled; `0.2.3` package uploaded; draft version `0.2.3` confirmed with expected permissions and no `tabs`; Submit for Review completed; automatic publish after review checkbox was checked; final status verified as `待审核`.
+- Trusted tester local unpacked `0.2.3` package preparation:
+  - `dist/TimeWhere-0.2.3-local-unpacked-20260524-042303.zip`
+  - SHA256 `6FEAFDB4C7072FFA1336F8BDA656CEDE2B0242F2D00D93D5B117C8ACBE5C23DF`
+  - Zip inspection: root contains only `extension/`; manifest version `0.2.3`; `key` present; development OAuth client ID present; Drive `appDataFolder` scope unchanged.
 - `0.2.1` stabilization sync evidence:
   - Full `npm test` passed on 2026-05-20 after Task Arrange same-day subject matching, no-throttle auto Arrange, and Calendar/Plan diagnostic snapshot changes.
   - No `0.2.1` package or CWS submission artifact was generated.
@@ -167,6 +177,6 @@ Escalate to external advisor for:
 ## Product Owner Decisions Needed
 
 1. Confirm Product Owner name or preferred authority label.
-2. Confirm final CWS review outcome after `0.2.1` Purple Potassium fix resubmission.
-3. Decide whether and when to approve automatic publish or manual staged publish after review.
-4. Decide whether Side Panel / quick-add changes should be packaged for a later CWS update after the current pending review resolves.
+2. Confirm final CWS review / publish outcome for the `0.2.3` OAuth correction.
+3. Run real Google data sync smoke after CWS accepts/publishes `0.2.3`.
+4. Decide whether a separate later Side Panel / quick-add follow-up is still needed after `0.2.3` resolves the OAuth client mismatch.

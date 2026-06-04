@@ -91,6 +91,7 @@ const context = {
 };
 vm.runInNewContext(boardJs, context);
 vm.runInNewContext(dialogsJs, context);
+vm.runInNewContext(detailPanelJs, context);
 
 const noDateTask = context.normalizeManualTaskPayload({ title: 'No date' });
 assert('manual task payload allows missing due_date',
@@ -343,6 +344,11 @@ assert('Task card exposes Planner-like more menu copy action entry point',
     && manageBacCardHtml.includes('more_horiz')
     && boardJs.includes('data-task-menu-action="copy"')
     && boardJs.includes('复制任务'));
+assert('Task action menu exposes partial complete for writable tasks only',
+    boardJs.includes('data-task-menu-action="partial-complete"')
+    && boardJs.includes('部分完成')
+    && boardJs.includes('const isManageBacTask = task && TimeWhereManageBac?.isManageBacTask(task)')
+    && /!\s*isManageBacTask\s*\?\s*`[\s\S]*data-task-menu-action="partial-complete"/.test(boardJs));
 assert('Board and List no longer expose inline progress toggle buttons',
     !manageBacCardHtml.includes('task-progress-btn')
     && !boardJs.includes('task-progress-btn')
@@ -385,6 +391,10 @@ assert('Task card menu click is handled before card detail open', /task-card-men
 assert('Task action menu delegates copy to copy dialog', scriptJs.includes("closest('[data-task-menu-action]')")
     && scriptJs.includes("taskMenuAction.dataset.taskMenuAction === 'copy'")
     && scriptJs.includes('await showCopyTaskDialog(taskId)'));
+assert('Task action menu delegates partial complete to the shared floating panel',
+    scriptJs.includes("taskMenuAction.dataset.taskMenuAction === 'partial-complete'")
+    && scriptJs.includes('const actionRect = taskMenuAction.getBoundingClientRect()')
+    && scriptJs.includes('await openPartialCompleteDialog(taskId, actionRect)'));
 assert('Task detail panel exposes same copy menu action', detailPanelJs.includes('task-detail-menu-btn')
     && detailPanelJs.includes('more_horiz')
     && scriptJs.includes("closest('.task-detail-menu-btn')"));
@@ -423,7 +433,15 @@ const copiedPayload = context.buildCopiedTaskPayload({
     deadline: '2026-05-20',
     labels: [7],
     notes: 'Source notes',
-    checklist: [{ id: 'old-1', title: 'Read', checked: true }],
+    checklist: [{
+        id: 'old-1',
+        title: 'Read',
+        checked: true,
+        type: 'partial_completion',
+        partial_group_id: 'partial-1',
+        partial_role: 'done',
+        partial_percent: 30
+    }],
     schedule_time: '19:00',
     duration: 60,
     completed_at: '2026-05-19T10:00:00.000Z',
@@ -450,7 +468,10 @@ assert('copied task resets execution state and checklist checked values',
     && copiedPayload.completed_at === null
     && copiedPayload.checklist.length === 1
     && copiedPayload.checklist[0].checked === false
-    && copiedPayload.checklist[0].id !== 'old-1');
+    && copiedPayload.checklist[0].id !== 'old-1'
+    && copiedPayload.checklist[0].type === 'partial_completion'
+    && copiedPayload.checklist[0].partial_group_id === 'partial-1'
+    && copiedPayload.checklist[0].partial_percent === 30);
 assert('copied ManageBac task becomes a normal local task',
     copiedPayload.source === null
     && copiedPayload.source_type === null
@@ -548,6 +569,59 @@ assert('Checklist progress derivation skips empty checklist and explicit progres
 assert('Detail checklist checkbox updates current task only even for recurring tasks',
     detailPanelJs.includes('await TimeWhereDB.updateChecklist(taskId, checklist)')
     && !/checklist-checkbox[\s\S]*?await updateTaskFromDetail\(\{ checklist \}\)/.test(detailPanelJs));
+assert('Partial complete helper marks system checklist items with metadata', (() => {
+    const checklist = context.buildPartialCompletionChecklist(30);
+    return checklist.length === 2
+        && checklist[0].title === '已完成占比 30%'
+        && checklist[0].checked === true
+        && checklist[0].type === 'partial_completion'
+        && checklist[0].partial_role === 'done'
+        && checklist[0].partial_percent === 30
+        && checklist[1].title === '未完成占比 70%'
+        && checklist[1].checked === false
+        && checklist[1].partial_group_id === checklist[0].partial_group_id;
+})());
+assert('Partial complete helper updates existing ratio checklist without duplicate ids', (() => {
+    const original = context.buildPartialCompletionChecklist(30);
+    const group = context.findPartialCompletionGroup(original);
+    const updated = context.buildPartialCompletionChecklist(80, group);
+    return updated.length === 2
+        && updated[0].id === original[0].id
+        && updated[1].id === original[1].id
+        && updated[0].title === '已完成占比 80%'
+        && updated[1].title === '未完成占比 20%'
+        && updated[0].partial_group_id === original[0].partial_group_id
+        && context.isPartialCompletionChecklistItem(updated[0]) === true;
+})());
+assert('Partial complete replacement updates only the existing metadata group', (() => {
+    const original = context.buildPartialCompletionChecklist(20);
+    const group = context.findPartialCompletionGroup(original);
+    const updated = context.buildPartialCompletionChecklist(70, group);
+    const next = context.replacePartialCompletionChecklistGroup([
+        { id: 'regular', title: 'Normal item', checked: false },
+        ...original
+    ], group, updated);
+    return next.length === 3
+        && next[0].id === 'regular'
+        && next.filter(item => item.type === 'partial_completion').length === 2
+        && next.some(item => item.title === '已完成占比 70%')
+        && next.some(item => item.title === '未完成占比 30%');
+})());
+assert('Partial complete panel supports checklist and ratio immediate save paths',
+    detailPanelJs.includes('function openPartialCompleteDialog')
+    && detailPanelJs.includes('partial-complete-floating-panel')
+    && detailPanelJs.includes('renderPartialCompleteChecklistPanel(task, checklist)')
+    && detailPanelJs.includes('renderPartialCompleteRatioPanel(task, partialGroup)')
+    && detailPanelJs.includes('data-partial-action="checklist"')
+    && detailPanelJs.includes('data-partial-action="ratio"')
+    && detailPanelJs.includes('data-mode="checklist"')
+    && detailPanelJs.includes('data-mode="ratio"')
+    && detailPanelJs.includes('savePartialCompleteRatio')
+    && detailPanelJs.includes('savePartialCompleteChecklistItem')
+    && detailPanelJs.includes('TimeWhereDB.updateChecklist(taskId, nextChecklist)'));
+assert('Partial complete dialog blocks ManageBac source task writes',
+    detailPanelJs.includes("showToast('ManageBac 来源任务不能使用部分完成', 'error')")
+    && detailPanelJs.includes('TimeWhereManageBac?.isManageBacTask(task)'));
 
 context.TaskApp.groupBy = 'priority';
 context.TaskApp.viewMode = 'plan';

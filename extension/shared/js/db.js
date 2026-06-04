@@ -1175,7 +1175,49 @@ const TimeWhereDB = {
         return value == null ? value : JSON.parse(JSON.stringify(value));
     },
 
+    normalizeJournalChecklistItem(item, index = 0) {
+        return {
+            id: String(item?.id ?? `index:${index}`),
+            title: String(item?.title || item?.text || ''),
+            checked: item?.checked === true,
+            type: item?.type || null,
+            partial_group_id: item?.partial_group_id || null,
+            partial_role: item?.partial_role || null,
+            partial_percent: Number.isFinite(Number(item?.partial_percent))
+                ? Number(item.partial_percent)
+                : null
+        };
+    },
+
+    createJournalChecklistBaseline(task = {}) {
+        const items = Array.isArray(task.checklist)
+            ? task.checklist.map((item, index) => this.normalizeJournalChecklistItem(item, index))
+            : [];
+        const checkedItems = items.filter(item => item.checked);
+        const partialDone = items
+            .filter(item => item.type === 'partial_completion' && item.partial_role === 'done')
+            .map(item => item.partial_percent)
+            .filter(value => value != null);
+        const fingerprintItems = items.map(item => ({
+            id: item.id,
+            title: item.title,
+            checked: item.checked,
+            type: item.type,
+            partial_group_id: item.partial_group_id,
+            partial_role: item.partial_role,
+            partial_percent: item.partial_percent
+        }));
+        return {
+            checklist_total_count: items.length,
+            checklist_checked_count: checkedItems.length,
+            checklist_checked_ids: checkedItems.map(item => item.id).sort(),
+            checklist_fingerprint: JSON.stringify(fingerprintItems),
+            checklist_partial_percent: partialDone.length > 0 ? Math.max(...partialDone) : null
+        };
+    },
+
     createJournalTaskSnapshot(task) {
+        const checklistBaseline = this.createJournalChecklistBaseline(task);
         return {
             id: task.id,
             title: task.title || '',
@@ -1190,7 +1232,126 @@ const TimeWhereDB = {
             source: task.source || null,
             source_uid: task.source_uid || null,
             duration: task.duration || null,
-            schedule_time: task.schedule_time || null
+            schedule_time: task.schedule_time || null,
+            assignment: task.assignment ? {
+                status: task.assignment.status || null,
+                label: task.assignment.label || null,
+                reason: task.assignment.reason || null,
+                container_id: task.assignment.container_id || null,
+                container_name: task.assignment.container_name || null,
+                time_start: task.assignment.time_start || null,
+                time_end: task.assignment.time_end || null
+            } : null,
+            ...checklistBaseline
+        };
+    },
+
+    getJournalTaskCompletionStatus(snapshot = {}, currentTask = null, analysis = null, journalDate = null) {
+        const progress = currentTask?.progress || currentTask?.status || snapshot?.progress || 'not_started';
+        const completedAt = currentTask?.completed_at || snapshot?.completed_at || null;
+        const completedOnDate = journalDate
+            ? this.getLocalDateFromISO(completedAt) === journalDate
+            : !!completedAt;
+        if (progress === 'completed' || completedOnDate) {
+            return { status: 'completed', label: '完成' };
+        }
+
+        const partialPercent = currentTask?.checklist_partial_percent != null && Number.isFinite(Number(currentTask.checklist_partial_percent))
+            ? Number(currentTask.checklist_partial_percent)
+            : snapshot?.checklist_partial_percent != null && Number.isFinite(Number(snapshot.checklist_partial_percent))
+                ? Number(snapshot.checklist_partial_percent)
+                : null;
+        const checkedCount = Number.isFinite(Number(currentTask?.checklist_checked_count))
+            ? Number(currentTask.checklist_checked_count)
+            : Number.isFinite(Number(snapshot?.checklist_checked_count))
+                ? Number(snapshot.checklist_checked_count)
+                : 0;
+        if (analysis?.has_new_progress || (partialPercent != null && partialPercent > 0) || checkedCount > 0) {
+            return { status: 'partial', label: '部分完成' };
+        }
+
+        return { status: 'incomplete', label: '未完成' };
+    },
+
+    withJournalTaskCompletionStatus(snapshot, currentTask = null, analysis = null, journalDate = null) {
+        const completion = this.getJournalTaskCompletionStatus(snapshot, currentTask, analysis, journalDate);
+        return {
+            ...snapshot,
+            journal_status: completion.status,
+            journal_status_label: completion.label
+        };
+    },
+
+    getJournalSnapshotForTask(journal, taskId) {
+        const id = String(taskId);
+        const candidates = [
+            ...(journal?.planned_task_snapshots || []),
+            ...(journal?.daily_pool_snapshots || [])
+        ];
+        return candidates.find(snapshot => String(snapshot.id) === id) || null;
+    },
+
+    analyzeJournalChecklistProgress(snapshot, currentTask, journalDate) {
+        const taskId = currentTask?.id ?? snapshot?.id ?? null;
+        const current = this.createJournalChecklistBaseline(currentTask || {});
+        const hasChecklistBaseline = snapshot != null
+            && Object.prototype.hasOwnProperty.call(snapshot, 'checklist_checked_count')
+            && Array.isArray(snapshot.checklist_checked_ids);
+        const completedToday = this.getLocalDateFromISO(currentTask?.completed_at) === journalDate;
+        const wasCompletedAtSnapshot = snapshot?.progress === 'completed'
+            || this.getLocalDateFromISO(snapshot?.completed_at) === journalDate;
+
+        if (!hasChecklistBaseline) {
+            return {
+                task_id: taskId,
+                title: currentTask?.title || snapshot?.title || '',
+                has_checklist_baseline: false,
+                has_new_progress: completedToday && !wasCompletedAtSnapshot,
+                progress_source: completedToday && !wasCompletedAtSnapshot ? 'completion_only' : 'no_checklist_baseline',
+                completed_today: completedToday
+            };
+        }
+
+        const baselineCheckedIds = new Set((snapshot.checklist_checked_ids || []).map(String));
+        const currentCheckedIds = new Set((current.checklist_checked_ids || []).map(String));
+        const newlyCheckedIds = [...currentCheckedIds].filter(id => !baselineCheckedIds.has(id));
+        const uncheckedBaselineIds = [...baselineCheckedIds].filter(id => !currentCheckedIds.has(id));
+        const baselinePartial = snapshot.checklist_partial_percent != null && Number.isFinite(Number(snapshot.checklist_partial_percent))
+            ? Number(snapshot.checklist_partial_percent)
+            : null;
+        const currentPartial = current.checklist_partial_percent != null && Number.isFinite(Number(current.checklist_partial_percent))
+            ? Number(current.checklist_partial_percent)
+            : null;
+        const checkedCountIncreased = current.checklist_checked_count > (snapshot.checklist_checked_count || 0);
+        const partialIncreased = currentPartial != null
+            && (baselinePartial == null || currentPartial > baselinePartial);
+        const checklistStructureChanged = current.checklist_fingerprint !== (snapshot.checklist_fingerprint || null);
+        const checklistRegressed = current.checklist_checked_count < (snapshot.checklist_checked_count || 0)
+            || uncheckedBaselineIds.length > 0
+            || (currentPartial != null && baselinePartial != null && currentPartial < baselinePartial);
+        const hasNewProgress = newlyCheckedIds.length > 0
+            || checkedCountIncreased
+            || partialIncreased
+            || (completedToday && !wasCompletedAtSnapshot);
+
+        return {
+            task_id: taskId,
+            title: currentTask?.title || snapshot?.title || '',
+            has_checklist_baseline: true,
+            has_new_progress: hasNewProgress,
+            progress_source: hasNewProgress ? 'checklist_or_completion' : 'none',
+            completed_today: completedToday,
+            checked_count_before: snapshot.checklist_checked_count || 0,
+            checked_count_now: current.checklist_checked_count,
+            checklist_total_before: snapshot.checklist_total_count || 0,
+            checklist_total_now: current.checklist_total_count,
+            newly_checked_ids: newlyCheckedIds,
+            unchecked_baseline_ids: uncheckedBaselineIds,
+            partial_percent_before: baselinePartial,
+            partial_percent_now: currentPartial,
+            partial_percent_increased: partialIncreased,
+            checklist_structure_changed: checklistStructureChanged,
+            checklist_regressed: checklistRegressed
         };
     },
 
@@ -1200,6 +1361,65 @@ const TimeWhereDB = {
             .filter(task => task.start_date == null || task.start_date <= date)
             .filter(task => task.deferred_until == null || new Date(task.deferred_until) <= referenceDate)
             .map(task => this.createJournalTaskSnapshot(task));
+    },
+
+    getDailyJournalScheduling() {
+        return globalThis.TimeWhereScheduling || null;
+    },
+
+    getDailyJournalContainersForDate(containers = [], date, scheduling = this.getDailyJournalScheduling()) {
+        if (!scheduling?.containerAppliesToDate) return [];
+        const dateObj = new Date(`${date}T00:00:00`);
+        const dow = dateObj.getDay();
+        const isWeekday = dow >= 1 && dow <= 5;
+        const isWeekend = dow === 0 || dow === 6;
+        return (containers || [])
+            .filter(container => container?.enabled !== false)
+            .filter(container => scheduling.containerAppliesToDate(container, dateObj, date, dow, isWeekday, isWeekend));
+    },
+
+    buildDailyJournalSettleSnapshot(tasks, containers, date, referenceDate = new Date(`${date}T00:00:00`)) {
+        const scheduling = this.getDailyJournalScheduling();
+        if (!scheduling?.buildDailyTaskPool || !scheduling?.dailySettle) {
+            return this.buildDailyJournalPoolSnapshot(tasks, date, referenceDate);
+        }
+        const taskPool = scheduling.buildDailyTaskPool(tasks || [], referenceDate);
+        const todayContainers = this.getDailyJournalContainersForDate(containers || [], date, scheduling);
+        const settle = scheduling.dailySettle(taskPool, todayContainers, referenceDate);
+        const displayTasks = settle?.displayTasks || settle?.currentTasks || taskPool;
+        return displayTasks.map(task => this.createJournalTaskSnapshot(task));
+    },
+
+    buildDailyJournalExtraTaskSnapshots(tasks, plannedIds, snapshotAt) {
+        const snapshotTime = snapshotAt ? new Date(snapshotAt).getTime() : null;
+        if (!Number.isFinite(snapshotTime)) return [];
+        return (tasks || [])
+            .filter(task => !plannedIds.has(String(task.id)))
+            .filter(task => {
+                const createdTime = new Date(task.created_at || task.createdAt || 0).getTime();
+                return Number.isFinite(createdTime) && createdTime > snapshotTime;
+            })
+            .map(task => this.createJournalTaskSnapshot(task));
+    },
+
+    buildDailyJournalCompletionSnapshots(journal, tasks, journalDate) {
+        const taskById = new Map((tasks || []).map(task => [String(task.id), task]));
+        const plannedSnapshots = Array.isArray(journal?.planned_task_snapshots) ? journal.planned_task_snapshots : [];
+        const plannedIds = new Set(plannedSnapshots.map(task => String(task.id)));
+        const plannedCompletion = plannedSnapshots.map(snapshot => {
+            const current = taskById.get(String(snapshot.id)) || null;
+            const analysis = this.analyzeJournalChecklistProgress(snapshot, current || snapshot, journalDate);
+            return this.withJournalTaskCompletionStatus(snapshot, current, analysis, journalDate);
+        });
+        const extraCompletion = this.buildDailyJournalExtraTaskSnapshots(tasks, plannedIds, journal?.snapshot_at)
+            .map(snapshot => {
+                const current = taskById.get(String(snapshot.id)) || null;
+                return this.withJournalTaskCompletionStatus(snapshot, current, null, journalDate);
+            });
+        return {
+            completion_task_snapshots: plannedCompletion,
+            completion_extra_task_snapshots: extraCompletion
+        };
     },
 
     async getDailyJournal(date) {
@@ -1215,9 +1435,6 @@ const TimeWhereDB = {
     async ensureDailyJournalSnapshot(date = new Date(), referenceDate = new Date(), options = {}) {
         const journalDate = this.getDailyJournalDate(date);
         const ref = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
-        if (!options.force && ref.getHours() < 6) {
-            return { status: 'too_early', date: journalDate, journal: await this.getDailyJournal(journalDate) };
-        }
 
         const existing = await this.getDailyJournal(journalDate);
         if (existing?.snapshot_at && Array.isArray(existing.planned_task_snapshots)) {
@@ -1226,9 +1443,8 @@ const TimeWhereDB = {
 
         const now = this.getNowISO();
         const tasks = await this.getAllTasks();
-        const planned = tasks
-            .filter(task => task.start_date === journalDate)
-            .map(task => this.createJournalTaskSnapshot(task));
+        const containers = await this.getContainers({ enabled: true });
+        const planned = this.buildDailyJournalSettleSnapshot(tasks, containers, journalDate, ref);
         const dailyPool = this.buildDailyJournalPoolSnapshot(tasks, journalDate, ref);
         const journal = {
             ...(existing || {}),
@@ -1253,16 +1469,44 @@ const TimeWhereDB = {
         return { status: 'created', date: journalDate, journal };
     },
 
+    async ensureDailyJournalCompletionSnapshot(date = new Date(), referenceDate = new Date(), options = {}) {
+        const journalDate = this.getDailyJournalDate(date);
+        let journal = await this.getDailyJournal(journalDate);
+        if (!journal?.snapshot_at || !Array.isArray(journal.planned_task_snapshots)) {
+            journal = (await this.ensureDailyJournalSnapshot(journalDate, new Date(`${journalDate}T23:59:00`), options)).journal;
+        }
+        if (journal?.completion_snapshot_at && Array.isArray(journal.completion_task_snapshots)) {
+            return { status: 'exists', date: journalDate, journal };
+        }
+
+        const tasks = await this.getAllTasks();
+        const now = this.getNowISO();
+        const completion = this.buildDailyJournalCompletionSnapshots(journal, tasks, journalDate);
+        const updated = {
+            ...journal,
+            ...completion,
+            completion_snapshot_at: referenceDate instanceof Date ? referenceDate.toISOString() : new Date(referenceDate).toISOString(),
+            updated_at: now
+        };
+        await db.daily_journals.put(updated);
+        await this.markGoogleSyncDirty('daily_journals', updated.date, updated, options);
+        return { status: 'created', date: journalDate, journal: updated };
+    },
+
     async buildDailyJournalDraft(date = new Date(), referenceDate = new Date()) {
         const journalDate = this.getDailyJournalDate(date);
         let journal = await this.getDailyJournal(journalDate);
-        if (!journal && referenceDate.getHours() >= 6) {
+        if (!journal) {
             journal = (await this.ensureDailyJournalSnapshot(journalDate, referenceDate)).journal;
         }
         const tasks = await this.getAllTasks();
         const taskById = new Map(tasks.map(task => [String(task.id), task]));
         const plannedSnapshots = journal?.planned_task_snapshots || [];
         const plannedIds = new Set(plannedSnapshots.map(task => String(task.id)));
+        const progressAnalyses = tasks.map(task => {
+            const snapshot = this.getJournalSnapshotForTask(journal, task.id);
+            return this.analyzeJournalChecklistProgress(snapshot, task, journalDate);
+        });
         const completed = tasks
             .filter(task => this.getLocalDateFromISO(task.completed_at) === journalDate)
             .map(task => this.createJournalTaskSnapshot(task));
@@ -1273,21 +1517,40 @@ const TimeWhereDB = {
             if (!current) return true;
             return current.progress !== 'completed' && this.getLocalDateFromISO(current.completed_at) !== journalDate;
         });
-        const extraDone = completed.filter(snapshot => !plannedIds.has(String(snapshot.id)));
+        const extraTasks = this.buildDailyJournalExtraTaskSnapshots(tasks, plannedIds, journal?.snapshot_at);
+        const progressByTaskId = new Map(progressAnalyses.map(analysis => [String(analysis.task_id), analysis]));
+        const completionByTaskId = new Map((journal?.completion_task_snapshots || []).map(snapshot => [String(snapshot.id), snapshot]));
+        const extraCompletionByTaskId = new Map((journal?.completion_extra_task_snapshots || []).map(snapshot => [String(snapshot.id), snapshot]));
+        const plannedReviewSnapshots = plannedSnapshots.map(snapshot => {
+            const frozen = completionByTaskId.get(String(snapshot.id));
+            if (frozen) return frozen;
+            const current = taskById.get(String(snapshot.id)) || null;
+            return this.withJournalTaskCompletionStatus(snapshot, current, progressByTaskId.get(String(snapshot.id)), journalDate);
+        });
+        const extraReviewSnapshots = extraTasks.map(snapshot => {
+            const frozen = extraCompletionByTaskId.get(String(snapshot.id));
+            if (frozen) return frozen;
+            const current = taskById.get(String(snapshot.id)) || null;
+            return this.withJournalTaskCompletionStatus(snapshot, current, null, journalDate);
+        });
         return {
             ...(journal || {}),
             date: journalDate,
             status: journal?.status || 'snapshot',
-            planned_task_snapshots: plannedSnapshots,
+            planned_task_snapshots: plannedReviewSnapshots,
             daily_pool_snapshots: journal?.daily_pool_snapshots || this.buildDailyJournalPoolSnapshot(tasks, journalDate, referenceDate),
             completed_task_snapshots: completedPlanned,
             all_completed_task_snapshots: completed,
             delayed_task_snapshots: delayed,
-            extra_done_task_snapshots: extraDone,
+            extra_done_task_snapshots: extraReviewSnapshots,
+            task_progress_analyses: progressAnalyses,
+            progressed_task_ids: progressAnalyses
+                .filter(analysis => analysis.has_new_progress)
+                .map(analysis => String(analysis.task_id)),
             completed_planned_count: completedPlanned.length,
             completed_count: completed.length,
             delayed_count: delayed.length,
-            extra_done_count: extraDone.length,
+            extra_done_count: extraTasks.length,
             planned_count: plannedSnapshots.length,
             completed_ids: Array.from(completedIds)
         };

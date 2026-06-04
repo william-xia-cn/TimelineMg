@@ -51,6 +51,47 @@ agent-browser --cdp 9222 --session timewhere-cws-cdp snapshot -i -u
 
 3. Agent verifies current state from live page output before acting.
 
+If the browser is not already listening on `9222`, verify with:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:9222/json/version
+```
+
+If the request is refused, start the dedicated Chrome profile again. If Google
+shows an identity verification page, the Product Owner must complete login or
+2FA in the visible Chrome window; the agent must not enter credentials,
+verification codes, or account recovery details.
+
+## Reusable CWS Submission Flow
+
+Use this sequence for CWS updates in any project:
+
+1. Verify the local upload zip before opening CWS:
+   - zip root contains `manifest.json`;
+   - `manifest.version` is higher than the currently published CWS version;
+   - CWS package manifest has no `key` field;
+   - permissions match the intended release;
+   - package scan has no secrets, cookies, tokens, private samples, or local
+     profile paths.
+2. Open the item package page and compare CWS draft/published package metadata
+   with the local artifact.
+3. If CWS already has an accepted draft that can be published, publish or
+   discard it only after explicit Product Owner approval. CWS will reject a new
+   upload with the same manifest version as the already published package.
+4. Upload the new zip. If upload succeeds, CWS usually returns to an edit page;
+   re-open the package page and confirm the draft version and permissions.
+5. Open Privacy and fill any new permission reason fields introduced by the
+   manifest, for example `sidePanel`.
+6. Save draft and verify the Submit for Review button becomes enabled.
+7. Submit for review. If an auto-publish checkbox appears, set it exactly as
+   approved by Product Owner.
+8. Confirm the final status page. Expected successful review-submission state is
+   `待审核` / pending review.
+
+For private testing, configure trusted tester access in publisher settings or
+the CWS distribution controls as applicable. Do not record tester emails or
+private account identifiers in repository evidence.
+
 ## Operating Rules
 
 - Do not record account emails, tester accounts, cookies, tokens, passwords, or
@@ -67,6 +108,26 @@ agent-browser --cdp 9222 --session timewhere-cws-cdp snapshot -i -u
 - Treat "pending review" or other locked states as release-state boundaries.
   If editing requires canceling review or creating a new draft, stop and ask for
   explicit approval.
+- Treat "ready to publish" as a release-state boundary too. Publishing an
+  accepted old draft may be required before CWS allows a higher-version update,
+  but it changes live tester state and requires explicit approval.
+- If CWS rejects an upload with `manifest.json` version not higher than the
+  published package, bump the source/package version, regenerate the sanitized
+  zip, and push the version commit before uploading again.
+- After package upload, re-check Privacy. CWS may add new required permission
+  reason fields and keep Submit for Review disabled until they are saved.
+
+Useful commands:
+
+```powershell
+agent-browser --cdp 9222 --session <session-name> open <cws-url>
+agent-browser --cdp 9222 --session <session-name> snapshot -i
+agent-browser --cdp 9222 --session <session-name> find text "文件包" click --exact
+agent-browser --cdp 9222 --session <session-name> find role button click --name "提请审核"
+```
+
+In PowerShell, prefer semantic `find ...` commands over raw refs when refs are
+stale or awkward to quote.
 
 ## Fallbacks
 
@@ -76,6 +137,30 @@ agent-browser --cdp 9222 --session timewhere-cws-cdp snapshot -i -u
   extension script injection can be blocked there.
 - A fresh `agent-browser --headed` session is useful for ordinary websites, but
   it will not automatically reuse the Product Owner's CWS login.
+- Some CWS upload controls open a native file chooser from a Material button,
+  with no stable file input exposed to `agent-browser upload`. In that case,
+  connect Playwright to the same CDP browser and handle the file chooser:
+
+```powershell
+$env:TEMP = "<workspace>\.tmp"
+$env:TMP = "<workspace>\.tmp"
+node -e "`
+(async()=>{ `
+  const { chromium } = require('playwright'); `
+  const browser = await chromium.connectOverCDP('http://127.0.0.1:9222'); `
+  const page = browser.contexts()[0].pages()[0]; `
+  await page.bringToFront(); `
+  const chooserPromise = page.waitForEvent('filechooser', { timeout: 15000 }); `
+  await page.getByRole('button', { name: /选择文件/ }).click(); `
+  const chooser = await chooserPromise; `
+  await chooser.setFiles('<absolute-path-to-cws-zip>'); `
+  await page.waitForTimeout(15000); `
+  await browser.close(); `
+})().catch(e=>{ console.error(e); process.exit(1); })"
+```
+
+Set `TEMP` / `TMP` to a writable workspace directory when sandboxed Playwright
+cannot create artifacts in the OS user temp directory.
 
 ## Verification Checklist
 

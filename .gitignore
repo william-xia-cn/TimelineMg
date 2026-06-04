@@ -13,6 +13,7 @@ package-lock.json
 Thumbs.db
 
 # Build artifacts
+.tmp/
 dist/
 build/
 

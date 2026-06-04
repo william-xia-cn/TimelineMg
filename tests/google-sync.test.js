@@ -424,12 +424,26 @@ async function run() {
     assert('manifest includes Chrome identity permission', manifestJson.permissions.includes('identity'));
     assert('manifest includes Chrome identity.email permission for local account display', manifestJson.permissions.includes('identity.email'));
     assert('manifest OAuth2 client id is configured', /^[0-9a-z-]+\.apps\.googleusercontent\.com$/.test(manifestJson.oauth2?.client_id || ''));
+    assertEqual('source manifest keeps development OAuth client for fixed unpacked extension ID',
+        manifestJson.oauth2?.client_id,
+        '541406150907-rj6d6npl4dnoqcfiaol68tqh8chbpdpg.apps.googleusercontent.com');
     assert('manifest OAuth2 client id placeholder removed', !/YOUR_GOOGLE_OAUTH_CLIENT_ID/.test(manifestJson.oauth2?.client_id || ''));
     assert('manifest only requests Drive appDataFolder scope', manifestJson.oauth2?.scopes?.length === 1 && manifestJson.oauth2.scopes[0] === 'https://www.googleapis.com/auth/drive.appdata');
     assert('manifest includes fixed development public key', typeof manifestJson.key === 'string' && manifestJson.key.length > 300);
     assertEqual('manifest key derives expected development extension ID', extensionIdFromManifestKey(manifestJson.key), 'ogdjmelmfkfahppahhkkggdejjainbnd');
     assert('manifest includes narrow Drive API host permission', manifestJson.host_permissions.includes('https://www.googleapis.com/drive/v3/*'));
     assert('manifest includes narrow Drive upload host permission', manifestJson.host_permissions.includes('https://www.googleapis.com/upload/drive/v3/*'));
+
+    const cwsPackageScript = read('tools/package-cws.ps1');
+    assert('CWS packaging script injects CWS OAuth client for store extension ID',
+        cwsPackageScript.includes('541406150907-u6pvenpfdpgfmgnv8h9f126l4hc4oru9.apps.googleusercontent.com')
+        && cwsPackageScript.includes('PSObject.Properties.Remove("key")'));
+
+    const localPackageScript = read('tools/package-local-unpacked.ps1');
+    assert('local unpacked packaging script keeps fixed development ID and OAuth client',
+        localPackageScript.includes('ogdjmelmfkfahppahhkkggdejjainbnd')
+        && localPackageScript.includes('541406150907-rj6d6npl4dnoqcfiaol68tqh8chbpdpg.apps.googleusercontent.com')
+        && localPackageScript.includes('Local unpacked bundle requires manifest.key'));
 
     const repoText = [
         read('extension/shared/js/google-sync.js'),

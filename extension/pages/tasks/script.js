@@ -176,9 +176,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             e.preventDefault();
             e.stopPropagation();
             const taskId = taskMenuAction.dataset.taskId;
+            const actionRect = taskMenuAction.getBoundingClientRect();
             closeTaskActionMenu();
             if (taskMenuAction.dataset.taskMenuAction === 'copy') {
                 await showCopyTaskDialog(taskId);
+            } else if (taskMenuAction.dataset.taskMenuAction === 'partial-complete') {
+                await openPartialCompleteDialog(taskId, actionRect);
             }
             return;
         }
