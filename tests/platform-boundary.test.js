@@ -180,6 +180,8 @@ assert('Desktop OAuth uses installed-app PKCE with bundled client metadata secre
     && desktopAuth.includes("require('./desktop-oauth-secrets')")
     && !desktopAuth.includes(['GOC', 'SPX-'].join(''))
     && desktopAuth.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID')
+    && desktopAuth.includes('net.fetch')
+    && desktopAuth.includes('desktop_oauth_network_failed')
     && desktopAuth.includes('client_secret: credentials.clientSecret')
     && desktopAuth.includes('pkce_desktop_client_metadata_secret')
     && desktopAuth.includes('pkce_public_client_override')

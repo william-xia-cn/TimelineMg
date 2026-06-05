@@ -1,4 +1,4 @@
-const { app, safeStorage, shell } = require('electron');
+const { app, net, safeStorage, shell } = require('electron');
 const crypto = require('crypto');
 const fs = require('fs/promises');
 const http = require('http');
@@ -72,7 +72,13 @@ function makeAuthError(message, code) {
   return error;
 }
 
-function createDesktopAuth({ fetchImpl = global.fetch } = {}) {
+function getDesktopFetchImpl(fetchImpl = null) {
+  if (typeof fetchImpl === 'function') return fetchImpl;
+  if (net && typeof net.fetch === 'function') return net.fetch.bind(net);
+  return global.fetch;
+}
+
+function createDesktopAuth({ fetchImpl = null } = {}) {
   let memoryAccessToken = null;
 
   function getStatePath() {
@@ -144,12 +150,23 @@ function createDesktopAuth({ fetchImpl = global.fetch } = {}) {
   }
 
   async function requestToken(body) {
-    if (typeof fetchImpl !== 'function') throw new Error('Fetch implementation is unavailable for Google OAuth');
-    const response = await fetchImpl(TOKEN_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(body).toString()
-    });
+    const tokenFetch = getDesktopFetchImpl(fetchImpl);
+    if (typeof tokenFetch !== 'function') {
+      throw makeAuthError('Fetch implementation is unavailable for Google OAuth', 'desktop_oauth_fetch_unavailable');
+    }
+    let response = null;
+    try {
+      response = await tokenFetch(TOKEN_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(body).toString()
+      });
+    } catch (error) {
+      throw makeAuthError(
+        `Google OAuth token network request failed: ${error.message || 'fetch failed'}`,
+        'desktop_oauth_network_failed'
+      );
+    }
     const json = await response.json().catch(() => ({}));
     if (!response.ok) {
       const errorCode = json.error || `http_${response.status}`;
@@ -315,8 +332,9 @@ function createDesktopAuth({ fetchImpl = global.fetch } = {}) {
     const state = await readState();
     const refreshToken = state?.encrypted_refresh_token ? decryptRefreshToken(state) : null;
     const token = memoryAccessToken?.token || refreshToken;
-    if (token && clientId && typeof fetchImpl === 'function') {
-      await fetchImpl(REVOKE_ENDPOINT, {
+    const tokenFetch = getDesktopFetchImpl(fetchImpl);
+    if (token && clientId && typeof tokenFetch === 'function') {
+      await tokenFetch(REVOKE_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token }).toString()

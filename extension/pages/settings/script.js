@@ -434,6 +434,9 @@ function getGoogleSyncFailureMessage(error = {}) {
     if (reason === 'desktop_oauth_not_connected' || reason === 'not_authorized') {
         return 'Google 同步尚未连接，或旧授权已不可用。请重新点击连接 Google 后再同步。';
     }
+    if (reason === 'desktop_oauth_network_failed' || /fetch failed|network request failed|ENOTFOUND|ECONNRESET|ETIMEDOUT/i.test(message)) {
+        return 'Google 授权已完成，但 TimeWhere 桌面进程无法连接 Google token 服务。请确认系统代理/VPN 允许 TimeWhere 访问 oauth2.googleapis.com 后重试。';
+    }
     if (reason === 'invalid_client' || /client_secret is missing|invalid_client/i.test(message)) {
         return '当前内部桌面包应已内置 Google Desktop OAuth client metadata。若仍失败，请检查内置 client ID/secret 是否匹配、OAuth 同意屏幕测试账号、Drive API 权限，或断开后重新连接。';
     }
