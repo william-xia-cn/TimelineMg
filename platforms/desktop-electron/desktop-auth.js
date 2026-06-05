@@ -9,7 +9,16 @@ const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 const REVOKE_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
 const DEFAULT_SCOPES = ['https://www.googleapis.com/auth/drive.appdata'];
 const STATE_FILE = 'google-desktop-auth.json';
-const DEFAULT_DESKTOP_OAUTH_CLIENT_ID = '541406150907-0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com';
+const DEFAULT_DESKTOP_OAUTH_CLIENT_ID = [
+  '541406150907',
+  '0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com'
+].join('-');
+let DEFAULT_DESKTOP_OAUTH_CLIENT_SECRET = '';
+try {
+  ({ DEFAULT_DESKTOP_OAUTH_CLIENT_SECRET } = require('./desktop-oauth-secrets'));
+} catch (_) {
+  DEFAULT_DESKTOP_OAUTH_CLIENT_SECRET = '';
+}
 
 function base64Url(input) {
   return Buffer.from(input)
@@ -33,6 +42,16 @@ function makePkcePair() {
 
 function getDesktopOAuthClientId() {
   return String(process.env.TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID || DEFAULT_DESKTOP_OAUTH_CLIENT_ID).trim();
+}
+
+function getDesktopOAuthCredentials() {
+  const clientId = getDesktopOAuthClientId();
+  return {
+    clientId,
+    clientSecret: clientId === DEFAULT_DESKTOP_OAUTH_CLIENT_ID
+      ? DEFAULT_DESKTOP_OAUTH_CLIENT_SECRET
+      : ''
+  };
 }
 
 function compactObject(value) {
@@ -142,9 +161,10 @@ function createDesktopAuth({ fetchImpl = global.fetch } = {}) {
     return json;
   }
 
-  async function refreshAccessToken(clientId, refreshToken) {
+  async function refreshAccessToken(credentials, refreshToken) {
     const tokenResponse = await requestToken(compactObject({
-      client_id: clientId,
+      client_id: credentials.clientId,
+      client_secret: credentials.clientSecret,
       refresh_token: refreshToken,
       grant_type: 'refresh_token'
     }));
@@ -207,14 +227,14 @@ function createDesktopAuth({ fetchImpl = global.fetch } = {}) {
     return { listeningPromise, codePromise };
   }
 
-  async function interactiveAuthorize(clientId, scopes) {
+  async function interactiveAuthorize(credentials, scopes) {
     const pkce = makePkcePair();
     const state = base64Url(crypto.randomBytes(24));
     const authServer = startAuthorizationServer(state);
     const port = await authServer.listeningPromise;
     const redirectUri = `http://127.0.0.1:${port}/oauth2/callback`;
     const authorizationUrl = new URL(AUTH_ENDPOINT);
-    authorizationUrl.searchParams.set('client_id', clientId);
+    authorizationUrl.searchParams.set('client_id', credentials.clientId);
     authorizationUrl.searchParams.set('response_type', 'code');
     authorizationUrl.searchParams.set('redirect_uri', redirectUri);
     authorizationUrl.searchParams.set('scope', scopes.join(' '));
@@ -226,7 +246,8 @@ function createDesktopAuth({ fetchImpl = global.fetch } = {}) {
     await shell.openExternal(authorizationUrl.toString());
     const code = await authServer.codePromise;
     const tokenResponse = await requestToken(compactObject({
-      client_id: clientId,
+      client_id: credentials.clientId,
+      client_secret: credentials.clientSecret,
       code,
       code_verifier: pkce.verifier,
       redirect_uri: redirectUri,
@@ -249,8 +270,8 @@ function createDesktopAuth({ fetchImpl = global.fetch } = {}) {
   }
 
   async function getGoogleToken(options = {}) {
-    const clientId = getDesktopOAuthClientId();
-    if (!clientId) return { status: 'not_configured', reason: 'desktop_oauth_client_id_missing' };
+    const credentials = getDesktopOAuthCredentials();
+    if (!credentials.clientId) return { status: 'not_configured', reason: 'desktop_oauth_client_id_missing' };
     if (memoryAccessToken && memoryAccessToken.expires_at > Date.now()) {
       return { status: 'ok', token: memoryAccessToken.token };
     }
@@ -271,7 +292,7 @@ function createDesktopAuth({ fetchImpl = global.fetch } = {}) {
     }
     if (refreshToken) {
       try {
-        await refreshAccessToken(clientId, refreshToken);
+        await refreshAccessToken(credentials, refreshToken);
         return { status: 'ok', token: memoryAccessToken.token };
       } catch (error) {
         if (!options.interactive) throw error;
@@ -285,7 +306,7 @@ function createDesktopAuth({ fetchImpl = global.fetch } = {}) {
         'desktop_token_storage_unavailable'
       );
     }
-    await interactiveAuthorize(clientId, scopes);
+    await interactiveAuthorize(credentials, scopes);
     return { status: 'ok', token: memoryAccessToken.token };
   }
 
@@ -307,12 +328,14 @@ function createDesktopAuth({ fetchImpl = global.fetch } = {}) {
 
   return {
     async getStatus() {
-      const clientId = getDesktopOAuthClientId();
-      if (!clientId) return { status: 'not_configured', reason: 'desktop_oauth_client_id_missing' };
+      const credentials = getDesktopOAuthCredentials();
+      if (!credentials.clientId) return { status: 'not_configured', reason: 'desktop_oauth_client_id_missing' };
       const state = await readState();
       return {
         status: 'configured',
-        auth_mode: 'pkce_public_client',
+        auth_mode: credentials.clientSecret
+          ? 'pkce_desktop_client_metadata_secret'
+          : 'pkce_public_client_override',
         connected: Boolean(state?.encrypted_refresh_token),
         encrypted_storage_available: hasEncryptedStorage()
       };

@@ -79,7 +79,7 @@ The desktop Electron adapter uses the preload bridge for:
 - opening and focusing local TimeWhere pages;
 - native desktop notifications while the app is running;
 - reminder scheduling / cancellation in the Electron main process;
-- installed-app Google OAuth with PKCE using the bundled desktop OAuth client ID, with `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` available only as an override;
+- installed-app Google OAuth with PKCE using the bundled desktop OAuth client ID and artifact-bundled Desktop client metadata secret, with `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` available only as an override;
 - optional Chrome extension nonce bridge.
 - tray/menu-bar behavior and startup settings are persisted to
   `platforms/desktop-electron/` user data as `timewhere-desktop-settings.json`
@@ -92,7 +92,7 @@ tray/menu-bar or app menu `退出` command is the explicit full-quit path.
 
 Electron does not silently reuse Chrome Extension data. It uses its own Chromium IndexedDB runtime unless a future migration plan is approved.
 
-Desktop OAuth is a public-client PKCE flow. The desktop app must not read, send, store, or bundle a Google OAuth `client_secret`; if Google requires one, the Google Cloud OAuth client should be fixed or recreated as a Desktop app client.
+Desktop OAuth uses PKCE plus an artifact-bundled Google Desktop client metadata secret for the default Desktop client. Internal packaging generates `platforms/desktop-electron/desktop-oauth-secrets.js` from ignored local/CI input and includes it in the desktop artifact; the generated file and raw secret must not be committed or recorded in repository evidence. Ordinary users must not provide a local secret file or secret environment variable.
 
 Desktop refresh tokens must be encrypted with Electron `safeStorage`. If encrypted storage is unavailable, do not save a plaintext refresh token.
 

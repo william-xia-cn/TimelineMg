@@ -66,8 +66,8 @@ Chrome extension connection is an optional enhancement for detection / opening w
 ### Phase 5: Desktop Google Sync
 
 - Use Google installed-app OAuth with Authorization Code + PKCE, system browser, and localhost callback.
-- Bundle the desktop OAuth client ID `541406150907-0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com`; `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` is an optional override for testing or client rotation.
-- Do not read, send, store, or bundle a Google OAuth `client_secret`; the desktop app is a public installed client and relies on PKCE.
+- Bundle the configured Google Desktop OAuth client ID; `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` is an optional override for testing or client rotation.
+- Desktop OAuth uses PKCE plus an artifact-bundled Google Desktop client metadata secret for the default Desktop client per D-032. The generated secrets module is an internal packaging input and must remain untracked.
 - Store refresh token under Electron `app.getPath('userData')` only through Electron `safeStorage`.
 - If encrypted storage is unavailable, refuse to save plaintext refresh token and show failure to the user.
 
@@ -94,7 +94,7 @@ Chrome extension connection is an optional enhancement for detection / opening w
 
 - Windows desktop app opens core pages without Chrome runtime dependency.
 - Desktop Google Drive `appDataFolder` sync can authorize through the system browser using the bundled desktop OAuth client ID.
-- `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` can override the bundled ID for development or client rotation; no Desktop OAuth client secret is required or supported.
+- `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` can override the bundled ID for development or client rotation. The default Desktop client uses the generated artifact-bundled metadata secret; `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET` and `desktop-oauth.local.json` are packaging inputs only, not ordinary runtime/user configuration.
 - Desktop refresh token is encrypted or not saved.
 - Desktop notifications fire while the app is running.
 - Chrome extension bridge connects only with matching extension ID and nonce.

@@ -26,6 +26,8 @@ jobs:
         run: npm --prefix platforms/desktop-electron install
 
       - name: Build macOS package
+        env:
+          TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET }}
         run: npm run electron:package:mac
 
       - name: Upload macOS package artifact

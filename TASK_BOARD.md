@@ -3,7 +3,7 @@
 ## Active Target
 
 - Baseline Stabilized; package / extension version is moving to `0.3.0` for desktop artifact preparation. The historical `0.2.3` CWS Private testing OAuth correction remains submitted to CWS review after Google sync failed with a bad OAuth client ID.
-- D-031 Windows desktop portable implementation is active for local testing and now uses a bundled Desktop OAuth client ID. Current desktop artifact target is `0.3.0` Windows portable exe plus macOS Universal zip using existing unsigned package targets.
+- D-031/D-032 Windows desktop portable implementation is active for local testing and now uses a bundled Desktop OAuth client ID plus artifact-bundled Desktop client metadata secret generated from ignored packaging input. Current desktop artifact target is `0.3.0` Windows portable exe plus macOS Universal zip using existing unsigned package targets.
 - Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, TimeWhere `0.2.0` CWS Private testing material preparation, the accepted `0.2.1` Purple Potassium Private testing publication, `0.2.2` Side Panel CWS submission, `0.2.3` OAuth correction CWS submission, and D-031 Windows desktop portable implementation are complete. Product Owner approved the `v0.3.0` desktop artifact candidate tag and moving that tag for the macOS Universal artifact correction only. Public listing expansion / CWS bridge submission / desktop signing or installer / deploy remain unapproved.
 
 ## Active Collaboration Model
@@ -40,7 +40,7 @@
 - [x] Build&Test bumped current package / extension / desktop artifact target to `0.3.0` and generated Windows portable exe `platforms/desktop-electron/dist/TimeWhere-0.3.0-win-portable.exe` with SHA256 `28CF9906B35821505B77A56470942BC7D1A55BD9506FA47784B8ED029EAA3E57`.
 - [x] Build&Test corrected the `0.3.0` macOS artifact target from superseded x64 zip to Universal zip, generated GitHub Actions artifact `TimeWhere-0.3.0-mac-universal.zip` with SHA256 `0541F177DFB5754C5145BC65582A08D5ED0A533F4FC24A01F92219DE14410A4E`, and moved `v0.3.0` to the corrected candidate commit.
 - [x] Build&Test fixed Windows desktop Google authorization post-callback failure handling: stale/unreadable saved token state is cleared before re-authorization, structured OAuth failure reasons reach Settings, and first failed authorization keeps the connect button available.
-- [x] Build&Test removed local Desktop OAuth client secret support and made Desktop Google OAuth PKCE-only; if Google token exchange requires a secret, the Google Cloud OAuth client must be fixed or recreated as a Desktop app client.
+- [x] Build&Test replaced PKCE-only Desktop OAuth with PKCE plus artifact-bundled Desktop client metadata secret for the default Desktop client; `desktop-oauth.local.json` and `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET` are packaging inputs only, not ordinary runtime/user configuration.
 
 ## NEXT
 

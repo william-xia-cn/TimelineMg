@@ -71,10 +71,11 @@ assert('D-031 records standalone Windows desktop app direction',
 assert('Project status records Windows desktop portable implementation boundary',
     projectMaster.includes('Windows desktop portable implementation')
     && projectMaster.includes('D-031 approves a standalone Windows Electron portable app')
-    && taskBoard.includes('D-031 Windows desktop portable implementation is active'));
+    && projectMaster.includes('D-032 replaces only its Desktop OAuth secret handling')
+    && taskBoard.includes('D-031/D-032 Windows desktop portable implementation is active'));
 assert('Dual-platform spec covers desktop OAuth, notifications, portable exe, and bridge as optional',
     spec.includes('standalone Windows Electron app')
-    && spec.includes('541406150907-0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com')
+    && spec.includes('configured Google Desktop OAuth client ID')
     && spec.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID')
     && spec.includes('TimeWhere-0.3.0-win-portable.exe')
     && spec.includes('Missing extension, old bridge version, nonce mismatch, or timeout are shown as non-blocking'));
@@ -171,18 +172,27 @@ assert('Electron preload exposes TimeWhereElectronPlatform bridge',
     electronPreload.includes("contextBridge.exposeInMainWorld('TimeWhereElectronPlatform'")
     && electronPreload.includes("ipcRenderer.invoke('timewhere-platform'"));
 
-assert('Desktop OAuth uses installed-app PKCE without a client secret',
-    desktopAuth.includes('541406150907-0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com')
+assert('Desktop OAuth uses installed-app PKCE with bundled client metadata secret',
+    desktopAuth.includes('541406150907')
+    && desktopAuth.includes('0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com')
+    && desktopAuth.includes(".join('-')")
+    && desktopAuth.includes('DEFAULT_DESKTOP_OAUTH_CLIENT_SECRET')
+    && desktopAuth.includes("require('./desktop-oauth-secrets')")
+    && !desktopAuth.includes(['GOC', 'SPX-'].join(''))
     && desktopAuth.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID')
-    && !desktopAuth.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET')
-    && !desktopAuth.includes('desktop-oauth.local.json')
-    && !desktopAuth.includes('client_secret')
-    && desktopAuth.includes("auth_mode: 'pkce_public_client'")
+    && desktopAuth.includes('client_secret: credentials.clientSecret')
+    && desktopAuth.includes('pkce_desktop_client_metadata_secret')
+    && desktopAuth.includes('pkce_public_client_override')
     && desktopAuth.includes('code_challenge_method')
     && desktopAuth.includes('S256')
     && desktopAuth.includes('access_type')
     && desktopAuth.includes('safeStorage.encryptString')
     && desktopAuth.includes('refusing to save a plaintext refresh token'));
+assert('Desktop package bundles generated OAuth secret module from ignored packaging input',
+    electronPackage.scripts['prepackage:win'].includes('prepare-desktop-oauth-secret.ps1')
+    && electronPackage.scripts['prepackage:mac'].includes('prepare-desktop-oauth-secret.ps1')
+    && electronPackage.build.files.includes('desktop-oauth-secrets.js')
+    && gitignore.includes('platforms/desktop-electron/desktop-oauth-secrets.js'));
 assert('Chrome bridge is localhost nonce verified and one-shot',
     chromeBridge.includes('127.0.0.1')
     && chromeBridge.includes('nonce_mismatch')

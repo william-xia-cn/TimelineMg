@@ -358,6 +358,8 @@ async function run() {
     const settingsCss = read('extension/pages/settings/styles.css');
     const dbScript = read('extension/shared/js/db.js');
     const desktopAuthScript = read('platforms/desktop-electron/desktop-auth.js');
+    const desktopPackage = JSON.parse(read('platforms/desktop-electron/package.json'));
+    const gitignore = read('.gitignore');
     assert('Settings UI contains Google 数据同步 section', settingsHtml.includes('Google 数据同步'));
     assert('Settings UI places Google sync after task defaults and before data management',
         settingsHtml.indexOf('任务默认值') > -1
@@ -402,27 +404,38 @@ async function run() {
         read('extension/shared/js/google-sync.js').includes('makePlatformAuthError')
         && read('extension/shared/js/google-sync.js').includes("result?.status === 'failed'")
         && read('extension/shared/js/google-sync.js').includes('error.code = reason'));
-    assert('Desktop Google sync OAuth path uses bundled installed-app client id, PKCE-only auth, and safe token storage',
-        desktopAuthScript.includes('541406150907-0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com')
+    assert('Desktop Google sync OAuth path uses bundled installed-app client id, PKCE plus bundled client metadata secret, and safe token storage',
+        desktopAuthScript.includes('541406150907')
+        && desktopAuthScript.includes('0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com')
+        && desktopAuthScript.includes(".join('-')")
+        && desktopAuthScript.includes('DEFAULT_DESKTOP_OAUTH_CLIENT_SECRET')
+        && desktopAuthScript.includes("require('./desktop-oauth-secrets')")
+        && !desktopAuthScript.includes(['GOC', 'SPX-'].join(''))
         && desktopAuthScript.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID')
-        && !desktopAuthScript.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET')
-        && !desktopAuthScript.includes('desktop-oauth.local.json')
-        && !desktopAuthScript.includes('client_secret')
-        && desktopAuthScript.includes("auth_mode: 'pkce_public_client'")
+        && desktopAuthScript.includes('client_secret: credentials.clientSecret')
+        && desktopAuthScript.includes("auth_mode: credentials.clientSecret")
+        && desktopAuthScript.includes('pkce_desktop_client_metadata_secret')
+        && desktopAuthScript.includes('pkce_public_client_override')
         && desktopAuthScript.includes('code_challenge_method')
         && desktopAuthScript.includes('S256')
         && desktopAuthScript.includes('safeStorage.encryptString')
         && desktopAuthScript.includes('refusing to save a plaintext refresh token')
         && desktopAuthScript.includes('desktop_oauth_saved_token_unreadable')
         && desktopAuthScript.includes('await clearState()'));
+    assert('Desktop packaging prepares and bundles generated OAuth secret module without tracking it',
+        desktopPackage.scripts['prepackage:win'].includes('prepare-desktop-oauth-secret.ps1')
+        && desktopPackage.scripts['prepackage:mac'].includes('prepare-desktop-oauth-secret.ps1')
+        && desktopPackage.build.files.includes('desktop-oauth-secrets.js')
+        && gitignore.includes('platforms/desktop-electron/desktop-oauth-secrets.js'));
     assert('Settings surfaces actionable desktop OAuth failure reasons',
         settingsScript.includes('getGoogleSyncFailureMessage')
         && settingsScript.includes('desktop_token_storage_unavailable')
         && settingsScript.includes('desktop_oauth_saved_token_unreadable')
         && settingsScript.includes('desktop_oauth_not_connected')
         && settingsScript.includes('client_secret is missing')
-        && settingsScript.includes('PKCE')
-        && settingsScript.includes('不会保存 client secret')
+        && settingsScript.includes('内置 Google Desktop OAuth client metadata')
+        && settingsScript.includes('client ID/secret 是否匹配')
+        && !settingsScript.includes('不需要也不会保存 client secret')
         && !settingsScript.includes('desktop-oauth.local.json')
         && settingsScript.includes('redirect_uri_mismatch')
         && settingsScript.includes('Drive API')
@@ -527,9 +540,13 @@ async function run() {
         read('extension/shared/js/google-sync.js'),
         read('tests/google-sync.test.js'),
         read('extension/pages/settings/settings.html'),
-        read('extension/pages/settings/script.js')
+        read('extension/pages/settings/script.js'),
+        read('platforms/desktop-electron/desktop-auth.js'),
+        read('tools/prepare-desktop-oauth-secret.ps1')
     ].join('\n');
-    assert('repo Google sync code/tests do not contain real OAuth token values or client secrets', !/ya29\.|client_secret[_-]?[a-z0-9]/i.test(repoText));
+    assert('repo Google sync code/tests do not contain real OAuth token values or client secrets',
+        !repoText.includes(['ya', '29.'].join(''))
+        && !repoText.includes(['GOC', 'SPX-'].join('')));
 
     console.log('\n' + '='.repeat(42));
     console.log(`Total: ${passed + failed} checks   PASS ${passed}   ${failed > 0 ? 'FAIL' : 'PASS'} ${failed}`);

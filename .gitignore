@@ -25,6 +25,7 @@ build/
 *.pem
 *.key
 desktop-oauth.local.json
+platforms/desktop-electron/desktop-oauth-secrets.js
 
 # Local/private calendar imports
 *.ics

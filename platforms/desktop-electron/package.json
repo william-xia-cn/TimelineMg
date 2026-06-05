@@ -7,7 +7,9 @@
   "scripts": {
     "start": "electron .",
     "smoke": "electron .",
+    "prepackage:win": "powershell -ExecutionPolicy Bypass -File ../../tools/prepare-desktop-oauth-secret.ps1",
     "package:win": "electron-builder --win portable --x64",
+    "prepackage:mac": "pwsh -ExecutionPolicy Bypass -File ../../tools/prepare-desktop-oauth-secret.ps1",
     "package:mac": "electron-builder --mac zip --universal"
   },
   "dependencies": {
@@ -27,6 +29,7 @@
       "main.js",
       "preload.js",
       "desktop-auth.js",
+      "desktop-oauth-secrets.js",
       "chrome-bridge.js",
       "package.json"
     ],

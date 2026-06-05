@@ -48,9 +48,9 @@ npm run electron:package:mac:remote
 
 ## Google Sync
 
-Desktop Google Drive `appDataFolder` sync uses an installed-app OAuth flow with PKCE and a localhost callback. The desktop OAuth client ID is bundled in the app, and `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` is only an optional override for testing or client rotation.
+Desktop Google Drive `appDataFolder` sync uses an installed-app OAuth flow with PKCE and a localhost callback. The desktop OAuth client ID is tracked in source, and the Desktop client metadata secret is generated into `desktop-oauth-secrets.js` from ignored local/CI packaging input before building internal desktop artifacts. `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` is only an optional override for testing or client rotation.
 
-TimeWhere Desktop is a public installed client. It does not read, send, store, or bundle a Google OAuth `client_secret`. If token exchange reports that a client secret is required, fix or recreate the Google Cloud OAuth client as a Desktop app client instead of adding a local secret file.
+The artifact-bundled Desktop client metadata secret is not a user token or password. It exists only because Google's Desktop token endpoint may require `client_secret` even when PKCE is used. Ordinary users should not create `desktop-oauth.local.json` or set a Desktop client secret environment variable; those are internal packaging inputs only.
 
 Refresh tokens are stored under Electron `app.getPath('userData')` and encrypted with Electron `safeStorage`. If encrypted storage is unavailable, TimeWhere refuses to save a plaintext refresh token.
 
