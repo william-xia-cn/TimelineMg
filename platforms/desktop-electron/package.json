@@ -8,7 +8,7 @@
     "start": "electron .",
     "smoke": "electron .",
     "package:win": "electron-builder --win portable --x64",
-    "package:mac": "electron-builder --mac zip --x64"
+    "package:mac": "electron-builder --mac zip --universal"
   },
   "dependencies": {
     "ws": "^8.18.3"
@@ -54,11 +54,11 @@
         {
           "target": "zip",
           "arch": [
-            "x64"
+            "universal"
           ]
         }
       ],
-      "artifactName": "TimeWhere-0.3.0-mac-x64.zip"
+      "artifactName": "TimeWhere-0.3.0-mac-universal.zip"
     }
   }
 }

@@ -23,10 +23,10 @@ platforms/desktop-electron/dist/TimeWhere-0.3.0-win-portable.exe
 Mac package output:
 
 ```text
-platforms/desktop-electron/dist/TimeWhere-0.3.0-mac-x64.zip
+platforms/desktop-electron/dist/TimeWhere-0.3.0-mac-universal.zip
 ```
 
-Note: mac 打包通常需要在 macOS 上执行 `npm run electron:package:mac`。如果在 Windows 上尝试该命令，可能会因平台能力限制而失败。
+Note: mac 打包通常需要在 macOS 上执行 `npm run electron:package:mac`。当前 macOS artifact 目标是 Universal zip，覆盖 Intel Mac 和 Apple Silicon。如果在 Windows 上尝试该命令，可能会因平台能力限制而失败。
 
 远程触发打包（推荐在 Windows 上直接执行）：
 

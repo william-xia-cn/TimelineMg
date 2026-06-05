@@ -3,8 +3,8 @@
 ## Active Target
 
 - Baseline Stabilized; package / extension version is moving to `0.3.0` for desktop artifact preparation. The historical `0.2.3` CWS Private testing OAuth correction remains submitted to CWS review after Google sync failed with a bad OAuth client ID.
-- D-031 Windows desktop portable implementation is active for local testing and now uses a bundled Desktop OAuth client ID. Current desktop artifact target is `0.3.0` Windows portable exe plus macOS x64 zip using existing unsigned package targets.
-- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, TimeWhere `0.2.0` CWS Private testing material preparation, the accepted `0.2.1` Purple Potassium Private testing publication, `0.2.2` Side Panel CWS submission, `0.2.3` OAuth correction CWS submission, and D-031 Windows desktop portable implementation are complete. Public listing expansion / CWS bridge submission / desktop signing or installer / tag / merge / deploy remain unapproved.
+- D-031 Windows desktop portable implementation is active for local testing and now uses a bundled Desktop OAuth client ID. Current desktop artifact target is `0.3.0` Windows portable exe plus macOS Universal zip using existing unsigned package targets.
+- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, TimeWhere `0.2.0` CWS Private testing material preparation, the accepted `0.2.1` Purple Potassium Private testing publication, `0.2.2` Side Panel CWS submission, `0.2.3` OAuth correction CWS submission, and D-031 Windows desktop portable implementation are complete. Product Owner approved the `v0.3.0` desktop artifact candidate tag and moving that tag for the macOS Universal artifact correction only. Public listing expansion / CWS bridge submission / desktop signing or installer / deploy remain unapproved.
 
 ## Active Collaboration Model
 
@@ -37,7 +37,8 @@
 - [x] releaseMg canceled the pending `0.2.2` CWS draft review, uploaded `dist/TimeWhere-0.2.3-private-cws-sanitized-20260524-041047.zip`, confirmed draft version `0.2.3` with expected permissions and no `tabs`, submitted it for review, and verified CWS status `待审核` with automatic publish after review enabled.
 - [x] Build&Test implemented D-030 dual-platform preparation: platform boundary/spec docs, reinstall recovery UX, lightweight Chrome platform adapter, platform auth adapter for Google Sync, and Mac Electron preview skeleton. D-031 now supersedes the Mac preview target with Windows desktop portable scope.
 - [x] Build&Test implemented D-031 Windows desktop portable app: desktop Electron shell, bundled Desktop OAuth client ID with optional env override, desktop notifications, optional Chrome extension bridge, and portable exe package `platforms/desktop-electron/dist/TimeWhere-0.2.3-win-portable.exe`.
-- [x] Build&Test bumped current package / extension / desktop artifact target to `0.3.0` and generated Windows portable exe `platforms/desktop-electron/dist/TimeWhere-0.3.0-win-portable.exe` with SHA256 `5F49EEBF001A67C0B02AA142A05ED42EB17341BD3E13FCCAA4AB253B830A1806`.
+- [x] Build&Test bumped current package / extension / desktop artifact target to `0.3.0` and generated Windows portable exe `platforms/desktop-electron/dist/TimeWhere-0.3.0-win-portable.exe` with SHA256 `28CF9906B35821505B77A56470942BC7D1A55BD9506FA47784B8ED029EAA3E57`.
+- [ ] Build&Test corrects the `0.3.0` macOS artifact target from superseded x64 zip to Universal zip, regenerates remote macOS artifact evidence, and moves `v0.3.0` to the corrected candidate commit.
 - [x] Build&Test fixed Windows desktop Google authorization post-callback failure handling: stale/unreadable saved token state is cleared before re-authorization, structured OAuth failure reasons reach Settings, and first failed authorization keeps the connect button available.
 - [x] Build&Test added ignored local Desktop OAuth client secret support through `desktop-oauth.local.json`, because Google token exchange may require the Desktop credential secret even though it must not be committed.
 

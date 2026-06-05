@@ -6,7 +6,7 @@
 - **Version**: package / extension release version `0.3.0`; design-doc version `v2.3`
 - **Stage**: Baseline Stabilized; CWS Private testing `0.2.3` OAuth correction submitted for review; Windows desktop portable implementation completed for local testing; Windows / macOS desktop artifact preparation active for `0.3.0`
 - **Active release/deployment target**: TimeWhere `0.2.3` CWS Private testing OAuth correction after the `0.2.2` Side Panel update exposed a CWS OAuth client mismatch.
-- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-025 approved the `0.2.1` Purple Potassium permission fix; D-026 records current source using Chrome Side Panel as the primary toolbar surface. D-027 approved the `0.2.2` Side Panel CWS update. D-029 approves the `0.2.3` CWS OAuth correction upload / Submit for Review and automatic publish after review. D-031 approves a standalone Windows Electron portable app with optional Chrome extension bridge. Public listing expansion, tag, merge, deploy, CWS bridge submission, desktop signing/installer/auto-update, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
+- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-025 approved the `0.2.1` Purple Potassium permission fix; D-026 records current source using Chrome Side Panel as the primary toolbar surface. D-027 approved the `0.2.2` Side Panel CWS update. D-029 approves the `0.2.3` CWS OAuth correction upload / Submit for Review and automatic publish after review. D-031 approves a standalone Windows Electron portable app with optional Chrome extension bridge. Product Owner approved the `v0.3.0` desktop artifact candidate tag and moving that tag for the macOS Universal artifact correction only. Public listing expansion, deploy, CWS bridge submission, desktop signing/installer/auto-update, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
 
 ## Collaboration Model
 
@@ -102,7 +102,7 @@ Escalate to external advisor for:
 | Deployment channel | Chrome Web Store Private testing |
 | Review status | `0.2.3` OAuth correction was submitted to CWS review on 2026-05-24 after canceling the pending `0.2.2` draft review; automatic publish after review was enabled. CWS status verified as `待审核`; do not claim publication until CWS accepts it. |
 | Public release | NOT_STARTED; explicitly out of MVP scope |
-| Tag | NOT_APPROVED |
+| Tag | NOT_APPROVED for the CWS `0.2.3` candidate |
 
 ## Known Risks
 
@@ -185,11 +185,12 @@ Escalate to external advisor for:
   - `npm test` passed after adding reinstall recovery UX, platform auth adapter, and Electron preview.
   - Electron dependency is pinned by `platforms/desktop-electron/package-lock.json`; `electron@42.3.2` reports `npm audit --audit-level=high` with `0 vulnerabilities` when verified.
   - Windows portable target generated: `platforms/desktop-electron/dist/TimeWhere-0.2.3-win-portable.exe`; SHA256 `B16EC9B7D5A37B2E62B6E85DC33CDE8366FE11481E3308EF52CEC2FFB6F75627`.
-  - Current desktop artifact target: `0.3.0` Windows portable exe and macOS x64 zip using the existing unsigned package targets.
-  - `0.3.0` Windows portable target generated: `platforms/desktop-electron/dist/TimeWhere-0.3.0-win-portable.exe`; SHA256 `5F49EEBF001A67C0B02AA142A05ED42EB17341BD3E13FCCAA4AB253B830A1806`.
+  - Superseded desktop artifact candidate: `0.3.0` macOS x64 zip from workflow artifact `TimeWhere-mac-package`; SHA256 `9014E7CE2755418662270847A1F8100F15AF592681D83A36BCE48C45109B9CC6`. Superseded because Product Owner selected Universal as the `0.3.0` macOS artifact target.
+  - Current desktop artifact target: `0.3.0` Windows portable exe and macOS Universal zip using the existing unsigned package targets.
+  - `0.3.0` Windows portable target generated: `platforms/desktop-electron/dist/TimeWhere-0.3.0-win-portable.exe`; SHA256 `28CF9906B35821505B77A56470942BC7D1A55BD9506FA47784B8ED029EAA3E57`.
   - Verification: `npm --prefix platforms/desktop-electron audit --audit-level=high`, `npm run electron:smoke`, portable exe smoke with `TIMEWHERE_ELECTRON_SMOKE=1`, `npm run electron:package:win`, and `npm test` passed on 2026-06-04. Bundled Desktop OAuth / post-authorization failure handling / local Desktop client secret config update re-verified with `node tests/google-sync.test.js`, `node tests/platform-boundary.test.js`, `npm run electron:smoke`, `npm run electron:package:win`, portable exe smoke, and `npm test` on 2026-06-05.
   - Desktop OAuth client ID is bundled for the Windows app; `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` remains an optional override. If Google requires the Desktop client secret for token exchange, it must come from ignored local config (`desktop-oauth.local.json`) or a local override, not from committed source.
-  - Desktop signing, installer, auto-update, CWS bridge submission, tag, merge, push, deploy, and release remain unapproved.
+  - `v0.3.0` desktop artifact candidate tag is approved for the current desktop artifact candidate only; public release, GitHub Release creation, desktop signing, installer, auto-update, CWS bridge submission, deploy, and release remain unapproved.
 
 ## Product Owner Decisions Needed
 

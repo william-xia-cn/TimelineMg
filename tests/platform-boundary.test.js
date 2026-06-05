@@ -148,6 +148,11 @@ assert('Desktop Electron package builds Windows portable exe',
     && electronPackage.build?.win?.artifactName === 'TimeWhere-0.3.0-win-portable.exe'
     && electronLock.packages?.['node_modules/electron']?.version === '42.3.2'
     && gitignore.includes('!platforms/desktop-electron/package-lock.json'));
+assert('Desktop Electron package builds macOS Universal zip',
+    electronPackage.scripts?.['package:mac'] === 'electron-builder --mac zip --universal'
+    && electronPackage.build?.mac?.target?.[0]?.target === 'zip'
+    && electronPackage.build?.mac?.target?.[0]?.arch?.includes('universal')
+    && electronPackage.build?.mac?.artifactName === 'TimeWhere-0.3.0-mac-universal.zip');
 assert('Desktop main loads packaged extension resources and exposes navigation routes',
     electronMain.includes('packagedExtensionRoot')
     && electronMain.includes('process.resourcesPath')
