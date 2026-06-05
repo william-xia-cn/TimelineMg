@@ -434,8 +434,8 @@ function getGoogleSyncFailureMessage(error = {}) {
     if (reason === 'desktop_oauth_not_connected' || reason === 'not_authorized') {
         return 'Google 同步尚未连接，或旧授权已不可用。请重新点击连接 Google 后再同步。';
     }
-    if (/client_secret is missing/i.test(message)) {
-        return '当前 Google 桌面 OAuth client 需要 client secret 才能换取 token。请把该 Desktop credential 的 client secret 写入本地 desktop-oauth.local.json 后重试；不要提交到 git。';
+    if (reason === 'invalid_client' || /client_secret is missing|invalid_client/i.test(message)) {
+        return '当前 Google 桌面 OAuth client 配置不适合桌面 PKCE 授权。请在 Google Cloud 中使用“桌面应用”OAuth client；TimeWhere 不需要也不会保存 client secret。';
     }
     if (reason === 'redirect_uri_mismatch' || /redirect_uri_mismatch/i.test(message)) {
         return 'Google OAuth redirect URI 不匹配。请确认 Google Cloud 中创建的是“桌面应用”OAuth client，而不是 Web 应用。';

@@ -67,7 +67,7 @@ Chrome extension connection is an optional enhancement for detection / opening w
 
 - Use Google installed-app OAuth with Authorization Code + PKCE, system browser, and localhost callback.
 - Bundle the desktop OAuth client ID `541406150907-0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com`; `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` is an optional override for testing or client rotation.
-- If Google requires the Desktop OAuth client secret during token exchange, read it only from ignored local config (`desktop-oauth.local.json`) or local environment override; do not commit the real value.
+- Do not read, send, store, or bundle a Google OAuth `client_secret`; the desktop app is a public installed client and relies on PKCE.
 - Store refresh token under Electron `app.getPath('userData')` only through Electron `safeStorage`.
 - If encrypted storage is unavailable, refuse to save plaintext refresh token and show failure to the user.
 
@@ -94,7 +94,7 @@ Chrome extension connection is an optional enhancement for detection / opening w
 
 - Windows desktop app opens core pages without Chrome runtime dependency.
 - Desktop Google Drive `appDataFolder` sync can authorize through the system browser using the bundled desktop OAuth client ID.
-- `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` can override the bundled ID for development or client rotation; `desktop-oauth.local.json` can provide a non-committed Desktop client secret if Google requires it.
+- `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` can override the bundled ID for development or client rotation; no Desktop OAuth client secret is required or supported.
 - Desktop refresh token is encrypted or not saved.
 - Desktop notifications fire while the app is running.
 - Chrome extension bridge connects only with matching extension ID and nonce.

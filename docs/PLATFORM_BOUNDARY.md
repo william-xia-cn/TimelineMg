@@ -92,7 +92,7 @@ tray/menu-bar or app menu `退出` command is the explicit full-quit path.
 
 Electron does not silently reuse Chrome Extension data. It uses its own Chromium IndexedDB runtime unless a future migration plan is approved.
 
-If Google requires the Desktop OAuth client secret during token exchange, the value must be supplied through ignored local config (`desktop-oauth.local.json`) or a local environment override. Do not commit the real client secret.
+Desktop OAuth is a public-client PKCE flow. The desktop app must not read, send, store, or bundle a Google OAuth `client_secret`; if Google requires one, the Google Cloud OAuth client should be fixed or recreated as a Desktop app client.
 
 Desktop refresh tokens must be encrypted with Electron `safeStorage`. If encrypted storage is unavailable, do not save a plaintext refresh token.
 

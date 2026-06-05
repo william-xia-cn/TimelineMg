@@ -171,11 +171,13 @@ assert('Electron preload exposes TimeWhereElectronPlatform bridge',
     electronPreload.includes("contextBridge.exposeInMainWorld('TimeWhereElectronPlatform'")
     && electronPreload.includes("ipcRenderer.invoke('timewhere-platform'"));
 
-assert('Desktop OAuth uses installed-app PKCE with optional non-committed local client secret',
+assert('Desktop OAuth uses installed-app PKCE without a client secret',
     desktopAuth.includes('541406150907-0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com')
     && desktopAuth.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID')
-    && desktopAuth.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET')
-    && desktopAuth.includes('desktop-oauth.local.json')
+    && !desktopAuth.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET')
+    && !desktopAuth.includes('desktop-oauth.local.json')
+    && !desktopAuth.includes('client_secret')
+    && desktopAuth.includes("auth_mode: 'pkce_public_client'")
     && desktopAuth.includes('code_challenge_method')
     && desktopAuth.includes('S256')
     && desktopAuth.includes('access_type')

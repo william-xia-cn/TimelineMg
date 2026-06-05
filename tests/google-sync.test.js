@@ -402,12 +402,13 @@ async function run() {
         read('extension/shared/js/google-sync.js').includes('makePlatformAuthError')
         && read('extension/shared/js/google-sync.js').includes("result?.status === 'failed'")
         && read('extension/shared/js/google-sync.js').includes('error.code = reason'));
-    assert('Desktop Google sync OAuth path uses bundled installed-app client id, PKCE, and safe token storage',
+    assert('Desktop Google sync OAuth path uses bundled installed-app client id, PKCE-only auth, and safe token storage',
         desktopAuthScript.includes('541406150907-0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com')
         && desktopAuthScript.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID')
-        && desktopAuthScript.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET')
-        && desktopAuthScript.includes('desktop-oauth.local.json')
-        && desktopAuthScript.includes('client_secret: config.client_secret')
+        && !desktopAuthScript.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET')
+        && !desktopAuthScript.includes('desktop-oauth.local.json')
+        && !desktopAuthScript.includes('client_secret')
+        && desktopAuthScript.includes("auth_mode: 'pkce_public_client'")
         && desktopAuthScript.includes('code_challenge_method')
         && desktopAuthScript.includes('S256')
         && desktopAuthScript.includes('safeStorage.encryptString')
@@ -420,7 +421,9 @@ async function run() {
         && settingsScript.includes('desktop_oauth_saved_token_unreadable')
         && settingsScript.includes('desktop_oauth_not_connected')
         && settingsScript.includes('client_secret is missing')
-        && settingsScript.includes('desktop-oauth.local.json')
+        && settingsScript.includes('PKCE')
+        && settingsScript.includes('不会保存 client secret')
+        && !settingsScript.includes('desktop-oauth.local.json')
         && settingsScript.includes('redirect_uri_mismatch')
         && settingsScript.includes('Drive API')
         && settingsScript.includes('last_error: message'));
