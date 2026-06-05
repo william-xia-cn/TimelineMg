@@ -347,13 +347,13 @@ assert('Focus layout has four independent top-level board columns', /<section cl
     && /<section class="board-column column-week"/.test(focusHtml)
     && /<section class="board-column column-feed"/.test(focusHtml));
 assert('Focus layout does not use merged column-side layout', !/column-side|side-panel/.test(focusHtml + focusCss));
-assert('Focus layout expresses overall 2:2:1:1 ratio', focusCss.includes('总布局 2:2:1:1')
-    && /column-calendar[\s\S]*\* 2 \/ 5/.test(focusCss)
-    && /column-week[\s\S]*column-feed[\s\S]*\* 1 \/ 5/.test(focusCss));
-assert('Focus first viewport target remains 2:2:1', focusCss.includes('首屏优先显示前 2:2:1')
-    && focusCss.includes('--focus-first-viewport-width: calc(100vw - 124px)'));
-assert('Focus board allows horizontal scrolling to feed column', /board-layout[\s\S]*overflow-x:\s*auto/.test(focusCss)
-    && /column-feed[\s\S]*flex:\s*0 0 calc\(var\(--focus-first-viewport-width\) \* 1 \/ 5\)/.test(focusCss));
+assert('Focus layout uses 4-column 40/40/10/10 ratio for wide screens', /board-column\s*{[\s\S]*?flex:\s*1 1 40%/.test(focusCss)
+    && /column-calendar\s*{[\s\S]*?flex:\s*1 1 40%/.test(focusCss)
+    && /column-week[\s\S]*?flex:\s*1 1 10%/.test(focusCss)
+    && /column-feed[\s\S]*?flex:\s*1 1 10%/.test(focusCss));
+assert('Focus viewport-specific formula is removed for modernized board layout', !focusCss.includes('--focus-first-viewport-width')
+    && focusCss.includes('min-width: 220px'));
+assert('Focus board still scrolls only when needed', /board-layout[\s\S]*overflow-x:\s*auto/.test(focusCss));
 assert('Focus week and feed are not stacked inside one column', focusHtml.indexOf('column-week') > focusHtml.indexOf('column-calendar')
     && focusHtml.indexOf('column-feed') > focusHtml.indexOf('column-week')
     && (focusHtml.match(/<section class="board-column column-/g) || []).length === 4

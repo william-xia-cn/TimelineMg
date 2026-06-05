@@ -25,8 +25,6 @@
     --radius-md: 12px;
     --radius-lg: 16px;
     --radius-xl: 24px;
-    --focus-first-viewport-width: calc(100vw - 124px);
-    
     --transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
@@ -173,10 +171,9 @@ body::before {
 }
 
 .board-column {
-    /* 总布局 2:2:1:1；首屏优先显示前 2:2:1，消息流通过横向滚动进入 */
-    /* 首屏宽度 = 100vw - sidebar(64) - app padding×2(24) - sidebar-board gap(12) - 前三列 gap×2(24) = 100vw - 124px */
-    flex: 0 0 calc(var(--focus-first-viewport-width) * 2 / 5);
-    min-width: 0;
+    /* 默认保持 4 列完整出现在首屏：40%/40%/10%/10% */
+    flex: 1 1 40%;
+    min-width: 220px;
     background: var(--column-bg);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
@@ -190,7 +187,7 @@ body::before {
 
 /* 日程列：2 份；纵向 padding 压缩，给日历体更多可视高度 */
 .board-column.column-calendar {
-    flex: 0 0 calc(var(--focus-first-viewport-width) * 2 / 5);
+    flex: 1 1 40%;
     padding: 6px 12px;
 }
 .column-calendar .column-header {
@@ -205,8 +202,8 @@ body::before {
 
 .board-column.column-week,
 .board-column.column-feed {
-    flex: 0 0 calc(var(--focus-first-viewport-width) * 1 / 5);
-    min-width: 260px;
+    flex: 1 1 10%;
+    min-width: 220px;
 }
 
 /* 高亮色块 */

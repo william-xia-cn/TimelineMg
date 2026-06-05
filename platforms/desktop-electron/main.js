@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Notification, ipcMain, Tray, nativeImage } = require('electron');
+const { app, BrowserWindow, Menu, Notification, ipcMain, Tray, nativeImage, screen } = require('electron');
 const path = require('path');
 const fs = require('node:fs');
 const fsp = fs.promises;
@@ -91,6 +91,54 @@ function getTrayIcon() {
   return null;
 }
 
+function getDefaultWindowBounds() {
+  const fallback = {
+    width: 1880,
+    height: 980,
+    minWidth: 1400,
+    minHeight: 840
+  };
+  try {
+    const workArea = screen.getPrimaryDisplay()?.workArea;
+    if (!workArea || workArea.width <= 0 || workArea.height <= 0) {
+      return fallback;
+    }
+    const width = Math.min(1880, Math.floor(workArea.width * 0.95));
+    const height = Math.min(1120, Math.floor(workArea.height * 0.9));
+    const minWidth = Math.min(width, Math.max(1120, Math.floor(width * 0.88)));
+    const minHeight = Math.min(height, Math.max(760, Math.floor(height * 0.86)));
+    return {
+      width,
+      height,
+      minWidth,
+      minHeight
+    };
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function showWindow(win) {
+  if (!win || win.isDestroyed()) return null;
+  if (win.isMinimized()) {
+    win.restore();
+  }
+  if (process.platform === 'darwin' && app.dock?.show) {
+    app.dock.show();
+  }
+  win.show();
+  win.focus();
+  return win;
+}
+
+function hideToTray(win) {
+  if (!win || win.isDestroyed()) return;
+  win.hide();
+  if (process.platform === 'darwin' && app.dock?.hide) {
+    app.dock.hide();
+  }
+}
+
 function getWindowVisibilityState() {
   if (!mainWindow || mainWindow.isDestroyed()) return 'hidden';
   return mainWindow.isVisible() ? 'visible' : 'hidden';
@@ -138,11 +186,7 @@ function destroyTray() {
 }
 
 function openWindow(route = defaultRoute) {
-  const win = getOrCreateMainWindow(route);
-  if (win?.isMinimized?.()) win.restore();
-  win?.show();
-  win?.focus();
-  return win;
+  return getOrCreateMainWindow(route);
 }
 
 function toggleMainWindow() {
@@ -341,11 +385,12 @@ async function loadRoute(win, route = defaultRoute) {
 }
 
 function createMainWindow(route = defaultRoute) {
+  const bounds = getDefaultWindowBounds();
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 820,
-    minWidth: 1040,
-    minHeight: 680,
+    width: bounds.width,
+    height: bounds.height,
+    minWidth: bounds.minWidth,
+    minHeight: bounds.minHeight,
     title: 'TimeWhere',
     backgroundColor: '#f1f5f9',
     webPreferences: {
@@ -377,7 +422,7 @@ function createMainWindow(route = defaultRoute) {
     if (isQuitting) return;
     if (desktopSettings.closeToTray) {
       event.preventDefault();
-      mainWindow.hide();
+      hideToTray(mainWindow);
     }
   });
   mainWindow.on('closed', () => {
@@ -387,11 +432,20 @@ function createMainWindow(route = defaultRoute) {
 }
 
 function getOrCreateMainWindow(route = defaultRoute) {
-  if (!mainWindow || mainWindow.isDestroyed()) return createMainWindow(route);
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
-  if (route) loadRoute(mainWindow, route).catch(error => console.error(`TimeWhere route failed: ${error.message}`));
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    const win = createMainWindow(route);
+    if (win) {
+      showWindow(win);
+      return win;
+    }
+    return null;
+  }
+  showWindow(mainWindow);
+  if (route) {
+    loadRoute(mainWindow, route).catch(error => {
+      console.error(`TimeWhere route failed: ${error.message}`);
+    });
+  }
   return mainWindow;
 }
 
@@ -617,7 +671,7 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
   return { status: 'not_supported', method };
 });
 
-app.whenReady().then(() => {
+  app.whenReady().then(() => {
   if (!smokeMode) app.setAsDefaultProtocolClient(protocolScheme);
   loadDesktopSettings()
     .then(() => {
@@ -639,10 +693,6 @@ app.whenReady().then(() => {
       syncTrayMenuLabels();
     });
   app.on('activate', () => {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      createMainWindow();
-      return;
-    }
     openWindow();
   });
 });

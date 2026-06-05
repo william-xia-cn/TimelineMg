@@ -242,14 +242,17 @@ assert('Settings contains desktop bridge card and non-dependency copy',
     && settingsScript.includes('isDesktopElectronPlatform')
     && settingsScript.includes('handleDesktopSystemSettingsChange')
     && settingsScript.includes('desktopSystemSettingsDefaults'));
-assert('Desktop window controls keep native minimize and close to tray by default',
+assert('Desktop window controls keep native minimize and close-to-tray with Dock hiding',
     !electronMain.includes("mainWindow.on('minimize'")
     && electronMain.includes('closeToTray: true')
     && electronMain.includes("mainWindow.on('close'")
     && electronMain.includes('event.preventDefault();')
-    && electronMain.includes('mainWindow.hide();')
-    && electronMain.includes('mainWindow.isMinimized()')
-    && electronMain.includes('mainWindow.restore()'));
+    && electronMain.includes('hideToTray(mainWindow);')
+    && electronMain.includes('showWindow(mainWindow')
+    && electronMain.includes('app.dock?.hide')
+    && electronMain.includes('showWindow(win)')
+    && electronMain.includes('.isMinimized()')
+    && electronMain.includes('.restore()'));
 
 assert('Manifest includes local bridge host permission for unpacked bridge testing',
     manifest.host_permissions.includes('ws://127.0.0.1/*')
