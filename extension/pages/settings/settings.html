@@ -273,6 +273,15 @@
                                     <p class="setting-desc">TimeWhere 可离线完整使用；Google 仅用于跨设备同步。</p>
                                 </div>
 
+                                <div class="google-sync-card google-sync-recovery-card" id="googleSyncRecoveryHint" hidden>
+                                    <div class="google-sync-card-header">
+                                        <span class="setting-label">重装恢复</span>
+                                        <button class="action-btn" id="connectAndRestoreGoogleSyncBtn" type="button">连接 Google 并从云端恢复</button>
+                                    </div>
+                                    <p class="setting-desc">检测到本地暂无任务、日程、习惯或每日总结。若云端已有 TimeWhere 同步副本，可先连接 Google，再确认是否下载到本地。</p>
+                                    <p class="setting-desc">恢复前会要求再次确认，不会静默覆盖本地数据。</p>
+                                </div>
+
                                 <div class="google-sync-card">
                                     <div class="google-sync-card-header">
                                         <span class="setting-label">同步状态</span>
@@ -291,6 +300,60 @@
                                     <button class="action-btn google-sync-conflict-btn" id="processGoogleConflictsBtn" type="button" hidden>处理冲突</button>
                                 </div>
                                 <div class="google-sync-preview" id="googleSyncPreview" hidden></div>
+                            </div>
+                        </section>
+
+                        <!-- 桌面集成 -->
+                        <section class="section" id="desktopIntegrationSection" hidden>
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">desktop_windows</span> 桌面集成
+                            </h2>
+                            <div class="settings-group desktop-integration-group">
+                                <div class="desktop-bridge-card">
+                                    <div class="desktop-bridge-card-header">
+                                        <span class="setting-label">连接 Chrome 控件</span>
+                                        <button class="action-btn" id="connectDesktopBridgeBtn" type="button">连接控件</button>
+                                    </div>
+                                    <div class="desktop-bridge-controls">
+                                        <label class="desktop-bridge-field">
+                                            <span>控件 ID</span>
+                                            <select id="desktopBridgeExtensionPreset">
+                                                <option value="ogdjmelmfkfahppahhkkggdejjainbnd">开发固定 ID</option>
+                                                <option value="bokjekfjghliieopghopibmhjokgkjkb">Chrome Web Store ID</option>
+                                                <option value="custom">自定义 ID</option>
+                                            </select>
+                                        </label>
+                                        <label class="desktop-bridge-field" id="desktopBridgeCustomField" hidden>
+                                            <span>自定义控件 ID</span>
+                                            <input type="text" id="desktopBridgeCustomExtensionId" maxlength="32" autocomplete="off" placeholder="32 位 Chrome Extension ID">
+                                        </label>
+                                    </div>
+                                    <div class="desktop-bridge-state-line">
+                                        <span class="desktop-bridge-status" id="desktopBridgeStatus" data-status="idle">○ 未连接</span>
+                                        <span class="desktop-bridge-version" id="desktopBridgeVersion"></span>
+                                    </div>
+                                    <div class="setting-row" style="margin-top: 12px;">
+                                        <div class="setting-info">
+                                            <span class="setting-label">关闭到托盘 / 菜单栏</span>
+                                            <span class="setting-desc">关闭按钮不退出应用，改为后台驻留。</span>
+                                        </div>
+                                        <label class="toggle-switch">
+                                            <input id="desktopCloseToTray" type="checkbox">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="setting-row" style="margin-top: 8px;">
+                                        <div class="setting-info">
+                                            <span class="setting-label">开机自动运行</span>
+                                            <span class="setting-desc">系统启动时自动打开 TimeWhere。</span>
+                                        </div>
+                                        <label class="toggle-switch">
+                                            <input id="desktopStartAtLogin" type="checkbox">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    <p class="setting-desc">Windows 版不依赖 Chrome 控件；连接只用于检测和打开已安装控件，不传输任务数据。</p>
+                                </div>
                             </div>
                         </section>
 
@@ -415,6 +478,7 @@
     <script src="../../shared/js/dexie.js"></script>
     <!-- Database -->
     <script src="../../shared/js/db.js"></script>
+    <script src="../../shared/js/platform.js"></script>
     <script src="../../shared/js/appearance.js"></script>
     <!-- Scheduling -->
     <script src="../../shared/js/scheduling.js"></script>
@@ -422,6 +486,8 @@
     <script src="../../shared/js/managebac.js"></script>
     <script src="../../shared/js/google-sync.js"></script>
     <!-- Settings Script -->
+    <script src="../../shared/js/reminders.js"></script>
+    <script src="../../shared/js/desktop-reminders.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

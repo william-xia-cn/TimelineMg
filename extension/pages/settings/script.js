@@ -8,6 +8,13 @@ let settingsManageBacSyncInProgress = false;
 let googleSyncInProgress = false;
 let googleSyncPreviewState = null;
 let pendingGoogleSyncDangerAction = null;
+let desktopBridgeInProgress = false;
+let desktopSystemSettingsInProgress = false;
+const desktopSystemSettingsDefaults = {
+    minimizeToTray: false,
+    closeToTray: true,
+    startAtLogin: false
+};
 
 document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
@@ -15,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await initDatabase();
         await loadSettings();
         await ensureTaskReminderAlarm();
+        await setupDesktopIntegration();
         runGoogleSyncCheck();
     } catch (error) {
         showToast(`设置页初始化失败：${error.message}`, 'error');
@@ -67,18 +75,23 @@ function setupEventListeners() {
     document.getElementById('settingsSaveManageBacIcsLinkBtn')?.addEventListener('click', handleSettingsSaveManageBacIcsLink);
     document.getElementById('settingsSyncManageBacBtn')?.addEventListener('click', handleSettingsManageBacSync);
     document.getElementById('connectGoogleSyncBtn')?.addEventListener('click', handleConnectGoogleSync);
+    document.getElementById('connectAndRestoreGoogleSyncBtn')?.addEventListener('click', handleConnectAndRestoreGoogleSync);
     document.getElementById('syncGoogleNowBtn')?.addEventListener('click', handleGoogleSyncNow);
     document.getElementById('restoreGoogleSyncBtn')?.addEventListener('click', handleRestoreGoogleSync);
     document.getElementById('uploadGoogleSyncBtn')?.addEventListener('click', handleUploadGoogleSync);
     document.getElementById('disconnectGoogleSyncBtn')?.addEventListener('click', handleDisconnectGoogleSync);
     document.getElementById('processGoogleConflictsBtn')?.addEventListener('click', showStoredGoogleSyncConflicts);
     document.getElementById('testNotificationBtn')?.addEventListener('click', handleTestNotification);
+    document.getElementById('desktopBridgeExtensionPreset')?.addEventListener('change', updateDesktopBridgeCustomField);
+    document.getElementById('connectDesktopBridgeBtn')?.addEventListener('click', handleConnectDesktopBridge);
     document.getElementById('closeGoogleSyncDangerModal')?.addEventListener('click', closeGoogleSyncDangerModal);
     document.getElementById('cancelGoogleSyncDangerBtn')?.addEventListener('click', closeGoogleSyncDangerModal);
     document.getElementById('confirmGoogleSyncDangerBtn')?.addEventListener('click', confirmGoogleSyncDangerAction);
     document.getElementById('googleSyncDangerConfirmInput')?.addEventListener('input', updateGoogleSyncDangerConfirmState);
     document.getElementById('appearanceBackground')?.addEventListener('change', previewAppearanceSettings);
     document.getElementById('appearanceAvatar')?.addEventListener('change', previewAppearanceSettings);
+    document.getElementById('desktopCloseToTray')?.addEventListener('change', handleDesktopSystemSettingsChange);
+    document.getElementById('desktopStartAtLogin')?.addEventListener('change', handleDesktopSystemSettingsChange);
     setupImportEvents();
 }
 
@@ -88,6 +101,177 @@ function previewAppearanceSettings() {
         background: document.getElementById('appearanceBackground')?.value || 'calm',
         avatar: document.getElementById('appearanceAvatar')?.value || 'default'
     });
+}
+
+function isDesktopElectronPlatform() {
+    return globalThis.TimeWherePlatform?.name === 'desktop-electron';
+}
+
+async function setupDesktopIntegration() {
+    const section = document.getElementById('desktopIntegrationSection');
+    if (!section) return;
+    section.hidden = !isDesktopElectronPlatform();
+    if (section.hidden) return;
+    updateDesktopBridgeCustomField();
+    await refreshDesktopBridgeStatus();
+    await refreshDesktopSystemSettings();
+}
+
+function updateDesktopBridgeCustomField() {
+    const preset = document.getElementById('desktopBridgeExtensionPreset')?.value || '';
+    const field = document.getElementById('desktopBridgeCustomField');
+    if (field) field.hidden = preset !== 'custom';
+}
+
+function getSelectedDesktopBridgeExtensionId() {
+    const preset = document.getElementById('desktopBridgeExtensionPreset')?.value || '';
+    if (preset === 'custom') {
+        return document.getElementById('desktopBridgeCustomExtensionId')?.value?.trim().toLowerCase() || '';
+    }
+    return preset;
+}
+
+function setDesktopBridgeStatus(message, status = 'idle', version = '') {
+    const statusEl = document.getElementById('desktopBridgeStatus');
+    const versionEl = document.getElementById('desktopBridgeVersion');
+    if (statusEl) {
+        statusEl.textContent = message;
+        statusEl.dataset.status = status;
+    }
+    if (versionEl) versionEl.textContent = version || '';
+}
+
+function updateDesktopBridgeControls() {
+    const disabled = desktopBridgeInProgress || desktopSystemSettingsInProgress || !isDesktopElectronPlatform();
+    [
+        'desktopBridgeExtensionPreset',
+        'desktopBridgeCustomExtensionId',
+        'connectDesktopBridgeBtn',
+        'desktopCloseToTray',
+        'desktopStartAtLogin'
+    ].forEach(id => document.getElementById(id)?.toggleAttribute('disabled', disabled));
+}
+
+function readDesktopSystemSettingsInputs() {
+    return {
+        closeToTray: !!document.getElementById('desktopCloseToTray')?.checked,
+        startAtLogin: !!document.getElementById('desktopStartAtLogin')?.checked
+    };
+}
+
+function applyDesktopSystemSettingsToInputs(settings = {}) {
+    const normalized = {
+        minimizeToTray: settings.minimizeToTray ?? desktopSystemSettingsDefaults.minimizeToTray,
+        closeToTray: settings.closeToTray ?? desktopSystemSettingsDefaults.closeToTray,
+        startAtLogin: settings.startAtLogin ?? desktopSystemSettingsDefaults.startAtLogin
+    };
+    const closeEl = document.getElementById('desktopCloseToTray');
+    const startAtLoginEl = document.getElementById('desktopStartAtLogin');
+    if (closeEl) closeEl.checked = normalized.closeToTray === true;
+    if (startAtLoginEl) startAtLoginEl.checked = normalized.startAtLogin === true;
+}
+
+async function refreshDesktopSystemSettings() {
+    if (!isDesktopElectronPlatform() || typeof globalThis.TimeWherePlatform?.system?.getDesktopSettings !== 'function') {
+        return;
+    }
+    try {
+        const result = await globalThis.TimeWherePlatform.system.getDesktopSettings();
+        if (result?.status === 'ok' && result.settings) {
+            applyDesktopSystemSettingsToInputs(result.settings);
+            return;
+        }
+        applyDesktopSystemSettingsToInputs({});
+    } catch (error) {
+        console.warn('读取桌面托盘/开机设置失败：', error);
+        applyDesktopSystemSettingsToInputs({});
+    }
+}
+
+async function handleDesktopSystemSettingsChange() {
+    if (!isDesktopElectronPlatform() || typeof globalThis.TimeWherePlatform?.system?.setDesktopSettings !== 'function') {
+        return;
+    }
+    const nextSettings = readDesktopSystemSettingsInputs();
+    desktopSystemSettingsInProgress = true;
+    updateDesktopBridgeControls();
+    try {
+        const result = await globalThis.TimeWherePlatform.system.setDesktopSettings(nextSettings);
+        if (result?.status === 'ok') {
+            applyDesktopSystemSettingsToInputs(result.settings || nextSettings);
+            showToast('桌面集成设置已应用', 'success');
+            return;
+        }
+        showToast(`应用失败：${result?.reason || 'unknown'}`, 'error');
+        if (result?.settings) {
+            applyDesktopSystemSettingsToInputs(result.settings);
+        } else {
+            await refreshDesktopSystemSettings();
+        }
+    } catch (error) {
+        showToast(`应用失败：${error.message}`, 'error');
+        await refreshDesktopSystemSettings();
+    } finally {
+        desktopSystemSettingsInProgress = false;
+        updateDesktopBridgeControls();
+    }
+}
+
+async function refreshDesktopBridgeStatus() {
+    if (!isDesktopElectronPlatform() || typeof globalThis.TimeWherePlatform?.chromeBridge?.getStatus !== 'function') return;
+    const state = await globalThis.TimeWherePlatform.chromeBridge.getStatus();
+    if (state?.status === 'connected') {
+        setDesktopBridgeStatus('● 已连接', 'connected', `${state.extensionId || ''} ${state.version ? `v${state.version}` : ''}`.trim());
+    } else if (state?.status === 'waiting') {
+        setDesktopBridgeStatus('● 等待控件响应', 'waiting', state.extensionId || '');
+    } else {
+        setDesktopBridgeStatus('○ 未连接', 'idle');
+    }
+}
+
+function formatDesktopBridgeFailure(result = {}) {
+    const reason = result.reason || result.status || 'unknown';
+    const labels = {
+        timeout: '未检测到控件，请确认已安装并允许打开扩展页面。',
+        invalid_extension_id: '控件 ID 格式不正确。',
+        nonce_mismatch: '握手校验失败，请重试。',
+        extension_id_mismatch: '响应控件 ID 与选择不一致。',
+        bridge_version_too_old: '控件版本过旧，需要更新到包含桌面 bridge 的版本。',
+        invalid_message_type: '控件 bridge 响应格式不正确。',
+        invalid_json: '控件 bridge 响应无法解析。'
+    };
+    return labels[reason] || `连接失败：${reason}`;
+}
+
+async function handleConnectDesktopBridge() {
+    if (!isDesktopElectronPlatform()) return;
+    const extensionId = getSelectedDesktopBridgeExtensionId();
+    if (!/^[a-p]{32}$/.test(extensionId)) {
+        setDesktopBridgeStatus('● 控件 ID 无效', 'failed');
+        showToast('请输入有效的 32 位 Chrome 控件 ID', 'error');
+        return;
+    }
+    desktopBridgeInProgress = true;
+    updateDesktopBridgeControls();
+    setDesktopBridgeStatus('● 等待控件响应', 'waiting', extensionId);
+    try {
+        const result = await globalThis.TimeWherePlatform.chromeBridge.connectExtension({ extensionId });
+        if (result?.status === 'connected') {
+            setDesktopBridgeStatus('● 已连接', 'connected', `${result.extensionId} ${result.version ? `v${result.version}` : ''}`.trim());
+            showToast('Chrome 控件已连接；Windows 版仍可独立使用。', 'success');
+            return;
+        }
+        const message = formatDesktopBridgeFailure(result);
+        setDesktopBridgeStatus(`● ${message}`, result?.status || 'failed', extensionId);
+        showToast(message, 'error');
+    } catch (error) {
+        setDesktopBridgeStatus('● 连接失败', 'failed', extensionId);
+        showToast(`连接控件失败：${error.message}`, 'error');
+    } finally {
+        desktopBridgeInProgress = false;
+        updateDesktopBridgeControls();
+        updateDesktopBridgeCustomField();
+    }
 }
 
 async function loadSettingsManageBacLink() {
@@ -213,7 +397,9 @@ function getGoogleSyncApi() {
 
 function createGoogleSyncRuntime() {
     const api = getGoogleSyncApi();
-    const authAdapter = api.createChromeIdentityAuthAdapter(typeof chrome !== 'undefined' ? chrome : null);
+    const authAdapter = globalThis.TimeWherePlatform?.auth?.getGoogleToken && api.createTimeWherePlatformAuthAdapter
+        ? api.createTimeWherePlatformAuthAdapter(globalThis.TimeWherePlatform)
+        : api.createChromeIdentityAuthAdapter(typeof chrome !== 'undefined' ? chrome : null);
     const driveClient = api.createDriveAppDataClient({ authAdapter });
     return { api, authAdapter, driveClient };
 }
@@ -223,6 +409,56 @@ function setGoogleSyncStatus(message, status = 'not_configured') {
     if (!el) return;
     el.textContent = message;
     el.dataset.status = status;
+}
+
+function getGoogleSyncNotConfiguredMessage(reason = '') {
+    if (reason === 'desktop_oauth_client_id_missing') {
+        return '○ 桌面同步未配置';
+    }
+    return '○ 未连接';
+}
+
+function getGoogleSyncFailureReason(error = {}) {
+    return error.code || error.reason || error.name || 'google_sync_failed';
+}
+
+function getGoogleSyncFailureMessage(error = {}) {
+    const message = String(error.message || '');
+    const reason = getGoogleSyncFailureReason(error);
+    if (reason === 'desktop_token_storage_unavailable' || /token storage encryption is unavailable/i.test(message)) {
+        return 'Windows 当前无法使用安全凭据存储保存 Google 授权。请确认 Windows Hello/系统凭据服务可用后重试。';
+    }
+    if (reason === 'desktop_oauth_saved_token_unreadable' || /cannot be decrypted/i.test(message)) {
+        return '旧的桌面 Google 授权状态无法解密，TimeWhere 已清理旧状态；请重新连接 Google。';
+    }
+    if (reason === 'desktop_oauth_not_connected' || reason === 'not_authorized') {
+        return 'Google 同步尚未连接，或旧授权已不可用。请重新点击连接 Google 后再同步。';
+    }
+    if (/client_secret is missing/i.test(message)) {
+        return '当前 Google 桌面 OAuth client 需要 client secret 才能换取 token。请把该 Desktop credential 的 client secret 写入本地 desktop-oauth.local.json 后重试；不要提交到 git。';
+    }
+    if (reason === 'redirect_uri_mismatch' || /redirect_uri_mismatch/i.test(message)) {
+        return 'Google OAuth redirect URI 不匹配。请确认 Google Cloud 中创建的是“桌面应用”OAuth client，而不是 Web 应用。';
+    }
+    if (reason === 'unauthorized_client' || /unauthorized_client/i.test(message)) {
+        return '当前 OAuth client 不允许桌面授权。请确认客户端类型为“桌面应用”，并启用所需 API。';
+    }
+    if (reason === 'access_denied' || /access_denied/i.test(message)) {
+        return 'Google 授权已取消或被拒绝，请重新点击连接并允许 Drive appDataFolder 权限。';
+    }
+    if (reason === 'invalid_grant' || /invalid_grant/i.test(message)) {
+        return 'Google 授权码或旧授权已失效，请重新连接 Google。';
+    }
+    if (/Google Drive request failed \(403\)/i.test(message)) {
+        return 'Google Drive 请求被拒绝。请确认 Google Cloud 已启用 Drive API，且该账号允许使用此 OAuth 应用。';
+    }
+    if (/Google Drive request failed/i.test(message)) {
+        return message;
+    }
+    if (/Google auth token unavailable|Google authorization unavailable/i.test(message)) {
+        return 'Google 授权状态不可用。请重新连接 Google 后再同步。';
+    }
+    return message || '未知错误';
 }
 
 function formatGoogleSyncDateTime(value) {
@@ -241,7 +477,7 @@ async function updateGoogleSyncAccountDisplay(state = null) {
     const accountEl = document.getElementById('googleSyncAccountEmail');
     const connectBtn = document.getElementById('connectGoogleSyncBtn');
     const disconnectBtn = document.getElementById('disconnectGoogleSyncBtn');
-    const connected = state?.status === 'connected' || state?.status === 'conflict' || state?.status === 'pending_retry' || state?.status === 'failed' || state?.status === 'syncing';
+    const connected = isGoogleSyncConnectedState(state);
     const email = connected ? await getGoogleSyncAccountEmail() : null;
     if (accountEl) {
         accountEl.textContent = email || (connected ? 'Google 账户' : '');
@@ -270,10 +506,74 @@ function updateGoogleSyncConflictButton(count = 0) {
     btn.textContent = hasConflicts ? `处理 ${count} 项冲突` : '处理冲突';
 }
 
+function isGoogleSyncConnectedState(state = null) {
+    if (['connected', 'conflict', 'pending_retry', 'syncing'].includes(state?.status)) return true;
+    if (state?.status !== 'failed') return false;
+    return Boolean(state.connected_at || state.last_success_at || state.last_restore_at || state.last_force_upload_at);
+}
+
+async function getGoogleSyncLocalUserDataCounts() {
+    const safeCount = async getter => {
+        if (typeof getter !== 'function') return 0;
+        const rows = await getter.call(TimeWhereDB);
+        return Array.isArray(rows) ? rows.length : 0;
+    };
+    const journals = typeof TimeWhereDB.listDailyJournals === 'function'
+        ? await TimeWhereDB.listDailyJournals()
+        : [];
+    const meaningfulJournals = Array.isArray(journals)
+        ? journals.filter(isMeaningfulGoogleSyncRecoveryJournal)
+        : [];
+    const counts = {
+        tasks: await safeCount(TimeWhereDB.getAllTasks),
+        events: await safeCount(TimeWhereDB.getEvents),
+        habits: await safeCount(TimeWhereDB.getHabits),
+        daily_journals: meaningfulJournals.length
+    };
+    counts.total = counts.tasks + counts.events + counts.habits + counts.daily_journals;
+    return counts;
+}
+
+function isMeaningfulGoogleSyncRecoveryJournal(journal = {}) {
+    const hasNotes = [
+        journal.planned_notes,
+        journal.delayed_notes,
+        journal.extra_done_notes,
+        journal.general_notes
+    ].some(value => String(value || '').trim());
+    const hasTaskSnapshots = [
+        journal.planned_task_snapshots,
+        journal.completed_task_snapshots,
+        journal.delayed_task_snapshots,
+        journal.extra_done_task_snapshots,
+        journal.completion_task_snapshots,
+        journal.completion_extra_task_snapshots
+    ].some(value => Array.isArray(value) && value.length > 0);
+    return journal.status === 'submitted' || hasNotes || hasTaskSnapshots;
+}
+
+async function updateGoogleSyncRecoveryHint(state = null) {
+    const hint = document.getElementById('googleSyncRecoveryHint');
+    const btn = document.getElementById('connectAndRestoreGoogleSyncBtn');
+    if (!hint) return;
+    if (typeof TimeWhereGoogleSync === 'undefined' || typeof TimeWhereDB === 'undefined' || isGoogleSyncConnectedState(state)) {
+        hint.hidden = true;
+        return;
+    }
+    try {
+        const counts = await getGoogleSyncLocalUserDataCounts();
+        hint.hidden = counts.total !== 0;
+        if (btn) btn.disabled = googleSyncInProgress;
+    } catch (_) {
+        hint.hidden = true;
+    }
+}
+
 function updateGoogleSyncControls() {
     const disabled = googleSyncInProgress || typeof TimeWhereGoogleSync === 'undefined';
     [
         'connectGoogleSyncBtn',
+        'connectAndRestoreGoogleSyncBtn',
         'syncGoogleNowBtn',
         'restoreGoogleSyncBtn',
         'uploadGoogleSyncBtn',
@@ -294,6 +594,7 @@ async function loadGoogleSyncStatus() {
         updateGoogleSyncLastSyncDisplay(null);
         updateGoogleSyncConflictButton(0);
         updateGoogleSyncControls();
+        await updateGoogleSyncRecoveryHint({ status: 'not_configured' });
         return;
     }
     const state = await TimeWhereGoogleSync.getGoogleSyncState(TimeWhereDB);
@@ -305,7 +606,7 @@ async function loadGoogleSyncStatus() {
         updateGoogleSyncConflictButton(state.conflict_count || 0);
         await showStoredGoogleSyncConflicts();
     } else if (state?.status === 'failed') {
-        setGoogleSyncStatus('● 失败', 'failed');
+        setGoogleSyncStatus(state?.last_error ? `● 失败：${state.last_error}` : '● 失败', 'failed');
         updateGoogleSyncConflictButton(0);
     } else if (state?.status === 'pending_retry') {
         setGoogleSyncStatus('● 离线待重试', 'failed');
@@ -314,43 +615,81 @@ async function loadGoogleSyncStatus() {
         setGoogleSyncStatus('● 同步中', 'syncing');
         updateGoogleSyncConflictButton(0);
     } else {
-        setGoogleSyncStatus('○ 未连接', 'not_configured');
+        setGoogleSyncStatus(getGoogleSyncNotConfiguredMessage(state?.reason), 'not_configured');
         updateGoogleSyncConflictButton(0);
     }
     await updateGoogleSyncAccountDisplay(state);
     updateGoogleSyncLastSyncDisplay(state);
     updateGoogleSyncControls();
+    await updateGoogleSyncRecoveryHint(state);
+}
+
+async function connectGoogleSyncAccount() {
+    const { api, authAdapter } = createGoogleSyncRuntime();
+    const result = await authAdapter.connect();
+    if (result.status === 'not_configured') {
+        await api.saveGoogleSyncState(TimeWhereDB, {
+            status: 'not_configured',
+            reason: result.reason || 'oauth_client_id_missing'
+        });
+        return { status: 'not_configured', reason: result.reason || 'oauth_client_id_missing' };
+    }
+    const accountInfo = await authAdapter.getAccountInfo?.();
+    if (accountInfo?.email) {
+        await TimeWhereDB.setSetting('google_sync_account_email', accountInfo.email);
+    }
+    await api.saveGoogleSyncState(TimeWhereDB, {
+        status: 'connected',
+        connected_at: new Date().toISOString()
+    });
+    return { status: 'connected' };
 }
 
 async function handleConnectGoogleSync() {
     setGoogleSyncInProgress(true, '正在连接 Google 同步…');
     try {
-        const { api, authAdapter } = createGoogleSyncRuntime();
-        const result = await authAdapter.connect();
+        const result = await connectGoogleSyncAccount();
         if (result.status === 'not_configured') {
-            await api.saveGoogleSyncState(TimeWhereDB, {
-                status: 'not_configured',
-                reason: result.reason || 'oauth_client_id_missing'
-            });
-            setGoogleSyncStatus('○ 未连接', 'not_configured');
-            showToast('Google OAuth client ID 未配置；本地功能不受影响。', 'info');
+            setGoogleSyncStatus(getGoogleSyncNotConfiguredMessage(result.reason), 'not_configured');
+            showToast(result.reason === 'desktop_oauth_client_id_missing'
+                ? '桌面 Google OAuth client ID 未配置；Windows 本地功能不受影响。'
+                : 'Google OAuth client ID 未配置；本地功能不受影响。', 'info');
             return;
         }
-        const accountInfo = await authAdapter.getAccountInfo?.();
-        if (accountInfo?.email) {
-            await TimeWhereDB.setSetting('google_sync_account_email', accountInfo.email);
-        }
-        await api.saveGoogleSyncState(TimeWhereDB, {
-            status: 'connected',
-            connected_at: new Date().toISOString()
-        });
         setGoogleSyncStatus('● 已连接', 'connected');
-        await updateGoogleSyncAccountDisplay({ status: 'connected' });
+        await loadGoogleSyncStatus();
         showToast('Google 数据同步已连接', 'success');
     } catch (error) {
         await markGoogleSyncFailed(error);
     } finally {
         setGoogleSyncInProgress(false);
+        await loadGoogleSyncStatus();
+    }
+}
+
+async function handleConnectAndRestoreGoogleSync() {
+    setGoogleSyncInProgress(true, '正在连接 Google 同步…');
+    let connected = false;
+    try {
+        const result = await connectGoogleSyncAccount();
+        if (result.status === 'not_configured') {
+            setGoogleSyncStatus(getGoogleSyncNotConfiguredMessage(result.reason), 'not_configured');
+            showToast(result.reason === 'desktop_oauth_client_id_missing'
+                ? '桌面 Google OAuth client ID 未配置；无法从云端恢复。'
+                : 'Google OAuth client ID 未配置；无法从云端恢复。', 'info');
+            return;
+        }
+        connected = true;
+        setGoogleSyncStatus('● 已连接', 'connected');
+        showToast('Google 已连接。请在确认框中确认是否下载到本地。', 'info');
+    } catch (error) {
+        await markGoogleSyncFailed(error);
+    } finally {
+        setGoogleSyncInProgress(false);
+        await loadGoogleSyncStatus();
+    }
+    if (connected) {
+        openGoogleSyncDangerModal('restore');
     }
 }
 
@@ -365,7 +704,7 @@ async function executeUploadGoogleSync() {
         const result = await api.forceUploadLocalToCloud(TimeWhereDB, driveClient);
         if (result.status === 'not_configured') {
             await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: result.reason });
-            setGoogleSyncStatus('○ 未连接', 'not_configured');
+            setGoogleSyncStatus(getGoogleSyncNotConfiguredMessage(result.reason), 'not_configured');
             showToast('Google OAuth client ID 未配置，无法上传到 Drive。', 'info');
             return;
         }
@@ -387,7 +726,7 @@ async function handleGoogleSyncNow() {
         const result = await api.runAutoSync(TimeWhereDB, driveClient, { force: true });
         if (result?.status === 'not_configured') {
             await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: result.reason });
-            setGoogleSyncStatus('○ 未连接', 'not_configured');
+            setGoogleSyncStatus(getGoogleSyncNotConfiguredMessage(result.reason), 'not_configured');
             showToast('Google OAuth client ID 未配置；无法同步。', 'info');
             return;
         }
@@ -420,7 +759,7 @@ async function executeRestoreGoogleSync() {
         const result = await api.forceRestoreCloudToLocal(TimeWhereDB, driveClient);
         if (result?.status === 'not_configured') {
             await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: result.reason });
-            setGoogleSyncStatus('○ 未连接', 'not_configured');
+            setGoogleSyncStatus(getGoogleSyncNotConfiguredMessage(result.reason), 'not_configured');
             showToast('Google OAuth client ID 未配置；无法下载到本地。', 'info');
             return;
         }
@@ -464,18 +803,21 @@ async function handleDisconnectGoogleSync() {
 }
 
 async function markGoogleSyncFailed(error) {
+    const reason = getGoogleSyncFailureReason(error);
+    const message = getGoogleSyncFailureMessage(error);
     try {
         if (typeof TimeWhereGoogleSync !== 'undefined') {
             await TimeWhereGoogleSync.saveGoogleSyncState(TimeWhereDB, {
                 status: 'failed',
-                last_error: error.message
+                reason,
+                last_error: message
             });
         }
     } catch (_) {
         // Status write failure should not hide the original sync error.
     }
     setGoogleSyncStatus('● 失败', 'failed');
-    showToast(`Google 数据同步失败：${error.message}`, 'error');
+    showToast(`Google 数据同步失败：${message}`, 'error');
 }
 
 const GOOGLE_SYNC_DANGER_COPY = {
@@ -1163,27 +1505,40 @@ async function handleTestNotification() {
             showToast('系统任务提醒已关闭，未发送测试提醒', 'info');
             return;
         }
-        if (!chrome?.runtime?.sendMessage) {
-            showToast('当前环境不支持 Chrome 系统通知测试', 'error');
+        if (typeof chrome !== 'undefined' && chrome?.runtime?.sendMessage) {
+            const response = await chrome.runtime.sendMessage({ type: 'TIMEWHERE_TASK_REMINDER_TEST' });
+            if (!response?.ok) {
+                throw new Error(response?.error || '测试提醒发送失败');
+            }
+            const alarmText = formatReminderAlarmStatus(response.alarm);
+            const diagnosticText = formatDiagnosticAlarmStatus(response.diagnosticAlarm);
+            showToast(`已发送测试提醒；${alarmText}；${diagnosticText}`, 'success');
+            scheduleDiagnosticAlarmFollowUp();
             return;
         }
-        const response = await chrome.runtime.sendMessage({ type: 'TIMEWHERE_TASK_REMINDER_TEST' });
-        if (!response?.ok) {
-            throw new Error(response?.error || '测试提醒发送失败');
+        if (isDesktopElectronPlatform() && globalThis.TimeWherePlatform?.notification?.notify) {
+            await globalThis.TimeWherePlatform.notification.notify({
+                id: `timewhere-desktop-test:${Date.now()}`,
+                title: 'TimeWhere 测试提醒',
+                message: 'Windows 桌面通知已可用；应用运行期间会按任务规则提醒。'
+            });
+            await globalThis.TimeWhereDesktopReminders?.rescheduleNow?.();
+            showToast('已发送 Windows 桌面测试提醒；应用运行期间任务提醒可用。', 'success');
+            return;
         }
-        const alarmText = formatReminderAlarmStatus(response.alarm);
-        const diagnosticText = formatDiagnosticAlarmStatus(response.diagnosticAlarm);
-        showToast(`已发送测试提醒；${alarmText}；${diagnosticText}`, 'success');
-        scheduleDiagnosticAlarmFollowUp();
+        showToast('当前环境不支持系统通知测试', 'error');
     } catch (error) {
         showToast(`测试提醒失败：${error.message}`, 'error');
     }
 }
 
 async function ensureTaskReminderAlarm() {
-    if (!chrome?.runtime?.sendMessage) return null;
     const enabled = document.getElementById('notificationEnabled')?.checked !== false;
     if (!enabled) return null;
+    if (isDesktopElectronPlatform()) {
+        return await globalThis.TimeWhereDesktopReminders?.rescheduleNow?.() || { status: 'desktop_ready' };
+    }
+    if (typeof chrome === 'undefined' || !chrome?.runtime?.sendMessage) return null;
     const response = await chrome.runtime.sendMessage({ type: 'TIMEWHERE_TASK_REMINDER_ENSURE' });
     if (!response?.ok) {
         throw new Error(response?.error || '任务提醒 alarm 注册失败');
@@ -1213,6 +1568,7 @@ function formatDiagnosticAlarmStatus(alarm) {
 function scheduleDiagnosticAlarmFollowUp() {
     window.setTimeout(async () => {
         try {
+            if (typeof chrome === 'undefined' || !chrome?.runtime?.sendMessage) return;
             const response = await chrome.runtime.sendMessage({ type: 'TIMEWHERE_TASK_REMINDER_STATUS' });
             if (!response?.ok) {
                 throw new Error(response?.error || '无法读取 alarm 状态');
@@ -1277,6 +1633,12 @@ async function resetSettings() {
         await TimeWhereDB.db.settings.clear();
         await TimeWhereDB.initDefaultSettings();
         await loadSettings();
+        if (isDesktopElectronPlatform() && typeof globalThis.TimeWherePlatform?.system?.setDesktopSettings === 'function') {
+            const result = await globalThis.TimeWherePlatform.system.setDesktopSettings(desktopSystemSettingsDefaults);
+            if (result?.status === 'ok') {
+                applyDesktopSystemSettingsToInputs(result.settings || desktopSystemSettingsDefaults);
+            }
+        }
         showToast('设置已重置', 'success');
     } catch (e) {
         showToast('重置失败：' + e.message, 'error');

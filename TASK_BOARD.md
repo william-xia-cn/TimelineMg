@@ -2,8 +2,9 @@
 
 ## Active Target
 
-- Baseline Stabilized; `0.2.3` CWS Private testing OAuth correction has been submitted to CWS review after Google sync failed with a bad OAuth client ID.
-- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, TimeWhere `0.2.0` CWS Private testing material preparation, the accepted `0.2.1` Purple Potassium Private testing publication, `0.2.2` Side Panel CWS submission, and `0.2.3` OAuth correction CWS submission are complete. Public listing expansion / tag / merge / deploy remain unapproved.
+- Baseline Stabilized; package / extension version is moving to `0.3.0` for desktop artifact preparation. The historical `0.2.3` CWS Private testing OAuth correction remains submitted to CWS review after Google sync failed with a bad OAuth client ID.
+- D-031 Windows desktop portable implementation is active for local testing and now uses a bundled Desktop OAuth client ID. Current desktop artifact target is `0.3.0` Windows portable exe plus macOS x64 zip using existing unsigned package targets.
+- Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, TimeWhere `0.2.0` CWS Private testing material preparation, the accepted `0.2.1` Purple Potassium Private testing publication, `0.2.2` Side Panel CWS submission, `0.2.3` OAuth correction CWS submission, and D-031 Windows desktop portable implementation are complete. Public listing expansion / CWS bridge submission / desktop signing or installer / tag / merge / deploy remain unapproved.
 
 ## Active Collaboration Model
 
@@ -34,6 +35,11 @@
 - [x] releaseMg submitted the fixed `0.2.1` package to CWS review and verified dashboard status as pending review; automatic publish after review remains disabled/unapproved.
 - [x] Documentation aligned to current Side Panel / Dashboard quick-add source state and recorded source drift from the pending CWS package.
 - [x] releaseMg canceled the pending `0.2.2` CWS draft review, uploaded `dist/TimeWhere-0.2.3-private-cws-sanitized-20260524-041047.zip`, confirmed draft version `0.2.3` with expected permissions and no `tabs`, submitted it for review, and verified CWS status `待审核` with automatic publish after review enabled.
+- [x] Build&Test implemented D-030 dual-platform preparation: platform boundary/spec docs, reinstall recovery UX, lightweight Chrome platform adapter, platform auth adapter for Google Sync, and Mac Electron preview skeleton. D-031 now supersedes the Mac preview target with Windows desktop portable scope.
+- [x] Build&Test implemented D-031 Windows desktop portable app: desktop Electron shell, bundled Desktop OAuth client ID with optional env override, desktop notifications, optional Chrome extension bridge, and portable exe package `platforms/desktop-electron/dist/TimeWhere-0.2.3-win-portable.exe`.
+- [x] Build&Test bumped current package / extension / desktop artifact target to `0.3.0` and generated Windows portable exe `platforms/desktop-electron/dist/TimeWhere-0.3.0-win-portable.exe` with SHA256 `5F49EEBF001A67C0B02AA142A05ED42EB17341BD3E13FCCAA4AB253B830A1806`.
+- [x] Build&Test fixed Windows desktop Google authorization post-callback failure handling: stale/unreadable saved token state is cleared before re-authorization, structured OAuth failure reasons reach Settings, and first failed authorization keeps the connect button available.
+- [x] Build&Test added ignored local Desktop OAuth client secret support through `desktop-oauth.local.json`, because Google token exchange may require the Desktop credential secret even though it must not be committed.
 
 ## NEXT
 
@@ -92,6 +98,7 @@
 ## LATER
 
 - [ ] After CWS accepts/publishes `0.2.3`, install/update the CWS Private testing build and run Google data sync v1 real-auth smoke against a test Google account.
+- [ ] After Windows desktop portable smoke stabilizes, evaluate whether moving shared code out of `extension/` is worth a staging-build step. Do not move Chrome package files outside the extension root until staging is approved.
 - [x] releaseMg completes CWS cancel-review, fixed package upload, and Submit for Review for the `0.2.1` Purple Potassium fix.
 - [ ] Decide whether Side Panel / quick-add changes should be packaged for a later CWS update after the current pending review resolves.
 - [ ] Product Owner confirms risk acceptance for the regenerated `0.2.0` package being prepared without automated/browser tests.

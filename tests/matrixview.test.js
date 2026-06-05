@@ -30,6 +30,18 @@ function decodeQuotedPrintable(text) {
         .replace(/=([0-9A-F]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
+function replaceMatrixViewCellWithFreeBlock(html, day, periodIndex, label = 'Free') {
+    const rowRegex = new RegExp(`<tr[^>]*>\\s*<t[hd][^>]*>\\s*${day}\\s*<\\/t[hd]>[\\s\\S]*?<\\/tr>`, 'i');
+    const row = String(html || '').match(rowRegex)?.[0];
+    if (!row) return html;
+    const cells = row.match(/<t[dh]\b[\s\S]*?<\/t[dh]>/gi) || [];
+    const cellIndex = 4 + periodIndex;
+    const targetCell = cells[cellIndex];
+    if (!targetCell) return html;
+    const replacement = `<td><span class="free-block">${label}</span></td>`;
+    return html.replace(row, row.replace(targetCell, replacement));
+}
+
 class FakeDB {
     constructor() {
         this.nextPlanId = 1;
@@ -161,6 +173,19 @@ async function run() {
     const htmlParsed = MatrixView.parseMatrixViewMime(sanitizedHtml);
     assertEqual('sanitized HTML table parses without relying on table id', htmlParsed.parse_status, 'ok');
     assertEqual('sanitized HTML table has full 6x8 grid records', htmlParsed.records.length, 48);
+
+    const emptyBlockHtml = replaceMatrixViewCellWithFreeBlock(
+        replaceMatrixViewCellWithFreeBlock(sanitizedHtml, 'B', 3, 'No Class'),
+        'F',
+        1,
+        'No Class'
+    );
+    const emptyBlockParsed = MatrixView.parseMatrixViewMime(emptyBlockHtml);
+    assertEqual('MatrixView HTML with empty class blocks still parses', emptyBlockParsed.parse_status, 'ok');
+    assertEqual('MatrixView HTML with two empty class blocks imports real class records only', emptyBlockParsed.records.length, 46);
+    assertEqual('MatrixView HTML with empty class blocks keeps eight A-H days', emptyBlockParsed.by_day.length, 8);
+    assertEqual('MatrixView HTML with empty class blocks keeps six period set from real classes', Array.from(new Set(emptyBlockParsed.records.map(record => record.period))).sort(), ['1', '2', '3', '4', 'CT', 'DRM']);
+    assert('MatrixView HTML with empty class blocks still requires fields for imported records', emptyBlockParsed.records.every(record => record.subject_in_matrixview && record.teacher && record.room));
 
     const incompleteMhtml = mhtmlFixture.replace('Room: 1359', '');
     const incompleteParsed = MatrixView.parseMatrixViewMime(incompleteMhtml);

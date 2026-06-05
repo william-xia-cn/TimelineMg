@@ -1,6 +1,7 @@
 # Dependencies
 node_modules/
 package-lock.json
+!platforms/desktop-electron/package-lock.json
 
 # Local editor/tool configs
 .claude/
@@ -23,6 +24,7 @@ build/
 # Local private keys
 *.pem
 *.key
+desktop-oauth.local.json
 
 # Local/private calendar imports
 *.ics

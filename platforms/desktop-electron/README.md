@@ -17,13 +17,13 @@ npm run electron:package:mac
 Windows package output:
 
 ```text
-platforms/desktop-electron/dist/TimeWhere-0.2.3-win-portable.exe
+platforms/desktop-electron/dist/TimeWhere-0.3.0-win-portable.exe
 ```
 
 Mac package output:
 
 ```text
-platforms/desktop-electron/dist/TimeWhere-0.2.3-mac-x64.zip
+platforms/desktop-electron/dist/TimeWhere-0.3.0-mac-x64.zip
 ```
 
 Note: mac 打包通常需要在 macOS 上执行 `npm run electron:package:mac`。如果在 Windows 上尝试该命令，可能会因平台能力限制而失败。

@@ -241,10 +241,12 @@
         }
 
         const records = [];
+        const matrixDays = new Set();
         const dayRows = rows.slice(1);
         for (const row of dayRows) {
             const day = normalizeText(row[0]?.text);
             if (!/^[A-H]$/.test(day)) continue;
+            matrixDays.add(day);
             const terms = row.slice(1, 4).map(cell => normalizeText(cell.text)).filter(Boolean).join(' ');
             const periodCells = row.slice(4, 10);
             for (let i = 0; i < periodHeaders.length; i++) {
@@ -257,6 +259,8 @@
                 const room = roomRaw.replace(/^Room:\s*/i, '').trim();
                 const cellText = stripTags(cell.html);
                 if (!normalizeText(cellText)) continue;
+                const hasCourseField = [subject, teacher, room].some(value => normalizeText(value));
+                if (!hasCourseField) continue;
                 records.push({
                     day,
                     period,
@@ -269,7 +273,10 @@
         }
 
         const parsed = sanitizeMatrixViewData({ records });
-        const validation = validateMatrixViewGrid(parsed);
+        const validation = validateMatrixViewGrid(parsed, {
+            dayCount: matrixDays.size,
+            periodCount: periodHeaders.length
+        });
         if (!validation.ok) return matrixParseFailure(validation.reason);
         return parsed;
     }
@@ -283,16 +290,18 @@
         };
     }
 
-    function validateMatrixViewGrid(parsed) {
+    function validateMatrixViewGrid(parsed, grid = {}) {
         const records = Array.isArray(parsed?.records) ? parsed.records : [];
         const days = new Set(records.map(record => record.day));
         const periods = new Set(records.map(record => record.period));
+        const dayCount = Number.isFinite(Number(grid.dayCount)) ? Number(grid.dayCount) : days.size;
+        const periodCount = Number.isFinite(Number(grid.periodCount)) ? Number(grid.periodCount) : periods.size;
         const incomplete = records.some(record => {
             return !normalizeText(record.subject_in_matrixview) || !normalizeText(record.teacher) || !normalizeText(record.room);
         });
-        if (records.length !== 48) return { ok: false, reason: 'matrix_grid_record_count_invalid' };
-        if (days.size !== 8) return { ok: false, reason: 'matrix_grid_day_count_invalid' };
-        if (periods.size !== 6) return { ok: false, reason: 'matrix_grid_period_count_invalid' };
+        if (records.length === 0) return { ok: false, reason: 'matrix_grid_record_count_invalid' };
+        if (dayCount !== 8) return { ok: false, reason: 'matrix_grid_day_count_invalid' };
+        if (periodCount !== 6) return { ok: false, reason: 'matrix_grid_period_count_invalid' };
         if (incomplete) return { ok: false, reason: 'matrix_grid_incomplete_course_fields' };
         return { ok: true, reason: null };
     }

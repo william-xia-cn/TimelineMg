@@ -247,6 +247,18 @@ async function run() {
     assert('Drive upload creates file in appDataFolder', fetchCalls.some(call => String(call.options.body || '').includes('"parents":["appDataFolder"]')));
     assert('Drive adapter uses bearer token without persisting it', fetchCalls.every(call => call.options.headers?.Authorization === 'Bearer mock-token'));
 
+    const disconnectedDrive = GoogleSync.createDriveAppDataClient({
+        authAdapter: { getToken: async () => ({ status: 'not_authorized', reason: 'desktop_oauth_not_connected' }) },
+        fetchImpl: mockFetch
+    });
+    let disconnectedReason = '';
+    try {
+        await disconnectedDrive.downloadJsonFile(GoogleSync.SYNC_FILE_NAME);
+    } catch (error) {
+        disconnectedReason = error.code || error.reason || '';
+    }
+    assertEqual('Drive adapter preserves desktop not-authorized reason for Settings diagnostics', disconnectedReason, 'desktop_oauth_not_connected');
+
     const cloudSnapshot = JSON.parse(JSON.stringify(snapshot));
     cloudSnapshot.exported_at = '2026-05-15T00:10:00.000Z';
     cloudSnapshot.data.tasks[0].title = 'Cloud Essay';
@@ -345,6 +357,7 @@ async function run() {
     const settingsScript = read('extension/pages/settings/script.js');
     const settingsCss = read('extension/pages/settings/styles.css');
     const dbScript = read('extension/shared/js/db.js');
+    const desktopAuthScript = read('platforms/desktop-electron/desktop-auth.js');
     assert('Settings UI contains Google 数据同步 section', settingsHtml.includes('Google 数据同步'));
     assert('Settings UI places Google sync after task defaults and before data management',
         settingsHtml.indexOf('任务默认值') > -1
@@ -360,6 +373,11 @@ async function run() {
     assert('Settings UI contains connection status card', settingsHtml.includes('连接状态') && settingsHtml.includes('googleSyncAccountEmail'));
     assert('Settings UI contains sync status card', settingsHtml.includes('同步状态') && settingsHtml.includes('googleSyncLastSyncAt'));
     assert('Settings UI includes connect button', settingsHtml.includes('connectGoogleSyncBtn') && settingsHtml.includes('连接 Google 账户同步'));
+    assert('Settings UI includes reinstall recovery prompt',
+        settingsHtml.includes('googleSyncRecoveryHint')
+        && settingsHtml.includes('connectAndRestoreGoogleSyncBtn')
+        && settingsHtml.includes('连接 Google 并从云端恢复')
+        && settingsHtml.includes('恢复前会要求再次确认，不会静默覆盖本地数据。'));
     assert('Settings UI includes manual sync button', settingsHtml.includes('syncGoogleNowBtn') && settingsHtml.includes('手动同步'));
     assert('Settings UI includes cloud download danger button', settingsHtml.includes('restoreGoogleSyncBtn') && settingsHtml.includes('↓ 下载到本地'));
     assert('Settings UI includes cloud upload danger button', settingsHtml.includes('uploadGoogleSyncBtn') && settingsHtml.includes('↑ 上传到云端'));
@@ -370,6 +388,49 @@ async function run() {
     assert('Google upload/download danger actions open modal instead of window.confirm', settingsScript.includes("openGoogleSyncDangerModal('upload')") && settingsScript.includes("openGoogleSyncDangerModal('restore')"));
     assert('Google danger modal contains upload and download confirmation phrases', settingsScript.includes("phrase: '上传到云端'") && settingsScript.includes("phrase: '下载到本地'"));
     assert('Settings loads google-sync.js before page script', settingsHtml.indexOf('google-sync.js') > -1 && settingsHtml.indexOf('google-sync.js') < settingsHtml.indexOf('script.js"></script>'));
+    assert('Settings loads platform adapter before google-sync runtime',
+        settingsHtml.indexOf('platform.js') > -1
+        && settingsHtml.indexOf('platform.js') < settingsHtml.indexOf('google-sync.js'));
+    assert('Settings Google sync runtime prefers TimeWherePlatform auth adapter',
+        settingsScript.includes('createTimeWherePlatformAuthAdapter(globalThis.TimeWherePlatform)')
+        && settingsScript.includes('createChromeIdentityAuthAdapter(typeof chrome'));
+    assert('Google sync exposes platform auth adapter and default Drive client uses it',
+        typeof GoogleSync.createTimeWherePlatformAuthAdapter === 'function'
+        && settingsScript.includes('TimeWherePlatform?.auth?.getGoogleToken')
+        && read('extension/shared/js/google-sync.js').includes('createTimeWherePlatformAuthAdapter(global.TimeWherePlatform)'));
+    assert('Google sync platform auth adapter propagates structured desktop auth failures',
+        read('extension/shared/js/google-sync.js').includes('makePlatformAuthError')
+        && read('extension/shared/js/google-sync.js').includes("result?.status === 'failed'")
+        && read('extension/shared/js/google-sync.js').includes('error.code = reason'));
+    assert('Desktop Google sync OAuth path uses bundled installed-app client id, PKCE, and safe token storage',
+        desktopAuthScript.includes('541406150907-0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com')
+        && desktopAuthScript.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID')
+        && desktopAuthScript.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET')
+        && desktopAuthScript.includes('desktop-oauth.local.json')
+        && desktopAuthScript.includes('client_secret: config.client_secret')
+        && desktopAuthScript.includes('code_challenge_method')
+        && desktopAuthScript.includes('S256')
+        && desktopAuthScript.includes('safeStorage.encryptString')
+        && desktopAuthScript.includes('refusing to save a plaintext refresh token')
+        && desktopAuthScript.includes('desktop_oauth_saved_token_unreadable')
+        && desktopAuthScript.includes('await clearState()'));
+    assert('Settings surfaces actionable desktop OAuth failure reasons',
+        settingsScript.includes('getGoogleSyncFailureMessage')
+        && settingsScript.includes('desktop_token_storage_unavailable')
+        && settingsScript.includes('desktop_oauth_saved_token_unreadable')
+        && settingsScript.includes('desktop_oauth_not_connected')
+        && settingsScript.includes('client_secret is missing')
+        && settingsScript.includes('desktop-oauth.local.json')
+        && settingsScript.includes('redirect_uri_mismatch')
+        && settingsScript.includes('Drive API')
+        && settingsScript.includes('last_error: message'));
+    assert('Settings keeps connect button visible after first failed Google authorization',
+        settingsScript.includes("state?.status !== 'failed'")
+        && settingsScript.includes('state.connected_at || state.last_success_at || state.last_restore_at || state.last_force_upload_at'));
+    assert('Settings keeps defensive desktop sync not-configured copy without blocking local use',
+        settingsScript.includes('desktop_oauth_client_id_missing')
+        && settingsScript.includes('桌面同步未配置')
+        && settingsScript.includes('Windows 本地功能不受影响'));
     assert('Settings sync preview has explicit confirmation handler', settingsScript.includes('handleApplyGoogleSyncPreview') && settingsScript.includes('确认同步选中项'));
     assert('Settings confirmation supports v1 conflict choices', settingsScript.includes("mode === 'v1_conflicts'") && settingsScript.includes('resolveSyncConflicts'));
     assert('Settings conflict UI summarizes records with business fields',
@@ -400,6 +461,20 @@ async function run() {
         && settingsCss.includes('.google-sync-conflict-side')
         && settingsCss.includes('.google-sync-conflict-field.changed'));
     assert('Settings dangerous upload/restore use v1 force helpers', settingsScript.includes('forceUploadLocalToCloud') && settingsScript.includes('forceRestoreCloudToLocal'));
+    assert('Settings recovery prompt only shows for disconnected empty user data',
+        settingsScript.includes('function getGoogleSyncLocalUserDataCounts')
+        && settingsScript.includes('getAllTasks')
+        && settingsScript.includes('getEvents')
+        && settingsScript.includes('getHabits')
+        && settingsScript.includes('listDailyJournals')
+        && settingsScript.includes('isMeaningfulGoogleSyncRecoveryJournal')
+        && settingsScript.includes('counts.total !== 0')
+        && settingsScript.includes('isGoogleSyncConnectedState(state)'));
+    const connectAndRestoreBlock = (settingsScript.match(/async function handleConnectAndRestoreGoogleSync[\s\S]*?async function handleUploadGoogleSync/) || [''])[0];
+    assert('Settings connect-and-restore flow opens restore confirmation instead of restoring directly',
+        connectAndRestoreBlock.includes('async function handleConnectAndRestoreGoogleSync')
+        && connectAndRestoreBlock.includes("openGoogleSyncDangerModal('restore')")
+        && !connectAndRestoreBlock.includes('forceRestoreCloudToLocal'));
     assert('main pages load google-sync.js for page-open sync checks',
         [
             'extension/pages/focus/focus.html',

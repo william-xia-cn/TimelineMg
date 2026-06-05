@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.2.3",
+    [string]$Version = "0.3.0",
     [string]$ExpectedExtensionId = "ogdjmelmfkfahppahhkkggdejjainbnd",
     [string]$ExpectedOAuthClientId = "541406150907-rj6d6npl4dnoqcfiaol68tqh8chbpdpg.apps.googleusercontent.com"
 )

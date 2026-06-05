@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TimeWhere",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "个人时间管理与任务规划系统 - TimeWhere for IB Students",
   "options_page": "pages/settings/settings.html",
   "icons": {
@@ -24,7 +24,8 @@
     "https://managebac.cn/student/events/*",
     "https://*.managebac.cn/student/events/*",
     "https://www.googleapis.com/drive/v3/*",
-    "https://www.googleapis.com/upload/drive/v3/*"
+    "https://www.googleapis.com/upload/drive/v3/*",
+    "ws://127.0.0.1/*"
   ],
   "oauth2": {
     "client_id": "541406150907-rj6d6npl4dnoqcfiaol68tqh8chbpdpg.apps.googleusercontent.com",

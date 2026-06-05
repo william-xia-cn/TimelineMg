@@ -245,6 +245,8 @@ assert('background creates previous-day completion snapshot after local midnight
 
 const settingsHtml = fs.readFileSync(path.join(__dirname, '../extension/pages/settings/settings.html'), 'utf8');
 const settingsJs = fs.readFileSync(path.join(__dirname, '../extension/pages/settings/script.js'), 'utf8');
+const desktopReminders = fs.readFileSync(path.join(__dirname, '../extension/shared/js/desktop-reminders.js'), 'utf8');
+const desktopMain = fs.readFileSync(path.join(__dirname, '../platforms/desktop-electron/main.js'), 'utf8');
 assert('Settings exposes system task reminder toggle',
     settingsHtml.includes('id="notificationEnabled"') && settingsHtml.includes('系统任务提醒'));
 assert('Settings exposes manual notification test action',
@@ -256,11 +258,23 @@ assert('Settings sends manual notification test message',
     settingsJs.includes('TIMEWHERE_TASK_REMINDER_TEST') && settingsJs.includes('handleTestNotification'));
 assert('Settings ensures task reminder alarm from notification settings',
     settingsJs.includes('TIMEWHERE_TASK_REMINDER_ENSURE')
-    && settingsJs.includes('alarm 已注册'));
+    && settingsJs.includes('alarm 已注册')
+    && settingsJs.includes('TimeWhereDesktopReminders?.rescheduleNow'));
 assert('Settings reports diagnostic alarm scheduled time',
     settingsJs.includes('formatDiagnosticAlarmStatus')
     && settingsJs.includes('30 秒诊断')
     && settingsJs.includes('scheduleDiagnosticAlarmFollowUp'));
+assert('Desktop reminder bridge uses shared reminder rules and platform rescheduleAll',
+    desktopReminders.includes('TimeWhereReminders.computeTaskReminders')
+    && desktopReminders.includes('TimeWherePlatform.reminderRuntime.rescheduleAll')
+    && desktopReminders.includes('TimeWhereReminders.buildReminderNotificationPayload')
+    && desktopReminders.includes("global.TimeWherePlatform?.name === 'desktop-electron'"));
+assert('Electron main implements app-running reminder timers and notification click routing',
+    desktopMain.includes('const reminderTimers = new Map()')
+    && desktopMain.includes('function scheduleReminder')
+    && desktopMain.includes("method === 'reminderRuntime.rescheduleAll'")
+    && desktopMain.includes('sendNotificationClick(payload)')
+    && desktopMain.includes('Notification.isSupported'));
 
 console.log('\n' + '='.repeat(40));
 console.log(`Total: ${passed + failed} checks   PASS ${passed}   ${failed > 0 ? 'FAIL' : 'PASS'} ${failed}`);

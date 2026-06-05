@@ -1,5 +1,7 @@
-const { app, BrowserWindow, Menu, Notification, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, Notification, ipcMain, Tray, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('node:fs');
+const fsp = fs.promises;
 const { pathToFileURL } = require('url');
 const { createDesktopAuth } = require('./desktop-auth');
 const { createChromeBridge } = require('./chrome-bridge');
@@ -10,11 +12,33 @@ const packagedExtensionRoot = () => path.join(process.resourcesPath, 'extension'
 const preloadPath = path.join(__dirname, 'preload.js');
 const defaultRoute = 'pages/focus/focus.html';
 const smokeMode = process.env.TIMEWHERE_ELECTRON_SMOKE === '1';
+const smokeRuntimeRoot = path.join(
+  process.env.TMP || process.env.TEMP || repoRoot,
+  `timewhere-electron-smoke-${process.pid}`
+);
+
+if (smokeMode) {
+  app.setPath('userData', path.join(smokeRuntimeRoot, 'user-data'));
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-gpu-compositing');
+  app.commandLine.appendSwitch('in-process-gpu');
+  app.commandLine.appendSwitch('disk-cache-dir', path.join(smokeRuntimeRoot, 'cache'));
+}
 
 const desktopAuth = createDesktopAuth();
 const chromeBridge = createChromeBridge();
 const reminderTimers = new Map();
 let mainWindow = null;
+let tray = null;
+let isQuitting = false;
+const desktopSettingsDefaults = {
+  minimizeToTray: false,
+  closeToTray: true,
+  startAtLogin: false
+};
+let desktopSettings = { ...desktopSettingsDefaults };
+const desktopSettingsPath = () => path.join(app.getPath('userData'), 'timewhere-desktop-settings.json');
 
 const routeMap = {
   dashboard: 'pages/focus/focus.html',
@@ -25,6 +49,94 @@ const routeMap = {
   matrixview: 'pages/settings/matrixview.html',
   managebac: 'pages/settings/managebac-sync.html'
 };
+
+function isValidDesktopSettings(payload = {}) {
+  const next = {};
+  if (typeof payload.minimizeToTray === 'boolean') next.minimizeToTray = payload.minimizeToTray;
+  if (typeof payload.closeToTray === 'boolean') next.closeToTray = payload.closeToTray;
+  if (typeof payload.startAtLogin === 'boolean') next.startAtLogin = payload.startAtLogin;
+  return next;
+}
+
+function getTrayIcon() {
+  const candidates = [
+    path.join(getExtensionRoot(), 'icons', 'icon16.png'),
+    path.join(getExtensionRoot(), 'icons', 'icon48.png'),
+    path.join(getExtensionRoot(), 'icons', 'icon128.png')
+  ];
+  for (const candidate of candidates) {
+    if (!fs.existsSync(candidate)) continue;
+    const image = nativeImage.createFromPath(candidate);
+    if (!image.isEmpty()) return image;
+  }
+  return null;
+}
+
+function getWindowVisibilityState() {
+  if (!mainWindow || mainWindow.isDestroyed()) return 'hidden';
+  return mainWindow.isVisible() ? 'visible' : 'hidden';
+}
+
+function createTrayMenu() {
+  const menu = Menu.buildFromTemplate([
+    {
+      label: '显示/隐藏',
+      type: 'normal',
+      click: () => toggleMainWindow()
+    },
+    {
+      label: '打开设置',
+      type: 'normal',
+      click: () => openWindow(routeMap.settings)
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      type: 'normal',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      }
+    }
+  ]);
+  tray?.setContextMenu(menu);
+}
+
+function createTray() {
+  if (tray) return;
+  const icon = getTrayIcon();
+  tray = new Tray(icon || nativeImage.createEmpty());
+  tray.setToolTip('TimeWhere');
+  tray.on('double-click', toggleMainWindow);
+  tray.on('click', toggleMainWindow);
+  createTrayMenu();
+}
+
+function destroyTray() {
+  if (!tray) return;
+  tray.destroy();
+  tray = null;
+}
+
+function openWindow(route = defaultRoute) {
+  const win = getOrCreateMainWindow(route);
+  if (win?.isMinimized?.()) win.restore();
+  win?.show();
+  win?.focus();
+  return win;
+}
+
+function toggleMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    openWindow(defaultRoute);
+    return;
+  }
+  if (getWindowVisibilityState() === 'visible') {
+    mainWindow.hide();
+  } else {
+    openWindow();
+  }
+}
 
 function getExtensionRoot() {
   return app.isPackaged ? packagedExtensionRoot() : devExtensionRoot;
@@ -60,6 +172,85 @@ function resolveExtensionRoute(route = defaultRoute) {
     throw new Error('Route is outside the extension package root');
   }
   return { filePath: resolved, search: parts.search, hash: parts.hash, route: parts.pathname };
+}
+
+async function loadDesktopSettings() {
+  try {
+    const raw = await fsp.readFile(desktopSettingsPath(), 'utf8');
+    const parsed = JSON.parse(raw);
+    const normalized = {
+      ...desktopSettingsDefaults,
+      ...parsed
+    };
+    desktopSettings = {
+      minimizeToTray: typeof normalized.minimizeToTray === 'boolean' ? normalized.minimizeToTray : desktopSettingsDefaults.minimizeToTray,
+      closeToTray: typeof normalized.closeToTray === 'boolean' ? normalized.closeToTray : desktopSettingsDefaults.closeToTray,
+      startAtLogin: typeof normalized.startAtLogin === 'boolean' ? normalized.startAtLogin : desktopSettingsDefaults.startAtLogin
+    };
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn(`[Desktop] loadDesktopSettings failed: ${error.message}`);
+    }
+    desktopSettings = { ...desktopSettingsDefaults };
+  }
+  return desktopSettings;
+}
+
+async function persistDesktopSettings(next = {}) {
+  desktopSettings = {
+    ...desktopSettings,
+    ...next
+  };
+  try {
+    await fsp.writeFile(desktopSettingsPath(), JSON.stringify(desktopSettings, null, 2), 'utf8');
+    return { status: 'ok', settings: { ...desktopSettings } };
+  } catch (error) {
+    console.error(`[Desktop] saveDesktopSettings failed: ${error.message}`);
+    return { status: 'failed', reason: 'settings_save_failed', message: error.message };
+  }
+}
+
+function applyLoginItemSettings(value) {
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: Boolean(value),
+      openAsHidden: false
+    });
+    return { status: 'ok' };
+  } catch (error) {
+    return { status: 'failed', reason: 'set_login_item_failed', message: error.message };
+  }
+}
+
+async function applyDesktopSettings(next = {}) {
+  const updates = isValidDesktopSettings(next);
+  const before = { ...desktopSettings };
+  const saveResult = await persistDesktopSettings(updates);
+  if (saveResult.status !== 'ok') {
+    return {
+      status: 'failed',
+      reason: saveResult.reason,
+      message: saveResult.message,
+      settings: before
+    };
+  }
+
+  if (Object.prototype.hasOwnProperty.call(updates, 'startAtLogin')) {
+    const targetStartAtLogin = desktopSettings.startAtLogin;
+    const login = applyLoginItemSettings(desktopSettings.startAtLogin);
+    if (login.status !== 'ok') {
+      await persistDesktopSettings({ startAtLogin: before.startAtLogin });
+      desktopSettings.startAtLogin = before.startAtLogin;
+      return {
+        status: 'failed',
+        reason: login.reason,
+        message: login.message,
+        settings: { ...desktopSettings }
+      };
+    }
+  }
+
+  return { status: 'ok', settings: { ...desktopSettings } };
 }
 
 async function loadRoute(win, route = defaultRoute) {
@@ -102,6 +293,13 @@ function createMainWindow(route = defaultRoute) {
     }, 5000);
   }
 
+  mainWindow.on('close', event => {
+    if (isQuitting) return;
+    if (desktopSettings.closeToTray) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -110,6 +308,7 @@ function createMainWindow(route = defaultRoute) {
 
 function getOrCreateMainWindow(route = defaultRoute) {
   if (!mainWindow || mainWindow.isDestroyed()) return createMainWindow(route);
+  if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
   if (route) loadRoute(mainWindow, route).catch(error => console.error(`TimeWhere route failed: ${error.message}`));
@@ -134,7 +333,13 @@ function buildMenu() {
         routeItem('MatrixView Import', routeMap.matrixview),
         routeItem('ManageBac Sync', routeMap.managebac),
         { type: 'separator' },
-        { role: 'quit' }
+        {
+          label: '退出',
+          click: () => {
+            isQuitting = true;
+            app.quit();
+          }
+        }
       ]
     },
     {
@@ -238,6 +443,18 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
     const win = getOrCreateMainWindow(route);
     return { status: 'opened', route, windowId: win.id };
   }
+  if (method === 'window.show') {
+    const route = payload.route || defaultRoute;
+    const win = openWindow(route);
+    return { status: 'shown', route, windowId: win?.id };
+  }
+  if (method === 'window.hide') {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.hide();
+      return { status: 'hidden', route: null };
+    }
+    return { status: 'hidden', route: null };
+  }
   if (method === 'notification.notify') {
     return showDesktopNotification(payload);
   }
@@ -290,19 +507,70 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
       extensionRoot: getExtensionRoot()
     };
   }
+  if (method === 'system.getDesktopSettings') {
+    return {
+      status: 'ok',
+      settings: { ...desktopSettings }
+    };
+  }
+  if (method === 'system.setDesktopSettings') {
+    return await applyDesktopSettings(payload);
+  }
   return { status: 'not_supported', method };
 });
 
 app.whenReady().then(() => {
-  buildMenu();
-  createMainWindow();
+  loadDesktopSettings()
+    .then(() => {
+      applyLoginItemSettings(desktopSettings.startAtLogin);
+      return syncLoginItemStateFromOS();
+    })
+    .then(() => {
+      buildMenu();
+      createMainWindow();
+      createTray();
+      syncTrayMenuLabels();
+    })
+    .catch(error => {
+      console.error(`[Desktop] init failed: ${error.message}`);
+      buildMenu();
+      createMainWindow();
+      createTray();
+      syncTrayMenuLabels();
+    });
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createMainWindow();
+      return;
+    }
+    openWindow();
   });
 });
+
+function syncLoginItemStateFromOS() {
+  if (!app.getLoginItemSettings) return Promise.resolve(desktopSettings);
+  const state = app.getLoginItemSettings();
+  if (typeof state?.openAtLogin === 'boolean' && state.openAtLogin !== desktopSettings.startAtLogin) {
+    return persistDesktopSettings({ startAtLogin: state.openAtLogin }).then(() => ({ settings: { ...desktopSettings } }));
+  }
+  return Promise.resolve({ settings: { ...desktopSettings } });
+}
+
+function syncTrayMenuLabels() {
+  if (!tray) return;
+  createTrayMenu();
+}
 
 app.on('window-all-closed', () => {
   chromeBridge.closeActiveServer();
   for (const id of reminderTimers.keys()) cancelReminder(id);
-  if (process.platform !== 'darwin') app.quit();
+  app.quit();
+});
+
+app.on('will-quit', () => {
+  destroyTray();
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
 });

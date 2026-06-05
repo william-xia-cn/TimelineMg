@@ -333,7 +333,7 @@ function setupEventListeners() {
     const btnSettings = document.getElementById('btnSettings');
     if (btnSettings) {
         btnSettings.addEventListener('click', function() {
-            chrome.runtime.openOptionsPage();
+            openSettingsPage();
         });
     }
 
@@ -372,7 +372,25 @@ function setupEventListeners() {
 }
 
 function openExtensionPage(path) {
+    if (globalThis.TimeWherePlatform?.window?.openMain) {
+        globalThis.TimeWherePlatform.window.openMain(path).catch(error => {
+            console.warn('TimeWhere: platform openMain failed, falling back to chrome.tabs', error);
+            chrome.tabs.create({ url: chrome.runtime.getURL(path) });
+        });
+        return;
+    }
     chrome.tabs.create({ url: chrome.runtime.getURL(path) });
+}
+
+function openSettingsPage() {
+    if (globalThis.TimeWherePlatform?.window?.openSettings) {
+        globalThis.TimeWherePlatform.window.openSettings().catch(error => {
+            console.warn('TimeWhere: platform openSettings failed, falling back to options page', error);
+            chrome.runtime.openOptionsPage();
+        });
+        return;
+    }
+    chrome.runtime.openOptionsPage();
 }
 
 function openPopupWindow() {

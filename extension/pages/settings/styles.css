@@ -402,6 +402,88 @@ select, input[type="number"], input[type="text"] {
     background: rgba(255, 255, 255, 0.74);
 }
 
+.google-sync-recovery-card {
+    border-color: rgba(37, 99, 235, 0.28);
+    background: rgba(239, 246, 255, 0.82);
+}
+
+.desktop-integration-group {
+    padding: 12px;
+    overflow: visible;
+}
+
+.desktop-bridge-card {
+    padding: 14px 16px;
+    border: 1px solid var(--border-stroke);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, 0.74);
+}
+
+.desktop-bridge-card-header,
+.desktop-bridge-state-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.desktop-bridge-controls {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(240px, 1.2fr);
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.desktop-bridge-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-sub);
+}
+
+.desktop-bridge-field input,
+.desktop-bridge-field select {
+    width: 100%;
+}
+
+.desktop-bridge-status {
+    flex-shrink: 0;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    background: #e2e8f0;
+}
+
+.desktop-bridge-status[data-status="connected"] {
+    color: #047857;
+    background: #d1fae5;
+}
+
+.desktop-bridge-status[data-status="waiting"] {
+    color: #92400e;
+    background: #fef3c7;
+}
+
+.desktop-bridge-status[data-status="failed"],
+.desktop-bridge-status[data-status="not_connected"],
+.desktop-bridge-status[data-status="needs_update"],
+.desktop-bridge-status[data-status="rejected"] {
+    color: #991b1b;
+    background: #fee2e2;
+}
+
+.desktop-bridge-version {
+    color: var(--text-sub);
+    font-size: 12px;
+    font-weight: 700;
+}
+
 .google-sync-card-header {
     display: flex;
     align-items: center;
@@ -578,7 +660,8 @@ select, input[type="number"], input[type="text"] {
     }
 
     .google-sync-preview-row,
-    .google-sync-conflict-compare {
+    .google-sync-conflict-compare,
+    .desktop-bridge-controls {
         grid-template-columns: 1fr;
     }
 }

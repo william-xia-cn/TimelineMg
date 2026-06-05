@@ -636,6 +636,59 @@
         };
     }
 
+    function createTimeWherePlatformAuthAdapter(platform = global.TimeWherePlatform) {
+        function makePlatformAuthError(result = {}) {
+            const reason = result.reason || result.status || 'platform_auth_failed';
+            const message = result.message || `Google platform authorization failed: ${reason}`;
+            const error = new Error(message);
+            error.code = reason;
+            error.reason = reason;
+            return error;
+        }
+
+        return {
+            async getStatus() {
+                if (!platform?.auth?.getGoogleToken) {
+                    return { status: 'not_configured', reason: 'platform_auth_unavailable' };
+                }
+                if (typeof platform.auth.getStatus === 'function') {
+                    return await platform.auth.getStatus();
+                }
+                return { status: 'configured' };
+            },
+            async connect() {
+                const status = await this.getStatus();
+                if (status.status === 'not_configured') return status;
+                const result = await platform.auth.getGoogleToken({ interactive: true });
+                if (result?.status === 'not_configured') return result;
+                if (result?.status === 'failed') throw makePlatformAuthError(result);
+                if (result?.status === 'not_authorized') throw makePlatformAuthError(result);
+                if (!result?.token) throw new Error('Google auth token unavailable');
+                return { status: 'connected', token: result.token };
+            },
+            async getToken(options = {}) {
+                const status = await this.getStatus();
+                if (status.status === 'not_configured') return status;
+                const result = await platform.auth.getGoogleToken({ interactive: options.interactive === true });
+                if (result?.status === 'not_configured') return result;
+                if (result?.status === 'not_authorized') return result;
+                if (result?.status === 'failed') throw makePlatformAuthError(result);
+                if (!result?.token) throw new Error('Google auth token unavailable');
+                return { status: 'connected', token: result.token };
+            },
+            async getAccountInfo() {
+                if (typeof platform?.auth?.getAccountInfo !== 'function') return { email: null };
+                const info = await platform.auth.getAccountInfo();
+                return { email: info?.email || null };
+            },
+            async disconnect() {
+                if (typeof platform?.auth?.revokeGoogleToken !== 'function') return { status: 'disconnected' };
+                await platform.auth.revokeGoogleToken();
+                return { status: 'disconnected' };
+            }
+        };
+    }
+
     function driveRequestUrl(path, params = {}) {
         const url = new URL(`https://www.googleapis.com/drive/v3/${path}`);
         for (const [key, value] of Object.entries(params)) {
@@ -658,9 +711,20 @@
         if (!authAdapter) throw new Error('authAdapter is required');
         if (!fetchImpl) throw new Error('fetch implementation is required');
 
+        function makeAuthUnavailableError(auth = {}) {
+            const reason = auth.reason || auth.status || 'google_auth_unavailable';
+            const error = new Error(auth.message || `Google authorization unavailable: ${reason}`);
+            error.code = reason;
+            error.reason = reason;
+            return error;
+        }
+
         async function getAuthHeader() {
             const auth = await authAdapter.getToken({ interactive: false });
             if (auth.status === 'not_configured') return auth;
+            if (auth.status === 'not_authorized' || auth.status === 'failed') {
+                throw makeAuthUnavailableError(auth);
+            }
             if (!auth.token) throw new Error('Google auth token unavailable');
             return { Authorization: `Bearer ${auth.token}` };
         }
@@ -1244,7 +1308,9 @@
     }
 
     function createDefaultDriveClient() {
-        const authAdapter = createChromeIdentityAuthAdapter(typeof chrome !== 'undefined' ? chrome : null);
+        const authAdapter = global.TimeWherePlatform?.auth?.getGoogleToken
+            ? createTimeWherePlatformAuthAdapter(global.TimeWherePlatform)
+            : createChromeIdentityAuthAdapter(typeof chrome !== 'undefined' ? chrome : null);
         return createDriveAppDataClient({ authAdapter });
     }
 
@@ -1378,6 +1444,7 @@
         buildUploadSnapshotFromChoices,
         createManifest,
         createChromeIdentityAuthAdapter,
+        createTimeWherePlatformAuthAdapter,
         createDriveAppDataClient,
         getGoogleSyncState,
         saveGoogleSyncState,

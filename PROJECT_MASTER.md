@@ -3,10 +3,10 @@
 ## Project Status
 
 - **Project**: TimeWhere
-- **Version**: package / extension release version `0.2.3`; design-doc version `v2.3`
-- **Stage**: Baseline Stabilized; CWS Private testing `0.2.3` OAuth correction submitted for review
+- **Version**: package / extension release version `0.3.0`; design-doc version `v2.3`
+- **Stage**: Baseline Stabilized; CWS Private testing `0.2.3` OAuth correction submitted for review; Windows desktop portable implementation completed for local testing; Windows / macOS desktop artifact preparation active for `0.3.0`
 - **Active release/deployment target**: TimeWhere `0.2.3` CWS Private testing OAuth correction after the `0.2.2` Side Panel update exposed a CWS OAuth client mismatch.
-- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-025 approved the `0.2.1` Purple Potassium permission fix; D-026 records current source using Chrome Side Panel as the primary toolbar surface. D-027 approved the `0.2.2` Side Panel CWS update. D-029 approves the `0.2.3` CWS OAuth correction upload / Submit for Review and automatic publish after review. Public listing expansion, tag, merge, deploy, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
+- **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-025 approved the `0.2.1` Purple Potassium permission fix; D-026 records current source using Chrome Side Panel as the primary toolbar surface. D-027 approved the `0.2.2` Side Panel CWS update. D-029 approves the `0.2.3` CWS OAuth correction upload / Submit for Review and automatic publish after review. D-031 approves a standalone Windows Electron portable app with optional Chrome extension bridge. Public listing expansion, tag, merge, deploy, CWS bridge submission, desktop signing/installer/auto-update, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
 
 ## Collaboration Model
 
@@ -63,17 +63,19 @@ Escalate to external advisor for:
 ### In Scope
 
 - Local-first MVP for IB student personal time management.
-- IndexedDB / Dexie v4 data model.
+- IndexedDB / Dexie v5 data model.
 - Task Board basic CRUD.
 - Calendar containers/events basic management.
 - Focus Dashboard.
 - Daily Settle.
 - Minimal Settings.
 - Minimal Popup.
+- Chrome Side Panel as the primary toolbar surface.
 - `scheduling.js` unit tests.
 - Manual MVP validation checklist.
 - Google data sync v1 per D-019 / D-020: optional account configuration for cloud persistence and cross-device bidirectional sync; TimeWhere remains fully usable without Google.
 - System task reminders per D-021: local Chrome notifications for explicit `schedule_time` tasks and current Daily Settle container tasks.
+- Standalone Windows desktop app per D-031: Electron desktop shell, Windows portable package target, desktop Google Drive `appDataFolder` sync path with bundled Desktop OAuth client ID, app-running desktop notifications, and optional Chrome extension bridge.
 
 ### Out Of Scope
 
@@ -87,6 +89,7 @@ Escalate to external advisor for:
 - Background alarm usage outside local task reminders. D-021 approves alarms only for local task reminder notifications.
 - Background alarm based ManageBac ICS subscription sync. Current ManageBac follow-up supports saved link configuration, Dashboard-entry management checks, manual sync, and user-confirmed task creation only.
 - Any further Chrome Web Store upload, Submit for Review, publish, or public listing without explicit Product Owner approval. D-025 covered only the completed `0.2.1` Purple Potassium resubmission; current source has moved ahead of that submitted package.
+- Desktop signing, installer, auto-update, Swift/Tauri rewrites, SQLite migration, duplicated UI, silent Google account binding / cloud restore, or treating Chrome extension connection as required for Windows app use.
 
 ## Release / Deployment State
 
@@ -173,6 +176,20 @@ Escalate to external advisor for:
 - `0.2.1` stabilization sync evidence:
   - Full `npm test` passed on 2026-05-20 after Task Arrange same-day subject matching, no-throttle auto Arrange, and Calendar/Plan diagnostic snapshot changes.
   - No `0.2.1` package or CWS submission artifact was generated.
+- D-030 / D-031 desktop preparation evidence:
+  - `docs/specs/FEATURE_SPEC_DUAL_PLATFORM_EVOLUTION.md`
+  - `docs/PLATFORM_BOUNDARY.md`
+  - `extension/shared/js/platform.js`
+  - `platforms/desktop-electron/`
+  - `tests/platform-boundary.test.js`
+  - `npm test` passed after adding reinstall recovery UX, platform auth adapter, and Electron preview.
+  - Electron dependency is pinned by `platforms/desktop-electron/package-lock.json`; `electron@42.3.2` reports `npm audit --audit-level=high` with `0 vulnerabilities` when verified.
+  - Windows portable target generated: `platforms/desktop-electron/dist/TimeWhere-0.2.3-win-portable.exe`; SHA256 `B16EC9B7D5A37B2E62B6E85DC33CDE8366FE11481E3308EF52CEC2FFB6F75627`.
+  - Current desktop artifact target: `0.3.0` Windows portable exe and macOS x64 zip using the existing unsigned package targets.
+  - `0.3.0` Windows portable target generated: `platforms/desktop-electron/dist/TimeWhere-0.3.0-win-portable.exe`; SHA256 `5F49EEBF001A67C0B02AA142A05ED42EB17341BD3E13FCCAA4AB253B830A1806`.
+  - Verification: `npm --prefix platforms/desktop-electron audit --audit-level=high`, `npm run electron:smoke`, portable exe smoke with `TIMEWHERE_ELECTRON_SMOKE=1`, `npm run electron:package:win`, and `npm test` passed on 2026-06-04. Bundled Desktop OAuth / post-authorization failure handling / local Desktop client secret config update re-verified with `node tests/google-sync.test.js`, `node tests/platform-boundary.test.js`, `npm run electron:smoke`, `npm run electron:package:win`, portable exe smoke, and `npm test` on 2026-06-05.
+  - Desktop OAuth client ID is bundled for the Windows app; `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` remains an optional override. If Google requires the Desktop client secret for token exchange, it must come from ignored local config (`desktop-oauth.local.json`) or a local override, not from committed source.
+  - Desktop signing, installer, auto-update, CWS bridge submission, tag, merge, push, deploy, and release remain unapproved.
 
 ## Product Owner Decisions Needed
 

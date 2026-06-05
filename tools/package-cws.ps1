@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.2.3",
+    [string]$Version = "0.3.0",
     [string]$CwsOAuthClientId = "541406150907-u6pvenpfdpgfmgnv8h9f126l4hc4oru9.apps.googleusercontent.com"
 )
 
@@ -39,7 +39,17 @@ $manifest.oauth2.client_id = $CwsOAuthClientId
 if ($manifest.PSObject.Properties.Name -contains "key") {
     $manifest.PSObject.Properties.Remove("key")
 }
+if ($manifest.host_permissions) {
+    $manifest.host_permissions = @($manifest.host_permissions | Where-Object {
+        $_ -ne "ws://127.0.0.1/*" -and $_ -ne "ws://localhost/*"
+    })
+}
 $manifest | ConvertTo-Json -Depth 20 | Set-Content -Path $manifestPath -Encoding UTF8
+
+$desktopBridgePath = Join-Path $stage "pages\desktop-bridge"
+if (Test-Path -LiteralPath $desktopBridgePath) {
+    Remove-Item -LiteralPath $desktopBridgePath -Recurse -Force
+}
 
 if (Test-Path -LiteralPath $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
