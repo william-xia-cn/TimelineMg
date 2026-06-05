@@ -12,6 +12,7 @@ This document defines the boundary between TimeWhere business code and platform-
 | `extension/shared/js/platform.js` | Lightweight `TimeWherePlatform` adapter loaded by browser pages. |
 | `extension/pages/desktop-bridge/` | Optional Chrome extension bridge page; sends only extension ID/version/nonce. |
 | `platforms/desktop-electron/` | Standalone desktop Electron shell and Windows portable package target. |
+| `platforms/macos-widget/` | Display-only WidgetKit source preparation for macOS current-task/count widgets. |
 | `docs/specs/FEATURE_SPEC_DUAL_PLATFORM_EVOLUTION.md` | Product and rollout spec for this evolution. |
 
 Do not move shared code out of `extension/` until a staging build is approved. Chrome packages cannot reference files outside their package root directly.
@@ -51,7 +52,8 @@ TimeWherePlatform = {
   },
   system: {
     getDesktopSettings(),
-    setDesktopSettings(settings)
+    setDesktopSettings(settings),
+    writeWidgetSnapshot(snapshot)
   }
 }
 ```
@@ -81,6 +83,7 @@ The desktop Electron adapter uses the preload bridge for:
 - reminder scheduling / cancellation in the Electron main process;
 - installed-app Google OAuth with PKCE using the bundled desktop OAuth client ID and artifact-bundled Desktop client metadata secret, with `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` available only as an override;
 - optional Chrome extension nonce bridge.
+- writing a sanitized `timewhere-widget-v1.json` snapshot for display-only macOS WidgetKit source preparation;
 - tray/menu-bar behavior and startup settings are persisted to
   `platforms/desktop-electron/` user data as `timewhere-desktop-settings.json`
   with `closeToTray` and `startAtLogin`; legacy `minimizeToTray` may be read or
@@ -97,6 +100,11 @@ Desktop OAuth uses PKCE plus an artifact-bundled Google Desktop client metadata 
 Desktop refresh tokens must be encrypted with Electron `safeStorage`. If encrypted storage is unavailable, do not save a plaintext refresh token.
 
 The Chrome extension bridge may exchange only extension ID, extension version, bridge version, and nonce. It must not transfer tasks, calendars, journals, tokens, or other user data.
+
+The macOS WidgetKit preparation reads only the sanitized widget snapshot. It must
+not read IndexedDB, Google sync state, OAuth tokens, client secrets, account
+identifiers, cookies, or raw local data. The widget is not embedded into the
+macOS artifact until a separate signing/App Group/package decision is approved.
 
 ## Current Direct Chrome API Exceptions
 

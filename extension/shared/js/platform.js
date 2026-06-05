@@ -182,6 +182,9 @@
                 },
                 setDesktopSettings() {
                     return { status: 'not_supported', reason: 'already_running_in_chrome_extension' };
+                },
+                writeWidgetSnapshot() {
+                    return { status: 'not_supported', reason: 'already_running_in_chrome_extension' };
                 }
             }
         };
@@ -222,7 +225,35 @@
                     if (typeof bridge?.onNotificationClick !== 'function' || typeof callback !== 'function') {
                         return () => {};
                     }
-                    return bridge.onNotificationClick(callback);
+                    const seen = new Set();
+                    const dispatch = payload => {
+                        const identity = payload?.clicked_at
+                            || `${payload?.id || payload?.key || ''}:${payload?.task_id || ''}:${payload?.bucket || ''}`;
+                        if (identity && seen.has(identity)) return;
+                        if (identity) seen.add(identity);
+                        callback(payload);
+                    };
+                    const consumePending = async () => {
+                        if (typeof bridge?.consumePendingNotificationClicks !== 'function') return;
+                        try {
+                            const result = await bridge.consumePendingNotificationClicks();
+                            for (const payload of result?.clicks || []) dispatch(payload);
+                        } catch (_) {
+                            // Pending notification clicks are best-effort.
+                        }
+                    };
+                    const unsubscribe = bridge.onNotificationClick(payload => {
+                        dispatch(payload);
+                        consumePending();
+                    });
+                    consumePending();
+                    return unsubscribe;
+                },
+                async consumePendingClicks() {
+                    if (typeof bridge?.consumePendingNotificationClicks !== 'function') {
+                        return { status: 'not_supported', clicks: [] };
+                    }
+                    return await bridge.consumePendingNotificationClicks();
                 }
             },
             reminderRuntime: {
@@ -272,6 +303,9 @@
                 },
                 setDesktopSettings(settings = {}) {
                     return call('system.setDesktopSettings', settings);
+                },
+                writeWidgetSnapshot(snapshot = {}) {
+                    return call('system.writeWidgetSnapshot', snapshot);
                 }
             }
         };
@@ -313,7 +347,11 @@
                 revokeGoogleToken: () => ({ status: 'not_supported' })
             },
             chromeBridge: { connectExtension: notSupported, getStatus: notSupported },
-            system: { getDesktopSettings: () => ({ status: 'not_supported', reason: 'platform_unavailable' }), setDesktopSettings: () => ({ status: 'not_supported', reason: 'platform_unavailable' }) }
+            system: {
+                getDesktopSettings: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
+                setDesktopSettings: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
+                writeWidgetSnapshot: () => ({ status: 'not_supported', reason: 'platform_unavailable' })
+            }
         };
     }
 
@@ -330,6 +368,6 @@
         badge: ['set', 'clear'],
         auth: ['getStatus', 'getGoogleToken', 'getAccountInfo', 'revokeGoogleToken'],
         chromeBridge: ['connectExtension', 'getStatus'],
-        system: ['getDesktopSettings', 'setDesktopSettings']
+        system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot']
     };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

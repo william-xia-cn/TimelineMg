@@ -61,6 +61,9 @@ const chromeBridge = read('platforms/desktop-electron/chrome-bridge.js');
 const bridgeHtml = read('extension/pages/desktop-bridge/bridge.html');
 const bridgeJs = read('extension/pages/desktop-bridge/bridge.js');
 const manifest = JSON.parse(read('extension/manifest.json'));
+const widgetSnapshot = read('extension/shared/js/widget-snapshot.js');
+const widgetSwift = read('platforms/macos-widget/TimeWhereWidget/TimeWhereWidget.swift');
+const widgetWorkflow = read('.github/workflows/timewhere-macos-widget.yml');
 
 assert('D-031 records standalone Windows desktop app direction',
     decisions.includes('D-031')
@@ -82,14 +85,17 @@ assert('Dual-platform spec covers desktop OAuth, notifications, portable exe, an
 assert('Platform boundary forbids Chrome extension dependency for Windows app',
     boundary.includes('Chrome extension connection is optional')
     && boundary.includes('Desktop refresh tokens must be encrypted')
-    && boundary.includes('It must not transfer tasks, calendars, journals, tokens, or other user data'));
+    && boundary.includes('It must not transfer tasks, calendars, journals, tokens, or other user data')
+    && boundary.includes('timewhere-widget-v1.json')
+    && boundary.includes('not read IndexedDB, Google sync state, OAuth tokens'));
 
 assert('TimeWherePlatform exposes desktop-capable contract',
     platformJs.includes('global.TimeWherePlatform')
     && platformJs.includes('TimeWherePlatformContract')
     && platformJs.includes("reminderRuntime: ['schedule', 'cancel', 'rescheduleAll']")
     && platformJs.includes("auth: ['getStatus', 'getGoogleToken', 'getAccountInfo', 'revokeGoogleToken']")
-    && platformJs.includes("chromeBridge: ['connectExtension', 'getStatus']"));
+    && platformJs.includes("chromeBridge: ['connectExtension', 'getStatus']")
+    && platformJs.includes("system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot']"));
 assert('Chrome adapter wraps expected platform APIs',
     platformJs.includes("name: 'chrome-extension'")
     && platformJs.includes('chromeRef.tabs.create')
@@ -105,11 +111,13 @@ assert('Desktop adapter delegates auth, reminders, and Chrome bridge to Electron
     && platformJs.includes("call('reminderRuntime.rescheduleAll'")
     && platformJs.includes("call('chromeBridge.connectExtension'")
     && platformJs.includes("call('system.getDesktopSettings'")
-    && platformJs.includes("call('system.setDesktopSettings'"));
+    && platformJs.includes("call('system.setDesktopSettings'")
+    && platformJs.includes("call('system.writeWidgetSnapshot'"));
 assert('Fallback platform returns desktop system settings capability as not_supported',
     platformJs.includes("name: 'web-fallback'")
-    && platformJs.includes("system: { getDesktopSettings: () => ({ status: 'not_supported'")
-    && platformJs.includes("setDesktopSettings: () => ({ status: 'not_supported'"));
+    && platformJs.includes("getDesktopSettings: () => ({ status: 'not_supported'")
+    && platformJs.includes("setDesktopSettings: () => ({ status: 'not_supported'")
+    && platformJs.includes("writeWidgetSnapshot: () => ({ status: 'not_supported'"));
 
 const pagesWithPlatform = [
     'extension/pages/focus/focus.html',
@@ -127,7 +135,7 @@ assert('Desktop app pages load reminders and desktop reminder bridge',
         'extension/pages/settings/settings.html',
         'extension/pages/tasks/tasks.html',
         'extension/pages/calendar/calendar.html'
-    ].every(file => read(file).includes('shared/js/reminders.js') && read(file).includes('shared/js/desktop-reminders.js')));
+    ].every(file => read(file).includes('shared/js/reminders.js') && read(file).includes('shared/js/widget-snapshot.js') && read(file).includes('shared/js/desktop-reminders.js')));
 assert('Popup navigation uses TimeWherePlatform with Chrome fallback',
     popupJs.includes('TimeWherePlatform?.window?.openMain')
     && popupJs.includes('TimeWherePlatform?.window?.openSettings')
@@ -154,11 +162,23 @@ assert('Desktop Electron package builds macOS Universal zip',
     && electronPackage.build?.mac?.target?.[0]?.target === 'zip'
     && electronPackage.build?.mac?.target?.[0]?.arch?.includes('universal')
     && electronPackage.build?.mac?.artifactName === 'TimeWhere-0.3.0-mac-universal.zip');
+assert('macOS WidgetKit preparation is display-only and unsigned-build scoped',
+    decisions.includes('D-034')
+    && boundary.includes('platforms/macos-widget/')
+    && packageJson.scripts?.['macos:widget:build']?.includes('CODE_SIGNING_ALLOWED=NO')
+    && widgetWorkflow.includes('macos-latest')
+    && widgetWorkflow.includes('npm run macos:widget:build')
+    && widgetSnapshot.includes('timewhere-widget-v1')
+    && widgetSwift.includes('WidgetKit')
+    && widgetSwift.includes('timewhere://dashboard')
+    && !/token|secret|OAuth|cookie|email/i.test(widgetSwift));
 assert('Desktop main loads packaged extension resources and exposes navigation routes',
     electronMain.includes('packagedExtensionRoot')
     && electronMain.includes('process.resourcesPath')
     && electronMain.includes("matrixview: 'pages/settings/matrixview.html'")
     && electronMain.includes("managebac: 'pages/settings/managebac-sync.html'")
+    && electronMain.includes("const protocolScheme = 'timewhere'")
+    && electronMain.includes('app.setAsDefaultProtocolClient(protocolScheme)')
     && electronMain.includes('TimeWhere-0.3.0-win-portable.exe') === false
     && electronMain.includes('Menu.setApplicationMenu')
     && electronMain.includes('TIMEWHERE_ELECTRON_SMOKE'));
@@ -166,11 +186,14 @@ assert('Desktop main exposes auth, reminders, notifications, and Chrome bridge I
     electronMain.includes("method === 'auth.getGoogleToken'")
     && electronMain.includes('serializeAuthError')
     && electronMain.includes("method === 'reminderRuntime.rescheduleAll'")
+    && electronMain.includes("method === 'notification.consumePendingClicks'")
+    && electronMain.includes('pendingNotificationClicks')
     && electronMain.includes("method === 'chromeBridge.connectExtension'")
     && electronMain.includes('Notification.isSupported'));
 assert('Electron preload exposes TimeWhereElectronPlatform bridge',
     electronPreload.includes("contextBridge.exposeInMainWorld('TimeWhereElectronPlatform'")
-    && electronPreload.includes("ipcRenderer.invoke('timewhere-platform'"));
+    && electronPreload.includes("ipcRenderer.invoke('timewhere-platform'")
+    && electronPreload.includes('consumePendingNotificationClicks'));
 
 assert('Desktop OAuth uses installed-app PKCE with bundled client metadata secret',
     desktopAuth.includes('541406150907')

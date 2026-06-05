@@ -25,6 +25,14 @@
     "directories": {
       "output": "dist"
     },
+    "protocols": [
+      {
+        "name": "TimeWhere",
+        "schemes": [
+          "timewhere"
+        ]
+      }
+    ],
     "files": [
       "main.js",
       "preload.js",

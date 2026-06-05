@@ -3,39 +3,116 @@
 (function initDesktopReminders(global) {
     'use strict';
 
-    const SENT_STATE_KEY = 'timewhere_desktop_reminder_sent_v1';
+    const ACK_STATE_KEY = 'timewhere_desktop_reminder_ack_v1';
     const POLL_MS = 60 * 1000;
     let timer = null;
     let running = false;
+    let unsubscribeNotificationClick = null;
 
     function isDesktopPlatform() {
         return global.TimeWherePlatform?.name === 'desktop-electron';
     }
 
-    function readSentState() {
+    function readAckState() {
         try {
-            return JSON.parse(global.localStorage?.getItem(SENT_STATE_KEY) || '{}') || {};
+            return JSON.parse(global.localStorage?.getItem(ACK_STATE_KEY) || '{}') || {};
         } catch (_) {
             return {};
         }
     }
 
-    function writeSentState(state) {
+    function writeAckState(state) {
         try {
-            global.localStorage?.setItem(SENT_STATE_KEY, JSON.stringify(state || {}));
+            global.localStorage?.setItem(ACK_STATE_KEY, JSON.stringify(state || {}));
         } catch (_) {
             // Reminder dedupe is best-effort when localStorage is unavailable.
         }
     }
 
-    function pruneSentState(state, now) {
+    function pruneAckState(state, now, tasks = []) {
         const today = global.TimeWhereReminders?.formatDateISO?.(now);
         if (!today) return state;
+        const eligibleTaskIds = new Set((tasks || [])
+            .filter(task => global.TimeWhereReminders?.isTaskEligibleToday?.(task, now))
+            .map(task => String(task.id)));
         const next = {};
         for (const [key, value] of Object.entries(state || {})) {
-            if (String(key).includes(today)) next[key] = value;
+            if (!String(key).includes(today)) continue;
+            const taskId = value?.task_id || String(key).split(':')[1];
+            if (taskId && !eligibleTaskIds.has(String(taskId))) continue;
+            next[key] = value;
         }
         return next;
+    }
+
+    function buildAckedSentState(state) {
+        const sentState = {};
+        for (const [key, value] of Object.entries(state || {})) {
+            if (value?.ack_at) sentState[key] = value.ack_at;
+        }
+        return sentState;
+    }
+
+    function recordReminderSent(state, reminder, now) {
+        const key = reminder?.key;
+        if (!key) return state;
+        state[key] = {
+            ...(state[key] || {}),
+            key,
+            task_id: reminder.task_id || reminder.task?.id || null,
+            type: reminder.type || null,
+            bucket: reminder.bucket || null,
+            sent_at: now.toISOString(),
+            ack_at: state[key]?.ack_at || null
+        };
+        return state;
+    }
+
+    function acknowledgeNotificationClick(payload = {}, now = new Date()) {
+        if (!isDesktopPlatform()) return { status: 'not_supported' };
+        const key = payload.key || payload.id;
+        if (!key || !String(key).startsWith('reminder:')) return { status: 'ignored' };
+        const state = readAckState();
+        state[key] = {
+            ...(state[key] || {}),
+            key,
+            task_id: payload.task_id || state[key]?.task_id || null,
+            type: payload.type || state[key]?.type || null,
+            bucket: payload.bucket || state[key]?.bucket || null,
+            sent_at: state[key]?.sent_at || null,
+            ack_at: now.toISOString()
+        };
+        writeAckState(state);
+        return { status: 'acknowledged', key };
+    }
+
+    function ensureNotificationClickHandler() {
+        if (unsubscribeNotificationClick || typeof global.TimeWherePlatform?.notification?.onClick !== 'function') return;
+        unsubscribeNotificationClick = global.TimeWherePlatform.notification.onClick(payload => {
+            acknowledgeNotificationClick(payload);
+        });
+    }
+
+    async function writeWidgetSnapshot(tasks = [], containers = [], now = new Date()) {
+        if (!global.TimeWhereWidgetSnapshot?.buildWidgetSnapshot || typeof global.TimeWherePlatform?.system?.writeWidgetSnapshot !== 'function') {
+            return { status: 'not_supported' };
+        }
+        let completedToday = null;
+        try {
+            if (typeof global.TimeWhereDB?.getTodayCompletedCount === 'function') {
+                completedToday = await global.TimeWhereDB.getTodayCompletedCount();
+            }
+        } catch (_) {
+            completedToday = null;
+        }
+        const snapshot = global.TimeWhereWidgetSnapshot.buildWidgetSnapshot({
+            tasks,
+            containers,
+            now,
+            scheduling: global.TimeWhereScheduling,
+            completedToday
+        });
+        return await global.TimeWherePlatform.system.writeWidgetSnapshot(snapshot);
     }
 
     async function collectDueReminders(now = new Date()) {
@@ -45,10 +122,12 @@
         const settings = typeof global.TimeWhereDB.getSettings === 'function'
             ? await global.TimeWhereDB.getSettings()
             : {};
-        if (settings?.notification_enabled === false) return [];
         const tasks = await global.TimeWhereDB.getAllTasks?.() || [];
         const containers = await global.TimeWhereDB.getContainers?.() || [];
-        const sentState = pruneSentState(readSentState(), now);
+        await writeWidgetSnapshot(tasks, containers, now);
+        if (settings?.notification_enabled === false) return [];
+        const ackState = pruneAckState(readAckState(), now, tasks);
+        const sentState = buildAckedSentState(ackState);
         const reminders = global.TimeWhereReminders.computeTaskReminders(
             tasks,
             containers,
@@ -56,8 +135,8 @@
             global.TimeWhereScheduling,
             sentState
         );
-        for (const reminder of reminders) sentState[reminder.key] = now.toISOString();
-        writeSentState(sentState);
+        for (const reminder of reminders) recordReminderSent(ackState, reminder, now);
+        writeAckState(ackState);
         return reminders;
     }
 
@@ -70,6 +149,9 @@
             title: notification.title,
             message: notification.message,
             notification,
+            key: reminder.key,
+            type: reminder.type,
+            bucket: reminder.bucket,
             task_id: taskId,
             route: taskId ? `pages/focus/focus.html?task_id=${encodeURIComponent(taskId)}` : 'pages/focus/focus.html'
         };
@@ -92,6 +174,7 @@
 
     function start() {
         if (!isDesktopPlatform() || timer) return { status: 'not_started' };
+        ensureNotificationClickHandler();
         rescheduleNow().catch(error => console.warn('Desktop reminder bridge failed:', error));
         timer = global.setInterval(() => {
             rescheduleNow().catch(error => console.warn('Desktop reminder bridge failed:', error));
@@ -101,11 +184,21 @@
 
     function stop() {
         if (timer) global.clearInterval(timer);
+        if (unsubscribeNotificationClick) unsubscribeNotificationClick();
+        unsubscribeNotificationClick = null;
         timer = null;
         return { status: 'stopped' };
     }
 
-    global.TimeWhereDesktopReminders = { start, stop, rescheduleNow, collectDueReminders };
+    global.TimeWhereDesktopReminders = {
+        start,
+        stop,
+        rescheduleNow,
+        collectDueReminders,
+        acknowledgeNotificationClick,
+        writeWidgetSnapshot,
+        readAckState
+    };
 
     if (global.document) {
         global.document.addEventListener('DOMContentLoaded', () => {

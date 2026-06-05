@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, Notification, ipcMain, Tray, nativeImage } = r
 const path = require('path');
 const fs = require('node:fs');
 const fsp = fs.promises;
+const os = require('node:os');
 const { pathToFileURL } = require('url');
 const { createDesktopAuth } = require('./desktop-auth');
 const { createChromeBridge } = require('./chrome-bridge');
@@ -11,6 +12,10 @@ const devExtensionRoot = path.join(repoRoot, 'extension');
 const packagedExtensionRoot = () => path.join(process.resourcesPath, 'extension');
 const preloadPath = path.join(__dirname, 'preload.js');
 const defaultRoute = 'pages/focus/focus.html';
+const widgetSnapshotSchema = 'timewhere-widget-v1';
+const widgetSnapshotFileName = 'timewhere-widget-v1.json';
+const widgetAppGroupIdentifier = 'group.cn.williamxia.timewhere';
+const protocolScheme = 'timewhere';
 const smokeMode = process.env.TIMEWHERE_ELECTRON_SMOKE === '1';
 const smokeRuntimeRoot = path.join(
   process.env.TMP || process.env.TEMP || repoRoot,
@@ -29,9 +34,11 @@ if (smokeMode) {
 const desktopAuth = createDesktopAuth();
 const chromeBridge = createChromeBridge();
 const reminderTimers = new Map();
+const pendingNotificationClicks = [];
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
+let pendingProtocolRoute = null;
 const desktopSettingsDefaults = {
   minimizeToTray: false,
   closeToTray: true,
@@ -39,6 +46,18 @@ const desktopSettingsDefaults = {
 };
 let desktopSettings = { ...desktopSettingsDefaults };
 const desktopSettingsPath = () => path.join(app.getPath('userData'), 'timewhere-desktop-settings.json');
+
+function appGroupWidgetSnapshotPath() {
+  if (process.platform !== 'darwin') return null;
+  return path.join(os.homedir(), 'Library', 'Group Containers', widgetAppGroupIdentifier, widgetSnapshotFileName);
+}
+
+function widgetSnapshotPath() {
+  if (process.env.TIMEWHERE_WIDGET_SNAPSHOT_PATH) return process.env.TIMEWHERE_WIDGET_SNAPSHOT_PATH;
+  const groupPath = appGroupWidgetSnapshotPath();
+  if (groupPath && fs.existsSync(path.dirname(groupPath))) return groupPath;
+  return path.join(app.getPath('userData'), widgetSnapshotFileName);
+}
 
 const routeMap = {
   dashboard: 'pages/focus/focus.html',
@@ -174,6 +193,27 @@ function resolveExtensionRoute(route = defaultRoute) {
   return { filePath: resolved, search: parts.search, hash: parts.hash, route: parts.pathname };
 }
 
+function routeFromProtocolUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== `${protocolScheme}:`) return defaultRoute;
+    const target = `${url.hostname || ''}${url.pathname || ''}`.replace(/^\/+/, '');
+    if (target === 'dashboard' || target === 'focus' || !target) return routeMap.dashboard;
+    return routeMap[target] || defaultRoute;
+  } catch (_) {
+    return defaultRoute;
+  }
+}
+
+function openProtocolUrl(rawUrl) {
+  const route = routeFromProtocolUrl(rawUrl);
+  if (!app.isReady()) {
+    pendingProtocolRoute = route;
+    return;
+  }
+  openWindow(route);
+}
+
 async function loadDesktopSettings() {
   try {
     const raw = await fsp.readFile(desktopSettingsPath(), 'utf8');
@@ -251,6 +291,46 @@ async function applyDesktopSettings(next = {}) {
   }
 
   return { status: 'ok', settings: { ...desktopSettings } };
+}
+
+function sanitizeWidgetTask(task = {}) {
+  return {
+    id: String(task.id || ''),
+    title: String(task.title || '无标题任务').slice(0, 120),
+    plan_name: String(task.plan_name || '').slice(0, 80),
+    schedule_time: task.schedule_time ? String(task.schedule_time).slice(0, 8) : null,
+    duration: Number.isFinite(Number(task.duration)) ? Number(task.duration) : 45,
+    priority: String(task.priority || 'medium').slice(0, 24),
+    progress: String(task.progress || 'not_started').slice(0, 32),
+    assignment_label: String(task.assignment_label || '').slice(0, 80)
+  };
+}
+
+function sanitizeWidgetSnapshot(snapshot = {}) {
+  const counts = snapshot.counts || {};
+  return {
+    schema: widgetSnapshotSchema,
+    generated_at: snapshot.generated_at || new Date().toISOString(),
+    counts: {
+      completed_today: Math.max(0, Number(counts.completed_today) || 0),
+      pending_today: Math.max(0, Number(counts.pending_today) || 0)
+    },
+    current_tasks: Array.isArray(snapshot.current_tasks)
+      ? snapshot.current_tasks.slice(0, 3).map(sanitizeWidgetTask).filter(task => task.id)
+      : []
+  };
+}
+
+async function writeWidgetSnapshot(snapshot = {}) {
+  const safeSnapshot = sanitizeWidgetSnapshot(snapshot);
+  const target = widgetSnapshotPath();
+  try {
+    await fsp.mkdir(path.dirname(target), { recursive: true });
+    await fsp.writeFile(target, JSON.stringify(safeSnapshot, null, 2), 'utf8');
+    return { status: 'ok', path: target, schema: safeSnapshot.schema };
+  } catch (error) {
+    return { status: 'failed', reason: 'widget_snapshot_write_failed', message: error.message };
+  }
 }
 
 async function loadRoute(win, route = defaultRoute) {
@@ -359,12 +439,24 @@ function buildMenu() {
 }
 
 function sendNotificationClick(payload = {}) {
+  const clickPayload = {
+    ...payload,
+    clicked_at: new Date().toISOString()
+  };
+  pendingNotificationClicks.push(clickPayload);
+  if (pendingNotificationClicks.length > 25) pendingNotificationClicks.shift();
+
   const route = payload.route
     || (payload.task_id ? `pages/focus/focus.html?task_id=${encodeURIComponent(payload.task_id)}` : null)
     || (payload.journal_date ? `pages/focus/focus.html?journal_date=${encodeURIComponent(payload.journal_date)}` : null);
   if (route) getOrCreateMainWindow(route);
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  mainWindow.webContents.send('timewhere-platform:notification-click', payload);
+  mainWindow.webContents.send('timewhere-platform:notification-click', clickPayload);
+}
+
+function consumePendingNotificationClicks() {
+  const clicks = pendingNotificationClicks.splice(0, pendingNotificationClicks.length);
+  return { status: 'ok', clicks };
 }
 
 function showDesktopNotification(payload = {}) {
@@ -458,6 +550,9 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
   if (method === 'notification.notify') {
     return showDesktopNotification(payload);
   }
+  if (method === 'notification.consumePendingClicks') {
+    return consumePendingNotificationClicks();
+  }
   if (method === 'reminderRuntime.schedule') {
     return scheduleReminder(payload);
   }
@@ -516,10 +611,14 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
   if (method === 'system.setDesktopSettings') {
     return await applyDesktopSettings(payload);
   }
+  if (method === 'system.writeWidgetSnapshot') {
+    return await writeWidgetSnapshot(payload);
+  }
   return { status: 'not_supported', method };
 });
 
 app.whenReady().then(() => {
+  if (!smokeMode) app.setAsDefaultProtocolClient(protocolScheme);
   loadDesktopSettings()
     .then(() => {
       applyLoginItemSettings(desktopSettings.startAtLogin);
@@ -527,7 +626,8 @@ app.whenReady().then(() => {
     })
     .then(() => {
       buildMenu();
-      createMainWindow();
+      createMainWindow(pendingProtocolRoute || defaultRoute);
+      pendingProtocolRoute = null;
       createTray();
       syncTrayMenuLabels();
     })
@@ -545,6 +645,11 @@ app.whenReady().then(() => {
     }
     openWindow();
   });
+});
+
+app.on('open-url', (event, rawUrl) => {
+  event.preventDefault();
+  openProtocolUrl(rawUrl);
 });
 
 function syncLoginItemStateFromOS() {
