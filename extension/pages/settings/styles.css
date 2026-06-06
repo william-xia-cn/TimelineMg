@@ -492,6 +492,15 @@ select, input[type="number"], input[type="text"] {
     margin-bottom: 10px;
 }
 
+.google-sync-account-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    min-width: 0;
+}
+
 .google-sync-state-line,
 .google-sync-meta-line {
     display: flex;
@@ -504,8 +513,24 @@ select, input[type="number"], input[type="text"] {
 }
 
 .google-sync-account {
+    max-width: min(360px, 52vw);
+    padding: 6px 10px;
+    border: 1px solid rgba(37, 99, 235, 0.22);
+    border-radius: 999px;
+    background: rgba(239, 246, 255, 0.86);
     font-weight: 700;
-    color: var(--text-main);
+    color: #1d4ed8;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.google-sync-conflict-empty {
+    padding: 12px 14px;
+    border: 1px solid rgba(146, 64, 14, 0.22);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 251, 235, 0.82);
 }
 
 .google-sync-danger-actions {

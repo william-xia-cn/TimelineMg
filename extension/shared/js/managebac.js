@@ -1017,16 +1017,25 @@
 
     function preserveLocalExecutionState(task, existingTask) {
         if (!existingTask) return task;
+        const hasOwn = field => Object.prototype.hasOwnProperty.call(existingTask, field);
+        const preserveValue = field => hasOwn(field) ? existingTask[field] : task[field];
+        const preserveArray = field => hasOwn(field) && Array.isArray(existingTask[field])
+            ? existingTask[field].map(item => item && typeof item === 'object' ? { ...item } : item)
+            : task[field];
         return {
             ...task,
-            start_date: Object.prototype.hasOwnProperty.call(existingTask, 'start_date')
-                ? existingTask.start_date || null
-                : task.start_date || null,
+            start_date: hasOwn('start_date') ? existingTask.start_date || null : task.start_date || null,
             priority: existingTask.priority || task.priority || 'medium',
             progress: existingTask.progress || task.progress || 'not_started',
-            completed_at: Object.prototype.hasOwnProperty.call(existingTask, 'completed_at')
-                ? existingTask.completed_at || null
-                : task.completed_at || null
+            status: preserveValue('status') || task.status || 'pending',
+            completed_at: hasOwn('completed_at') ? existingTask.completed_at || null : task.completed_at || null,
+            bucket_id: hasOwn('bucket_id') ? existingTask.bucket_id || null : task.bucket_id || null,
+            labels: preserveArray('labels') || [],
+            notes: hasOwn('notes') ? existingTask.notes || '' : task.notes || '',
+            description: hasOwn('description') ? existingTask.description || '' : task.description || '',
+            checklist: preserveArray('checklist') || [],
+            schedule_time: hasOwn('schedule_time') ? existingTask.schedule_time || null : task.schedule_time || null,
+            duration: hasOwn('duration') ? existingTask.duration ?? 45 : task.duration ?? 45
         };
     }
 

@@ -123,7 +123,9 @@ async function loadDashboardData() {
 // 从 shared/js/scheduling.js 导入调度相关函数
 const { timeToMinutes, prioritySortValue, priorityLabel, priorityClass,
         containerAppliesToDate, getContainerLayer, dailySettle,
-        buildDailyTaskPool, escapeHTML, escapeAttribute, _nthWeekdayOfMonth } = window.TimeWhereScheduling;
+        buildDailyTaskPool, escapeHTML, escapeAttribute, _nthWeekdayOfMonth,
+        expandEventsForDateRange, buildCalendarDayProjection,
+        getCalendarTasksForDate, assignCalendarTasksToContainers } = window.TimeWhereScheduling;
 
 function formatDate(dateStr) {
     const today = new Date();
@@ -379,18 +381,14 @@ function createTaskCard(task, opts = {}) {
     }
 
     // 操作按钮
-    const partialCompleteToggleHtml = !isManageBacSource
-        ? `<button class="btn-micro" data-action="toggle-partial-complete-menu" data-task-id="${taskId}" aria-expanded="false">部分完成</button>`
-        : '';
+    const partialCompleteToggleHtml = `<button class="btn-micro" data-action="toggle-partial-complete-menu" data-task-id="${taskId}" aria-expanded="false">部分完成</button>`;
     const checklist = Array.isArray(task.checklist) ? task.checklist : [];
     const partialGroup = findPartialCompletionGroup(checklist);
-    const partialCompleteMenuHtml = !isManageBacSource
-        ? `<div class="partial-complete-panel" data-partial-complete-menu-for="${taskId}" hidden>
+    const partialCompleteMenuHtml = `<div class="partial-complete-panel" data-partial-complete-menu-for="${taskId}" hidden>
             ${partialGroup || checklist.length === 0
                 ? renderPartialCompleteRatioBody(taskId, partialGroup)
                 : renderPartialCompleteChecklistBody(taskId, checklist)}
-        </div>`
-        : '';
+        </div>`;
     const progressBtns = isInProgress
         ? `<button class="btn-micro" data-action="pause" data-task-id="${taskId}">暂停</button>
            ${partialCompleteToggleHtml}
@@ -891,11 +889,6 @@ async function saveCurrentTaskPartialCompleteRatio(taskId, percent) {
         showToast('任务不存在或已删除', 'error');
         return;
     }
-    if (TimeWhereDB.isManageBacSourceTask?.(task)) {
-        showToast('ManageBac 来源任务不能使用部分完成', 'error');
-        return;
-    }
-
     const currentChecklist = Array.isArray(task.checklist) ? task.checklist : [];
     const partialGroup = findPartialCompletionGroup(currentChecklist);
     const partialItems = buildPartialCompletionChecklist(percent, partialGroup);
@@ -914,11 +907,6 @@ async function saveCurrentTaskPartialCompleteChecklistItem(taskId, checklistId, 
         showToast('任务不存在或已删除', 'error');
         return;
     }
-    if (TimeWhereDB.isManageBacSourceTask?.(task)) {
-        showToast('ManageBac 来源任务不能使用部分完成', 'error');
-        return;
-    }
-
     const checklist = (task.checklist || []).map(item =>
         String(item.id) === String(checklistId) ? { ...item, checked: !!checked } : item
     );
@@ -986,7 +974,8 @@ async function loadCalendarColumn() {
 
     // 加载数据
     const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
-    const dbEvents = (await TimeWhereDB.getEventsByDateRange(todayStr, tomorrowStr)) || [];
+    const allDbEvents = (await TimeWhereDB.getEvents()) || [];
+    const dbEvents = expandEventsForDateRange(allDbEvents, todayStr, tomorrowStr);
     const allTasks = (await TimeWhereDB.getAllTasks()) || [];
 
     // 渲染两天
@@ -1006,97 +995,24 @@ async function loadCalendarColumn() {
 }
 
 function getDateTasksForDisplay(tasks, dateStr) {
-    const items = [];
-    (tasks || []).forEach(task => {
-        if (!task || task.progress === 'completed' || task.status === 'completed') return;
-        const dueDate = task.due_date || task.deadline || null;
-        if (dueDate === dateStr) {
-            items.push({ ...task, calendar_item_type: 'due' });
-        } else if (task.start_date === dateStr) {
-            items.push({ ...task, calendar_item_type: 'start' });
-        }
-    });
-    return items.sort((a, b) => {
-        if (a.calendar_item_type !== b.calendar_item_type) return a.calendar_item_type === 'due' ? -1 : 1;
-        return String(a.title || '').localeCompare(String(b.title || ''));
-    });
-}
-
-function focusTaskMatchesContainer(task, container) {
-    if (!task?.schedule_time || !container?.time_start || !container?.time_end) return false;
-    const taskMin = timeToMinutes(task.schedule_time);
-    return taskMin >= timeToMinutes(container.time_start) && taskMin < timeToMinutes(container.time_end);
+    return getCalendarTasksForDate(tasks, dateStr);
 }
 
 function assignDateTasksToContainers(tasks, containers) {
-    const sortedContainers = [...(containers || [])].sort((a, b) =>
-        String(a.time_start || '').localeCompare(String(b.time_start || ''))
-    );
-    const assignments = new Map(sortedContainers.map(container => [container.id, []]));
-    const firstLayerOne = sortedContainers.find(container => getContainerLayer(container) === 1);
-    const fallbackContainer = firstLayerOne || sortedContainers[0] || null;
-    (tasks || []).forEach(task => {
-        const target = task.schedule_time
-            ? sortedContainers.find(container => focusTaskMatchesContainer(task, container))
-            : fallbackContainer;
-        if (target && assignments.has(target.id)) assignments.get(target.id).push(task);
-    });
-    return assignments;
+    return assignCalendarTasksToContainers(tasks, containers);
 }
 
 function renderDayColumn(col, dateObj, dateStr, allContainers, allDbEvents, allTasks, isToday) {
     col.innerHTML = '';
 
-    const dayOfWeek = dateObj.getDay();
-    const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-    // 处理 override / skip
-    const dayEvents = allDbEvents.filter(e => e.date === dateStr);
-    const overriddenIds = new Set(dayEvents.filter(e => e.source === 'container_override').map(e => e.container_id));
-    const skippedIds = new Set(dayEvents.filter(e => e.source === 'container_skip').map(e => e.container_id));
-
-    const dayContainers = allContainers
-        .filter(c => {
-            if (skippedIds.has(c.id) || overriddenIds.has(c.id)) return false;
-            return containerAppliesToDate(c, dateObj, dateStr, dayOfWeek, isWeekday, isWeekend);
-        });
-
-    const dateTasks = getDateTasksForDisplay(allTasks, dateStr);
-    const taskAssignments = assignDateTasksToContainers(dateTasks, dayContainers);
-
-    // 容器 → 事件格式
-    const containerEvents = dayContainers
-        .map(c => ({
-            title: c.name,
-            time_start: c.time_start,
-            time_end: c.time_end,
-            color: c.color || '#4A90D9',
-            type: 'container',
-            source: 'container',
-            id: c.id,
-            layer: getContainerLayer(c),
-            isContainer: true,
-            tasks: taskAssignments.get(c.id) || []
-        }));
-
-    // 普通事件（非 skip）
-    const regularEvents = dayEvents
-        .filter(e => e.source !== 'container_skip' && e.time_start && e.time_end)
-        .map(e => ({
-            title: e.title,
-            time_start: e.time_start,
-            time_end: e.time_end,
-            color: e.color || '#3b82f6',
-            type: 'event',
-            source: e.source || 'manual',
-            id: e.id,
-            isContainer: false
-        }));
-
-    const allItems = [...containerEvents, ...regularEvents].sort((a, b) =>
-        timeToMinutes(a.time_start) - timeToMinutes(b.time_start)
-    );
+    const projection = buildCalendarDayProjection({
+        date: dateObj,
+        dateStr,
+        containers: allContainers,
+        events: allDbEvents,
+        tasks: allTasks
+    });
+    const allItems = projection.timedItems;
 
     // 渲染事件块
     allItems.forEach(item => {
@@ -1518,6 +1434,11 @@ function handleFocusDelegatedClick(e) {
     if (!actionEl) return;
 
     const { action, taskId } = actionEl.dataset;
+    if (action === 'open-external-link') {
+        e.preventDefault();
+        runFocusAction(actionEl, async () => openTaskNotesExternalLink(actionEl));
+        return;
+    }
     if (action === 'quick-add-current-task') {
         e.preventDefault();
         runFocusAction(actionEl, async () => quickAddCurrentTask());
@@ -1885,7 +1806,7 @@ async function openCurrentTaskDetailModal(taskId) {
                 </button>
             </div>
             <div class="modal-body">
-                ${isManageBacSource ? '<p class="source-readonly-hint">ManageBac 来源内容只读；可修改本地状态、优先级和开始日期。</p>' : ''}
+                ${isManageBacSource ? '<p class="source-readonly-hint">ManageBac 来源标题和截止日期只读；可修改本地状态、优先级、开始日期、定时时间、时长和笔记。</p>' : ''}
                 <div class="form-group">
                     <label>任务标题</label>
                     <input type="text" id="detailTaskTitle" value="${escapeAttribute(task.title || '')}" ${isManageBacSource ? 'readonly' : ''}>
@@ -1922,16 +1843,17 @@ async function openCurrentTaskDetailModal(taskId) {
                 <div class="form-grid two-col">
                     <div class="form-group">
                         <label>定时时间</label>
-                        <input type="time" id="detailTaskScheduleTime" value="${escapeAttribute(task.schedule_time || '')}" ${isManageBacSource ? 'disabled' : ''}>
+                        <input type="time" id="detailTaskScheduleTime" value="${escapeAttribute(task.schedule_time || '')}">
                     </div>
                     <div class="form-group">
                         <label>预计时长（分钟）</label>
-                        <input type="number" id="detailTaskDuration" value="${escapeAttribute(String(task.duration || 45))}" min="5" max="480" step="5" ${isManageBacSource ? 'disabled' : ''}>
+                        <input type="number" id="detailTaskDuration" value="${escapeAttribute(String(task.duration || 45))}" min="5" max="480" step="5">
                     </div>
                 </div>
                 <div class="form-group">
                     <label>说明</label>
-                    <textarea id="detailTaskNotes" rows="4" ${isManageBacSource ? 'readonly' : ''}>${escapeHTML(task.notes || task.description || '')}</textarea>
+                    <textarea id="detailTaskNotes" rows="4">${escapeHTML(task.notes || task.description || '')}</textarea>
+                    <div class="notes-link-preview" data-notes-link-preview>${renderTaskNotesExternalLinks(task.notes || task.description || '')}</div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -1940,6 +1862,9 @@ async function openCurrentTaskDetailModal(taskId) {
             </div>
         </div>`;
     document.body.appendChild(modal);
+    document.getElementById('detailTaskNotes')?.addEventListener('input', event => {
+        refreshTaskNotesExternalLinks(modal, event.target.value);
+    });
     setTimeout(() => document.getElementById('detailTaskTitle')?.focus(), 100);
 }
 
@@ -1964,6 +1889,9 @@ async function saveCurrentTaskDetailModal() {
         progress,
         priority: document.getElementById('detailTaskPriority')?.value || 'medium',
         start_date: document.getElementById('detailTaskStartDate')?.value || null,
+        schedule_time: document.getElementById('detailTaskScheduleTime')?.value || null,
+        duration: parseInt(document.getElementById('detailTaskDuration')?.value || '45', 10) || 45,
+        notes: document.getElementById('detailTaskNotes')?.value || '',
         completed_at: progress === 'completed' ? (task.completed_at || new Date().toISOString()) : null
     };
     if (!isManageBacSource) {
@@ -1974,14 +1902,26 @@ async function saveCurrentTaskDetailModal() {
         }
         updates.title = title;
         updates.due_date = document.getElementById('detailTaskDueDate')?.value || null;
-        updates.schedule_time = document.getElementById('detailTaskScheduleTime')?.value || null;
-        updates.duration = parseInt(document.getElementById('detailTaskDuration')?.value || '45', 10) || 45;
-        updates.notes = document.getElementById('detailTaskNotes')?.value || '';
     }
     await TimeWhereDB.updateTask(taskId, updates);
     closeCurrentTaskDetailModal();
     await loadDashboardData();
     showToast('任务详情已更新', 'success');
+}
+
+function renderTaskNotesExternalLinks(text) {
+    return globalThis.TimeWhereExternalLinks?.renderExternalLinkList?.(text || '') || '';
+}
+
+function refreshTaskNotesExternalLinks(root, text) {
+    const target = root?.querySelector('[data-notes-link-preview]');
+    if (target) target.innerHTML = renderTaskNotesExternalLinks(text);
+}
+
+async function openTaskNotesExternalLink(button) {
+    const url = button?.dataset?.url || '';
+    if (!globalThis.TimeWhereExternalLinks?.openExternalUrl) throw new Error('外部链接模块未加载');
+    await globalThis.TimeWhereExternalLinks.openExternalUrl(url);
 }
 
 async function ensureDashboardQuickAddPlanAndBucket() {

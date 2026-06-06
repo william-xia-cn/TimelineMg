@@ -263,12 +263,15 @@
                                 <div class="google-sync-card">
                                     <div class="google-sync-card-header">
                                         <span class="setting-label">连接状态</span>
-                                        <button class="action-btn" id="connectGoogleSyncBtn" type="button">连接 Google 账户同步</button>
-                                        <button class="action-btn danger" id="disconnectGoogleSyncBtn" type="button" hidden>断开连接</button>
+                                        <div class="google-sync-account-actions">
+                                            <span class="google-sync-account" id="googleSyncAccountEmail" hidden></span>
+                                            <button class="action-btn" id="connectGoogleSyncBtn" type="button">连接 Google 账户同步</button>
+                                            <button class="action-btn" id="switchGoogleSyncAccountBtn" type="button" hidden>切换账户</button>
+                                            <button class="action-btn danger" id="disconnectGoogleSyncBtn" type="button" hidden>断开连接</button>
+                                        </div>
                                     </div>
                                     <div class="google-sync-state-line">
                                         <span class="google-sync-status" id="googleSyncStatus" data-status="not_configured">○ 未连接</span>
-                                        <span class="google-sync-account" id="googleSyncAccountEmail"></span>
                                     </div>
                                     <p class="setting-desc">TimeWhere 可离线完整使用；Google 仅用于跨设备同步。</p>
                                 </div>

@@ -64,7 +64,20 @@ class FakeDB {
     }
 
     isAllowedManageBacLocalStatusUpdate(data = {}) {
-        const allowedFields = new Set(['progress', 'completed_at', 'status', 'start_date', 'priority']);
+        const allowedFields = new Set([
+            'progress',
+            'completed_at',
+            'status',
+            'start_date',
+            'priority',
+            'notes',
+            'description',
+            'schedule_time',
+            'duration',
+            'checklist',
+            'labels',
+            'bucket_id'
+        ]);
         const fields = Object.keys(data || {});
         return fields.length > 0 && fields.every(field => allowedFields.has(field));
     }
@@ -329,11 +342,18 @@ async function run() {
         && managebacSyncScript.includes('clearManageBacPendingRows'));
     assert('Task detail no longer has a separate ManageBac detail renderer', !/renderManageBacReadOnlyDetail|ManageBac Task/.test(taskDetailScript));
     assert('Task detail uses one layout with ManageBac source badge', taskDetailScript.includes('source-badge') && taskDetailScript.includes('ManageBac'));
-    assert('Task detail marks ManageBac source fields readonly', taskDetailScript.includes('data-readonly-source="true"') && taskDetailScript.includes('readonly'));
-    assert('Task detail allows ManageBac start date but keeps due date readonly',
-        /data-field="start_date"[\s\S]*\$\{sourceStartDateDisabledAttr\}/.test(taskDetailScript)
+    assert('Task detail keeps ManageBac source facts readonly', taskDetailScript.includes('const titleEditable = isManageBacTask ? \'false\' : \'true\'')
         && /data-field="due_date"[\s\S]*\$\{sourceDisabledAttr\}/.test(taskDetailScript)
-        && taskDetailScript.includes("if (input.disabled || (isManageBacTask && field !== 'start_date')) return;"));
+        && taskDetailScript.includes('data-field="subject"')
+        && taskDetailScript.includes('data-field="managebac_subject"'));
+    assert('Task detail allows ManageBac local execution fields',
+        taskDetailScript.includes('data-field="bucket_id"')
+        && /data-field="schedule_time"[\s\S]{0,120}>/.test(taskDetailScript)
+        && /data-field="duration"[\s\S]{0,140}>/.test(taskDetailScript)
+        && /data-field="notes"[\s\S]{0,120}>/.test(taskDetailScript)
+        && taskDetailScript.includes("if (input.disabled || (isManageBacTask && field === 'due_date')) return;")
+        && taskDetailScript.includes('await updateTaskFromDetail({ labels })')
+        && taskDetailScript.includes('await updateTaskFromDetail({ checklist: newChecklist })'));
     assert('Task detail disables ManageBac delete action', taskDetailScript.includes('ManageBac 来源任务不能删除') && /btn-delete-task[\s\S]*disabled/.test(taskDetailScript));
     assert('Task detail keeps ManageBac progress editable', taskDetailScript.includes('TimeWhereDB.updateTask(taskId, updates)') && taskDetailScript.includes('completed_at'));
     assert('Task detail displays TimeWhere Plan and Subject fields', taskDetailScript.includes('TimeWhere Plan') && taskDetailScript.includes('data-field="subject"'));
@@ -437,6 +457,24 @@ async function run() {
     const locallyScheduledTask = (await syncDb.getAllTasks()).find(task => task.source_uid === 'mb-english-essay-1@example.invalid');
     assertEqual('ManageBac source task local start_date update is allowed', locallyScheduledTask.start_date, '2026-05-18');
     assertEqual('ManageBac source task local priority update is allowed', locallyScheduledTask.priority, 'urgent');
+    const localExecutionUpdate = {
+        notes: 'Local execution notes',
+        description: 'Local execution description',
+        schedule_time: '18:30',
+        duration: 90,
+        checklist: [{ id: 'local-check-1', title: 'Local checklist item', checked: false }],
+        labels: [101],
+        bucket_id: 12
+    };
+    await syncDb.updateTask(englishSourceTask.id, localExecutionUpdate);
+    const locallyCustomizedTask = (await syncDb.getAllTasks()).find(task => task.source_uid === 'mb-english-essay-1@example.invalid');
+    assertEqual('ManageBac source task local notes update is allowed', locallyCustomizedTask.notes, localExecutionUpdate.notes);
+    assertEqual('ManageBac source task local description update is allowed', locallyCustomizedTask.description, localExecutionUpdate.description);
+    assertEqual('ManageBac source task local schedule_time update is allowed', locallyCustomizedTask.schedule_time, '18:30');
+    assertEqual('ManageBac source task local duration update is allowed', locallyCustomizedTask.duration, 90);
+    assertEqual('ManageBac source task local checklist update is allowed', JSON.stringify(locallyCustomizedTask.checklist), JSON.stringify(localExecutionUpdate.checklist));
+    assertEqual('ManageBac source task local labels update is allowed', JSON.stringify(locallyCustomizedTask.labels), JSON.stringify([101]));
+    assertEqual('ManageBac source task local bucket update is allowed', locallyCustomizedTask.bucket_id, 12);
 
     const repeatResult = await ManageBac.syncManageBacIcs(syncDb, icsFixture, 'https://example.invalid/calendar.ics');
     assertEqual('re-sync same link creates no duplicates', repeatResult.created, 0);
@@ -447,6 +485,13 @@ async function run() {
     assertEqual('re-sync preserves user completed_at', repeatedEnglishTask.completed_at, localCompletedAt);
     assertEqual('re-sync preserves local start_date', repeatedEnglishTask.start_date, '2026-05-18');
     assertEqual('re-sync preserves local priority', repeatedEnglishTask.priority, 'urgent');
+    assertEqual('re-sync preserves local notes', repeatedEnglishTask.notes, localExecutionUpdate.notes);
+    assertEqual('re-sync preserves local description', repeatedEnglishTask.description, localExecutionUpdate.description);
+    assertEqual('re-sync preserves local schedule_time', repeatedEnglishTask.schedule_time, '18:30');
+    assertEqual('re-sync preserves local duration', repeatedEnglishTask.duration, 90);
+    assertEqual('re-sync preserves local checklist', JSON.stringify(repeatedEnglishTask.checklist), JSON.stringify(localExecutionUpdate.checklist));
+    assertEqual('re-sync preserves local labels', JSON.stringify(repeatedEnglishTask.labels), JSON.stringify([101]));
+    assertEqual('re-sync preserves local bucket', repeatedEnglishTask.bucket_id, 12);
 
     const changedIcs = icsFixture.replace('Essay Draft', 'Essay Final Draft');
     await ManageBac.syncManageBacIcs(syncDb, changedIcs, 'https://example.invalid/calendar.ics');
@@ -457,6 +502,12 @@ async function run() {
     const changedEnglishTask = (await syncDb.getAllTasks()).find(task => task.source_uid === 'mb-english-essay-1@example.invalid');
     assertEqual('source-field update still preserves user completion progress', changedEnglishTask.progress, 'completed');
     assertEqual('source-field update still preserves user completed_at', changedEnglishTask.completed_at, localCompletedAt);
+    assertEqual('source-field update still preserves local notes', changedEnglishTask.notes, localExecutionUpdate.notes);
+    assertEqual('source-field update still preserves local schedule_time', changedEnglishTask.schedule_time, '18:30');
+    assertEqual('source-field update still preserves local duration', changedEnglishTask.duration, 90);
+    assertEqual('source-field update still preserves local checklist', JSON.stringify(changedEnglishTask.checklist), JSON.stringify(localExecutionUpdate.checklist));
+    assertEqual('source-field update still preserves local labels', JSON.stringify(changedEnglishTask.labels), JSON.stringify([101]));
+    assertEqual('source-field update still preserves local bucket', changedEnglishTask.bucket_id, 12);
 
     const oneEventIcs = icsFixture.replace(/BEGIN:VEVENT\nUID:mb-math-problem-1@example\.invalid[\s\S]*?END:VEVENT\n/, '');
     const missingResult = await ManageBac.syncManageBacIcs(syncDb, oneEventIcs, 'https://example.invalid/calendar.ics');
@@ -471,6 +522,22 @@ async function run() {
         updateBlocked = true;
     }
     assertEqual('ManageBac source task user edit is blocked', updateBlocked, true);
+
+    let dueDateBlocked = false;
+    try {
+        await syncDb.updateTask(readonlyTask.id, { due_date: '2026-06-01' });
+    } catch (_) {
+        dueDateBlocked = true;
+    }
+    assertEqual('ManageBac source task local due date edit is blocked', dueDateBlocked, true);
+
+    let sourceMetadataBlocked = false;
+    try {
+        await syncDb.updateTask(readonlyTask.id, { source_uid: 'changed-source-uid' });
+    } catch (_) {
+        sourceMetadataBlocked = true;
+    }
+    assertEqual('ManageBac source metadata local edit is blocked', sourceMetadataBlocked, true);
 
     let mixedUpdateBlocked = false;
     try {

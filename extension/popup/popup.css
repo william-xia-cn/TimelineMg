@@ -1189,3 +1189,45 @@ body.sidepanel-body {
 .toast-success { border-left: 4px solid var(--green); }
 .toast-error { border-left: 4px solid var(--red); }
 .toast-info { border-left: 4px solid var(--blue); }
+
+.notes-link-preview {
+    margin-top: 8px;
+}
+
+.external-link-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.external-link-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 6px 8px;
+    border: 1px solid rgba(59, 130, 246, 0.24);
+    border-radius: 6px;
+    background: rgba(59, 130, 246, 0.06);
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.external-link-item:hover {
+    border-color: rgba(59, 130, 246, 0.42);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.external-link-item .material-symbols-outlined {
+    font-size: 16px;
+    flex: 0 0 auto;
+}
+
+.external-link-url {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

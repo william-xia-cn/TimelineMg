@@ -123,9 +123,9 @@ async function run() {
     );
 
     const dayContainers = [
-        { id: 'free', name: 'Free', time_start: '09:00', time_end: '10:00', layer: 2 },
-        { id: 'study', name: 'Study', time_start: '18:00', time_end: '20:00', layer: 1 },
-        { id: 'late', name: 'Late', time_start: '20:00', time_end: '21:00', layer: 1 }
+        { id: 'free', name: 'Free', time_start: '09:00', time_end: '10:00', layer: 2, repeat: 'daily' },
+        { id: 'study', name: 'Study', time_start: '18:00', time_end: '20:00', layer: 1, repeat: 'daily' },
+        { id: 'late', name: 'Late', time_start: '20:00', time_end: '21:00', layer: 1, repeat: 'daily' }
     ];
     const assignments = helpers.assignCalendarTasksToContainers([
         { id: 'unscheduled', start_date: '2026-05-18' },
@@ -145,6 +145,7 @@ async function run() {
     const calendarHtml = fs.readFileSync(path.join(root, 'extension', 'pages', 'calendar', 'calendar.html'), 'utf8');
     const calendarScript = fs.readFileSync(path.join(root, 'extension', 'pages', 'calendar', 'script.js'), 'utf8');
     const calendarStyles = fs.readFileSync(path.join(root, 'extension', 'pages', 'calendar', 'styles.css'), 'utf8');
+    const schedulingScript = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'scheduling.js'), 'utf8');
     const dbScript = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'db.js'), 'utf8');
     assert('Calendar product UI no longer contains visible 单次事件 wording', !/单次事件/.test(calendarHtml + calendarScript + calendarStyles));
     assert('Calendar modal type toggle uses 日程事件 wording', calendarScript.includes('>日程事件</button>'));
@@ -175,21 +176,40 @@ async function run() {
     assert('container edit derives legacy layer before save', calendarScript.includes('const selectedLayer = data ? getContainerLayer(data) : 1')
         && calendarScript.includes('selectedLayer === 1')
         && calendarScript.includes('selectedLayer === 2'));
-    assert('created and existing week containers share old layer-aware createEventCard rendering path', calendarScript.includes('const containerEvents = dayContainers.map')
+    const sharedProjection = helpers.buildCalendarDayProjection({
+        date: new Date('2026-05-18T00:00:00'),
+        dateStr: '2026-05-18',
+        containers: dayContainers,
+        events: helpers.expandEventsForDateRange([weeklyEvent, noneEvent, customEvent], '2026-05-18', '2026-05-18'),
+        tasks: arrangedTasks
+    });
+    assertEqual(
+        'shared day projection expands recurring events into the same timed item stream',
+        sharedProjection.timedItems.map(item => item.id),
+        ['free', 'event-custom', 'study', 'late']
+    );
+    assertEqual(
+        'shared day projection assigns exact date tasks to the first study container',
+        sharedProjection.timedItems.find(item => item.id === 'study').tasks.map(task => task.id),
+        ['same-day', 'today-due', 'today-start']
+    );
+
+    assert('created and existing week containers share old layer-aware createEventCard rendering path', calendarScript.includes('const projection = buildCalendarDayProjection({')
         && calendarScript.includes('createEventCard(item)')
         && calendarScript.includes("event.className = 'gcal-event layer-1'")
         && calendarScript.includes("event.className = 'gcal-event layer-2'")
         && calendarScript.includes("event.style.backgroundColor = color + '40'")
         && calendarScript.includes("event.style.border = `2px dashed ${darkenColor(color, 0.15)}`")
         && calendarScript.includes("event.style.border = `2px dashed ${color}`"));
-    assert('month view container items carry type source and layer', calendarScript.includes("type: 'container'")
-        && calendarScript.includes("source: 'container'")
-        && calendarScript.includes('layer: getContainerLayer(c)')
+    assert('month view container items carry type source and layer', schedulingScript.includes("type: 'container'")
+        && schedulingScript.includes("source: 'container'")
+        && schedulingScript.includes('layer: getContainerLayer(container)')
         && calendarScript.includes('eventEl.dataset.layer'));
-    assert('month view override/timetable/manual events remain event style inputs', calendarScript.includes("source: 'container_override'")
-        && calendarScript.includes("type: 'event'")
-        && calendarScript.includes("source: e.source || 'manual'"));
-    assert('week timed columns filter all-day events out of timed layout', /const dateEvents = dbEvents\.filter[\s\S]*source: e\.source \|\| 'manual'[\s\S]*\}\)\)\.filter\(e => e\.time_start && e\.time_end\)/.test(calendarScript));
+    assert('month view override/timetable/manual events remain event style inputs', schedulingScript.includes("event.source === 'container_override'")
+        && schedulingScript.includes("type: 'event'")
+        && schedulingScript.includes("source: event.source || 'manual'"));
+    assert('week timed columns filter all-day events out of timed layout', calendarScript.includes('const allItems = projection.timedItems')
+        && schedulingScript.includes('eventItems.filter(event => event.time_start && event.time_end)'));
     assert('week blank grid clicks can create schedules through fallback pointer handling', calendarScript.includes('function openCreateModalFromWeekPointer')
         && calendarScript.includes('function getWeekColumnFromPointer')
         && calendarScript.includes('function getCreateSlotFromPointer')
@@ -233,13 +253,14 @@ async function run() {
         && !calendarScript.includes('managebac_ics_token'));
     assert('Calendar week task display no longer uses Daily Settle rolling task pool', !calendarScript.includes('buildDailyTaskPool')
         && !calendarScript.includes('dailySettle')
-        && calendarScript.includes('getCalendarTasksForDate(allTasks, dateStr)')
-        && calendarScript.includes('assignCalendarTasksToContainers(dateTasks, dayContainers)'));
+        && calendarScript.includes('buildCalendarDayProjection({')
+        && schedulingScript.includes('getCalendarTasksForDate(tasks, normalizedDateStr)')
+        && schedulingScript.includes('assignCalendarTasksToContainers(dateTasks, dayContainers)'));
     assert('Calendar task display uses the same start marker structure as Dashboard today tomorrow',
         calendarScript.includes('task-item-title')
         && calendarScript.includes('task-item-type task-item-${itemType}')
         && calendarScript.includes("itemType === 'due' ? '结束' : '开始'")
-        && calendarScript.includes("calendar_item_type: 'due'")
+        && schedulingScript.includes("calendar_item_type: 'due'")
         && !calendarScript.includes('task-priority-dot')
         && !calendarScript.includes('task-item-dur')
         && calendarStyles.includes('.task-item-start')

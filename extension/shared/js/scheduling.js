@@ -113,6 +113,147 @@
         return 2;
     }
 
+    function eventAppliesToDate(event, dateObj, dateStr) {
+        if (!event) return false;
+        if (event.source === 'container_override' || event.source === 'container_skip') {
+            return event.date === dateStr;
+        }
+        const repeat = event.repeat || 'none';
+        if (repeat === 'none') return event.date === dateStr;
+        if (repeat === 'once') return (event.once_date || event.date) === dateStr;
+        if (event.date && dateStr < event.date) return false;
+
+        const dayOfWeek = dateObj.getDay();
+        const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        return containerAppliesToDate(event, dateObj, dateStr, dayOfWeek, isWeekday, isWeekend);
+    }
+
+    function expandEventsForDateRange(events, startDate, endDate) {
+        const expanded = [];
+        const cursor = new Date(startDate + 'T00:00:00');
+        const end = new Date(endDate + 'T00:00:00');
+        while (cursor <= end) {
+            const dateStr = formatDateISO(cursor);
+            (events || []).forEach(event => {
+                if (eventAppliesToDate(event, cursor, dateStr)) {
+                    expanded.push({
+                        ...event,
+                        occurrence_date: dateStr,
+                        original_date: event.date,
+                        date: dateStr
+                    });
+                }
+            });
+            cursor.setDate(cursor.getDate() + 1);
+        }
+        return expanded;
+    }
+
+    function getCalendarTasksForDate(tasks, dateStr) {
+        const items = [];
+        (tasks || []).forEach(task => {
+            if (!task || task.progress === 'completed' || task.status === 'completed') return;
+            const dueDate = task.due_date || task.deadline || null;
+            if (dueDate === dateStr) {
+                items.push({ ...task, calendar_item_type: 'due' });
+            } else if (task.start_date === dateStr) {
+                items.push({ ...task, calendar_item_type: 'start' });
+            }
+        });
+        return items.sort((a, b) => {
+            if (a.calendar_item_type !== b.calendar_item_type) return a.calendar_item_type === 'due' ? -1 : 1;
+            return String(a.title || '').localeCompare(String(b.title || ''));
+        });
+    }
+
+    function taskMatchesCalendarContainer(task, container) {
+        if (!task?.schedule_time || !container?.time_start || !container?.time_end) return false;
+        const taskMin = timeToMinutes(task.schedule_time);
+        return taskMin >= timeToMinutes(container.time_start) && taskMin < timeToMinutes(container.time_end);
+    }
+
+    function assignCalendarTasksToContainers(tasks, containers) {
+        const sortedContainers = [...(containers || [])].sort((a, b) =>
+            String(a.time_start || '').localeCompare(String(b.time_start || ''))
+        );
+        const assignments = new Map(sortedContainers.map(container => [container.id, []]));
+        const firstLayerOne = sortedContainers.find(container => getContainerLayer(container) === 1);
+        const fallbackContainer = firstLayerOne || sortedContainers[0] || null;
+
+        (tasks || []).forEach(task => {
+            const target = task.schedule_time
+                ? sortedContainers.find(container => taskMatchesCalendarContainer(task, container))
+                : fallbackContainer;
+            if (target && assignments.has(target.id)) assignments.get(target.id).push(task);
+        });
+
+        return assignments;
+    }
+
+    function buildCalendarDayProjection({ date, dateStr, containers = [], events = [], tasks = [] } = {}) {
+        const dateObj = date instanceof Date
+            ? date
+            : new Date((dateStr || formatDateISO(new Date())) + 'T00:00:00');
+        const normalizedDateStr = dateStr || formatDateISO(dateObj);
+        const dayOfWeek = dateObj.getDay();
+        const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+
+        const dayEvents = (events || []).filter(event => event.date === normalizedDateStr);
+        const overriddenIds = new Set(dayEvents.filter(event => event.source === 'container_override').map(event => event.container_id));
+        const skippedIds = new Set(dayEvents.filter(event => event.source === 'container_skip').map(event => event.container_id));
+
+        const dayContainers = (containers || []).filter(container => {
+            if (skippedIds.has(container.id) || overriddenIds.has(container.id)) return false;
+            return containerAppliesToDate(container, dateObj, normalizedDateStr, dayOfWeek, isWeekday, isWeekend);
+        });
+
+        const dateTasks = getCalendarTasksForDate(tasks, normalizedDateStr);
+        const taskAssignments = assignCalendarTasksToContainers(dateTasks, dayContainers);
+
+        const containerItems = dayContainers.map(container => ({
+            title: container.name,
+            time_start: container.time_start,
+            time_end: container.time_end,
+            color: container.color || '#4A90D9',
+            type: 'container',
+            source: 'container',
+            id: container.id,
+            layer: getContainerLayer(container),
+            isContainer: true,
+            tasks: taskAssignments.get(container.id) || []
+        }));
+
+        const eventItems = dayEvents
+            .filter(event => event.source !== 'container_skip')
+            .map(event => ({
+                title: event.title,
+                time_start: event.time_start,
+                time_end: event.time_end,
+                color: event.color || '#3b82f6',
+                type: 'event',
+                source: event.source || 'manual',
+                id: event.id,
+                isContainer: false
+            }));
+
+        const timedItems = [...containerItems, ...eventItems.filter(event => event.time_start && event.time_end)]
+            .sort((a, b) => timeToMinutes(a.time_start) - timeToMinutes(b.time_start));
+
+        return {
+            date: dateObj,
+            dateStr: normalizedDateStr,
+            dayEvents,
+            dayContainers,
+            dateTasks,
+            taskAssignments,
+            containerItems,
+            eventItems,
+            timedItems
+        };
+    }
+
     /**
      * 计算容器的容量（分钟数）
      */
@@ -767,6 +908,11 @@
         containerAppliesToDate,
         containerAppliesOn,
         getContainerLayer,
+        eventAppliesToDate,
+        expandEventsForDateRange,
+        getCalendarTasksForDate,
+        assignCalendarTasksToContainers,
+        buildCalendarDayProjection,
         getContainerCapacity,
         getDefaultStartDate,
         getEscalatedPriority,

@@ -735,7 +735,20 @@ const TimeWhereDB = {
     },
 
     isManageBacLocalStatusUpdate(data = {}) {
-        const allowedFields = new Set(['progress', 'completed_at', 'status', 'start_date', 'priority']);
+        const allowedFields = new Set([
+            'progress',
+            'completed_at',
+            'status',
+            'start_date',
+            'priority',
+            'notes',
+            'description',
+            'schedule_time',
+            'duration',
+            'checklist',
+            'labels',
+            'bucket_id'
+        ]);
         const fields = Object.keys(data || {});
         return fields.length > 0 && fields.every(field => allowedFields.has(field));
     },
@@ -743,7 +756,7 @@ const TimeWhereDB = {
     assertTaskWritable(task, options = {}, data = null) {
         if (this.isManageBacSourceTask(task) && !options.allowManageBacSync) {
             if (data && this.isManageBacLocalStatusUpdate(data)) return;
-            throw new Error('ManageBac source content is read-only. Local progress updates are allowed.');
+            throw new Error('ManageBac source facts are read-only. Local execution fields can be updated.');
         }
     },
 
@@ -1868,6 +1881,8 @@ const TimeWhereDB = {
                 first_launch: null,
                 google_connected: false,
                 google_email: null,
+                google_sync_account_key: null,
+                google_sync_account_name: null,
                 access_token: null,
                 refresh_token: null,
                 sync_enabled: false,

@@ -497,94 +497,10 @@ function openCreateModalFromWeekPointer(clientX, clientY, preferredColumn = null
 // 调度相关函数从 shared/js/scheduling.js 导入
 const { containerAppliesToDate, _nthWeekdayOfMonth,
         getContainerLayer, priorityLabel, priorityClass,
-        escapeHTML, escapeAttribute } = window.TimeWhereScheduling;
-
-function getCalendarTasksForDate(tasks, dateStr) {
-    const items = [];
-    (tasks || []).forEach(task => {
-        if (!task || task.progress === 'completed' || task.status === 'completed') return;
-        const dueDate = task.due_date || task.deadline || null;
-        if (dueDate === dateStr) {
-            items.push({ ...task, calendar_item_type: 'due' });
-        } else if (task.start_date === dateStr) {
-            items.push({ ...task, calendar_item_type: 'start' });
-        }
-    });
-    return items.sort((a, b) => {
-        if (a.calendar_item_type !== b.calendar_item_type) return a.calendar_item_type === 'due' ? -1 : 1;
-        return String(a.title || '').localeCompare(String(b.title || ''));
-    });
-}
-
-function calendarTimeToMinutes(timeStr) {
-    const [hour, minute] = String(timeStr || '00:00').split(':').map(Number);
-    return (hour || 0) * 60 + (minute || 0);
-}
-
-function calendarTaskMatchesContainer(task, container) {
-    if (!task?.schedule_time || !container?.time_start || !container?.time_end) return false;
-    const taskMin = calendarTimeToMinutes(task.schedule_time);
-    const startMin = calendarTimeToMinutes(container.time_start);
-    const endMin = calendarTimeToMinutes(container.time_end);
-    return taskMin >= startMin && taskMin < endMin;
-}
-
-function assignCalendarTasksToContainers(tasks, containers) {
-    const sortedContainers = [...(containers || [])].sort((a, b) =>
-        String(a.time_start || '').localeCompare(String(b.time_start || ''))
-    );
-    const assignments = new Map(sortedContainers.map(container => [container.id, []]));
-    const firstLayerOne = sortedContainers.find(container => getContainerLayer(container) === 1);
-    const fallbackContainer = firstLayerOne || sortedContainers[0] || null;
-
-    (tasks || []).forEach(task => {
-        const target = task.schedule_time
-            ? sortedContainers.find(container => calendarTaskMatchesContainer(task, container))
-            : fallbackContainer;
-        if (target && assignments.has(target.id)) {
-            assignments.get(target.id).push(task);
-        }
-    });
-
-    return assignments;
-}
-
-function eventAppliesToDate(event, dateObj, dateStr) {
-    if (!event) return false;
-    if (event.source === 'container_override' || event.source === 'container_skip') {
-        return event.date === dateStr;
-    }
-    const repeat = event.repeat || 'none';
-    if (repeat === 'none') return event.date === dateStr;
-    if (repeat === 'once') return (event.once_date || event.date) === dateStr;
-    if (event.date && dateStr < event.date) return false;
-
-    const dayOfWeek = dateObj.getDay();
-    const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    return containerAppliesToDate(event, dateObj, dateStr, dayOfWeek, isWeekday, isWeekend);
-}
-
-function expandEventsForDateRange(events, startDate, endDate) {
-    const expanded = [];
-    const cursor = new Date(startDate + 'T00:00:00');
-    const end = new Date(endDate + 'T00:00:00');
-    while (cursor <= end) {
-        const dateStr = formatDateISO(cursor);
-        (events || []).forEach(event => {
-            if (eventAppliesToDate(event, cursor, dateStr)) {
-                expanded.push({
-                    ...event,
-                    occurrence_date: dateStr,
-                    original_date: event.date,
-                    date: dateStr
-                });
-            }
-        });
-        cursor.setDate(cursor.getDate() + 1);
-    }
-    return expanded;
-}
+        escapeHTML, escapeAttribute,
+        eventAppliesToDate, expandEventsForDateRange,
+        getCalendarTasksForDate, assignCalendarTasksToContainers,
+        buildCalendarDayProjection } = window.TimeWhereScheduling;
 
 async function renderWeekColumns(dates) {
     const container = document.getElementById('weekColumns');
@@ -608,49 +524,14 @@ async function renderWeekColumns(dates) {
         const dateStr = formatDateISO(date);
         col.dataset.date = dateStr;
 
-        const dayOfWeek = date.getDay();
-        const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-        // Collect overrides/skips for this date
-        const dayOverrides = dbEvents.filter(e => e.date === dateStr && (e.source === 'container_override' || e.source === 'container_skip'));
-        const overriddenIds = new Set(dayOverrides.filter(e => e.source === 'container_override').map(e => e.container_id));
-        const skippedIds   = new Set(dayOverrides.filter(e => e.source === 'container_skip').map(e => e.container_id));
-
-        // 该日生效的容器
-        const dayContainers = allContainers.filter(c => {
-            if (skippedIds.has(c.id) || overriddenIds.has(c.id)) return false;
-            return containerAppliesToDate(c, date, dateStr, dayOfWeek, isWeekday, isWeekend);
+        const projection = buildCalendarDayProjection({
+            date,
+            dateStr,
+            containers: allContainers,
+            events: dbEvents,
+            tasks: allTasks
         });
-
-        const dateTasks = getCalendarTasksForDate(allTasks, dateStr);
-        const taskAssignments = assignCalendarTasksToContainers(dateTasks, dayContainers);
-
-        const containerEvents = dayContainers.map(c => ({
-            title: c.name,
-            time_start: c.time_start,
-            time_end: c.time_end,
-            color: c.color,
-            type: 'container',
-            id: c.id,
-            source: 'container',
-            layer: getContainerLayer(c),
-            tasks: taskAssignments.get(c.id) || []
-        }));
-
-        const dateEvents = dbEvents.filter(e => e.date === dateStr && e.source !== 'container_skip').map(e => ({
-            title: e.title,
-            time_start: e.time_start,
-            time_end: e.time_end,
-            color: e.color,
-            type: 'event',
-            id: e.id,
-            source: e.source || 'manual'
-        })).filter(e => e.time_start && e.time_end);
-
-        const allItems = [...containerEvents, ...dateEvents].sort((a, b) =>
-            a.time_start.localeCompare(b.time_start)
-        );
+        const allItems = projection.timedItems;
 
         const layout = calculateEventLayout(allItems);
 
@@ -956,43 +837,15 @@ async function renderMonthEvents() {
         const date = new Date(startDate);
         date.setDate(date.getDate() + i);
 
-        const dayOfWeek = date.getDay();
-        const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
         const dateStr = formatDateISO(date);
-
-        // Override/skip filtering (same logic as renderWeekColumns)
-        const dayOverrides = dbEvents.filter(e => e.date === dateStr &&
-            (e.source === 'container_override' || e.source === 'container_skip'));
-        const overriddenIds = new Set(dayOverrides.filter(e => e.source === 'container_override').map(e => e.container_id));
-        const skippedIds = new Set(dayOverrides.filter(e => e.source === 'container_skip').map(e => e.container_id));
-
-        // Containers that apply today (excluding skipped/overridden)
-        const containerItems = allContainers
-            .filter(c => !skippedIds.has(c.id) && !overriddenIds.has(c.id))
-            .filter(c => containerAppliesToDate(c, date, dateStr, dayOfWeek, isWeekday, isWeekend))
-            .map(c => ({
-                type: 'container',
-                source: 'container',
-                id: c.id,
-                title: c.name,
-                color: c.color,
-                time_start: c.time_start,
-                time_end: c.time_end,
-                layer: getContainerLayer(c)
-            }));
-
-        // Override events replace their container on this date
-        const overrideItems = dayOverrides
-            .filter(e => e.source === 'container_override')
-            .map(e => ({ type: 'event', source: 'container_override', id: e.id, title: e.title, color: e.color, time_start: e.time_start, time_end: e.time_end }));
-
-        // Regular manual/timetable events (skip skip/override source events from display)
-        const eventItems = dbEvents
-            .filter(e => e.date === dateStr && e.source !== 'container_override' && e.source !== 'container_skip')
-            .map(e => ({ type: 'event', source: e.source || 'manual', id: e.id, title: e.title, color: e.color, time_start: e.time_start, time_end: e.time_end }));
-
-        const allItems = [...containerItems, ...overrideItems, ...eventItems]
+        const projection = buildCalendarDayProjection({
+            date,
+            dateStr,
+            containers: allContainers,
+            events: dbEvents,
+            tasks: []
+        });
+        const allItems = [...projection.containerItems, ...projection.eventItems]
             .sort((a, b) => (a.time_start || '').localeCompare(b.time_start || ''));
 
         const maxEvents = 3;
@@ -1899,6 +1752,7 @@ if (typeof window !== 'undefined') {
         expandEventsForDateRange,
         getCalendarTasksForDate,
         assignCalendarTasksToContainers,
+        buildCalendarDayProjection,
         buildRepeatOptions,
         buildRepeatControlHTML,
         getMonthItemClass,

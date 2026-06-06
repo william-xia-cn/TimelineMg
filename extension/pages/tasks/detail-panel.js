@@ -21,6 +21,25 @@ function closeDetailPanel() {
     }
 }
 
+function renderTaskNotesExternalLinks(text) {
+    return globalThis.TimeWhereExternalLinks?.renderExternalLinkList?.(text || '') || '';
+}
+
+function refreshTaskNotesExternalLinks(root, text) {
+    const target = root?.querySelector('[data-notes-link-preview]');
+    if (target) target.innerHTML = renderTaskNotesExternalLinks(text);
+}
+
+async function openTaskNotesExternalLink(button) {
+    const url = button?.dataset?.url || '';
+    try {
+        if (!globalThis.TimeWhereExternalLinks?.openExternalUrl) throw new Error('外部链接模块未加载');
+        await globalThis.TimeWhereExternalLinks.openExternalUrl(url);
+    } catch (error) {
+        showToast(error.message || '无法打开链接', 'error');
+    }
+}
+
 // ========== Render Panel ==========
 
 async function renderDetailPanel(taskId) {
@@ -36,8 +55,6 @@ async function renderDetailPanel(taskId) {
     const isManageBacTask = TimeWhereManageBac?.isManageBacTask(task);
     const sourceReadonlyAttr = isManageBacTask ? 'data-readonly-source="true"' : '';
     const sourceDisabledAttr = isManageBacTask ? 'disabled' : '';
-    const sourceStartDateDisabledAttr = '';
-    const sourceReadonlyTextareaAttr = isManageBacTask ? 'readonly' : '';
     const titleEditable = isManageBacTask ? 'false' : 'true';
     const planInfo = await getTaskPlanInfo(task);
     const subjectText = task.subject || planInfo.subject || planInfo.name || 'No subject';
@@ -61,7 +78,7 @@ async function renderDetailPanel(taskId) {
     const priorityBtns = priorities.map(p => {
         const cfg = PRIORITY_CONFIG[p];
         const isActive = task.priority === p;
-        return `<button class="priority-option ${isActive ? 'active' : ''}" data-priority="${p}" style="--pri-color:${cfg.color};--pri-bg:${cfg.bgColor}" ${sourceDisabledAttr}>${cfg.label}</button>`;
+        return `<button class="priority-option ${isActive ? 'active' : ''}" data-priority="${p}" style="--pri-color:${cfg.color};--pri-bg:${cfg.bgColor}">${cfg.label}</button>`;
     }).join('');
 
     // Progress buttons
@@ -80,7 +97,7 @@ async function renderDetailPanel(taskId) {
     // Labels chips
     const labelChips = labels.map(l => {
         const isSelected = task.labels && task.labels.includes(l.id);
-        return `<button class="label-chip ${isSelected ? 'selected' : ''}" data-label-id="${l.id}" style="--label-color:${l.color}" ${sourceDisabledAttr}>
+        return `<button class="label-chip ${isSelected ? 'selected' : ''}" data-label-id="${l.id}" style="--label-color:${l.color}">
             ${escapeHTML(l.name || l.color)}
         </button>`;
     }).join('');
@@ -88,9 +105,9 @@ async function renderDetailPanel(taskId) {
     // Checklist items
     const checklistHTML = (task.checklist || []).map(item => `
         <div class="checklist-item" data-item-id="${item.id}">
-            <input type="checkbox" class="checklist-checkbox" ${item.checked ? 'checked' : ''} ${sourceDisabledAttr}>
+            <input type="checkbox" class="checklist-checkbox" ${item.checked ? 'checked' : ''}>
             <span class="checklist-text ${item.checked ? 'checked' : ''}">${escapeHTML(item.title)}</span>
-            <button class="checklist-delete" title="Delete" ${sourceDisabledAttr}><span class="material-symbols-outlined">close</span></button>
+            <button class="checklist-delete" title="Delete"><span class="material-symbols-outlined">close</span></button>
         </div>
     `).join('');
 
@@ -114,7 +131,7 @@ async function renderDetailPanel(taskId) {
             <!-- Title -->
             <div class="detail-field">
                 <div class="detail-title ${isManageBacTask ? 'source-readonly' : ''}" contenteditable="${titleEditable}" data-field="title" ${sourceReadonlyAttr} placeholder="Task title">${escapeHTML(task.title)}</div>
-                ${isManageBacTask ? '<p class="source-readonly-hint">ManageBac 来源内容只读；本地完成状态可在 TimeWhere 更新。</p>' : ''}
+                ${isManageBacTask ? '<p class="source-readonly-hint">ManageBac 来源标题、截止日期和来源元数据只读；本地执行字段可在 TimeWhere 更新。</p>' : ''}
             </div>
 
             <!-- Progress -->
@@ -157,7 +174,7 @@ async function renderDetailPanel(taskId) {
             <div class="detail-field detail-field-row">
                 <div class="detail-field-half">
                     <label>Start date</label>
-                    <input type="date" class="detail-date" data-field="start_date" value="${task.start_date || ''}" ${sourceStartDateDisabledAttr}>
+                    <input type="date" class="detail-date" data-field="start_date" value="${task.start_date || ''}">
                 </div>
                 <div class="detail-field-half">
                     <label>Due date</label>
@@ -169,11 +186,11 @@ async function renderDetailPanel(taskId) {
             <div class="detail-field detail-field-row">
                 <div class="detail-field-half">
                     <label>定时时间</label>
-                    <input type="time" class="detail-date" data-field="schedule_time" value="${task.schedule_time || ''}" ${sourceDisabledAttr}>
+                    <input type="time" class="detail-date" data-field="schedule_time" value="${task.schedule_time || ''}">
                 </div>
                 <div class="detail-field-half">
                     <label>预计时长 (分钟)</label>
-                    <input type="number" class="detail-date" data-field="duration" value="${task.duration || 45}" min="5" max="480" step="5" ${sourceDisabledAttr}>
+                    <input type="number" class="detail-date" data-field="duration" value="${task.duration || 45}" min="5" max="480" step="5">
                 </div>
             </div>
 
@@ -182,7 +199,7 @@ async function renderDetailPanel(taskId) {
                 <label>Checklist${task.checklist && task.checklist.length > 0 ? ` (${task.checklist.filter(i => i.checked).length}/${task.checklist.length})` : ''}</label>
                 <div class="checklist-list" id="checklistItems">${checklistHTML}</div>
                 <div class="checklist-add">
-                    <input type="text" class="checklist-add-input" id="checklistNewItem" placeholder="Add an item..." ${sourceDisabledAttr}>
+                    <input type="text" class="checklist-add-input" id="checklistNewItem" placeholder="Add an item...">
                 </div>
             </div>
 
@@ -229,7 +246,8 @@ async function renderDetailPanel(taskId) {
             <!-- Notes -->
             <div class="detail-field">
                 <label>Notes</label>
-                <textarea class="detail-textarea ${isManageBacTask ? 'source-readonly' : ''}" data-field="notes" placeholder="Add notes..." rows="4" ${sourceReadonlyTextareaAttr} ${sourceReadonlyAttr}>${escapeHTML(task.notes || '')}</textarea>
+                <textarea class="detail-textarea" data-field="notes" placeholder="Add notes..." rows="4">${escapeHTML(task.notes || '')}</textarea>
+                <div class="notes-link-preview" data-notes-link-preview>${renderTaskNotesExternalLinks(task.notes || task.description || '')}</div>
             </div>
         </div>
 
@@ -272,6 +290,16 @@ function wireDetailPanelEvents(taskId, options = {}) {
     const isManageBacTask = options.isManageBacTask === true;
     const panel = document.getElementById('taskDetailPanel');
     if (!panel) return;
+    if (panel.dataset.externalLinkHandlerAttached !== 'true') {
+        panel.addEventListener('click', event => {
+            const linkButton = event.target.closest('[data-action="open-external-link"]');
+            if (!linkButton) return;
+            event.preventDefault();
+            event.stopPropagation();
+            openTaskNotesExternalLink(linkButton);
+        });
+        panel.dataset.externalLinkHandlerAttached = 'true';
+    }
 
     const updateTaskFromDetail = async (updates) => {
         const scope = getDetailRecurrenceScope(panel);
@@ -314,7 +342,7 @@ function wireDetailPanelEvents(taskId, options = {}) {
 
     // Priority picker
     panel.querySelectorAll('.priority-option').forEach(btn => {
-        if (btn.disabled || isManageBacTask) return;
+        if (btn.disabled) return;
         btn.addEventListener('click', async () => {
             await updateTaskFromDetail({ priority: btn.dataset.priority });
             await TaskApp.refresh();
@@ -325,7 +353,7 @@ function wireDetailPanelEvents(taskId, options = {}) {
     const bucketSelect = panel.querySelector('[data-field="bucket_id"]');
     if (bucketSelect) {
         bucketSelect.addEventListener('change', async () => {
-            if (bucketSelect.disabled || isManageBacTask) return;
+            if (bucketSelect.disabled) return;
             const val = bucketSelect.value;
             await updateTaskFromDetail({ bucket_id: val ? parseInt(val) : null });
             await TaskApp.refresh();
@@ -335,7 +363,7 @@ function wireDetailPanelEvents(taskId, options = {}) {
     // Date / time / number inputs (start_date, due_date, schedule_time, duration)
     panel.querySelectorAll('.detail-date').forEach(input => {
         const field = input.dataset.field;
-        if (input.disabled || (isManageBacTask && field !== 'start_date')) return;
+        if (input.disabled || (isManageBacTask && field === 'due_date')) return;
         input.addEventListener('change', async () => {
             let value = input.value;
             if (field === 'duration') {
@@ -350,7 +378,7 @@ function wireDetailPanelEvents(taskId, options = {}) {
 
     // Labels picker
     panel.querySelectorAll('.label-chip').forEach(chip => {
-        if (chip.disabled || isManageBacTask) return;
+        if (chip.disabled) return;
         chip.addEventListener('click', async () => {
             const labelId = parseInt(chip.dataset.labelId);
             const task = await TimeWhereDB.getTaskById(taskId);
@@ -369,9 +397,10 @@ function wireDetailPanelEvents(taskId, options = {}) {
 
     // Notes textarea
     const notesEl = panel.querySelector('[data-field="notes"]');
-    if (notesEl && !notesEl.readOnly && !isManageBacTask) {
+    if (notesEl && !notesEl.readOnly) {
         let notesTimer;
         notesEl.addEventListener('input', () => {
+            refreshTaskNotesExternalLinks(panel, notesEl.value);
             clearTimeout(notesTimer);
             notesTimer = setTimeout(async () => {
                 await updateTaskFromDetail({ notes: notesEl.value });
@@ -382,7 +411,7 @@ function wireDetailPanelEvents(taskId, options = {}) {
 
     // Checklist: toggle item
     panel.querySelectorAll('.checklist-checkbox').forEach(cb => {
-        if (cb.disabled || isManageBacTask) return;
+        if (cb.disabled) return;
         cb.addEventListener('change', async () => {
             const itemId = cb.closest('.checklist-item').dataset.itemId;
             const task = await TimeWhereDB.getTaskById(taskId);
@@ -396,7 +425,7 @@ function wireDetailPanelEvents(taskId, options = {}) {
 
     // Checklist: delete item
     panel.querySelectorAll('.checklist-delete').forEach(btn => {
-        if (btn.disabled || isManageBacTask) return;
+        if (btn.disabled) return;
         btn.addEventListener('click', async () => {
             const itemId = btn.closest('.checklist-item').dataset.itemId;
             const task = await TimeWhereDB.getTaskById(taskId);
@@ -408,7 +437,7 @@ function wireDetailPanelEvents(taskId, options = {}) {
 
     // Checklist: add item
     const addInput = panel.querySelector('#checklistNewItem');
-    if (addInput && !addInput.disabled && !isManageBacTask) {
+    if (addInput && !addInput.disabled) {
         addInput.addEventListener('keydown', async (e) => {
             if (e.key === 'Enter') {
                 const title = addInput.value.trim();
@@ -611,11 +640,6 @@ async function openPartialCompleteDialog(taskId, anchor = null) {
         showToast('找不到任务', 'error');
         return;
     }
-    if (TimeWhereManageBac?.isManageBacTask(task)) {
-        showToast('ManageBac 来源任务不能使用部分完成', 'error');
-        return;
-    }
-
     closePartialCompletePanel({ refresh: false });
     const checklist = Array.isArray(task.checklist) ? task.checklist : [];
     const partialGroup = findPartialCompletionGroup(checklist);
@@ -719,11 +743,6 @@ async function handlePartialCompletePanelChange(event) {
 async function savePartialCompleteRatio(taskId, percent) {
     const task = await TimeWhereDB.getTaskById(taskId);
     if (!task) return false;
-    if (TimeWhereManageBac?.isManageBacTask(task)) {
-        showToast('ManageBac 来源任务不能使用部分完成', 'error');
-        return false;
-    }
-
     const currentChecklist = Array.isArray(task.checklist) ? task.checklist : [];
     const partialGroup = findPartialCompletionGroup(currentChecklist);
     const partialItems = buildPartialCompletionChecklist(percent, partialGroup);
@@ -739,11 +758,6 @@ async function savePartialCompleteRatio(taskId, percent) {
 async function savePartialCompleteChecklistItem(taskId, checklistId, checked) {
     const task = await TimeWhereDB.getTaskById(taskId);
     if (!task) return false;
-    if (TimeWhereManageBac?.isManageBacTask(task)) {
-        showToast('ManageBac 来源任务不能使用部分完成', 'error');
-        return false;
-    }
-
     const nextChecklist = (task.checklist || []).map(item => ({
         ...item,
         checked: String(item.id) === String(checklistId) ? !!checked : !!item.checked

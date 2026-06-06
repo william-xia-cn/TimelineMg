@@ -58,6 +58,7 @@ const electronMain = read('platforms/desktop-electron/main.js');
 const electronPreload = read('platforms/desktop-electron/preload.js');
 const desktopAuth = read('platforms/desktop-electron/desktop-auth.js');
 const chromeBridge = read('platforms/desktop-electron/chrome-bridge.js');
+const externalLinks = read('extension/shared/js/external-links.js');
 const bridgeHtml = read('extension/pages/desktop-bridge/bridge.html');
 const bridgeJs = read('extension/pages/desktop-bridge/bridge.js');
 const manifest = JSON.parse(read('extension/manifest.json'));
@@ -95,7 +96,8 @@ assert('TimeWherePlatform exposes desktop-capable contract',
     && platformJs.includes("reminderRuntime: ['schedule', 'cancel', 'rescheduleAll']")
     && platformJs.includes("auth: ['getStatus', 'getGoogleToken', 'getAccountInfo', 'revokeGoogleToken']")
     && platformJs.includes("chromeBridge: ['connectExtension', 'getStatus']")
-    && platformJs.includes("system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot']"));
+    && platformJs.includes("external: ['openUrl']")
+    && platformJs.includes("system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'confirmGoogleAccountSwitch']"));
 assert('Chrome adapter wraps expected platform APIs',
     platformJs.includes("name: 'chrome-extension'")
     && platformJs.includes('chromeRef.tabs.create')
@@ -103,7 +105,8 @@ assert('Chrome adapter wraps expected platform APIs',
     && platformJs.includes('chromeRef.notifications.create')
     && platformJs.includes('chromeRef.alarms.create')
     && platformJs.includes('chromeRef.action.setBadgeText')
-    && platformJs.includes('chromeRef.identity.getAuthToken'));
+    && platformJs.includes('chromeRef.identity.getAuthToken')
+    && platformJs.includes('chromeRef.tabs.create({ url: normalizedUrl }'));
 assert('Desktop adapter delegates auth, reminders, and Chrome bridge to Electron preload',
     platformJs.includes("name: 'desktop-electron'")
     && platformJs.includes("call('auth.getGoogleToken'")
@@ -112,12 +115,28 @@ assert('Desktop adapter delegates auth, reminders, and Chrome bridge to Electron
     && platformJs.includes("call('chromeBridge.connectExtension'")
     && platformJs.includes("call('system.getDesktopSettings'")
     && platformJs.includes("call('system.setDesktopSettings'")
-    && platformJs.includes("call('system.writeWidgetSnapshot'"));
+    && platformJs.includes("call('system.writeWidgetSnapshot'")
+    && platformJs.includes("call('system.getDesktopProfile'")
+    && platformJs.includes("call('system.confirmGoogleAccountSwitch'")
+    && platformJs.includes("call('external.openUrl'"));
 assert('Fallback platform returns desktop system settings capability as not_supported',
     platformJs.includes("name: 'web-fallback'")
     && platformJs.includes("getDesktopSettings: () => ({ status: 'not_supported'")
     && platformJs.includes("setDesktopSettings: () => ({ status: 'not_supported'")
-    && platformJs.includes("writeWidgetSnapshot: () => ({ status: 'not_supported'"));
+    && platformJs.includes("writeWidgetSnapshot: () => ({ status: 'not_supported'")
+    && platformJs.includes("getDesktopProfile: () => ({ status: 'not_supported'")
+    && platformJs.includes("confirmGoogleAccountSwitch: () => ({ status: 'not_supported'"));
+assert('Platform external URL handling is limited to http/https browser opens',
+    externalLinks.includes('extractHttpLinks')
+    && externalLinks.includes('renderExternalLinkList')
+    && externalLinks.includes('data-action="open-external-link"')
+    && externalLinks.includes('openExternalUrl')
+    && platformJs.includes('function normalizeExternalHttpUrl')
+    && platformJs.includes("url.protocol !== 'http:' && url.protocol !== 'https:'")
+    && electronMain.includes('shell.openExternal(url)')
+    && electronMain.includes("method === 'external.openUrl'")
+    && electronMain.includes('unsupported_url_protocol')
+    && electronMain.includes('External routes are not allowed in the desktop shell'));
 
 const pagesWithPlatform = [
     'extension/pages/focus/focus.html',
@@ -162,6 +181,16 @@ assert('Desktop Electron package builds macOS Universal zip',
     && electronPackage.build?.mac?.target?.[0]?.target === 'zip'
     && electronPackage.build?.mac?.target?.[0]?.arch?.includes('universal')
     && electronPackage.build?.mac?.artifactName === 'TimeWhere-0.3.0-mac-universal.zip');
+assert('Desktop Electron config carries explicit app and taskbar icons',
+    electronMain.includes("app.setAppUserModelId(desktopAppId)")
+    && electronMain.includes('function getWindowIcon()')
+    && electronMain.includes('icon: getWindowIcon() || undefined')
+    && electronPackage.build?.win?.icon === 'build/icon.ico'
+    && electronPackage.build?.mac?.icon === 'build/icon.png'
+    && fs.existsSync(path.join(root, 'platforms', 'desktop-electron', 'build', 'icon.ico'))
+    && fs.existsSync(path.join(root, 'platforms', 'desktop-electron', 'build', 'icon.png'))
+    && gitignore.includes('!platforms/desktop-electron/build/icon.ico')
+    && gitignore.includes('!platforms/desktop-electron/build/icon.png'));
 assert('macOS WidgetKit preparation is display-only and unsigned-build scoped',
     decisions.includes('D-034')
     && boundary.includes('platforms/macos-widget/')
@@ -189,6 +218,8 @@ assert('Desktop main exposes auth, reminders, notifications, and Chrome bridge I
     && electronMain.includes("method === 'notification.consumePendingClicks'")
     && electronMain.includes('pendingNotificationClicks')
     && electronMain.includes("method === 'chromeBridge.connectExtension'")
+    && electronMain.includes("method === 'system.getDesktopProfile'")
+    && electronMain.includes("method === 'system.confirmGoogleAccountSwitch'")
     && electronMain.includes('Notification.isSupported'));
 assert('Electron preload exposes TimeWhereElectronPlatform bridge',
     electronPreload.includes("contextBridge.exposeInMainWorld('TimeWhereElectronPlatform'")
@@ -201,6 +232,11 @@ assert('Desktop OAuth uses installed-app PKCE with bundled client metadata secre
     && desktopAuth.includes(".join('-')")
     && desktopAuth.includes('DEFAULT_DESKTOP_OAUTH_CLIENT_SECRET')
     && desktopAuth.includes("require('./desktop-oauth-secrets')")
+    && desktopAuth.includes('USERINFO_ENDPOINT')
+    && desktopAuth.includes('openid')
+    && desktopAuth.includes('account_key')
+    && desktopAuth.includes('sha256Hex')
+    && !desktopAuth.includes('return { email: null }')
     && !desktopAuth.includes(['GOC', 'SPX-'].join(''))
     && desktopAuth.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID')
     && desktopAuth.includes('net.fetch')
@@ -213,6 +249,14 @@ assert('Desktop OAuth uses installed-app PKCE with bundled client metadata secre
     && desktopAuth.includes('access_type')
     && desktopAuth.includes('safeStorage.encryptString')
     && desktopAuth.includes('refusing to save a plaintext refresh token'));
+assert('Desktop profile store isolates Google accounts by Electron partition',
+    electronMain.includes('timewhere-desktop-profile.json')
+    && electronMain.includes('persist:timewhere-google-')
+    && electronMain.includes('owner_account_key')
+    && electronMain.includes('ensureDesktopProfileForAuth')
+    && electronMain.includes('account_mismatch')
+    && electronMain.includes('webPreferences.partition')
+    && electronMain.includes('pendingGoogleAccountSwitches'));
 assert('Desktop package bundles generated OAuth secret module from ignored packaging input',
     electronPackage.scripts['prepackage:win'].includes('prepare-desktop-oauth-secret.ps1')
     && electronPackage.scripts['prepackage:mac'].includes('prepare-desktop-oauth-secret.ps1')
@@ -245,9 +289,9 @@ assert('Settings contains desktop bridge card and non-dependency copy',
 assert('Desktop window controls keep native minimize and close-to-tray with Dock hiding',
     !electronMain.includes("mainWindow.on('minimize'")
     && electronMain.includes('closeToTray: true')
-    && electronMain.includes("mainWindow.on('close'")
+    && electronMain.includes("win.on('close'")
     && electronMain.includes('event.preventDefault();')
-    && electronMain.includes('hideToTray(mainWindow);')
+    && electronMain.includes('hideToTray(win);')
     && electronMain.includes('showWindow(mainWindow')
     && electronMain.includes('app.dock?.hide')
     && electronMain.includes('showWindow(win)')

@@ -54,6 +54,12 @@ The artifact-bundled Desktop client metadata secret is not a user token or passw
 
 Refresh tokens are stored under Electron `app.getPath('userData')` and encrypted with Electron `safeStorage`. If encrypted storage is unavailable, TimeWhere refuses to save a plaintext refresh token.
 
+Desktop sync is account-bound. The OAuth flow also requests `openid profile email`
+so TimeWhere can derive a local-only account key from Google's subject and show
+the connected account in Settings. The first unowned local profile may be bound
+to the first connected Google account; later accounts use separate Electron
+persistent partitions so their IndexedDB data does not mix.
+
 ## Chrome Extension Bridge
 
 The bridge is optional. Settings can open an installed Chrome extension bridge page and perform a one-time localhost WebSocket nonce handshake. The bridge only exchanges extension ID, extension version, bridge version, and nonce; it does not transfer task data.

@@ -19,6 +19,7 @@ const dbJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'db.js
 const matrixViewJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'matrixview.js'), 'utf8');
 const taskArrangeAutoJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'task-arrange-auto.js'), 'utf8');
 const iconsJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'icons.js'), 'utf8');
+const externalLinksJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'external-links.js'), 'utf8');
 const boardCss = fs.readFileSync(path.join(root, 'extension', 'pages', 'tasks', 'styles.css'), 'utf8');
 
 let passed = 0;
@@ -344,11 +345,10 @@ assert('Task card exposes Planner-like more menu copy action entry point',
     && manageBacCardHtml.includes('more_horiz')
     && boardJs.includes('data-task-menu-action="copy"')
     && boardJs.includes('复制任务'));
-assert('Task action menu exposes partial complete for writable tasks only',
+assert('Task action menu exposes partial complete for ManageBac tasks too',
     boardJs.includes('data-task-menu-action="partial-complete"')
     && boardJs.includes('部分完成')
-    && boardJs.includes('const isManageBacTask = task && TimeWhereManageBac?.isManageBacTask(task)')
-    && /!\s*isManageBacTask\s*\?\s*`[\s\S]*data-task-menu-action="partial-complete"/.test(boardJs));
+    && !/!\s*isManageBacTask\s*\?\s*`[\s\S]*data-task-menu-action="partial-complete"/.test(boardJs));
 assert('Board and List no longer expose inline progress toggle buttons',
     !manageBacCardHtml.includes('task-progress-btn')
     && !boardJs.includes('task-progress-btn')
@@ -524,6 +524,11 @@ assert('DB exposes recurring task series helpers and validates count limit', dbJ
     && dbJs.includes('async deleteRecurringTaskScope')
     && dbJs.includes('async resizeRecurringTaskSeries')
     && dbJs.includes('count < 2 || count > 12'));
+assert('DB ManageBac edit boundary allows local execution fields only',
+    dbJs.includes('isManageBacLocalStatusUpdate(data = {})')
+    && ['notes', 'description', 'schedule_time', 'duration', 'checklist', 'labels', 'bucket_id'].every(field => dbJs.includes(`'${field}'`))
+    && dbJs.includes('ManageBac 来源任务不能创建周期任务')
+    && dbJs.includes('ManageBac 来源任务不能调整周期任务'));
 assert('DB recurring series lookup avoids schema migration for recurrence index',
     dbJs.includes('const allTasks = await db.tasks.toArray()')
     && dbJs.includes('item.recurrence_series_id === task.recurrence_series_id')
@@ -619,9 +624,31 @@ assert('Partial complete panel supports checklist and ratio immediate save paths
     && detailPanelJs.includes('savePartialCompleteRatio')
     && detailPanelJs.includes('savePartialCompleteChecklistItem')
     && detailPanelJs.includes('TimeWhereDB.updateChecklist(taskId, nextChecklist)'));
-assert('Partial complete dialog blocks ManageBac source task writes',
-    detailPanelJs.includes("showToast('ManageBac 来源任务不能使用部分完成', 'error')")
-    && detailPanelJs.includes('TimeWhereManageBac?.isManageBacTask(task)'));
+assert('Partial complete dialog supports ManageBac local checklist writes',
+    !detailPanelJs.includes("showToast('ManageBac 来源任务不能使用部分完成', 'error')")
+    && detailPanelJs.includes('TimeWhereDB.updateChecklist(taskId, nextChecklist)')
+    && detailPanelJs.includes('TimeWhereDB.updateChecklist(taskId, checklist)'));
+assert('Task detail notes render safe external HTTP link preview',
+    tasksHtml.includes('shared/js/external-links.js')
+    && tasksHtml.indexOf('shared/js/platform.js') < tasksHtml.indexOf('shared/js/external-links.js')
+    && tasksHtml.indexOf('shared/js/external-links.js') < tasksHtml.indexOf('<script src="detail-panel.js"></script>')
+    && detailPanelJs.includes('data-notes-link-preview')
+    && detailPanelJs.includes('renderTaskNotesExternalLinks(task.notes || task.description || \'\')')
+    && detailPanelJs.includes('refreshTaskNotesExternalLinks(panel, notesEl.value)')
+    && detailPanelJs.includes('openTaskNotesExternalLink(linkButton)')
+    && externalLinksJs.includes('data-action="open-external-link"')
+    && boardCss.includes('.external-link-item'));
+assert('Task detail allows ManageBac local execution fields while protecting source facts',
+    detailPanelJs.includes('ManageBac 来源标题、截止日期和来源元数据只读')
+    && detailPanelJs.includes('const titleEditable = isManageBacTask ? \'false\' : \'true\'')
+    && /data-field="due_date"[\s\S]*\$\{sourceDisabledAttr\}/.test(detailPanelJs)
+    && /<select class="detail-select" data-field="bucket_id">/.test(detailPanelJs)
+    && /data-field="schedule_time"[\s\S]{0,120}>/.test(detailPanelJs)
+    && /data-field="duration"[\s\S]{0,140}>/.test(detailPanelJs)
+    && /data-field="notes"[\s\S]{0,120}>/.test(detailPanelJs)
+    && detailPanelJs.includes('await updateTaskFromDetail({ labels })')
+    && detailPanelJs.includes('await updateTaskFromDetail({ checklist: newChecklist })')
+    && detailPanelJs.includes("if (input.disabled || (isManageBacTask && field === 'due_date')) return;"));
 
 context.TaskApp.groupBy = 'priority';
 context.TaskApp.viewMode = 'plan';

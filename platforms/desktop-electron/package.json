@@ -48,6 +48,7 @@
       }
     ],
     "win": {
+      "icon": "build/icon.ico",
       "signAndEditExecutable": false,
       "verifyUpdateCodeSignature": false,
       "target": [
@@ -61,6 +62,7 @@
       "artifactName": "TimeWhere-0.3.0-win-portable.exe"
     },
     "mac": {
+      "icon": "build/icon.png",
       "target": [
         {
           "target": "zip",

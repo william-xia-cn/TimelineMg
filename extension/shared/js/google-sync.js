@@ -25,6 +25,8 @@
     const GOOGLE_SYNC_LAST_RUN_KEY = 'google_sync_last_run_at';
     const GOOGLE_SYNC_LAST_SUCCESS_KEY = 'google_sync_last_success_at';
     const GOOGLE_SYNC_ACCOUNT_EMAIL_KEY = 'google_sync_account_email';
+    const GOOGLE_SYNC_ACCOUNT_NAME_KEY = 'google_sync_account_name';
+    const GOOGLE_SYNC_ACCOUNT_KEY_KEY = 'google_sync_account_key';
     const AUTO_SYNC_THROTTLE_MS = 60 * 1000;
     const SAVE_DEBOUNCE_MS = 30 * 1000;
 
@@ -56,6 +58,8 @@
         'refresh_token',
         'google_email',
         GOOGLE_SYNC_ACCOUNT_EMAIL_KEY,
+        GOOGLE_SYNC_ACCOUNT_NAME_KEY,
+        GOOGLE_SYNC_ACCOUNT_KEY_KEY,
         'management_review_pending',
         'task_arrange_pending',
         'managebac_pending_event_mappings',
@@ -656,11 +660,15 @@
                 }
                 return { status: 'configured' };
             },
-            async connect() {
+            async connect(options = {}) {
                 const status = await this.getStatus();
                 if (status.status === 'not_configured') return status;
-                const result = await platform.auth.getGoogleToken({ interactive: true });
+                const result = await platform.auth.getGoogleToken({
+                    interactive: true,
+                    force_account_selection: options.force_account_selection === true
+                });
                 if (result?.status === 'not_configured') return result;
+                if (result?.status === 'account_mismatch') return result;
                 if (result?.status === 'failed') throw makePlatformAuthError(result);
                 if (result?.status === 'not_authorized') throw makePlatformAuthError(result);
                 if (!result?.token) throw new Error('Google auth token unavailable');
@@ -671,6 +679,7 @@
                 if (status.status === 'not_configured') return status;
                 const result = await platform.auth.getGoogleToken({ interactive: options.interactive === true });
                 if (result?.status === 'not_configured') return result;
+                if (result?.status === 'account_mismatch') return result;
                 if (result?.status === 'not_authorized') return result;
                 if (result?.status === 'failed') throw makePlatformAuthError(result);
                 if (!result?.token) throw new Error('Google auth token unavailable');
@@ -679,7 +688,12 @@
             async getAccountInfo() {
                 if (typeof platform?.auth?.getAccountInfo !== 'function') return { email: null };
                 const info = await platform.auth.getAccountInfo();
-                return { email: info?.email || null };
+                return {
+                    account_key: info?.account_key || null,
+                    name: info?.name || null,
+                    email: info?.email || null,
+                    connected: info?.connected === true
+                };
             },
             async disconnect() {
                 if (typeof platform?.auth?.revokeGoogleToken !== 'function') return { status: 'disconnected' };
@@ -722,7 +736,7 @@
         async function getAuthHeader() {
             const auth = await authAdapter.getToken({ interactive: false });
             if (auth.status === 'not_configured') return auth;
-            if (auth.status === 'not_authorized' || auth.status === 'failed') {
+            if (auth.status === 'not_authorized' || auth.status === 'failed' || auth.status === 'account_mismatch') {
                 throw makeAuthUnavailableError(auth);
             }
             if (!auth.token) throw new Error('Google auth token unavailable');
@@ -814,6 +828,24 @@
         };
         await db.setSetting(GOOGLE_SYNC_STATE_KEY, next);
         return next;
+    }
+
+    async function saveGoogleSyncConflicts(db, conflicts = [], patch = {}) {
+        const list = Array.isArray(conflicts) ? clone(conflicts) : [];
+        await setSettingValue(db, GOOGLE_SYNC_CONFLICTS_KEY, list);
+        if (list.length > 0) {
+            return await saveGoogleSyncState(db, {
+                ...patch,
+                status: 'conflict',
+                conflict_count: list.length,
+                last_conflict_at: patch.last_conflict_at || nowISO()
+            });
+        }
+        return await saveGoogleSyncState(db, {
+            ...patch,
+            status: patch.status || 'connected',
+            conflict_count: 0
+        });
     }
 
     async function backupToDrive(db, driveClient, options = {}) {
@@ -1239,12 +1271,7 @@
         const mergePlan = planSyncMerge(localDoc, cloudDoc);
 
         if (mergePlan.conflicts.length > 0) {
-            await setSettingValue(db, GOOGLE_SYNC_CONFLICTS_KEY, mergePlan.conflicts);
-            await saveGoogleSyncState(db, {
-                status: 'conflict',
-                conflict_count: mergePlan.conflicts.length,
-                last_conflict_at: nowISO()
-            });
+            await saveGoogleSyncConflicts(db, mergePlan.conflicts);
             return { status: 'conflict', mergePlan, conflicts: mergePlan.conflicts };
         }
 
@@ -1253,7 +1280,7 @@
         }
 
         if (mergePlan.apply_local.length === 0 && mergePlan.upload_keys.length === 0 && mergePlan.upload_tombstones.length === 0) {
-            await saveGoogleSyncState(db, { status: 'connected', last_success_at: nowISO() });
+            await saveGoogleSyncConflicts(db, [], { status: 'connected', last_success_at: nowISO() });
             return { status: 'up_to_date', mergePlan };
         }
 
@@ -1271,8 +1298,7 @@
         if (uploadResult?.status === 'not_configured') return uploadResult;
         await markUploadedEntitiesClean(db, uploadDoc, planSyncMerge(localAfterApply, verifyCloudDoc || cloudDoc));
         await setSettingValue(db, GOOGLE_SYNC_LAST_SUCCESS_KEY, uploadDoc.cloud_updated_at);
-        await setSettingValue(db, GOOGLE_SYNC_CONFLICTS_KEY, []);
-        await saveGoogleSyncState(db, {
+        await saveGoogleSyncConflicts(db, [], {
             status: 'connected',
             last_success_at: uploadDoc.cloud_updated_at,
             last_sync_entity_count: uploadDoc.manifest.entity_count,
@@ -1356,7 +1382,7 @@
             upload_tombstones: Object.keys(uploadDoc.tombstones || {})
         };
         await markUploadedEntitiesClean(db, uploadDoc, mergePlan);
-        await saveGoogleSyncState(db, { status: 'connected', last_force_upload_at: uploadDoc.cloud_updated_at });
+        await saveGoogleSyncConflicts(db, [], { status: 'connected', last_force_upload_at: uploadDoc.cloud_updated_at });
         return { status: 'uploaded', uploadDoc, result };
     }
 
@@ -1370,7 +1396,7 @@
             ]
         };
         await applyMergePlanToLocal(db, mergePlan, cloudDoc);
-        await saveGoogleSyncState(db, { status: 'connected', last_restore_at: nowISO() });
+        await saveGoogleSyncConflicts(db, [], { status: 'connected', last_restore_at: nowISO() });
         return { status: 'restored', applied_count: mergePlan.apply_local.length };
     }
 
@@ -1398,11 +1424,11 @@
             }
         }
         const remaining = (conflicts || []).filter(conflict => !applied.includes(conflict.key));
-        await setSettingValue(db, GOOGLE_SYNC_CONFLICTS_KEY, remaining);
         if (remaining.length > 0) {
-            await saveGoogleSyncState(db, { status: 'conflict', conflict_count: remaining.length });
+            await saveGoogleSyncConflicts(db, remaining);
             return { status: 'conflict_remaining', applied_count: applied.length, remaining_count: remaining.length };
         }
+        await saveGoogleSyncConflicts(db, [], { status: 'connected' });
         const result = await runAutoSync(db, driveClient, { ...options, force: true });
         return { status: 'resolved', applied_count: applied.length, sync_result: result };
     }
@@ -1423,6 +1449,8 @@
         GOOGLE_SYNC_LAST_RUN_KEY,
         GOOGLE_SYNC_LAST_SUCCESS_KEY,
         GOOGLE_SYNC_ACCOUNT_EMAIL_KEY,
+        GOOGLE_SYNC_ACCOUNT_NAME_KEY,
+        GOOGLE_SYNC_ACCOUNT_KEY_KEY,
         AUTO_SYNC_THROTTLE_MS,
         SAVE_DEBOUNCE_MS,
         SNAPSHOT_TABLES: SNAPSHOT_TABLES.slice(),
@@ -1448,6 +1476,7 @@
         createDriveAppDataClient,
         getGoogleSyncState,
         saveGoogleSyncState,
+        saveGoogleSyncConflicts,
         backupToDrive,
         loadCloudSnapshot,
         buildLocalSyncDocument,

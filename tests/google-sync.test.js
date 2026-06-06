@@ -93,6 +93,8 @@ class FakeDB {
             default_duration: 45,
             default_priority: 'medium',
             google_sync_state: { status: 'connected' },
+            google_sync_account_key: 'account-key-redacted',
+            google_sync_account_name: 'Student Name',
             google_sync_account_email: 'student@example.invalid',
             access_token: 'secret-access-token',
             refresh_token: 'secret-refresh-token',
@@ -191,6 +193,8 @@ async function run() {
     assert('snapshot includes approved task default settings', snapshot.data.settings.default_duration === 45 && snapshot.data.settings.default_priority === 'medium');
     assert('snapshot excludes Google sync runtime state', !('google_sync_state' in snapshot.data.settings));
     assert('snapshot excludes local Google account email display', !('google_sync_account_email' in snapshot.data.settings));
+    assert('snapshot excludes local Google account name display', !('google_sync_account_name' in snapshot.data.settings));
+    assert('snapshot excludes local Google account key display', !('google_sync_account_key' in snapshot.data.settings));
     assert('snapshot excludes OAuth access token', !('access_token' in snapshot.data.settings));
     assert('snapshot excludes OAuth refresh token', !('refresh_token' in snapshot.data.settings));
     assert('snapshot excludes Google email display', !('google_email' in snapshot.data.settings));
@@ -258,6 +262,23 @@ async function run() {
         disconnectedReason = error.code || error.reason || '';
     }
     assertEqual('Drive adapter preserves desktop not-authorized reason for Settings diagnostics', disconnectedReason, 'desktop_oauth_not_connected');
+
+    let mismatchFetchCalled = false;
+    const mismatchDrive = GoogleSync.createDriveAppDataClient({
+        authAdapter: { getToken: async () => ({ status: 'account_mismatch', reason: 'account_mismatch', message: 'wrong account' }) },
+        fetchImpl: async () => {
+            mismatchFetchCalled = true;
+            return { ok: true, status: 200, json: async () => ({}) };
+        }
+    });
+    let mismatchReason = '';
+    try {
+        await mismatchDrive.downloadJsonFile(GoogleSync.SYNC_FILE_NAME);
+    } catch (error) {
+        mismatchReason = error.code || error.reason || '';
+    }
+    assertEqual('Drive adapter blocks account mismatch before network fetch', mismatchReason, 'account_mismatch');
+    assert('Drive adapter does not call Drive when desktop account mismatches profile', !mismatchFetchCalled);
 
     const cloudSnapshot = JSON.parse(JSON.stringify(snapshot));
     cloudSnapshot.exported_at = '2026-05-15T00:10:00.000Z';
@@ -337,6 +358,13 @@ async function run() {
     const autoResult = await GoogleSync.runAutoSync(dirtyDb, driveForAuto, { device_id: 'device-a' });
     assert('sync v1 auto sync uploads dirty local record', autoResult.status === 'synced' && driveForAuto.state.uploads.some(upload => upload.name === GoogleSync.SYNC_FILE_NAME));
 
+    const conflictDb = new FakeDB();
+    const savedConflict = makeEntity('tasks', 'conflict-save', { title: 'Saved conflict' });
+    await GoogleSync.saveGoogleSyncConflicts(conflictDb, [{ key: savedConflict.key, table: 'tasks', id: 'conflict-save', local: savedConflict, cloud: savedConflict }]);
+    assertEqual('sync v1 conflict helper stores count from conflict detail list',
+        conflictDb.settings.google_sync_state.conflict_count,
+        conflictDb.settings.google_sync_conflicts.length);
+
     const raceDrive = makeDriveClient(makeSyncDoc({}, {}, '2026-05-15T00:00:00.000Z'));
     let firstDownload = true;
     const originalDownload = raceDrive.downloadJsonFile;
@@ -413,6 +441,13 @@ async function run() {
         && !desktopAuthScript.includes(['GOC', 'SPX-'].join(''))
         && desktopAuthScript.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID')
         && desktopAuthScript.includes('net.fetch')
+        && desktopAuthScript.includes('openid')
+        && desktopAuthScript.includes('profile')
+        && desktopAuthScript.includes('email')
+        && desktopAuthScript.includes('USERINFO_ENDPOINT')
+        && desktopAuthScript.includes('account_key')
+        && desktopAuthScript.includes('sha256Hex')
+        && !desktopAuthScript.includes('return { email: null }')
         && desktopAuthScript.includes('desktop_oauth_network_failed')
         && desktopAuthScript.includes('client_secret: credentials.clientSecret')
         && desktopAuthScript.includes("auth_mode: credentials.clientSecret")
@@ -435,6 +470,9 @@ async function run() {
         && settingsScript.includes('desktop_oauth_saved_token_unreadable')
         && settingsScript.includes('desktop_oauth_not_connected')
         && settingsScript.includes('desktop_oauth_network_failed')
+        && settingsScript.includes('desktop_oauth_account_required')
+        && settingsScript.includes('account_mismatch')
+        && settingsScript.includes('conflict_detail_missing')
         && settingsScript.includes('oauth2.googleapis.com')
         && settingsScript.includes('client_secret is missing')
         && settingsScript.includes('内置 Google Desktop OAuth client metadata')
@@ -453,6 +491,17 @@ async function run() {
         && settingsScript.includes('Windows 本地功能不受影响'));
     assert('Settings sync preview has explicit confirmation handler', settingsScript.includes('handleApplyGoogleSyncPreview') && settingsScript.includes('确认同步选中项'));
     assert('Settings confirmation supports v1 conflict choices', settingsScript.includes("mode === 'v1_conflicts'") && settingsScript.includes('resolveSyncConflicts'));
+    assert('Settings renders connected Google account chip and switch account action',
+        settingsHtml.includes('googleSyncAccountEmail')
+        && settingsHtml.includes('switchGoogleSyncAccountBtn')
+        && settingsScript.includes('formatGoogleSyncAccountLabel')
+        && settingsScript.includes('confirmGoogleAccountSwitch')
+        && settingsScript.includes('force_account_selection'));
+    assert('Settings conflict detail recovery does not rely on argument object shims',
+        settingsScript.includes('renderGoogleSyncConflictEmpty')
+        && settingsScript.includes('conflict_detail_missing')
+        && settingsScript.includes('showStoredGoogleSyncConflicts(options = {})')
+        && !settingsScript.includes('arguments[0]'));
     assert('Settings conflict UI summarizes records with business fields',
         settingsScript.includes('summarizeGoogleSyncBusinessRecord')
         && settingsScript.includes("table === 'tasks'")
@@ -513,7 +562,10 @@ async function run() {
     assert('DB delete paths mark Google sync tombstones', dbScript.includes('markGoogleSyncDeleted') && dbScript.includes('markEntityDeleted'));
     assert('DB settings sync is limited to approved selected keys', dbScript.includes('SELECTED_SETTING_KEYS?.includes(key)'));
     assert('Google sync runtime state is not in selected cloud settings', !GoogleSync.SELECTED_SETTING_KEYS.includes(GoogleSync.GOOGLE_SYNC_STATE_KEY));
-    assert('Google account email display key is excluded from cloud settings', GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.GOOGLE_SYNC_ACCOUNT_EMAIL_KEY));
+    assert('Google account display keys are excluded from cloud settings',
+        GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.GOOGLE_SYNC_ACCOUNT_EMAIL_KEY)
+        && GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.GOOGLE_SYNC_ACCOUNT_NAME_KEY)
+        && GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.GOOGLE_SYNC_ACCOUNT_KEY_KEY));
 
     const manifestJson = JSON.parse(read('extension/manifest.json'));
     assert('manifest includes Chrome identity permission', manifestJson.permissions.includes('identity'));

@@ -1,8 +1,9 @@
-const { app, BrowserWindow, Menu, Notification, ipcMain, Tray, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, Menu, Notification, ipcMain, Tray, nativeImage, screen, shell } = require('electron');
 const path = require('path');
 const fs = require('node:fs');
 const fsp = fs.promises;
 const os = require('node:os');
+const crypto = require('node:crypto');
 const { pathToFileURL } = require('url');
 const { createDesktopAuth } = require('./desktop-auth');
 const { createChromeBridge } = require('./chrome-bridge');
@@ -16,11 +17,16 @@ const widgetSnapshotSchema = 'timewhere-widget-v1';
 const widgetSnapshotFileName = 'timewhere-widget-v1.json';
 const widgetAppGroupIdentifier = 'group.cn.williamxia.timewhere';
 const protocolScheme = 'timewhere';
+const desktopAppId = 'cn.williamxia.timewhere';
 const smokeMode = process.env.TIMEWHERE_ELECTRON_SMOKE === '1';
 const smokeRuntimeRoot = path.join(
   process.env.TMP || process.env.TEMP || repoRoot,
   `timewhere-electron-smoke-${process.pid}`
 );
+
+if (process.platform === 'win32') {
+  app.setAppUserModelId(desktopAppId);
+}
 
 if (smokeMode) {
   app.setPath('userData', path.join(smokeRuntimeRoot, 'user-data'));
@@ -45,7 +51,25 @@ const desktopSettingsDefaults = {
   startAtLogin: false
 };
 let desktopSettings = { ...desktopSettingsDefaults };
+const desktopProfileDefaults = {
+  schema: 'timewhere-desktop-profile-v1',
+  active_profile_id: 'default',
+  profiles: {
+    default: {
+      profile_id: 'default',
+      partition: null,
+      owner_account_key: null,
+      owner_display: null,
+      created_at: null,
+      updated_at: null
+    }
+  }
+};
+let desktopProfileState = JSON.parse(JSON.stringify(desktopProfileDefaults));
+let switchingDesktopProfile = false;
+const pendingGoogleAccountSwitches = new Map();
 const desktopSettingsPath = () => path.join(app.getPath('userData'), 'timewhere-desktop-settings.json');
+const desktopProfilePath = () => path.join(app.getPath('userData'), 'timewhere-desktop-profile.json');
 
 function appGroupWidgetSnapshotPath() {
   if (process.platform !== 'darwin') return null;
@@ -82,6 +106,20 @@ function getTrayIcon() {
     path.join(getExtensionRoot(), 'icons', 'icon16.png'),
     path.join(getExtensionRoot(), 'icons', 'icon48.png'),
     path.join(getExtensionRoot(), 'icons', 'icon128.png')
+  ];
+  for (const candidate of candidates) {
+    if (!fs.existsSync(candidate)) continue;
+    const image = nativeImage.createFromPath(candidate);
+    if (!image.isEmpty()) return image;
+  }
+  return null;
+}
+
+function getWindowIcon() {
+  const candidates = [
+    path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    path.join(getExtensionRoot(), 'icons', 'icon128.png'),
+    path.join(getExtensionRoot(), 'icons', 'icon48.png')
   ];
   for (const candidate of candidates) {
     if (!fs.existsSync(candidate)) continue;
@@ -237,6 +275,25 @@ function resolveExtensionRoute(route = defaultRoute) {
   return { filePath: resolved, search: parts.search, hash: parts.hash, route: parts.pathname };
 }
 
+function normalizeExternalHttpUrl(rawUrl) {
+  const value = String(rawUrl || '').trim();
+  if (!/^https?:\/\//i.test(value)) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    return url.href;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function openExternalHttpUrl(rawUrl) {
+  const url = normalizeExternalHttpUrl(rawUrl);
+  if (!url) return { status: 'invalid', reason: 'unsupported_url_protocol' };
+  await shell.openExternal(url);
+  return { status: 'opened', url };
+}
+
 function routeFromProtocolUrl(rawUrl) {
   try {
     const url = new URL(rawUrl);
@@ -292,6 +349,192 @@ async function persistDesktopSettings(next = {}) {
     console.error(`[Desktop] saveDesktopSettings failed: ${error.message}`);
     return { status: 'failed', reason: 'settings_save_failed', message: error.message };
   }
+}
+
+function nowISO() {
+  return new Date().toISOString();
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function normalizeAccountDisplay(account = {}) {
+  return {
+    account_key: account.account_key || null,
+    name: account.name || null,
+    email: account.email || null
+  };
+}
+
+function makeDesktopProfileId(accountKey = '') {
+  return `google-${String(accountKey).slice(0, 16)}`;
+}
+
+function makeDesktopPartition(accountKey = '') {
+  return `persist:timewhere-google-${String(accountKey).replace(/[^a-f0-9]/gi, '').toLowerCase()}`;
+}
+
+function normalizeDesktopProfileState(raw = {}) {
+  const base = cloneJson(desktopProfileDefaults);
+  const profiles = raw.profiles && typeof raw.profiles === 'object' ? raw.profiles : {};
+  const now = nowISO();
+  const normalizedProfiles = {
+    ...base.profiles,
+    ...profiles
+  };
+  if (!normalizedProfiles.default) {
+    normalizedProfiles.default = { ...base.profiles.default };
+  }
+  normalizedProfiles.default = {
+    ...base.profiles.default,
+    ...normalizedProfiles.default,
+    profile_id: 'default',
+    partition: normalizedProfiles.default.partition || null,
+    created_at: normalizedProfiles.default.created_at || now,
+    updated_at: normalizedProfiles.default.updated_at || now
+  };
+  const active = raw.active_profile_id && normalizedProfiles[raw.active_profile_id]
+    ? raw.active_profile_id
+    : 'default';
+  return {
+    schema: desktopProfileDefaults.schema,
+    active_profile_id: active,
+    profiles: normalizedProfiles,
+    updated_at: raw.updated_at || now
+  };
+}
+
+async function loadDesktopProfileState() {
+  try {
+    const raw = await fsp.readFile(desktopProfilePath(), 'utf8');
+    desktopProfileState = normalizeDesktopProfileState(JSON.parse(raw));
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn(`[Desktop] loadDesktopProfileState failed: ${error.message}`);
+    }
+    desktopProfileState = normalizeDesktopProfileState(desktopProfileDefaults);
+  }
+  return desktopProfileState;
+}
+
+async function persistDesktopProfileState() {
+  desktopProfileState.updated_at = nowISO();
+  await fsp.mkdir(path.dirname(desktopProfilePath()), { recursive: true });
+  await fsp.writeFile(desktopProfilePath(), JSON.stringify(desktopProfileState, null, 2), 'utf8');
+  return desktopProfileState;
+}
+
+function getActiveDesktopProfile() {
+  const state = normalizeDesktopProfileState(desktopProfileState);
+  desktopProfileState = state;
+  return state.profiles[state.active_profile_id] || state.profiles.default;
+}
+
+function getDesktopProfileSnapshot() {
+  const profile = getActiveDesktopProfile();
+  return {
+    status: 'ok',
+    profile_id: profile.profile_id,
+    owner_account_key: profile.owner_account_key || null,
+    owner_display: profile.owner_display || null,
+    partition: profile.partition || 'default',
+    is_account_owned: Boolean(profile.owner_account_key)
+  };
+}
+
+async function bindActiveProfileToAccount(accountInfo = {}) {
+  if (!accountInfo.account_key) return getDesktopProfileSnapshot();
+  const profile = getActiveDesktopProfile();
+  const display = normalizeAccountDisplay(accountInfo);
+  desktopProfileState.profiles[profile.profile_id] = {
+    ...profile,
+    owner_account_key: accountInfo.account_key,
+    owner_display: display,
+    updated_at: nowISO()
+  };
+  await persistDesktopProfileState();
+  return getDesktopProfileSnapshot();
+}
+
+async function activateDesktopProfileForAccount(accountInfo = {}) {
+  if (!accountInfo.account_key) {
+    return { status: 'failed', reason: 'missing_account_key' };
+  }
+  const display = normalizeAccountDisplay(accountInfo);
+  const existing = Object.values(desktopProfileState.profiles || {})
+    .find(profile => profile.owner_account_key === accountInfo.account_key);
+  const profileId = existing?.profile_id || makeDesktopProfileId(accountInfo.account_key);
+  const now = nowISO();
+  desktopProfileState.profiles[profileId] = {
+    ...(existing || {}),
+    profile_id: profileId,
+    partition: existing?.partition || makeDesktopPartition(accountInfo.account_key),
+    owner_account_key: accountInfo.account_key,
+    owner_display: display,
+    created_at: existing?.created_at || now,
+    updated_at: now
+  };
+  desktopProfileState.active_profile_id = profileId;
+  await persistDesktopProfileState();
+  return getDesktopProfileSnapshot();
+}
+
+function createPendingGoogleAccountSwitch(accountInfo = {}, currentProfile = null) {
+  const pendingAuthId = crypto.randomBytes(16).toString('hex');
+  pendingGoogleAccountSwitches.set(pendingAuthId, {
+    account_info: normalizeAccountDisplay(accountInfo),
+    current_profile: currentProfile || getActiveDesktopProfile(),
+    created_at: Date.now()
+  });
+  return pendingAuthId;
+}
+
+async function ensureDesktopProfileForAuth(authResult = {}) {
+  const accountInfo = authResult.account_info || null;
+  if (!accountInfo?.account_key) return { status: 'ok', profile: getDesktopProfileSnapshot() };
+  const profile = getActiveDesktopProfile();
+  if (!profile.owner_account_key) {
+    return { status: 'ok', profile: await bindActiveProfileToAccount(accountInfo) };
+  }
+  if (profile.owner_account_key === accountInfo.account_key) {
+    return { status: 'ok', profile: await bindActiveProfileToAccount(accountInfo) };
+  }
+  const pendingAuthId = createPendingGoogleAccountSwitch(accountInfo, profile);
+  return {
+    status: 'account_mismatch',
+    reason: 'account_mismatch',
+    message: 'The connected Google account belongs to a different TimeWhere desktop data space.',
+    pending_auth_id: pendingAuthId,
+    current_account: profile.owner_display || null,
+    authorized_account: normalizeAccountDisplay(accountInfo)
+  };
+}
+
+function recreateMainWindowForActiveProfile(route = routeMap.settings) {
+  switchingDesktopProfile = true;
+  const oldWindow = mainWindow;
+  const win = createMainWindow(route);
+  showWindow(win);
+  if (oldWindow && !oldWindow.isDestroyed()) {
+    oldWindow.destroy();
+  }
+  setTimeout(() => {
+    switchingDesktopProfile = false;
+  }, 250);
+  return win;
+}
+
+async function confirmGoogleAccountSwitch(payload = {}) {
+  const pendingAuthId = payload.pending_auth_id;
+  const pending = pendingGoogleAccountSwitches.get(pendingAuthId);
+  if (!pending) {
+    return { status: 'failed', reason: 'pending_auth_missing' };
+  }
+  pendingGoogleAccountSwitches.delete(pendingAuthId);
+  const profile = await activateDesktopProfileForAccount(pending.account_info);
+  setTimeout(() => recreateMainWindowForActiveProfile(routeMap.settings), 50);
+  return { status: 'ok', profile };
 }
 
 function applyLoginItemSettings(value) {
@@ -386,20 +629,27 @@ async function loadRoute(win, route = defaultRoute) {
 
 function createMainWindow(route = defaultRoute) {
   const bounds = getDefaultWindowBounds();
-  mainWindow = new BrowserWindow({
+  const profile = getActiveDesktopProfile();
+  const webPreferences = {
+    preload: preloadPath,
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: false
+  };
+  if (profile.partition) {
+    webPreferences.partition = profile.partition;
+  }
+  const win = new BrowserWindow({
     width: bounds.width,
     height: bounds.height,
     minWidth: bounds.minWidth,
     minHeight: bounds.minHeight,
     title: 'TimeWhere',
+    icon: getWindowIcon() || undefined,
     backgroundColor: '#f1f5f9',
-    webPreferences: {
-      preload: preloadPath,
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false
-    }
+    webPreferences
   });
+  mainWindow = win;
 
   loadRoute(mainWindow, route).catch(error => {
     console.error(`TimeWhere desktop route failed: ${error.message}`);
@@ -418,17 +668,17 @@ function createMainWindow(route = defaultRoute) {
     }, 5000);
   }
 
-  mainWindow.on('close', event => {
+  win.on('close', event => {
     if (isQuitting) return;
     if (desktopSettings.closeToTray) {
       event.preventDefault();
-      hideToTray(mainWindow);
+      hideToTray(win);
     }
   });
-  mainWindow.on('closed', () => {
-    mainWindow = null;
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null;
   });
-  return mainWindow;
+  return win;
 }
 
 function getOrCreateMainWindow(route = defaultRoute) {
@@ -630,13 +880,22 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
   }
   if (method === 'auth.getGoogleToken') {
     try {
-      return await desktopAuth.getGoogleToken(payload);
+      const result = await desktopAuth.getGoogleToken(payload);
+      if (result?.status === 'ok') {
+        const profileResult = await ensureDesktopProfileForAuth(result);
+        if (profileResult.status === 'account_mismatch') {
+          return profileResult;
+        }
+        return { ...result, desktop_profile: profileResult.profile };
+      }
+      return result;
     } catch (error) {
       return serializeAuthError(error);
     }
   }
   if (method === 'auth.getAccountInfo') {
-    return await desktopAuth.getAccountInfo();
+    const info = await desktopAuth.getAccountInfo();
+    return { ...info, desktop_profile: getDesktopProfileSnapshot() };
   }
   if (method === 'auth.revokeGoogleToken') {
     return await desktopAuth.revokeGoogleToken();
@@ -646,6 +905,9 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
   }
   if (method === 'chromeBridge.status') {
     return chromeBridge.getStatus();
+  }
+  if (method === 'external.openUrl') {
+    return await openExternalHttpUrl(payload.url);
   }
   if (method === 'desktop.info') {
     return {
@@ -668,12 +930,19 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
   if (method === 'system.writeWidgetSnapshot') {
     return await writeWidgetSnapshot(payload);
   }
+  if (method === 'system.getDesktopProfile') {
+    return getDesktopProfileSnapshot();
+  }
+  if (method === 'system.confirmGoogleAccountSwitch') {
+    return await confirmGoogleAccountSwitch(payload);
+  }
   return { status: 'not_supported', method };
 });
 
   app.whenReady().then(() => {
   if (!smokeMode) app.setAsDefaultProtocolClient(protocolScheme);
   loadDesktopSettings()
+    .then(() => loadDesktopProfileState())
     .then(() => {
       applyLoginItemSettings(desktopSettings.startAtLogin);
       return syncLoginItemStateFromOS();
@@ -717,6 +986,7 @@ function syncTrayMenuLabels() {
 }
 
 app.on('window-all-closed', () => {
+  if (switchingDesktopProfile) return;
   chromeBridge.closeActiveServer();
   for (const id of reminderTimers.keys()) cancelReminder(id);
   app.quit();

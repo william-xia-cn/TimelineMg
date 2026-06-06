@@ -17,6 +17,8 @@ const sidepanelHtml = fs.readFileSync(path.join(root, 'extension', 'popup', 'sid
 const popupCss = fs.readFileSync(path.join(root, 'extension', 'popup', 'popup.css'), 'utf8');
 const popupScript = fs.readFileSync(path.join(root, 'extension', 'popup', 'popup.js'), 'utf8');
 const calendarScript = fs.readFileSync(path.join(root, 'extension', 'pages', 'calendar', 'script.js'), 'utf8');
+const schedulingScript = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'scheduling.js'), 'utf8');
+const externalLinksScript = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'external-links.js'), 'utf8');
 const dashboardQuickAddPanelBlock = (focusScript.match(/async function openDashboardQuickAddTaskPanel[\s\S]*?function closeDashboardQuickAddTaskPanel/) || [''])[0];
 
 let passed = 0;
@@ -52,8 +54,16 @@ assert('Side Panel page reuses Popup assets and runtime dependencies',
     && sidepanelHtml.includes('../shared/js/dexie.js')
     && sidepanelHtml.includes('../shared/js/db.js')
     && sidepanelHtml.includes('../shared/js/google-sync.js')
+    && sidepanelHtml.includes('../shared/js/external-links.js')
     && sidepanelHtml.includes('../shared/js/scheduling.js')
     && sidepanelHtml.includes('<script src="popup.js"></script>'));
+assert('Dashboard Popup and Side Panel load external link helper after platform adapter',
+    focusHtml.includes('shared/js/external-links.js')
+    && popupHtml.includes('shared/js/external-links.js')
+    && sidepanelHtml.includes('shared/js/external-links.js')
+    && focusHtml.indexOf('shared/js/platform.js') < focusHtml.indexOf('shared/js/external-links.js')
+    && popupHtml.indexOf('shared/js/platform.js') < popupHtml.indexOf('shared/js/external-links.js')
+    && sidepanelHtml.indexOf('shared/js/platform.js') < sidepanelHtml.indexOf('shared/js/external-links.js'));
 assert('Side Panel keeps Popup menu content and exposes four bottom navigation entries',
     sidepanelHtml.includes('id="taskSummary"')
     && sidepanelHtml.includes('id="currentTaskList"')
@@ -100,7 +110,7 @@ assert('Side Panel today journal opens and saves in place', popupScript.includes
     && popupScript.includes('TimeWhereDB.saveDailyJournalDraft')
     && popupScript.includes('TimeWhereDB.submitDailyJournal'));
 assert('Popup and Side Panel current task cards use expandable partial complete panels',
-    popupScript.includes('const partialCompleteBtn = !isManageBacSource')
+    popupScript.includes('const partialCompleteBtn = `<button class="btn-micro" data-action="toggle-partial-complete-menu"')
     && popupScript.includes('data-action="toggle-partial-complete-menu"')
     && popupScript.includes('data-partial-complete-menu-for')
     && popupScript.includes('popup-partial-complete-panel')
@@ -121,7 +131,7 @@ assert('Popup partial complete uses checklist metadata and updateChecklist',
     && popupScript.includes('partial_percent: safePercent')
     && popupScript.includes('replacePartialCompletionChecklistGroup')
     && popupScript.includes('TimeWhereDB.updateChecklist(taskId, nextChecklist)')
-    && popupScript.includes("showToast('ManageBac 来源任务不能使用部分完成', 'error')"));
+    && !popupScript.includes("showToast('ManageBac 来源任务不能使用部分完成', 'error')"));
 assert('Popup partial complete checklist saves only from change with current checked state',
     popupScript.includes("if (actionEl.dataset.action === 'toggle-partial-complete-checklist')")
     && !/actionEl\.dataset\.action === 'toggle-partial-complete-checklist'[\s\S]{0,240}savePopupTaskPartialCompleteChecklistItem/.test(popupScript)
@@ -169,12 +179,11 @@ assert('Current task action buttons are neutral by default and only busy/pressed
     && popupScript.includes('btn-micro primary current-task-quick-add-action')
     && focusScript.includes('btn-micro primary" data-action="open-today-journal"')
     && popupScript.includes('btn-micro primary" data-action="open-today-journal"'));
-assert('Dashboard current task cards expose partial complete for local tasks',
+assert('Dashboard current task cards expose partial complete for ManageBac tasks too',
     focusScript.includes('data-action="toggle-partial-complete-menu"')
     && focusScript.includes('data-partial-complete-menu-for')
     && focusScript.includes('partial-complete-panel')
     && focusScript.includes('部分完成')
-    && focusScript.includes('!isManageBacSource')
     && focusScript.includes("action === 'toggle-partial-complete-menu'")
     && focusScript.includes('toggleCurrentTaskPartialCompleteMenu(taskId)')
     && focusScript.includes("action === 'partial-complete-ratio'")
@@ -191,7 +200,7 @@ assert('Dashboard partial complete uses checklist metadata and immediate updateC
     && focusScript.includes('replacePartialCompletionChecklistGroup')
     && focusScript.includes('TimeWhereDB.updateChecklist(taskId, nextChecklist)')
     && focusScript.includes('TimeWhereDB.updateChecklist(taskId, checklist)')
-    && focusScript.includes("showToast('ManageBac 来源任务不能使用部分完成', 'error')"));
+    && !focusScript.includes("showToast('ManageBac 来源任务不能使用部分完成', 'error')"));
 assert('Current task partial complete preserves expanded task while reloading',
     focusScript.includes('let dashboardCurrentTaskExpandedTaskId = null')
     && focusScript.includes('const requestedExpandedTaskId = targetTaskId || dashboardCurrentTaskExpandedTaskId')
@@ -251,6 +260,23 @@ assert('Dashboard current task card opens local detail modal from content area',
     && focusScript.includes('currentTaskDetailModal')
     && focusCss.includes('.task-detail-open-zone')
     && !focusScript.includes('btn-task-detail'));
+assert('Dashboard detail modal allows ManageBac local execution fields only',
+    focusScript.includes('ManageBac 来源标题和截止日期只读；可修改本地状态、优先级、开始日期、定时时间、时长和笔记。')
+    && /id="detailTaskTitle"[\s\S]{0,140}\$\{isManageBacSource \? 'readonly' : ''\}/.test(focusScript)
+    && /id="detailTaskDueDate"[\s\S]{0,180}\$\{isManageBacSource \? 'disabled' : ''\}/.test(focusScript)
+    && /id="detailTaskScheduleTime"[\s\S]{0,100}>/.test(focusScript)
+    && /id="detailTaskDuration"[\s\S]{0,140}>/.test(focusScript)
+    && /id="detailTaskNotes"[\s\S]{0,80}>/.test(focusScript)
+    && /const updates = \{[\s\S]*schedule_time:[\s\S]*duration:[\s\S]*notes:[\s\S]*completed_at/.test(focusScript)
+    && /if \(!isManageBacSource\) \{[\s\S]*updates\.title[\s\S]*updates\.due_date/.test(focusScript));
+assert('Dashboard detail notes render safe external HTTP link preview',
+    focusScript.includes('data-notes-link-preview')
+    && focusScript.includes('renderTaskNotesExternalLinks(task.notes || task.description || \'\')')
+    && focusScript.includes('refreshTaskNotesExternalLinks(modal, event.target.value)')
+    && focusScript.includes("action === 'open-external-link'")
+    && focusScript.includes('openTaskNotesExternalLink(actionEl)')
+    && focusCss.includes('.external-link-item')
+    && externalLinksScript.includes('extractHttpLinks'));
 assert('Dashboard exposes copyable debug snapshot for current runtime data',
     focusHtml.includes('data-action="copy-debug-snapshot"')
     && focusHtml.includes('诊断快照')
@@ -359,14 +385,16 @@ assert('Focus week and feed are not stacked inside one column', focusHtml.indexO
     && (focusHtml.match(/<section class="board-column column-/g) || []).length === 4
     && !/<div class="side-panel column-feed"/.test(focusHtml));
 assert('Focus calendar render path uses exact date task display instead of Daily Settle projection', /function renderDayColumn\([^)]*allTasks/.test(focusScript)
-    && focusScript.includes('const dateTasks = getDateTasksForDisplay(allTasks, dateStr)')
-    && focusScript.includes('assignDateTasksToContainers(dateTasks, dayContainers)')
+    && focusScript.includes('const projection = buildCalendarDayProjection({')
+    && focusScript.includes('const allItems = projection.timedItems')
+    && schedulingScript.includes('getCalendarTasksForDate(tasks, normalizedDateStr)')
+    && schedulingScript.includes('assignCalendarTasksToContainers(dateTasks, dayContainers)')
     && !focusScript.includes('const dayTaskPool = buildDailyTaskPool(allTasks, dayReferenceTime)')
     && !focusScript.includes('const settle = dailySettle(dayTaskPool, dayContainers, dayReferenceTime)'));
 assert('Focus calendar container item carries exact date tasks into render', focusScript.includes('function getDateTasksForDisplay')
-    && focusScript.includes("calendar_item_type: 'due'")
-    && focusScript.includes("calendar_item_type: 'start'")
-    && focusScript.includes('tasks: taskAssignments.get(c.id) || []')
+    && schedulingScript.includes("calendar_item_type: 'due'")
+    && schedulingScript.includes("calendar_item_type: 'start'")
+    && schedulingScript.includes('tasks: taskAssignments.get(container.id) || []')
     && focusScript.includes('renderContainerTasks(item.tasks)'));
 assert('Focus calendar container card renders task list markup', focusScript.includes('function renderContainerTasks')
     && focusScript.includes('container-tasks')
@@ -385,7 +413,7 @@ assert('Focus today tomorrow task display matches Calendar start marker style',
     && focusCss.includes('.task-item-due')
     && focusCss.includes('color: #b91c1c')
     && !focusCss.includes('.task-priority-dot'));
-assert('Focus regular calendar events do not render container task list', focusScript.includes("isContainer: false")
+assert('Focus regular calendar events do not render container task list', schedulingScript.includes("isContainer: false")
     && focusScript.includes("item.isContainer ? renderContainerTasks(item.tasks) : ''"));
 assert('Focus calendar uses Calendar-like layer-aware event card rendering', focusScript.includes('function createFocusCalendarCard')
     && focusScript.includes("div.className = 'gcal-event layer-1'")
@@ -394,11 +422,11 @@ assert('Focus calendar uses Calendar-like layer-aware event card rendering', foc
     && focusScript.includes("div.style.border = `2px dashed ${darkenColor(color, 0.15)}`")
     && focusScript.includes("div.style.border = `2px dashed ${color}`")
     && focusScript.includes("div.style.borderLeft = '3px solid rgba(255,255,255,0.4)'"));
-assert('Focus calendar cards carry type/source/layer metadata like Calendar', focusScript.includes("type: 'container'")
-    && focusScript.includes("source: 'container'")
-    && focusScript.includes('layer: getContainerLayer(c)')
-    && focusScript.includes("type: 'event'")
-    && focusScript.includes("source: e.source || 'manual'")
+assert('Focus calendar cards carry type/source/layer metadata like Calendar', schedulingScript.includes("type: 'container'")
+    && schedulingScript.includes("source: 'container'")
+    && schedulingScript.includes('layer: getContainerLayer(container)')
+    && schedulingScript.includes("type: 'event'")
+    && schedulingScript.includes("source: event.source || 'manual'")
     && focusScript.includes('div.dataset.source = source')
     && focusScript.includes('div.dataset.layer = String(layer)'));
 assert('Focus calendar cards use Calendar-style localized time labels', focusScript.includes('function formatTime')
@@ -674,6 +702,23 @@ assert('Popup current task card opens local detail modal from content area',
     && !popupScript.includes('btn-task-detail')
     && !popupScript.includes('openTaskDetailInPlanner')
     && !popupScript.includes('pages/tasks/tasks.html?task_id='));
+assert('Popup detail modal allows ManageBac local execution fields only',
+    popupScript.includes('ManageBac 来源标题和截止日期只读；可修改本地状态、优先级、开始日期、定时时间、时长和笔记。')
+    && /id="detailTaskTitle"[\s\S]{0,140}\$\{isManageBacSource \? 'readonly' : ''\}/.test(popupScript)
+    && /id="detailTaskDueDate"[\s\S]{0,180}\$\{isManageBacSource \? 'disabled' : ''\}/.test(popupScript)
+    && /id="detailTaskScheduleTime"[\s\S]{0,100}>/.test(popupScript)
+    && /id="detailTaskDuration"[\s\S]{0,140}>/.test(popupScript)
+    && /id="detailTaskNotes"[\s\S]{0,80}>/.test(popupScript)
+    && /const updates = \{[\s\S]*schedule_time:[\s\S]*duration:[\s\S]*notes:[\s\S]*completed_at/.test(popupScript)
+    && /if \(!isManageBacSource\) \{[\s\S]*updates\.title[\s\S]*updates\.due_date/.test(popupScript));
+assert('Popup and Side Panel detail notes render safe external HTTP link preview',
+    popupScript.includes('data-notes-link-preview')
+    && popupScript.includes('renderTaskNotesExternalLinks(task.notes || task.description || \'\')')
+    && popupScript.includes('refreshTaskNotesExternalLinks(modal, event.target.value)')
+    && popupScript.includes("actionEl.dataset.action === 'open-external-link'")
+    && popupScript.includes('openTaskNotesExternalLink(actionEl)')
+    && popupCss.includes('.external-link-item')
+    && externalLinksScript.includes('data-action="open-external-link"'));
 assert('Popup defer updates due_date instead of start_date', /async function deferTask[\s\S]*baseDate = task\?\.due_date \|\| task\?\.deadline \|\| formatDateISO\(today\)/.test(popupScript)
     && /async function deferTask[\s\S]*updateTask\(taskId, \{ due_date: formatDateISO\(target\) \}\)/.test(popupScript)
     && !/async function deferTask[\s\S]*updateTask\(taskId, \{ start_date: nextStartDate \}\)/.test(popupScript));

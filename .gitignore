@@ -17,6 +17,9 @@ Thumbs.db
 .tmp/
 dist/
 build/
+!platforms/desktop-electron/build/
+!platforms/desktop-electron/build/icon.ico
+!platforms/desktop-electron/build/icon.png
 
 # Logs
 *.log

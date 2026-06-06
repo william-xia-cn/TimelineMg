@@ -58,6 +58,8 @@ body::before {
     height: 100vh;
     padding: 12px;
     gap: 12px;
+    min-width: 0;
+    min-height: 0;
 }
 
 /* ====================
@@ -336,6 +338,8 @@ body::before {
     flex-direction: column;
     overflow: hidden;
     position: relative;
+    min-width: 0;
+    min-height: 0;
 }
 
 .board-header {
@@ -376,7 +380,8 @@ body::before {
     border: none;
     outline: none;
     font-size: 13px;
-    width: 150px;
+    width: clamp(120px, 20vw, 170px);
+    min-width: 110px;
     background: transparent;
 }
 
@@ -457,6 +462,7 @@ body::before {
     overflow-x: auto;
     overflow-y: hidden;
     scroll-behavior: smooth;
+    min-width: 0;
 }
 
 .kanban-column {
@@ -1033,7 +1039,8 @@ body::before {
     top: 12px;
     right: 12px;
     bottom: 12px;
-    width: 400px;
+    width: min(400px, calc(100vw - 24px));
+    max-width: 400px;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(20px);
     border-radius: var(--radius-xl);
@@ -2106,10 +2113,64 @@ body::before {
     padding: 2px 6px;
 }
 
+.notes-link-preview {
+    margin-top: 8px;
+}
+
+.external-link-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.external-link-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    padding: 6px 8px;
+    border: 1px solid rgba(59, 130, 246, 0.24);
+    border-radius: 6px;
+    background: rgba(59, 130, 246, 0.06);
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.external-link-item:hover {
+    border-color: rgba(59, 130, 246, 0.42);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.external-link-item .material-symbols-outlined {
+    font-size: 16px;
+    flex: 0 0 auto;
+}
+
+.external-link-url {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* ====================
    17. Responsive
    ==================== */
 @media (max-width: 1200px) {
+    .view-tabs {
+        flex-wrap: wrap;
+        row-gap: 10px;
+        padding-bottom: 12px;
+    }
+
+    .header-actions {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
     .context-sidebar {
         width: 200px;
     }

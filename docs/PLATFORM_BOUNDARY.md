@@ -53,7 +53,9 @@ TimeWherePlatform = {
   system: {
     getDesktopSettings(),
     setDesktopSettings(settings),
-    writeWidgetSnapshot(snapshot)
+    writeWidgetSnapshot(snapshot),
+    getDesktopProfile(),
+    confirmGoogleAccountSwitch({ pending_auth_id })
   }
 }
 ```
@@ -84,6 +86,9 @@ The desktop Electron adapter uses the preload bridge for:
 - installed-app Google OAuth with PKCE using the bundled desktop OAuth client ID and artifact-bundled Desktop client metadata secret, with `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` available only as an override;
 - optional Chrome extension nonce bridge.
 - writing a sanitized `timewhere-widget-v1.json` snapshot for display-only macOS WidgetKit source preparation;
+- Google-account-bound local profile selection for the desktop shell; different
+  Google accounts must use different Electron persistent partitions after the
+  first unowned local profile is bound;
 - tray/menu-bar behavior and startup settings are persisted to
   `platforms/desktop-electron/` user data as `timewhere-desktop-settings.json`
   with `closeToTray` and `startAtLogin`; legacy `minimizeToTray` may be read or
@@ -96,6 +101,14 @@ tray/menu-bar or app menu `退出` command is the explicit full-quit path.
 Electron does not silently reuse Chrome Extension data. It uses its own Chromium IndexedDB runtime unless a future migration plan is approved.
 
 Desktop OAuth uses PKCE plus an artifact-bundled Google Desktop client metadata secret for the default Desktop client. Internal packaging generates `platforms/desktop-electron/desktop-oauth-secrets.js` from ignored local/CI input and includes it in the desktop artifact; the generated file and raw secret must not be committed or recorded in repository evidence. Ordinary users must not provide a local secret file or secret environment variable.
+
+Desktop Google Sync also requests `openid profile email` so the desktop shell can
+derive a local-only `account_key` from the Google subject and display the
+currently connected account in Settings. The key/name/email are local identity
+metadata only and must not be included in Drive sync snapshots. If the active
+desktop profile is owned by account A and OAuth authorizes account B, the shell
+must block sync with `account_mismatch` until the user confirms switching to B's
+separate local profile.
 
 Desktop refresh tokens must be encrypted with Electron `safeStorage`. If encrypted storage is unavailable, do not save a plaintext refresh token.
 

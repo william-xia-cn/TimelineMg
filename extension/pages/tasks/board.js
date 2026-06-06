@@ -328,8 +328,6 @@ function renderColumnHTML(colData) {
 function showTaskActionMenu(button) {
     const taskId = button?.dataset?.taskId;
     if (!taskId) return;
-    const task = (TaskApp.currentPlanTasks || []).find(item => String(item.id) === String(taskId));
-    const isManageBacTask = task && TimeWhereManageBac?.isManageBacTask(task);
 
     const existing = document.querySelector('.task-action-menu');
     if (existing) {
@@ -348,11 +346,10 @@ function showTaskActionMenu(button) {
             <span class="material-symbols-outlined">content_copy</span>
             复制任务
         </button>
-        ${!isManageBacTask ? `
         <button type="button" class="task-action-menu-item" data-task-menu-action="partial-complete" data-task-id="${escapeAttribute(taskId)}">
             <span class="material-symbols-outlined">checklist</span>
             部分完成
-        </button>` : ''}`;
+        </button>`;
     menu.style.top = `${rect.bottom + 6}px`;
     menu.style.left = `${Math.min(rect.left, window.innerWidth - 180)}px`;
     document.body.appendChild(menu);

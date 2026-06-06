@@ -7,8 +7,10 @@ const path = require('path');
 const AUTH_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 const REVOKE_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
-const DEFAULT_SCOPES = ['https://www.googleapis.com/auth/drive.appdata'];
+const USERINFO_ENDPOINT = 'https://openidconnect.googleapis.com/v1/userinfo';
+const DEFAULT_SCOPES = ['openid', 'profile', 'email', 'https://www.googleapis.com/auth/drive.appdata'];
 const STATE_FILE = 'google-desktop-auth.json';
+const STATE_SCHEMA = 'timewhere-desktop-google-auth-v2';
 const DEFAULT_DESKTOP_OAUTH_CLIENT_ID = [
   '541406150907',
   '0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com'
@@ -30,6 +32,10 @@ function base64Url(input) {
 
 function sha256(text) {
   return crypto.createHash('sha256').update(text).digest();
+}
+
+function sha256Hex(text) {
+  return crypto.createHash('sha256').update(String(text || '')).digest('hex');
 }
 
 function makePkcePair() {
@@ -103,11 +109,24 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
 
   async function clearState() {
     memoryAccessToken = null;
-    try {
-      await fs.unlink(getStatePath());
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
+    const state = normalizeAuthState(await readState());
+    const activeKey = state.active_account_key;
+    if (activeKey && state.accounts?.[activeKey]) {
+      state.accounts[activeKey] = {
+        ...state.accounts[activeKey],
+        encrypted_refresh_token: null,
+        disconnected_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      await writeState(state);
+      return;
     }
+    await writeState({
+      schema: STATE_SCHEMA,
+      active_account_key: null,
+      accounts: {},
+      updated_at: new Date().toISOString()
+    });
   }
 
   function encryptRefreshToken(refreshToken) {
@@ -137,6 +156,43 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
         'desktop_oauth_saved_token_unreadable'
       );
     }
+  }
+
+  function normalizeAuthState(state = {}) {
+    if (state?.schema === STATE_SCHEMA) {
+      return {
+        schema: STATE_SCHEMA,
+        active_account_key: state.active_account_key || null,
+        accounts: state.accounts && typeof state.accounts === 'object' ? { ...state.accounts } : {},
+        updated_at: state.updated_at || null
+      };
+    }
+    return {
+      schema: STATE_SCHEMA,
+      active_account_key: null,
+      accounts: {},
+      legacy: state?.encrypted_refresh_token ? { ...state } : null,
+      updated_at: state?.updated_at || null
+    };
+  }
+
+  function publicAccountInfo(account = null, connected = false) {
+    if (!account) {
+      return { status: 'not_connected', connected: false, account_key: null, name: null, email: null };
+    }
+    return {
+      status: connected ? 'connected' : 'disconnected',
+      connected: Boolean(connected),
+      account_key: account.account_key || null,
+      name: account.name || null,
+      email: account.email || null
+    };
+  }
+
+  function getActiveAccount(state = normalizeAuthState()) {
+    const activeKey = state.active_account_key;
+    if (!activeKey) return null;
+    return state.accounts?.[activeKey] || null;
   }
 
   function rememberAccessToken(tokenResponse) {
@@ -178,6 +234,69 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
     return json;
   }
 
+  async function requestGoogleUserInfo(accessToken) {
+    const userInfoFetch = getDesktopFetchImpl(fetchImpl);
+    if (typeof userInfoFetch !== 'function') {
+      throw makeAuthError('Fetch implementation is unavailable for Google account info', 'desktop_oauth_fetch_unavailable');
+    }
+    let response = null;
+    try {
+      response = await userInfoFetch(USERINFO_ENDPOINT, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+    } catch (error) {
+      throw makeAuthError(
+        `Google account info request failed: ${error.message || 'fetch failed'}`,
+        'desktop_oauth_account_info_failed'
+      );
+    }
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const errorCode = json.error || `http_${response.status}`;
+      throw makeAuthError(
+        `Google account info request failed (${response.status}): ${json.error_description || json.error || 'unknown error'}`,
+        errorCode === 'invalid_token' ? 'desktop_oauth_account_required' : 'desktop_oauth_account_info_failed'
+      );
+    }
+    if (!json.sub) {
+      throw makeAuthError('Google account info response is missing subject', 'desktop_oauth_account_required');
+    }
+    return {
+      account_key: sha256Hex(json.sub),
+      name: json.name || null,
+      email: json.email || null
+    };
+  }
+
+  async function persistAuthorizedAccount(tokenResponse, scopes, previousState = {}, fallbackRefreshToken = null) {
+    const token = rememberAccessToken(tokenResponse);
+    const accountInfo = await requestGoogleUserInfo(token.token);
+    const state = normalizeAuthState(previousState);
+    const existing = state.accounts?.[accountInfo.account_key] || {};
+    const refreshToken = tokenResponse.refresh_token
+      || fallbackRefreshToken
+      || (existing.encrypted_refresh_token ? decryptRefreshToken(existing) : null);
+    if (!refreshToken) {
+      throw new Error('Google OAuth did not return a refresh token; please retry authorization.');
+    }
+    state.accounts = state.accounts || {};
+    state.accounts[accountInfo.account_key] = {
+      ...existing,
+      ...accountInfo,
+      encrypted_refresh_token: encryptRefreshToken(refreshToken),
+      connected_at: existing.connected_at || new Date().toISOString(),
+      disconnected_at: null,
+      updated_at: new Date().toISOString(),
+      scopes
+    };
+    state.active_account_key = accountInfo.account_key;
+    state.updated_at = new Date().toISOString();
+    delete state.legacy;
+    await writeState(state);
+    return accountInfo;
+  }
+
   async function refreshAccessToken(credentials, refreshToken) {
     const tokenResponse = await requestToken(compactObject({
       client_id: credentials.clientId,
@@ -186,7 +305,7 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
       grant_type: 'refresh_token'
     }));
     rememberAccessToken(tokenResponse);
-    return memoryAccessToken;
+    return { token: memoryAccessToken, tokenResponse };
   }
 
   function startAuthorizationServer(expectedState, timeoutMs = 90000) {
@@ -244,7 +363,7 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
     return { listeningPromise, codePromise };
   }
 
-  async function interactiveAuthorize(credentials, scopes) {
+  async function interactiveAuthorize(credentials, scopes, options = {}) {
     const pkce = makePkcePair();
     const state = base64Url(crypto.randomBytes(24));
     const authServer = startAuthorizationServer(state);
@@ -259,7 +378,7 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
     authorizationUrl.searchParams.set('code_challenge', pkce.challenge);
     authorizationUrl.searchParams.set('code_challenge_method', 'S256');
     authorizationUrl.searchParams.set('access_type', 'offline');
-    authorizationUrl.searchParams.set('prompt', 'consent');
+    authorizationUrl.searchParams.set('prompt', options.force_account_selection ? 'select_account consent' : 'consent');
     await shell.openExternal(authorizationUrl.toString());
     const code = await authServer.codePromise;
     const tokenResponse = await requestToken(compactObject({
@@ -270,33 +389,32 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
       redirect_uri: redirectUri,
       grant_type: 'authorization_code'
     }));
-    rememberAccessToken(tokenResponse);
     const previousState = await readState();
-    const refreshToken = tokenResponse.refresh_token || decryptRefreshToken(previousState);
-    if (!refreshToken) {
-      throw new Error('Google OAuth did not return a refresh token; please retry authorization.');
-    }
-    await writeState({
-      schema: 'timewhere-desktop-google-auth-v1',
-      encrypted_refresh_token: encryptRefreshToken(refreshToken),
-      connected_at: previousState.connected_at || new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      scopes
-    });
-    return memoryAccessToken;
+    const normalized = normalizeAuthState(previousState);
+    const legacyRefreshToken = normalized.legacy?.encrypted_refresh_token ? decryptRefreshToken(normalized.legacy) : null;
+    const accountInfo = await persistAuthorizedAccount(tokenResponse, scopes, previousState, legacyRefreshToken);
+    return { token: memoryAccessToken, accountInfo };
   }
 
   async function getGoogleToken(options = {}) {
     const credentials = getDesktopOAuthCredentials();
     if (!credentials.clientId) return { status: 'not_configured', reason: 'desktop_oauth_client_id_missing' };
-    if (memoryAccessToken && memoryAccessToken.expires_at > Date.now()) {
-      return { status: 'ok', token: memoryAccessToken.token };
-    }
     const scopes = Array.isArray(options.scopes) && options.scopes.length ? options.scopes : DEFAULT_SCOPES;
     const state = await readState();
+    const normalized = normalizeAuthState(state);
+    const activeAccount = getActiveAccount(normalized);
+    if (!options.force_account_selection && memoryAccessToken && memoryAccessToken.expires_at > Date.now() && activeAccount?.account_key) {
+      return { status: 'ok', token: memoryAccessToken.token, account_info: publicAccountInfo(activeAccount, Boolean(activeAccount.encrypted_refresh_token)) };
+    }
     let refreshToken = null;
+    let refreshAccount = activeAccount;
     try {
-      refreshToken = decryptRefreshToken(state);
+      if (!options.force_account_selection && activeAccount?.encrypted_refresh_token) {
+        refreshToken = decryptRefreshToken(activeAccount);
+      } else if (!options.force_account_selection && normalized.legacy?.encrypted_refresh_token) {
+        refreshToken = decryptRefreshToken(normalized.legacy);
+        refreshAccount = null;
+      }
     } catch (error) {
       if (!options.interactive) {
         return {
@@ -309,8 +427,18 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
     }
     if (refreshToken) {
       try {
-        await refreshAccessToken(credentials, refreshToken);
-        return { status: 'ok', token: memoryAccessToken.token };
+        const refreshed = await refreshAccessToken(credentials, refreshToken);
+        if (refreshAccount?.account_key) {
+          return { status: 'ok', token: refreshed.token.token, account_info: publicAccountInfo(refreshAccount, true) };
+        }
+        if (!options.interactive) {
+          return {
+            status: 'not_authorized',
+            reason: 'desktop_oauth_account_required',
+            message: 'Desktop Google authorization must be reconnected once to identify the account for local data isolation.'
+          };
+        }
+        await clearState();
       } catch (error) {
         if (!options.interactive) throw error;
         await clearState();
@@ -323,14 +451,15 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
         'desktop_token_storage_unavailable'
       );
     }
-    await interactiveAuthorize(credentials, scopes);
-    return { status: 'ok', token: memoryAccessToken.token };
+    const authorized = await interactiveAuthorize(credentials, scopes, options);
+    return { status: 'ok', token: authorized.token.token, account_info: publicAccountInfo(authorized.accountInfo, true) };
   }
 
   async function revokeGoogleToken() {
     const clientId = getDesktopOAuthClientId();
-    const state = await readState();
-    const refreshToken = state?.encrypted_refresh_token ? decryptRefreshToken(state) : null;
+    const state = normalizeAuthState(await readState());
+    const activeAccount = getActiveAccount(state);
+    const refreshToken = activeAccount?.encrypted_refresh_token ? decryptRefreshToken(activeAccount) : null;
     const token = memoryAccessToken?.token || refreshToken;
     const tokenFetch = getDesktopFetchImpl(fetchImpl);
     if (token && clientId && typeof tokenFetch === 'function') {
@@ -348,19 +477,23 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
     async getStatus() {
       const credentials = getDesktopOAuthCredentials();
       if (!credentials.clientId) return { status: 'not_configured', reason: 'desktop_oauth_client_id_missing' };
-      const state = await readState();
+      const state = normalizeAuthState(await readState());
+      const activeAccount = getActiveAccount(state);
       return {
         status: 'configured',
         auth_mode: credentials.clientSecret
           ? 'pkce_desktop_client_metadata_secret'
           : 'pkce_public_client_override',
-        connected: Boolean(state?.encrypted_refresh_token),
+        connected: Boolean(activeAccount?.encrypted_refresh_token),
+        account_info: publicAccountInfo(activeAccount, Boolean(activeAccount?.encrypted_refresh_token)),
         encrypted_storage_available: hasEncryptedStorage()
       };
     },
     getGoogleToken,
     async getAccountInfo() {
-      return { email: null };
+      const state = normalizeAuthState(await readState());
+      const activeAccount = getActiveAccount(state);
+      return publicAccountInfo(activeAccount, Boolean(activeAccount?.encrypted_refresh_token));
     },
     revokeGoogleToken
   };

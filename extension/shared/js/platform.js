@@ -18,6 +18,18 @@
         return chromeRef?.runtime?.lastError?.message || '';
     }
 
+    function normalizeExternalHttpUrl(value) {
+        const raw = String(value || '').trim();
+        if (!/^https?:\/\//i.test(raw)) return null;
+        try {
+            const url = new URL(raw);
+            if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+            return url.href;
+        } catch (_) {
+            return null;
+        }
+    }
+
     function chromeCallbackPromise(chromeRef, invoke) {
         return new Promise((resolve, reject) => {
             try {
@@ -176,6 +188,18 @@
                     return { status: 'not_supported', reason: 'already_running_in_chrome_extension' };
                 }
             },
+            external: {
+                async openUrl(url) {
+                    const normalizedUrl = normalizeExternalHttpUrl(url);
+                    if (!normalizedUrl) return { status: 'invalid', reason: 'unsupported_url_protocol' };
+                    if (chromeRef?.tabs?.create) {
+                        await chromeCallbackPromise(chromeRef, done => chromeRef.tabs.create({ url: normalizedUrl }, done));
+                        return { status: 'opened', url: normalizedUrl };
+                    }
+                    global.open?.(normalizedUrl, '_blank', 'noopener,noreferrer');
+                    return { status: 'opened', url: normalizedUrl };
+                }
+            },
             system: {
                 getDesktopSettings() {
                     return { status: 'not_supported', reason: 'already_running_in_chrome_extension' };
@@ -184,6 +208,12 @@
                     return { status: 'not_supported', reason: 'already_running_in_chrome_extension' };
                 },
                 writeWidgetSnapshot() {
+                    return { status: 'not_supported', reason: 'already_running_in_chrome_extension' };
+                },
+                getDesktopProfile() {
+                    return { status: 'not_supported', reason: 'already_running_in_chrome_extension' };
+                },
+                confirmGoogleAccountSwitch() {
                     return { status: 'not_supported', reason: 'already_running_in_chrome_extension' };
                 }
             }
@@ -297,6 +327,11 @@
                     return call('chromeBridge.status');
                 }
             },
+            external: {
+                openUrl(url) {
+                    return call('external.openUrl', { url });
+                }
+            },
             system: {
                 getDesktopSettings() {
                     return call('system.getDesktopSettings');
@@ -306,6 +341,12 @@
                 },
                 writeWidgetSnapshot(snapshot = {}) {
                     return call('system.writeWidgetSnapshot', snapshot);
+                },
+                getDesktopProfile() {
+                    return call('system.getDesktopProfile');
+                },
+                confirmGoogleAccountSwitch(payload = {}) {
+                    return call('system.confirmGoogleAccountSwitch', payload);
                 }
             }
         };
@@ -347,10 +388,20 @@
                 revokeGoogleToken: () => ({ status: 'not_supported' })
             },
             chromeBridge: { connectExtension: notSupported, getStatus: notSupported },
+            external: {
+                openUrl(url) {
+                    const normalizedUrl = normalizeExternalHttpUrl(url);
+                    if (!normalizedUrl) return { status: 'invalid', reason: 'unsupported_url_protocol' };
+                    global.open?.(normalizedUrl, '_blank', 'noopener,noreferrer');
+                    return { status: 'opened', url: normalizedUrl };
+                }
+            },
             system: {
                 getDesktopSettings: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
                 setDesktopSettings: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
-                writeWidgetSnapshot: () => ({ status: 'not_supported', reason: 'platform_unavailable' })
+                writeWidgetSnapshot: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
+                getDesktopProfile: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
+                confirmGoogleAccountSwitch: () => ({ status: 'not_supported', reason: 'platform_unavailable' })
             }
         };
     }
@@ -368,6 +419,7 @@
         badge: ['set', 'clear'],
         auth: ['getStatus', 'getGoogleToken', 'getAccountInfo', 'revokeGoogleToken'],
         chromeBridge: ['connectExtension', 'getStatus'],
-        system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot']
+        external: ['openUrl'],
+        system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'confirmGoogleAccountSwitch']
     };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

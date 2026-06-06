@@ -133,18 +133,14 @@ function renderCurrentTaskCard(task, index, expandedIndex = 0) {
     const statusLabel = getPopupTaskStatusLabel(task.progress);
     const checklistHtml = renderPopupTaskChecklist(task);
     const assignment = task.assignment || { status: 'unassigned', label: '当前未分配' };
-    const partialCompleteBtn = !isManageBacSource
-        ? `<button class="btn-micro" data-action="toggle-partial-complete-menu" data-task-id="${taskId}" aria-expanded="false">部分完成</button>`
-        : '';
+    const partialCompleteBtn = `<button class="btn-micro" data-action="toggle-partial-complete-menu" data-task-id="${taskId}" aria-expanded="false">部分完成</button>`;
     const checklist = Array.isArray(task.checklist) ? task.checklist : [];
     const partialGroup = findPartialCompletionGroup(checklist);
-    const partialCompleteMenuHtml = !isManageBacSource
-        ? `<div class="popup-partial-complete-panel" data-partial-complete-menu-for="${taskId}" hidden>
+    const partialCompleteMenuHtml = `<div class="popup-partial-complete-panel" data-partial-complete-menu-for="${taskId}" hidden>
             ${partialGroup || checklist.length === 0
                 ? renderPartialCompleteRatioBody(taskId, partialGroup)
                 : renderPartialCompleteChecklistBody(taskId, checklist)}
-        </div>`
-        : '';
+        </div>`;
 
     const progressBtns = isInProgress
         ? `<button class="btn-micro" data-action="pause" data-task-id="${taskId}">暂停</button>
@@ -434,6 +430,10 @@ async function handleTaskActionClick(event) {
     event.preventDefault();
     event.stopPropagation();
 
+    if (actionEl.dataset.action === 'open-external-link') {
+        await runPopupAction(actionEl, async () => openTaskNotesExternalLink(actionEl));
+        return;
+    }
     if (actionEl.dataset.action === 'quick-add-current-task') {
         await openSidepanelQuickAddTaskModal();
         return;
@@ -969,7 +969,7 @@ async function openCurrentTaskDetailModal(taskId) {
                 </button>
             </div>
             <div class="popup-modal-body">
-                ${isManageBacSource ? '<p class="source-readonly-hint">ManageBac 来源内容只读；可修改本地状态、优先级和开始日期。</p>' : ''}
+                ${isManageBacSource ? '<p class="source-readonly-hint">ManageBac 来源标题和截止日期只读；可修改本地状态、优先级、开始日期、定时时间、时长和笔记。</p>' : ''}
                 <label>任务标题<input type="text" id="detailTaskTitle" value="${escapeAttribute(task.title || '')}" ${isManageBacSource ? 'readonly' : ''}></label>
                 <div class="popup-detail-grid">
                     <label>状态<select id="detailTaskProgress">
@@ -989,10 +989,11 @@ async function openCurrentTaskDetailModal(taskId) {
                     <label>截止日期<input type="date" id="detailTaskDueDate" value="${escapeAttribute(task.due_date || task.deadline || '')}" ${isManageBacSource ? 'disabled' : ''}></label>
                 </div>
                 <div class="popup-detail-grid">
-                    <label>定时时间<input type="time" id="detailTaskScheduleTime" value="${escapeAttribute(task.schedule_time || '')}" ${isManageBacSource ? 'disabled' : ''}></label>
-                    <label>时长<input type="number" id="detailTaskDuration" value="${escapeAttribute(String(task.duration || 45))}" min="5" max="480" step="5" ${isManageBacSource ? 'disabled' : ''}></label>
+                    <label>定时时间<input type="time" id="detailTaskScheduleTime" value="${escapeAttribute(task.schedule_time || '')}"></label>
+                    <label>时长<input type="number" id="detailTaskDuration" value="${escapeAttribute(String(task.duration || 45))}" min="5" max="480" step="5"></label>
                 </div>
-                <label>说明<textarea id="detailTaskNotes" rows="3" ${isManageBacSource ? 'readonly' : ''}>${escapeHTML(task.notes || task.description || '')}</textarea></label>
+                <label>说明<textarea id="detailTaskNotes" rows="3">${escapeHTML(task.notes || task.description || '')}</textarea></label>
+                <div class="notes-link-preview" data-notes-link-preview>${renderTaskNotesExternalLinks(task.notes || task.description || '')}</div>
             </div>
             <div class="popup-modal-footer">
                 <button class="btn-micro" data-action="close-current-task-detail">取消</button>
@@ -1000,6 +1001,9 @@ async function openCurrentTaskDetailModal(taskId) {
             </div>
         </div>`;
     document.body.appendChild(modal);
+    document.getElementById('detailTaskNotes')?.addEventListener('input', event => {
+        refreshTaskNotesExternalLinks(modal, event.target.value);
+    });
     setTimeout(() => document.getElementById('detailTaskTitle')?.focus(), 50);
 }
 
@@ -1024,6 +1028,9 @@ async function saveCurrentTaskDetailModal() {
         progress,
         priority: document.getElementById('detailTaskPriority')?.value || 'medium',
         start_date: document.getElementById('detailTaskStartDate')?.value || null,
+        schedule_time: document.getElementById('detailTaskScheduleTime')?.value || null,
+        duration: parseInt(document.getElementById('detailTaskDuration')?.value || '45', 10) || 45,
+        notes: document.getElementById('detailTaskNotes')?.value || '',
         completed_at: progress === 'completed' ? (task.completed_at || new Date().toISOString()) : null
     };
     if (!isManageBacSource) {
@@ -1031,13 +1038,25 @@ async function saveCurrentTaskDetailModal() {
         if (!title) throw new Error('请输入任务标题');
         updates.title = title;
         updates.due_date = document.getElementById('detailTaskDueDate')?.value || null;
-        updates.schedule_time = document.getElementById('detailTaskScheduleTime')?.value || null;
-        updates.duration = parseInt(document.getElementById('detailTaskDuration')?.value || '45', 10) || 45;
-        updates.notes = document.getElementById('detailTaskNotes')?.value || '';
     }
     await TimeWhereDB.updateTask(taskId, updates);
     closeCurrentTaskDetailModal();
     showToast('任务详情已更新', 'success');
+}
+
+function renderTaskNotesExternalLinks(text) {
+    return globalThis.TimeWhereExternalLinks?.renderExternalLinkList?.(text || '') || '';
+}
+
+function refreshTaskNotesExternalLinks(root, text) {
+    const target = root?.querySelector('[data-notes-link-preview]');
+    if (target) target.innerHTML = renderTaskNotesExternalLinks(text);
+}
+
+async function openTaskNotesExternalLink(button) {
+    const url = button?.dataset?.url || '';
+    if (!globalThis.TimeWhereExternalLinks?.openExternalUrl) throw new Error('外部链接模块未加载');
+    await globalThis.TimeWhereExternalLinks.openExternalUrl(url);
 }
 
 async function startTask(taskId) {
@@ -1235,11 +1254,6 @@ async function savePopupTaskPartialCompleteRatio(taskId, percent) {
         showToast('任务不存在或已删除', 'error');
         return;
     }
-    if (TimeWhereDB.isManageBacSourceTask?.(task)) {
-        showToast('ManageBac 来源任务不能使用部分完成', 'error');
-        return;
-    }
-
     const currentChecklist = Array.isArray(task.checklist) ? task.checklist : [];
     const partialGroup = findPartialCompletionGroup(currentChecklist);
     const partialItems = buildPartialCompletionChecklist(percent, partialGroup);
@@ -1256,11 +1270,6 @@ async function savePopupTaskPartialCompleteChecklistItem(taskId, checklistId, ch
         showToast('任务不存在或已删除', 'error');
         return;
     }
-    if (TimeWhereDB.isManageBacSourceTask?.(task)) {
-        showToast('ManageBac 来源任务不能使用部分完成', 'error');
-        return;
-    }
-
     const checklist = (task.checklist || []).map(item =>
         String(item.id) === String(checklistId) ? { ...item, checked: !!checked } : item
     );
