@@ -140,6 +140,18 @@
                 },
                 async rescheduleAll() {
                     return { status: 'not_supported', reason: 'chrome_background_alarm_managed' };
+                },
+                async getWorkReminderState() {
+                    if (!chromeRef?.runtime?.sendMessage) return { status: 'not_supported' };
+                    return await chromeCallbackPromise(chromeRef, done =>
+                        chromeRef.runtime.sendMessage({ type: 'TIMEWHERE_WORK_REMINDER_STATE' }, done)
+                    );
+                },
+                async stopCurrentWorkReminder() {
+                    if (!chromeRef?.runtime?.sendMessage) return { status: 'not_supported' };
+                    return await chromeCallbackPromise(chromeRef, done =>
+                        chromeRef.runtime.sendMessage({ type: 'TIMEWHERE_WORK_REMINDER_STOP' }, done)
+                    );
                 }
             },
             badge: {
@@ -370,6 +382,12 @@
                 },
                 rescheduleAll(reminders = []) {
                     return call('reminderRuntime.rescheduleAll', { reminders });
+                },
+                getWorkReminderState() {
+                    return global.TimeWhereDesktopReminders?.readReminderState?.() || { status: 'not_supported' };
+                },
+                stopCurrentWorkReminder() {
+                    return global.TimeWhereDesktopReminders?.stopCurrentReminder?.() || { status: 'not_supported' };
                 }
             },
             badge: {
@@ -474,7 +492,7 @@
                 }
             },
             notification: { notify: notSupported, onClick: () => () => {}, onClose: () => () => {} },
-            reminderRuntime: { schedule: notSupported, cancel: notSupported, rescheduleAll: notSupported },
+            reminderRuntime: { schedule: notSupported, cancel: notSupported, rescheduleAll: notSupported, getWorkReminderState: notSupported, stopCurrentWorkReminder: notSupported },
             badge: { set: notSupported, clear: notSupported },
             auth: {
                 getStatus: () => ({ status: 'not_configured', reason: 'platform_unavailable' }),
@@ -513,7 +531,7 @@
         name: true,
         window: ['openMain', 'openQuickPanel', 'focus', 'show', 'hide', 'onActivated'],
         notification: ['notify', 'onClick', 'onClose'],
-        reminderRuntime: ['schedule', 'cancel', 'rescheduleAll'],
+        reminderRuntime: ['schedule', 'cancel', 'rescheduleAll', 'getWorkReminderState', 'stopCurrentWorkReminder'],
         badge: ['set', 'clear'],
         auth: ['getStatus', 'getGoogleToken', 'getAccountInfo', 'getDiagnostics', 'disconnectGoogleToken', 'revokeGoogleToken'],
         chromeBridge: ['connectExtension', 'getStatus'],

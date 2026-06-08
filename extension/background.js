@@ -8,7 +8,11 @@ importScripts('shared/js/scheduling.js', 'shared/js/reminders.js');
 
 const TASK_REMINDER_ALARM = 'timewhere-task-reminder-tick';
 const TASK_REMINDER_SENT_KEY = 'timewhere_task_reminder_sent';
+const TASK_REMINDER_SESSION_KEY = 'timewhere_work_reminder_state_v1';
+const TASK_REMINDER_NOTIFICATION_PREFIX = 'timewhere-work-reminder:';
 const TASK_REMINDER_ALARM_PERIOD_MINUTES = 1;
+const TASK_REMINDER_RENOTIFY_COOLDOWN_MS = 60 * 1000;
+const TASK_REMINDER_EXECUTION_CHECK_MS = 30 * 60 * 1000;
 const TASK_REMINDER_DEBUG_NOTIFICATIONS = false;
 const TASK_REMINDER_DIAGNOSTIC_ALARM = 'timewhere-task-reminder-diagnostic';
 const TASK_REMINDER_DIAGNOSTIC_DELAY_MINUTES = 0.5;
@@ -620,13 +624,138 @@ async function saveReminderSentState(sentState, now) {
     await chrome.storage.local.set({ [TASK_REMINDER_SENT_KEY]: compact });
 }
 
+function cloneReminderValue(value) {
+    return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function createReminderSessionId(now = new Date()) {
+    return `chrome-work-reminder:${now.getTime()}:${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function normalizeWorkReminderState(value = {}) {
+    const state = value && typeof value === 'object' ? cloneReminderValue(value) : {};
+    return {
+        schema: TASK_REMINDER_SESSION_KEY,
+        session_id: state.session_id || null,
+        status: state.status || 'idle',
+        due_key: state.due_key || null,
+        bucket: state.bucket || null,
+        phase: state.phase || null,
+        created_at: state.created_at || null,
+        last_notified_at: state.last_notified_at || null,
+        notification_closed_at: state.notification_closed_at || null,
+        handled_at: state.handled_at || null,
+        execution_check_at: state.execution_check_at || null,
+        task_ids: Array.isArray(state.task_ids) ? state.task_ids.map(id => String(id)) : [],
+        items: Array.isArray(state.items) ? state.items : [],
+        total_count: Number(state.total_count) || 0,
+        cooldown_until: state.cooldown_until || null,
+        stopped_at: state.stopped_at || null,
+        stop_reason: state.stop_reason || null
+    };
+}
+
+async function getWorkReminderState() {
+    const result = await chrome.storage.local.get(TASK_REMINDER_SESSION_KEY);
+    return normalizeWorkReminderState(result[TASK_REMINDER_SESSION_KEY]);
+}
+
+async function saveWorkReminderState(state) {
+    const normalized = normalizeWorkReminderState(state);
+    await chrome.storage.local.set({ [TASK_REMINDER_SESSION_KEY]: normalized });
+    return normalized;
+}
+
+function buildIdleWorkReminderState(now = new Date(), reason = 'no_due_work') {
+    return {
+        schema: TASK_REMINDER_SESSION_KEY,
+        status: 'idle',
+        session_id: null,
+        due_key: null,
+        bucket: null,
+        phase: null,
+        created_at: null,
+        last_notified_at: null,
+        notification_closed_at: null,
+        handled_at: null,
+        execution_check_at: null,
+        task_ids: [],
+        items: [],
+        total_count: 0,
+        cooldown_until: null,
+        stopped_at: null,
+        stop_reason: reason,
+        updated_at: now.toISOString()
+    };
+}
+
+function buildVisibleWorkReminderState(previousState, reminder, now = new Date(), phase = 'due') {
+    const previous = normalizeWorkReminderState(previousState);
+    const taskIds = (reminder.task_ids || [])
+        .map(id => String(id))
+        .filter(Boolean);
+    return {
+        ...previous,
+        schema: TASK_REMINDER_SESSION_KEY,
+        session_id: previous.session_id || createReminderSessionId(now),
+        status: 'notification_visible',
+        due_key: reminder.key || null,
+        bucket: reminder.bucket || null,
+        phase,
+        created_at: previous.created_at || now.toISOString(),
+        last_notified_at: now.toISOString(),
+        notification_closed_at: null,
+        handled_at: null,
+        execution_check_at: null,
+        task_ids: taskIds,
+        items: Array.isArray(reminder.items) ? reminder.items : [],
+        total_count: Number(reminder.total_count) || taskIds.length || 1,
+        cooldown_until: null,
+        stopped_at: null,
+        stop_reason: null,
+        updated_at: now.toISOString()
+    };
+}
+
+function parseReminderTime(value) {
+    if (!value) return null;
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : null;
+}
+
+function getTaskIdsSignature(taskIds = []) {
+    return (taskIds || [])
+        .map(id => String(id))
+        .filter(Boolean)
+        .sort()
+        .join('|');
+}
+
+function isSameWorkReminderSession(state, reminder) {
+    return state?.due_key
+        && reminder?.key
+        && String(state.due_key) === String(reminder.key)
+        && getTaskIdsSignature(state.task_ids) === getTaskIdsSignature(reminder.task_ids);
+}
+
+function createWorkReminderNotificationId(reminder = {}) {
+    return `${TASK_REMINDER_NOTIFICATION_PREFIX}${reminder.key || Date.now()}`;
+}
+
+function getWorkReminderKeyFromNotificationId(notificationId = '') {
+    return String(notificationId || '').startsWith(TASK_REMINDER_NOTIFICATION_PREFIX)
+        ? String(notificationId).slice(TASK_REMINDER_NOTIFICATION_PREFIX.length)
+        : '';
+}
+
 async function createTaskReminderNotification(reminder) {
     const payload = globalThis.TimeWhereReminders.buildReminderNotificationPayload(reminder);
     if (payload.iconUrl && !/^https?:|^chrome-extension:/i.test(payload.iconUrl)) {
         payload.iconUrl = chrome.runtime.getURL(payload.iconUrl);
     }
-    const notificationId = `timewhere-task:${reminder.task_id}:${reminder.type}:${reminder.bucket}`;
+    const notificationId = createWorkReminderNotificationId(reminder);
     await chrome.notifications.create(notificationId, payload);
+    return notificationId;
 }
 
 function formatClockTime(date) {
@@ -696,6 +825,69 @@ async function createTaskReminderTestNotification() {
     return { alarm, diagnosticAlarm };
 }
 
+async function handleWorkReminderNotificationClick(notificationId) {
+    const key = getWorkReminderKeyFromNotificationId(notificationId);
+    if (!key) return { status: 'ignored' };
+    const now = new Date();
+    const state = await getWorkReminderState();
+    const next = {
+        ...state,
+        schema: TASK_REMINDER_SESSION_KEY,
+        session_id: state.session_id || createReminderSessionId(now),
+        status: 'execution_check_waiting',
+        due_key: state.due_key || key,
+        phase: 'execution_check_waiting',
+        created_at: state.created_at || now.toISOString(),
+        handled_at: now.toISOString(),
+        execution_check_at: new Date(now.getTime() + TASK_REMINDER_EXECUTION_CHECK_MS).toISOString(),
+        notification_closed_at: null,
+        cooldown_until: null,
+        updated_at: now.toISOString()
+    };
+    await saveWorkReminderState(next);
+    return { status: 'handled', key: next.due_key, execution_check_at: next.execution_check_at };
+}
+
+async function handleWorkReminderNotificationClosed(notificationId, byUser) {
+    const key = getWorkReminderKeyFromNotificationId(notificationId);
+    if (!key || byUser !== true) return { status: 'ignored' };
+    const now = new Date();
+    const state = await getWorkReminderState();
+    if (state.status !== 'notification_visible') return { status: 'ignored', reason: 'not_visible' };
+    if (state.due_key && String(state.due_key) !== String(key)) {
+        return { status: 'ignored', reason: 'stale_notification' };
+    }
+    const next = {
+        ...state,
+        status: 'renotify_waiting',
+        notification_closed_at: now.toISOString(),
+        cooldown_until: new Date(now.getTime() + TASK_REMINDER_RENOTIFY_COOLDOWN_MS).toISOString(),
+        updated_at: now.toISOString()
+    };
+    await saveWorkReminderState(next);
+    return { status: 'closed', key: state.due_key, cooldown_until: next.cooldown_until };
+}
+
+async function stopCurrentWorkReminder() {
+    const now = new Date();
+    const state = await getWorkReminderState();
+    if (!state.session_id && state.status === 'idle') {
+        return { status: 'no_active_reminder', state };
+    }
+    const next = {
+        ...state,
+        status: 'stopped',
+        phase: 'stopped',
+        stopped_at: now.toISOString(),
+        stop_reason: 'user_stopped',
+        notification_closed_at: null,
+        cooldown_until: null,
+        updated_at: now.toISOString()
+    };
+    await saveWorkReminderState(next);
+    return { status: 'stopped', state: next };
+}
+
 async function runTaskReminderTick(now = new Date()) {
     if (!chrome.notifications || !chrome.storage?.local) return { sent: 0, skipped: true };
     const { tasks, containers, settings } = await readReminderData();
@@ -704,23 +896,57 @@ async function runTaskReminderTick(now = new Date()) {
         return { sent: 0, skipped: true, reason: 'disabled' };
     }
     const todayContainers = getTodayContainers(containers, now);
-    const sentState = await getReminderSentState();
     const aggregatedReminder = globalThis.TimeWhereReminders.computeAggregatedReminder(
         tasks,
         todayContainers,
         now,
         globalThis.TimeWhereScheduling,
-        sentState
+        {}
     );
-    const reminders = aggregatedReminder ? [aggregatedReminder] : [];
+    const state = await getWorkReminderState();
 
-    for (const reminder of reminders) {
-        await createTaskReminderNotification(reminder);
-        sentState[reminder.key] = new Date().toISOString();
+    if (!aggregatedReminder) {
+        if (state.status !== 'idle') {
+            await saveWorkReminderState(buildIdleWorkReminderState(now));
+        }
+        await createTaskReminderDebugNotification(now, [], '没有符合当前提醒规则的工作');
+        return { sent: 0 };
     }
-    await saveReminderSentState(sentState, now);
-    await createTaskReminderDebugNotification(now, reminders);
-    return { sent: reminders.length };
+
+    let shouldNotify = false;
+    let phase = 'due';
+    if (state.status === 'notification_visible') {
+        await createTaskReminderDebugNotification(now, [], '当前工作提醒通知仍在显示');
+        return { sent: 0, state: 'notification_visible' };
+    }
+    if (state.status === 'renotify_waiting') {
+        const cooldownUntil = parseReminderTime(state.cooldown_until);
+        if (cooldownUntil && now.getTime() < cooldownUntil) {
+            await createTaskReminderDebugNotification(now, [], '工作提醒关闭后等待冷却');
+            return { sent: 0, state: 'renotify_waiting' };
+        }
+        shouldNotify = true;
+        phase = state.phase || 'due';
+    } else if (state.status === 'execution_check_waiting') {
+        const checkAt = parseReminderTime(state.execution_check_at);
+        if (checkAt && now.getTime() < checkAt) {
+            await createTaskReminderDebugNotification(now, [], '工作提醒已处理，等待执行检查');
+            return { sent: 0, state: 'execution_check_waiting' };
+        }
+        shouldNotify = true;
+        phase = 'execution_check';
+    } else if (state.status === 'stopped' && isSameWorkReminderSession(state, aggregatedReminder)) {
+        await createTaskReminderDebugNotification(now, [], '当前工作提醒已停止');
+        return { sent: 0, state: 'stopped' };
+    } else {
+        shouldNotify = true;
+    }
+
+    if (!shouldNotify) return { sent: 0 };
+    await createTaskReminderNotification(aggregatedReminder);
+    await saveWorkReminderState(buildVisibleWorkReminderState(state, aggregatedReminder, now, phase));
+    await createTaskReminderDebugNotification(now, [aggregatedReminder]);
+    return { sent: 1, state: 'notification_visible' };
 }
 
 function isAllowedManageBacIcsUrl(rawUrl) {
@@ -780,6 +1006,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === 'TIMEWHERE_TASK_REMINDER_STATUS') {
         getTaskReminderStatus()
             .then(status => sendResponse({ ok: true, ...status }))
+            .catch(error => sendResponse({ ok: false, error: error.message }));
+        return true;
+    }
+
+    if (message?.type === 'TIMEWHERE_WORK_REMINDER_STATE') {
+        getWorkReminderState()
+            .then(state => sendResponse({ ok: true, state }))
+            .catch(error => sendResponse({ ok: false, error: error.message }));
+        return true;
+    }
+
+    if (message?.type === 'TIMEWHERE_WORK_REMINDER_STOP') {
+        stopCurrentWorkReminder()
+            .then(result => sendResponse({ ok: true, ...result }))
             .catch(error => sendResponse({ ok: false, error: error.message }));
         return true;
     }
@@ -858,9 +1098,18 @@ chrome.notifications?.onClicked.addListener(notificationId => {
         });
         return;
     }
-    if (!notificationId.startsWith('timewhere-task:')) return;
-    const [, taskId] = notificationId.split(':');
+    if (!notificationId.startsWith(TASK_REMINDER_NOTIFICATION_PREFIX)) return;
+    handleWorkReminderNotificationClick(notificationId).catch(error => {
+        console.error('TimeWhere: work reminder click state failed', error);
+    });
     chrome.tabs.create({
-        url: `pages/focus/focus.html?task_id=${encodeURIComponent(taskId)}`
+        url: 'pages/focus/focus.html'
+    });
+});
+
+chrome.notifications?.onClosed.addListener((notificationId, byUser) => {
+    if (!String(notificationId || '').startsWith(TASK_REMINDER_NOTIFICATION_PREFIX)) return;
+    handleWorkReminderNotificationClosed(notificationId, byUser).catch(error => {
+        console.error('TimeWhere: work reminder close state failed', error);
     });
 });

@@ -540,11 +540,12 @@ assert('Dashboard current task column renders quick add before today journal', f
     && !focusScript.includes('current-task-quick-add-meta')
     && /current-task-scroll-body custom-scrollbar[\s\S]*\$\{html\}[\s\S]*<\/div>[\s\S]*\$\{quickAddHTML\}[\s\S]*\$\{journalEntryHTML\}/.test(focusScript)
     && /current-task-scroll-body custom-scrollbar[\s\S]*empty-state[\s\S]*<\/div>[\s\S]*\$\{quickAddHTML\}[\s\S]*\$\{journalEntryHTML\}/.test(focusScript));
-assert('Dashboard exposes lightweight Desktop work reminder status and stop action',
+assert('Dashboard exposes lightweight work reminder status and stop action through platform runtime',
     focusScript.includes('renderDesktopWorkReminderBanner')
     && focusScript.includes('desktop-work-reminder-banner')
     && focusScript.includes("action === 'stop-desktop-work-reminder'")
-    && focusScript.includes('TimeWhereDesktopReminders?.stopCurrentReminder')
+    && focusScript.includes('getWorkReminderState')
+    && focusScript.includes('stopCurrentWorkReminder')
     && focusScript.includes('timewhere-desktop-reminder-state')
     && focusCss.includes('.desktop-work-reminder-banner')
     && focusCss.includes('.desktop-work-reminder-banner.execution_check_waiting')

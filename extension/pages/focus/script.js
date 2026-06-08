@@ -314,12 +314,12 @@ async function loadTaskColumn() {
 }
 
 async function renderDesktopWorkReminderBanner() {
-    if (globalThis.TimeWherePlatform?.name !== 'desktop-electron') return '';
-    const api = globalThis.TimeWhereDesktopReminders;
-    if (typeof api?.readReminderState !== 'function') return '';
+    const reminderRuntime = globalThis.TimeWherePlatform?.reminderRuntime;
+    if (typeof reminderRuntime?.getWorkReminderState !== 'function') return '';
     let state = null;
     try {
-        state = await api.readReminderState();
+        const result = await reminderRuntime.getWorkReminderState();
+        state = result?.state || result;
     } catch (_) {
         return '';
     }
@@ -363,7 +363,7 @@ function formatReminderClock(isoString) {
 }
 
 async function stopDesktopWorkReminder() {
-    const result = await globalThis.TimeWhereDesktopReminders?.stopCurrentReminder?.();
+    const result = await globalThis.TimeWherePlatform?.reminderRuntime?.stopCurrentWorkReminder?.();
     await loadTaskColumn();
     showToast(result?.status === 'stopped' ? '本次提醒已停止' : '当前没有进行中的提醒', 'info');
 }

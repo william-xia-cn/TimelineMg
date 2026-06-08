@@ -81,6 +81,12 @@ assert('D-041 records Desktop work reminder session semantics',
     && decisions.includes('1-minute cooldown')
     && decisions.includes('30-minute execution check')
     && decisions.includes('without a task deep link'));
+assert('D-042 records Chrome work reminder session adoption',
+    decisions.includes('D-042')
+    && decisions.includes('Chrome Extension task reminders adopt')
+    && decisions.includes('chrome.storage.local')
+    && decisions.includes('without a task deep link')
+    && decisions.includes('1-minute cooldown'));
 assert('Project status records Windows desktop portable implementation boundary',
     projectMaster.includes('Windows desktop portable implementation')
     && projectMaster.includes('D-031 approves a standalone Windows Electron portable app')
@@ -104,7 +110,7 @@ assert('TimeWherePlatform exposes desktop-capable contract',
     && platformJs.includes('TimeWherePlatformContract')
     && platformJs.includes("window: ['openMain', 'openQuickPanel', 'focus', 'show', 'hide', 'onActivated']")
     && platformJs.includes("notification: ['notify', 'onClick', 'onClose']")
-    && platformJs.includes("reminderRuntime: ['schedule', 'cancel', 'rescheduleAll']")
+    && platformJs.includes("reminderRuntime: ['schedule', 'cancel', 'rescheduleAll', 'getWorkReminderState', 'stopCurrentWorkReminder']")
     && platformJs.includes("auth: ['getStatus', 'getGoogleToken', 'getAccountInfo', 'getDiagnostics', 'disconnectGoogleToken', 'revokeGoogleToken']")
     && platformJs.includes("chromeBridge: ['connectExtension', 'getStatus']")
     && platformJs.includes("sync: ['getStatus', 'requestRun', 'pause', 'resume']")
@@ -117,6 +123,8 @@ assert('Chrome adapter wraps expected platform APIs',
     && platformJs.includes('chromeRef.notifications.create')
     && platformJs.includes('chromeRef.notifications.onClosed')
     && platformJs.includes('chromeRef.alarms.create')
+    && platformJs.includes('TIMEWHERE_WORK_REMINDER_STATE')
+    && platformJs.includes('TIMEWHERE_WORK_REMINDER_STOP')
     && platformJs.includes('chromeRef.action.setBadgeText')
     && platformJs.includes('chromeRef.identity.getAuthToken')
     && platformJs.includes('chromeRef.tabs.create({ url: normalizedUrl }'));

@@ -295,21 +295,34 @@ assert('background verifies alarm registration after create',
 assert('background runs immediate reminder check on bootstrap',
     background.includes('bootstrapTaskReminders()')
     && background.includes('await runTaskReminderTick()'));
-assert('background handles notification click to Dashboard task expansion',
+assert('background handles work reminder click as generic Dashboard open',
     background.includes('chrome.notifications?.onClicked.addListener')
-    && background.includes('focus.html?task_id='));
+    && background.includes('TASK_REMINDER_NOTIFICATION_PREFIX')
+    && background.includes('handleWorkReminderNotificationClick')
+    && background.includes("url: 'pages/focus/focus.html'")
+    && !background.includes('focus.html?task_id='));
 assert('background respects notification_enabled setting',
     background.includes("settings?.notification_enabled === false"));
-assert('background sends at most one aggregated task reminder per tick',
+assert('background sends at most one aggregated task reminder per session tick',
     background.includes('computeAggregatedReminder')
-    && background.includes('const reminders = aggregatedReminder ? [aggregatedReminder] : []'));
+    && background.includes('notification_visible')
+    && background.includes('renotify_waiting')
+    && background.includes('execution_check_waiting')
+    && background.includes('TASK_REMINDER_RENOTIFY_COOLDOWN_MS = 60 * 1000')
+    && background.includes('TASK_REMINDER_EXECUTION_CHECK_MS = 30 * 60 * 1000'));
+assert('background supports Chrome work reminder close and stop state',
+    background.includes('chrome.notifications?.onClosed.addListener')
+    && background.includes('handleWorkReminderNotificationClosed')
+    && background.includes('TIMEWHERE_WORK_REMINDER_STATE')
+    && background.includes('TIMEWHERE_WORK_REMINDER_STOP')
+    && background.includes('timewhere_work_reminder_state_v1'));
 assert('background exposes manual test notification message',
     background.includes('TIMEWHERE_TASK_REMINDER_TEST')
     && background.includes('timewhere-test-reminder:'));
 assert('background emits debug notification on every reminder tick',
     background.includes('TASK_REMINDER_DEBUG_NOTIFICATIONS')
     && background.includes('TimeWhere 检查：没有任务提醒')
-    && background.includes('createTaskReminderDebugNotification(now, reminders)')
+    && background.includes('createTaskReminderDebugNotification(now, [aggregatedReminder])')
     && background.includes('requireInteraction: true'));
 assert('background can schedule a diagnostic alarm event notification',
     background.includes('TASK_REMINDER_DIAGNOSTIC_ALARM')
