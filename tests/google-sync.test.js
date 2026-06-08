@@ -280,6 +280,33 @@ async function run() {
     assertEqual('Drive adapter blocks account mismatch before network fetch', mismatchReason, 'account_mismatch');
     assert('Drive adapter does not call Drive when desktop account mismatches profile', !mismatchFetchCalled);
 
+    const forbiddenDrive = GoogleSync.createDriveAppDataClient({
+        authAdapter: { getToken: async () => ({ status: 'connected', token: 'mock-token' }) },
+        fetchImpl: async () => ({
+            ok: false,
+            status: 403,
+            text: async () => JSON.stringify({
+                error: {
+                    code: 403,
+                    message: 'Request had insufficient authentication scopes.',
+                    status: 'PERMISSION_DENIED',
+                    errors: [{ reason: 'insufficientPermissions' }]
+                }
+            })
+        })
+    });
+    let forbiddenError = null;
+    try {
+        await forbiddenDrive.downloadJsonFile(GoogleSync.SYNC_FILE_NAME);
+    } catch (error) {
+        forbiddenError = error;
+    }
+    assert('Drive adapter preserves Google 403 reason for diagnostics',
+        forbiddenError?.http_status === 403
+        && forbiddenError.google_reason === 'insufficientPermissions'
+        && forbiddenError.google_status === 'PERMISSION_DENIED'
+        && forbiddenError.retryable === false);
+
     const cloudSnapshot = JSON.parse(JSON.stringify(snapshot));
     cloudSnapshot.exported_at = '2026-05-15T00:10:00.000Z';
     cloudSnapshot.data.tasks[0].title = 'Cloud Essay';
@@ -364,6 +391,66 @@ async function run() {
     assertEqual('sync v1 conflict helper stores count from conflict detail list',
         conflictDb.settings.google_sync_state.conflict_count,
         conflictDb.settings.google_sync_conflicts.length);
+    assert('sync v1 conflict helper stores stable conflict ids and timestamps',
+        conflictDb.settings.google_sync_conflicts[0].conflict_id
+        && conflictDb.settings.google_sync_conflicts[0].conflict_type === 'sync_conflict'
+        && conflictDb.settings.google_sync_conflicts[0].detected_at);
+
+    const arrangeOnlyDb = new FakeDB();
+    const baseArrangeTask = await arrangeOnlyDb.db.tasks.get('task-1');
+    const baseArrangeEntity = makeEntity('tasks', 'task-1', baseArrangeTask, { dirty: false });
+    arrangeOnlyDb.settings.google_sync_meta = {
+        [baseArrangeEntity.key]: {
+            table: 'tasks',
+            id: 'task-1',
+            dirty: false,
+            hash: baseArrangeEntity.hash,
+            last_synced_hash: baseArrangeEntity.hash,
+            last_synced_at: '2026-05-15T00:00:00.000Z'
+        }
+    };
+    const arrangedTask = { ...baseArrangeTask, start_date: '2026-05-29', priority: 'urgent' };
+    await arrangeOnlyDb.db.tasks.put(arrangedTask);
+    const arrangeOnlyMeta = await GoogleSync.markEntityDirty(arrangeOnlyDb, 'tasks', 'task-1', arrangedTask, {
+        changedFields: ['start_date', 'priority'],
+        googleSyncDerivedFields: ['start_date', 'priority'],
+        googleSyncDerivedBaseRecord: baseArrangeTask,
+        googleSyncDerivedSource: 'task_arrange_auto',
+        device_id: 'device-a'
+    });
+    const arrangeOnlyDoc = await GoogleSync.buildLocalSyncDocument(arrangeOnlyDb, { device_id: 'device-a' });
+    const arrangeOnlyEntity = arrangeOnlyDoc.entities[baseArrangeEntity.key];
+    const arrangeOnlyPlan = GoogleSync.planSyncMerge(arrangeOnlyDoc, makeSyncDoc({ [baseArrangeEntity.key]: baseArrangeEntity }));
+    assert('Arrange-only start_date and priority changes are recorded as derived but not dirty',
+        arrangeOnlyMeta.derived_only === true
+        && arrangeOnlyMeta.dirty === false
+        && arrangeOnlyEntity.dirty === false
+        && arrangeOnlyEntity.hash === baseArrangeEntity.hash);
+    assert('Arrange-only task field differences do not create sync conflicts',
+        !arrangeOnlyPlan.conflicts.some(conflict => conflict.key === baseArrangeEntity.key)
+        && !arrangeOnlyPlan.apply_local.some(change => change.key === baseArrangeEntity.key)
+        && !arrangeOnlyPlan.upload_keys.includes(baseArrangeEntity.key)
+        && !arrangeOnlyPlan.changes.some(change => change.key === baseArrangeEntity.key));
+
+    const cloudNotesEntity = makeEntity('tasks', 'task-1', { ...baseArrangeTask, notes: 'Remote note' }, { dirty: false, last_synced_hash: baseArrangeEntity.hash });
+    const cloudNotesDoc = makeSyncDoc({ [cloudNotesEntity.key]: cloudNotesEntity }, {}, '2026-05-15T00:10:00.000Z');
+    const cloudNotesPlan = GoogleSync.planSyncMerge(arrangeOnlyDoc, cloudNotesDoc);
+    await GoogleSync.applyMergePlanToLocal(arrangeOnlyDb, cloudNotesPlan, cloudNotesDoc);
+    const afterCloudApply = await arrangeOnlyDb.db.tasks.get('task-1');
+    assert('Applying cloud user changes preserves local Arrange-derived fields',
+        afterCloudApply.notes === 'Remote note'
+        && afterCloudApply.start_date === '2026-05-29'
+        && afterCloudApply.priority === 'urgent');
+
+    const manualTask = { ...afterCloudApply, start_date: '2026-06-01' };
+    await arrangeOnlyDb.db.tasks.put(manualTask);
+    const manualMeta = await GoogleSync.markEntityDirty(arrangeOnlyDb, 'tasks', 'task-1', manualTask, {
+        changedFields: ['start_date'],
+        device_id: 'device-a'
+    });
+    assert('Manual edit of start_date clears derived marker and becomes a real dirty task change',
+        manualMeta.dirty === true
+        && !manualMeta.derived_fields?.start_date);
 
     const raceDrive = makeDriveClient(makeSyncDoc({}, {}, '2026-05-15T00:00:00.000Z'));
     let firstDownload = true;
@@ -385,6 +472,11 @@ async function run() {
     const settingsScript = read('extension/pages/settings/script.js');
     const settingsCss = read('extension/pages/settings/styles.css');
     const dbScript = read('extension/shared/js/db.js');
+    const googleSyncScript = read('extension/shared/js/google-sync.js');
+    const platformScript = read('extension/shared/js/platform.js');
+    const desktopSyncServiceScript = read('extension/shared/js/desktop-sync-service.js');
+    const schedulingScript = read('extension/shared/js/scheduling.js');
+    const taskArrangeAutoScript = read('extension/shared/js/task-arrange-auto.js');
     const desktopAuthScript = read('platforms/desktop-electron/desktop-auth.js');
     const desktopPackage = JSON.parse(read('platforms/desktop-electron/package.json'));
     const gitignore = read('.gitignore');
@@ -421,6 +513,9 @@ async function run() {
     assert('Settings loads platform adapter before google-sync runtime',
         settingsHtml.indexOf('platform.js') > -1
         && settingsHtml.indexOf('platform.js') < settingsHtml.indexOf('google-sync.js'));
+    assert('Settings loads desktop sync service after google-sync runtime',
+        settingsHtml.indexOf('desktop-sync-service.js') > settingsHtml.indexOf('google-sync.js')
+        && settingsHtml.indexOf('desktop-sync-service.js') < settingsHtml.indexOf('script.js"></script>'));
     assert('Settings Google sync runtime prefers TimeWherePlatform auth adapter',
         settingsScript.includes('createTimeWherePlatformAuthAdapter(globalThis.TimeWherePlatform)')
         && settingsScript.includes('createChromeIdentityAuthAdapter(typeof chrome'));
@@ -429,9 +524,25 @@ async function run() {
         && settingsScript.includes('TimeWherePlatform?.auth?.getGoogleToken')
         && read('extension/shared/js/google-sync.js').includes('createTimeWherePlatformAuthAdapter(global.TimeWherePlatform)'));
     assert('Google sync platform auth adapter propagates structured desktop auth failures',
-        read('extension/shared/js/google-sync.js').includes('makePlatformAuthError')
-        && read('extension/shared/js/google-sync.js').includes("result?.status === 'failed'")
-        && read('extension/shared/js/google-sync.js').includes('error.code = reason'));
+        googleSyncScript.includes('makePlatformAuthError')
+        && googleSyncScript.includes("result?.status === 'failed'")
+        && googleSyncScript.includes('error.code = reason'));
+    assert('Desktop sync service serializes background sync with pending runs and retry backoff',
+        desktopSyncServiceScript.includes('createDesktopSyncService')
+        && desktopSyncServiceScript.includes('currentRun')
+        && desktopSyncServiceScript.includes('pendingRun')
+        && desktopSyncServiceScript.includes('BACKOFF_MS')
+        && desktopSyncServiceScript.includes("pause('conflict')")
+        && desktopSyncServiceScript.includes("requestRun({ reason: 'interval'"));
+    assert('Google page sync delegates to desktop sync service when running in Electron',
+        googleSyncScript.includes('getDesktopSyncService')
+        && googleSyncScript.includes('service.requestRun')
+        && googleSyncScript.includes('service.scheduleRun')
+        && googleSyncScript.includes('bypassDesktopSyncService'));
+    assert('TimeWherePlatform exposes desktop sync service contract',
+        platformScript.includes("sync: ['getStatus', 'requestRun', 'pause', 'resume']")
+        && platformScript.includes('TimeWhereDesktopSyncService?.requestRun')
+        && platformScript.includes('desktop_sync_service_unavailable'));
     assert('Desktop Google sync OAuth path uses bundled installed-app client id, PKCE plus bundled client metadata secret, and safe token storage',
         desktopAuthScript.includes('541406150907')
         && desktopAuthScript.includes('0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com')
@@ -482,6 +593,13 @@ async function run() {
         && settingsScript.includes('redirect_uri_mismatch')
         && settingsScript.includes('Drive API')
         && settingsScript.includes('last_error: message'));
+    assert('Settings surfaces detailed Drive 403 reasons and desktop background sync state',
+        settingsScript.includes('insufficientPermissions')
+        && settingsScript.includes('appNotConfiguredForUser')
+        && settingsScript.includes('accessNotConfigured')
+        && settingsScript.includes('last_google_reason')
+        && settingsScript.includes('updateGoogleSyncServiceDisplay')
+        && settingsScript.includes('桌面后台同步：冲突暂停'));
     assert('Settings keeps connect button visible after first failed Google authorization',
         settingsScript.includes("state?.status !== 'failed'")
         && settingsScript.includes('state.connected_at || state.last_success_at || state.last_restore_at || state.last_force_upload_at'));
@@ -551,6 +669,15 @@ async function run() {
             'extension/pages/tasks/tasks.html',
             'extension/popup/popup.html'
         ].every(file => read(file).includes('google-sync.js')));
+    assert('desktop pages load desktop-sync-service.js after google-sync.js',
+        [
+            'extension/pages/focus/focus.html',
+            'extension/pages/calendar/calendar.html',
+            'extension/pages/tasks/tasks.html',
+            'extension/pages/settings/settings.html',
+            'extension/popup/popup.html',
+            'extension/popup/sidepanel.html'
+        ].every(file => read(file).indexOf('desktop-sync-service.js') > read(file).indexOf('google-sync.js')));
     assert('main page scripts call non-blocking Google page sync check',
         [
             'extension/pages/focus/script.js',
@@ -560,6 +687,20 @@ async function run() {
         ].every(file => read(file).includes('runPageAutoSync(TimeWhereDB)')));
     assert('DB write paths mark Google sync dirty metadata', dbScript.includes('markGoogleSyncDirty') && dbScript.includes('markEntityDirty'));
     assert('DB delete paths mark Google sync tombstones', dbScript.includes('markGoogleSyncDeleted') && dbScript.includes('markEntityDeleted'));
+    assert('DB updateTask can preserve user updated_at for derived Arrange writes',
+        dbScript.includes('skipUserUpdatedAt')
+        && dbScript.includes('googleSyncDerivedBaseRecord')
+        && dbScript.includes('changedFields: Object.keys(data || {})'));
+    assert('Task Arrange writes start_date and priority as local derived sync fields',
+        schedulingScript.includes('googleSyncDerivedFields')
+        && schedulingScript.includes('googleSyncDerivedSource')
+        && schedulingScript.includes('task_arrange_auto')
+        && schedulingScript.includes('skipUserUpdatedAt'));
+    assert('Pending Task Arrange review writes derived fields with the same sync semantics',
+        taskArrangeAutoScript.includes('googleSyncDerivedFields')
+        && taskArrangeAutoScript.includes('googleSyncDerivedSource')
+        && taskArrangeAutoScript.includes('task_arrange_auto')
+        && taskArrangeAutoScript.includes('skipUserUpdatedAt'));
     assert('DB settings sync is limited to approved selected keys', dbScript.includes('SELECTED_SETTING_KEYS?.includes(key)'));
     assert('Google sync runtime state is not in selected cloud settings', !GoogleSync.SELECTED_SETTING_KEYS.includes(GoogleSync.GOOGLE_SYNC_STATE_KEY));
     assert('Google account display keys are excluded from cloud settings',
@@ -593,7 +734,8 @@ async function run() {
         && localPackageScript.includes('Local unpacked bundle requires manifest.key'));
 
     const repoText = [
-        read('extension/shared/js/google-sync.js'),
+        googleSyncScript,
+        desktopSyncServiceScript,
         read('tests/google-sync.test.js'),
         read('extension/pages/settings/settings.html'),
         read('extension/pages/settings/script.js'),

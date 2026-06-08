@@ -59,6 +59,7 @@ const electronPreload = read('platforms/desktop-electron/preload.js');
 const desktopAuth = read('platforms/desktop-electron/desktop-auth.js');
 const chromeBridge = read('platforms/desktop-electron/chrome-bridge.js');
 const externalLinks = read('extension/shared/js/external-links.js');
+const desktopSyncService = read('extension/shared/js/desktop-sync-service.js');
 const bridgeHtml = read('extension/pages/desktop-bridge/bridge.html');
 const bridgeJs = read('extension/pages/desktop-bridge/bridge.js');
 const manifest = JSON.parse(read('extension/manifest.json'));
@@ -96,6 +97,7 @@ assert('TimeWherePlatform exposes desktop-capable contract',
     && platformJs.includes("reminderRuntime: ['schedule', 'cancel', 'rescheduleAll']")
     && platformJs.includes("auth: ['getStatus', 'getGoogleToken', 'getAccountInfo', 'revokeGoogleToken']")
     && platformJs.includes("chromeBridge: ['connectExtension', 'getStatus']")
+    && platformJs.includes("sync: ['getStatus', 'requestRun', 'pause', 'resume']")
     && platformJs.includes("external: ['openUrl']")
     && platformJs.includes("system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'confirmGoogleAccountSwitch']"));
 assert('Chrome adapter wraps expected platform APIs',
@@ -118,6 +120,7 @@ assert('Desktop adapter delegates auth, reminders, and Chrome bridge to Electron
     && platformJs.includes("call('system.writeWidgetSnapshot'")
     && platformJs.includes("call('system.getDesktopProfile'")
     && platformJs.includes("call('system.confirmGoogleAccountSwitch'")
+    && platformJs.includes('TimeWhereDesktopSyncService?.requestRun')
     && platformJs.includes("call('external.openUrl'"));
 assert('Fallback platform returns desktop system settings capability as not_supported',
     platformJs.includes("name: 'web-fallback'")
@@ -125,7 +128,16 @@ assert('Fallback platform returns desktop system settings capability as not_supp
     && platformJs.includes("setDesktopSettings: () => ({ status: 'not_supported'")
     && platformJs.includes("writeWidgetSnapshot: () => ({ status: 'not_supported'")
     && platformJs.includes("getDesktopProfile: () => ({ status: 'not_supported'")
+    && platformJs.includes('sync: { getStatus: notSupported, requestRun: notSupported, pause: notSupported, resume: notSupported }')
     && platformJs.includes("confirmGoogleAccountSwitch: () => ({ status: 'not_supported'"));
+assert('Desktop sync service keeps Electron sync alive with serialized jobs and conflict pause',
+    desktopSyncService.includes('createDesktopSyncService')
+    && desktopSyncService.includes('DEFAULT_INTERVAL_MS = 60 * 1000')
+    && desktopSyncService.includes('DEFAULT_DEBOUNCE_MS = 30 * 1000')
+    && desktopSyncService.includes('pendingRun')
+    && desktopSyncService.includes("pause('conflict')")
+    && desktopSyncService.includes('retry_after')
+    && desktopSyncService.includes('TimeWhereDesktopSyncService'));
 assert('Platform external URL handling is limited to http/https browser opens',
     externalLinks.includes('extractHttpLinks')
     && externalLinks.includes('renderExternalLinkList')
@@ -148,6 +160,11 @@ const pagesWithPlatform = [
 ];
 assert('Primary pages load platform adapter before page scripts',
     pagesWithPlatform.every(file => read(file).includes('shared/js/platform.js')));
+assert('Desktop-capable pages load desktop sync service after google-sync',
+    pagesWithPlatform.every(file => {
+        const text = read(file);
+        return text.indexOf('desktop-sync-service.js') > text.indexOf('google-sync.js');
+    }));
 assert('Desktop app pages load reminders and desktop reminder bridge',
     [
         'extension/pages/focus/focus.html',

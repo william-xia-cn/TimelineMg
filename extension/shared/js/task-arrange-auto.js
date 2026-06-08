@@ -95,7 +95,12 @@
         for (const row of rows) {
             if (!row?.task_id || !row.updates || Object.keys(row.updates).length === 0) continue;
             try {
-                await db.updateTask(row.task_id, row.updates, { skipTaskArrangeDirty: true });
+                await db.updateTask(row.task_id, row.updates, {
+                    skipTaskArrangeDirty: true,
+                    skipUserUpdatedAt: true,
+                    googleSyncDerivedFields: Object.keys(row.updates || {}).filter(field => field === 'start_date' || field === 'priority'),
+                    googleSyncDerivedSource: 'task_arrange_auto'
+                });
                 appliedCount++;
             } catch (error) {
                 errors.push({ task_id: row.task_id, error: error.message || String(error) });

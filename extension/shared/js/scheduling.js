@@ -846,7 +846,12 @@
         const errors = [];
         for (const item of changes) {
             try {
-                await db.updateTask(item.task_id, item.updates, { skipTaskArrangeDirty: true });
+                await db.updateTask(item.task_id, item.updates, {
+                    skipTaskArrangeDirty: true,
+                    skipUserUpdatedAt: true,
+                    googleSyncDerivedFields: Object.keys(item.updates || {}).filter(field => field === 'start_date' || field === 'priority'),
+                    googleSyncDerivedSource: 'task_arrange_auto'
+                });
                 arranged++;
             } catch (error) {
                 errors.push({ task_id: item.task_id, error: error.message || String(error) });

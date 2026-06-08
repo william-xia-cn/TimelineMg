@@ -188,6 +188,20 @@
                     return { status: 'not_supported', reason: 'already_running_in_chrome_extension' };
                 }
             },
+            sync: {
+                getStatus() {
+                    return { status: 'not_supported', reason: 'chrome_page_sync_managed' };
+                },
+                requestRun() {
+                    return { status: 'not_supported', reason: 'chrome_page_sync_managed' };
+                },
+                pause() {
+                    return { status: 'not_supported', reason: 'chrome_page_sync_managed' };
+                },
+                resume() {
+                    return { status: 'not_supported', reason: 'chrome_page_sync_managed' };
+                }
+            },
             external: {
                 async openUrl(url) {
                     const normalizedUrl = normalizeExternalHttpUrl(url);
@@ -327,6 +341,20 @@
                     return call('chromeBridge.status');
                 }
             },
+            sync: {
+                getStatus() {
+                    return global.TimeWhereDesktopSyncService?.getStatus?.() || { status: 'not_supported', reason: 'desktop_sync_service_unavailable' };
+                },
+                requestRun(options = {}) {
+                    return global.TimeWhereDesktopSyncService?.requestRun?.(options) || { status: 'not_supported', reason: 'desktop_sync_service_unavailable' };
+                },
+                pause(options = {}) {
+                    return global.TimeWhereDesktopSyncService?.pause?.(options.reason || 'platform_pause') || { status: 'not_supported', reason: 'desktop_sync_service_unavailable' };
+                },
+                resume(options = {}) {
+                    return global.TimeWhereDesktopSyncService?.resume?.(options.reason || 'platform_resume') || { status: 'not_supported', reason: 'desktop_sync_service_unavailable' };
+                }
+            },
             external: {
                 openUrl(url) {
                     return call('external.openUrl', { url });
@@ -388,6 +416,7 @@
                 revokeGoogleToken: () => ({ status: 'not_supported' })
             },
             chromeBridge: { connectExtension: notSupported, getStatus: notSupported },
+            sync: { getStatus: notSupported, requestRun: notSupported, pause: notSupported, resume: notSupported },
             external: {
                 openUrl(url) {
                     const normalizedUrl = normalizeExternalHttpUrl(url);
@@ -419,6 +448,7 @@
         badge: ['set', 'clear'],
         auth: ['getStatus', 'getGoogleToken', 'getAccountInfo', 'revokeGoogleToken'],
         chromeBridge: ['connectExtension', 'getStatus'],
+        sync: ['getStatus', 'requestRun', 'pause', 'resume'],
         external: ['openUrl'],
         system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'confirmGoogleAccountSwitch']
     };

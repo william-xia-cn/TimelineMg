@@ -325,7 +325,8 @@ const TimeWhereDB = {
         const api = this.getGoogleSyncApi();
         if (!api?.markEntityDirty) return;
         try {
-            await api.markEntityDirty(this, table, id, record, options);
+            const result = await api.markEntityDirty(this, table, id, record, options);
+            if (result?.derived_only && result?.dirty !== true) return;
             if (api.schedulePageAutoSync) {
                 api.schedulePageAutoSync(this, { debounce_ms: 30 * 1000 });
             }
@@ -1019,9 +1020,11 @@ const TimeWhereDB = {
         const existingTask = await db.tasks.get(id);
         this.assertTaskWritable(existingTask, options, data);
         const updateData = {
-            ...data,
-            updated_at: this.getNowISO()
+            ...data
         };
+        if (!options.skipUserUpdatedAt) {
+            updateData.updated_at = this.getNowISO();
+        }
         if (Object.prototype.hasOwnProperty.call(updateData, 'subject')) {
             delete updateData.subject;
         }
@@ -1054,7 +1057,11 @@ const TimeWhereDB = {
         await db.tasks.update(id, updateData);
         const updatedTask = await db.tasks.get(id);
         await this.addSyncLog('task', 'update', updatedTask);
-        await this.markGoogleSyncDirty('tasks', id, updatedTask, options);
+        await this.markGoogleSyncDirty('tasks', id, updatedTask, {
+            ...options,
+            changedFields: Object.keys(data || {}),
+            googleSyncDerivedBaseRecord: options.googleSyncDerivedBaseRecord || existingTask || null
+        });
         if (this.hasArrangeRelevantTaskUpdate(data)) {
             await this.markTaskArrangeDirty('task_arrange_field_changed', options);
         }

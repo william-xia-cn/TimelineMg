@@ -96,6 +96,9 @@ function setupEventListeners() {
     document.getElementById('appearanceAvatar')?.addEventListener('change', previewAppearanceSettings);
     document.getElementById('desktopCloseToTray')?.addEventListener('change', handleDesktopSystemSettingsChange);
     document.getElementById('desktopStartAtLogin')?.addEventListener('change', handleDesktopSystemSettingsChange);
+    window.addEventListener('timewhere-desktop-sync-status', () => {
+        updateGoogleSyncServiceDisplay();
+    });
     setupImportEvents();
 }
 
@@ -462,11 +465,22 @@ function getGoogleSyncFailureMessage(error = {}) {
     if (reason === 'access_denied' || /access_denied/i.test(message)) {
         return 'Google 授权已取消或被拒绝，请重新点击连接并允许 Drive appDataFolder 权限。';
     }
+    if (reason === 'insufficientPermissions' || /insufficient authentication scopes|insufficientPermissions/i.test(message)) {
+        return 'Google Drive 授权缺少 appDataFolder 权限。请断开后重新连接 Google，并确认授权包含 Drive appDataFolder scope。';
+    }
+    if (reason === 'accessNotConfigured' || reason === 'SERVICE_DISABLED' || /accessNotConfigured|SERVICE_DISABLED/i.test(message)) {
+        return 'Google Cloud 项目未对当前 OAuth client 启用 Drive API，或 Drive API 刚启用尚未生效。';
+    }
+    if (reason === 'appNotConfiguredForUser' || /appNotConfiguredForUser/i.test(message)) {
+        return '当前 Google 账号未被允许使用此 OAuth 应用。请确认 OAuth 同意屏幕测试用户/发布状态。';
+    }
     if (reason === 'invalid_grant' || /invalid_grant/i.test(message)) {
         return 'Google 授权码或旧授权已失效，请重新连接 Google。';
     }
     if (/Google Drive request failed \(403\)/i.test(message)) {
-        return 'Google Drive 请求被拒绝。请确认 Google Cloud 已启用 Drive API，且该账号允许使用此 OAuth 应用。';
+        return error.google_reason
+            ? `Google Drive 请求被拒绝：${error.google_reason}。请按该原因检查 OAuth scope、Drive API、同意屏幕测试用户或账号权限。`
+            : 'Google Drive 请求被拒绝。请确认 OAuth scope、Drive API、同意屏幕测试用户和账号权限。';
     }
     if (/Google Drive request failed/i.test(message)) {
         return message;
@@ -555,6 +569,43 @@ function updateGoogleSyncLastSyncDisplay(state = null) {
     const el = document.getElementById('googleSyncLastSyncAt');
     if (!el) return;
     el.textContent = `最近同步：${formatGoogleSyncDateTime(state?.last_success_at || state?.last_restore_at || state?.last_force_upload_at)}`;
+}
+
+async function updateGoogleSyncServiceDisplay() {
+    const el = document.getElementById('googleSyncAutoStatus');
+    if (!el) return;
+    if (!isDesktopElectronPlatform() || typeof globalThis.TimeWherePlatform?.sync?.getStatus !== 'function') {
+        el.textContent = '自动同步：已开启';
+        return;
+    }
+    try {
+        const status = await globalThis.TimeWherePlatform.sync.getStatus();
+        if (status?.status === 'paused' && status.pause_reason === 'conflict') {
+            el.textContent = `桌面后台同步：冲突暂停${status.conflict_count ? `（${status.conflict_count}）` : ''}`;
+            return;
+        }
+        if (status?.running) {
+            el.textContent = '桌面后台同步：同步中';
+            return;
+        }
+        if (status?.status === 'backoff' || status?.retry_after) {
+            el.textContent = `桌面后台同步：等待重试 ${formatGoogleSyncDateTime(status.retry_after)}`;
+            return;
+        }
+        if (status?.status === 'failed') {
+            el.textContent = '桌面后台同步：失败';
+            return;
+        }
+        if (status?.started) {
+            el.textContent = status?.next_run_at
+                ? `桌面后台同步：已开启，下次 ${formatGoogleSyncDateTime(status.next_run_at)}`
+                : '桌面后台同步：已开启';
+            return;
+        }
+        el.textContent = '桌面后台同步：未启动';
+    } catch (_) {
+        el.textContent = '桌面后台同步：状态不可用';
+    }
 }
 
 function updateGoogleSyncConflictButton(count = 0) {
@@ -679,6 +730,7 @@ async function loadGoogleSyncStatus() {
     }
     await updateGoogleSyncAccountDisplay(state);
     updateGoogleSyncLastSyncDisplay(state);
+    await updateGoogleSyncServiceDisplay();
     updateGoogleSyncControls();
     await updateGoogleSyncRecoveryHint(state);
 }
@@ -846,7 +898,28 @@ async function handleGoogleSyncNow() {
     setGoogleSyncInProgress(true, '正在自动合并本地 / 云端数据…');
     try {
         const { api, driveClient } = createGoogleSyncRuntime();
-        const result = await api.runAutoSync(TimeWhereDB, driveClient, { force: true });
+        const result = isDesktopElectronPlatform() && typeof globalThis.TimeWherePlatform?.sync?.requestRun === 'function'
+            ? await globalThis.TimeWherePlatform.sync.requestRun({ reason: 'manual_sync', force: true })
+            : await api.runAutoSync(TimeWhereDB, driveClient, { force: true });
+        if (result?.status === 'queued') {
+            setGoogleSyncStatus('● 已排队同步', 'syncing');
+            showToast('已有同步正在运行，已排队本次手动同步。', 'info');
+            return;
+        }
+        if (result?.status === 'backoff') {
+            setGoogleSyncStatus('● 等待重试', 'failed');
+            showToast(`同步正在等待重试：${formatGoogleSyncDateTime(result.retry_after)}`, 'info');
+            return;
+        }
+        if (result?.status === 'paused' && result.reason === 'conflict') {
+            await showStoredGoogleSyncConflicts({ fallbackSync: true, showHintOnEmpty: true });
+            setGoogleSyncStatus(`● 有冲突待处理${result.conflict_count ? `（${result.conflict_count}）` : ''}`, 'conflict');
+            return;
+        }
+        if (result?.status === 'failed') {
+            await markGoogleSyncFailed(result);
+            return;
+        }
         if (result?.status === 'not_configured') {
             await api.saveGoogleSyncState(TimeWhereDB, { status: 'not_configured', reason: result.reason });
             setGoogleSyncStatus(getGoogleSyncNotConfiguredMessage(result.reason), 'not_configured');
@@ -936,7 +1009,13 @@ async function markGoogleSyncFailed(error) {
             await TimeWhereGoogleSync.saveGoogleSyncState(TimeWhereDB, {
                 status: 'failed',
                 reason,
-                last_error: message
+                last_error: message,
+                last_failed_at: new Date().toISOString(),
+                last_http_status: error.http_status || null,
+                last_google_reason: error.google_reason || null,
+                last_google_status: error.google_status || null,
+                last_google_message: error.google_message || null,
+                retryable: error.retryable === true
             });
         }
     } catch (_) {
@@ -1427,8 +1506,9 @@ function renderGoogleSyncConflicts(conflicts) {
     }
     const rows = conflicts.map(conflict => {
         const summary = summarizeGoogleSyncConflict(conflict);
+        const choiceKey = conflict.conflict_id || conflict.key;
         return `
-            <div class="google-sync-preview-row google-sync-conflict-row" data-sync-change-key="${escapeGoogleSyncText(conflict.key)}">
+            <div class="google-sync-preview-row google-sync-conflict-row" data-sync-change-key="${escapeGoogleSyncText(choiceKey)}">
                 <div class="google-sync-preview-meta">
                     <span class="google-sync-preview-title">${escapeGoogleSyncText(summary.label)}</span>
                     <span class="google-sync-preview-desc">${escapeGoogleSyncText(summary.typeText)}</span>
@@ -1437,7 +1517,7 @@ function renderGoogleSyncConflicts(conflicts) {
                         ${renderGoogleSyncConflictSide('云端版本', summary.cloudSummary, summary.localSummary)}
                     </div>
                 </div>
-                <select class="google-sync-choice" data-change-key="${escapeGoogleSyncText(conflict.key)}">
+                <select class="google-sync-choice" data-change-key="${escapeGoogleSyncText(choiceKey)}">
                     <option value="skip" selected>跳过</option>
                     <option value="local">使用本地</option>
                     <option value="cloud">使用云端</option>
@@ -1499,6 +1579,9 @@ async function handleApplyGoogleSyncPreview() {
             hideGoogleSyncPreview();
             setGoogleSyncStatus('● 已连接', 'connected');
             updateGoogleSyncConflictButton(0);
+            if (isDesktopElectronPlatform() && typeof globalThis.TimeWherePlatform?.sync?.resume === 'function') {
+                await globalThis.TimeWherePlatform.sync.resume({ reason: 'conflicts_resolved' });
+            }
             showToast(`已处理 ${result.applied_count} 项冲突并完成同步。`, 'success');
             return;
         }

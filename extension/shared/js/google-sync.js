@@ -27,6 +27,7 @@
     const GOOGLE_SYNC_ACCOUNT_EMAIL_KEY = 'google_sync_account_email';
     const GOOGLE_SYNC_ACCOUNT_NAME_KEY = 'google_sync_account_name';
     const GOOGLE_SYNC_ACCOUNT_KEY_KEY = 'google_sync_account_key';
+    const TASK_DERIVED_SYNC_FIELDS = new Set(['start_date', 'priority']);
     const AUTO_SYNC_THROTTLE_MS = 60 * 1000;
     const SAVE_DEBOUNCE_MS = 30 * 1000;
 
@@ -285,6 +286,83 @@
         return out;
     }
 
+    function normalizeDerivedFieldMap(value = {}) {
+        const out = {};
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
+        for (const [field, entry] of Object.entries(value)) {
+            if (!TASK_DERIVED_SYNC_FIELDS.has(field)) continue;
+            if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+                out[field] = {
+                    value: clone(entry.value ?? null),
+                    base_value: clone(entry.base_value ?? null),
+                    base_has_field: entry.base_has_field !== false,
+                    source: entry.source || 'derived',
+                    updated_at: entry.updated_at || null
+                };
+            } else {
+                out[field] = {
+                    value: clone(entry ?? null),
+                    base_value: null,
+                    base_has_field: true,
+                    source: 'derived',
+                    updated_at: null
+                };
+            }
+        }
+        return out;
+    }
+
+    function normalizeDerivedFieldList(fields = []) {
+        if (!Array.isArray(fields)) return [];
+        return Array.from(new Set(fields.filter(field => TASK_DERIVED_SYNC_FIELDS.has(field))));
+    }
+
+    function isDerivedFieldActive(record = {}, field, entry = null) {
+        if (!entry || !TASK_DERIVED_SYNC_FIELDS.has(field)) return false;
+        return stableJson(record?.[field] ?? null) === stableJson(entry.value ?? null);
+    }
+
+    function makeComparableRecordForSync(table, record, syncMeta = {}) {
+        const out = comparableRecord(record);
+        if (table !== 'tasks') return out;
+        const derivedFields = normalizeDerivedFieldMap(syncMeta.derived_fields);
+        for (const [field, entry] of Object.entries(derivedFields)) {
+            if (!isDerivedFieldActive(record, field, entry)) continue;
+            if (entry.base_has_field !== false) {
+                out[field] = clone(entry.base_value ?? null);
+            } else {
+                delete out[field];
+            }
+        }
+        return out;
+    }
+
+    function mergeRecordWithActiveDerivedFields(table, incomingRecord, localRecord, syncMeta = {}) {
+        const next = clone(incomingRecord) || {};
+        if (table !== 'tasks' || !localRecord) return next;
+        const derivedFields = normalizeDerivedFieldMap(syncMeta.derived_fields);
+        for (const [field, entry] of Object.entries(derivedFields)) {
+            if (isDerivedFieldActive(localRecord, field, entry)) {
+                next[field] = clone(localRecord[field] ?? null);
+            }
+        }
+        return next;
+    }
+
+    function refreshDerivedFieldBaseValues(derivedFields, entity) {
+        const next = normalizeDerivedFieldMap(derivedFields);
+        if (entity?.table !== 'tasks') return next;
+        for (const [field, entry] of Object.entries(next)) {
+            entry.base_has_field = Object.prototype.hasOwnProperty.call(entity.record || {}, field);
+            entry.base_value = clone(entity.record?.[field] ?? null);
+        }
+        return next;
+    }
+
+    function hasDerivedFields(derivedFields = {}) {
+        return Object.keys(normalizeDerivedFieldMap(derivedFields)).length > 0;
+    }
+
     async function getSettingValue(db, key, fallback) {
         if (!db?.getSetting) return fallback;
         const value = await db.getSetting(key);
@@ -332,12 +410,61 @@
         const meta = await readSyncMeta(db);
         const deviceId = options.device_id || await getOrCreateDeviceId(db);
         const previous = meta[key] || {};
-        meta[key] = {
+        const changedFields = Array.isArray(options.changedFields) ? options.changedFields : [];
+        const optionDerivedFields = table === 'tasks'
+            ? normalizeDerivedFieldList(options.googleSyncDerivedFields)
+            : [];
+        const optionDerivedSet = new Set(optionDerivedFields);
+        const derivedFields = normalizeDerivedFieldMap(previous.derived_fields);
+        if (table === 'tasks') {
+            for (const field of changedFields) {
+                if (TASK_DERIVED_SYNC_FIELDS.has(field) && !optionDerivedSet.has(field)) {
+                    delete derivedFields[field];
+                }
+            }
+            for (const field of optionDerivedFields) {
+                const baseRecord = options.googleSyncDerivedBaseRecord || {};
+                derivedFields[field] = {
+                    value: clone(record?.[field] ?? null),
+                    base_value: clone(Object.prototype.hasOwnProperty.call(baseRecord, field)
+                        ? baseRecord[field]
+                        : (derivedFields[field]?.base_value ?? null)),
+                    base_has_field: Object.prototype.hasOwnProperty.call(baseRecord, field)
+                        ? true
+                        : (derivedFields[field] ? derivedFields[field].base_has_field !== false : false),
+                    source: options.googleSyncDerivedSource || 'task_arrange_auto',
+                    updated_at: options.updated_at || nowISO()
+                };
+            }
+        }
+        const userChangedFields = changedFields.filter(field =>
+            field !== 'updated_at' && !optionDerivedSet.has(field)
+        );
+        const derivedOnly = table === 'tasks'
+            && optionDerivedFields.length > 0
+            && userChangedFields.length === 0;
+        const nextMeta = {
             ...previous,
             table,
             id: String(id),
+            source_device_id: deviceId
+        };
+        if (hasDerivedFields(derivedFields)) nextMeta.derived_fields = derivedFields;
+        else delete nextMeta.derived_fields;
+        if (derivedOnly) {
+            nextMeta.dirty = previous.dirty === true;
+            nextMeta.hash = previous.hash
+                || previous.last_synced_hash
+                || hashValue(makeComparableRecordForSync(table, record, nextMeta));
+            nextMeta.derived_updated_at = options.updated_at || nowISO();
+            meta[key] = nextMeta;
+            await writeSyncMeta(db, meta);
+            return { ...meta[key], derived_only: true };
+        }
+        meta[key] = {
+            ...nextMeta,
             dirty: true,
-            hash: hashValue(comparableRecord(record)),
+            hash: hashValue(makeComparableRecordForSync(table, record, nextMeta)),
             updated_at: options.updated_at || nowISO(),
             source_device_id: deviceId
         };
@@ -355,7 +482,7 @@
             table,
             id: String(id),
             deleted_at: options.deleted_at || nowISO(),
-            last_synced_hash: meta[key]?.last_synced_hash || hashValue(comparableRecord(record)),
+            last_synced_hash: meta[key]?.last_synced_hash || hashValue(makeComparableRecordForSync(table, record, meta[key] || {})),
             source_device_id: deviceId
         };
         delete meta[key];
@@ -713,12 +840,45 @@
 
     async function parseJsonResponse(response) {
         if (!response.ok) {
-            let detail = '';
-            try { detail = await response.text(); } catch (_) { detail = ''; }
-            throw new Error(`Google Drive request failed (${response.status})${detail ? `: ${detail.slice(0, 160)}` : ''}`);
+            throw await makeGoogleDriveError(response);
         }
         if (response.status === 204) return null;
         return await response.json();
+    }
+
+    async function makeGoogleDriveError(response) {
+        let detail = '';
+        let payload = null;
+        try {
+            detail = await response.text();
+            payload = detail ? JSON.parse(detail) : null;
+        } catch (_) {
+            payload = null;
+        }
+        const googleError = payload?.error || {};
+        const googleReason = googleError.errors?.[0]?.reason || googleError.status || '';
+        const message = googleError.message || detail || 'unknown error';
+        const error = new Error(`Google Drive request failed (${response.status})${message ? `: ${String(message).slice(0, 220)}` : ''}`);
+        error.code = googleReason || `google_drive_http_${response.status}`;
+        error.reason = error.code;
+        error.http_status = response.status;
+        error.google_reason = googleReason || null;
+        error.google_status = googleError.status || null;
+        error.google_message = googleError.message || null;
+        error.retryable = response.status >= 500 || response.status === 429;
+        return error;
+    }
+
+    function serializeSyncError(error = {}) {
+        return {
+            reason: error.code || error.reason || error.name || 'google_sync_failed',
+            message: error.message || 'Google sync failed',
+            http_status: error.http_status || null,
+            google_reason: error.google_reason || null,
+            google_status: error.google_status || null,
+            google_message: error.google_message || null,
+            retryable: error.retryable === true
+        };
     }
 
     function createDriveAppDataClient({ authAdapter, fetchImpl = global.fetch } = {}) {
@@ -830,8 +990,39 @@
         return next;
     }
 
+    function conflictSideUpdatedAt(value = null) {
+        return value?.updated_at || value?.record?.updated_at || value?.deleted_at || value?.last_synced_at || null;
+    }
+
+    function normalizeGoogleSyncConflict(conflict = {}, index = 0) {
+        const copy = clone(conflict) || {};
+        const key = copy.key || syncEntityKey(copy.table || 'unknown', copy.id ?? index);
+        const type = copy.conflict_type || copy.reason || 'sync_conflict';
+        const localUpdatedAt = conflictSideUpdatedAt(copy.local || copy.local_tombstone);
+        const cloudUpdatedAt = conflictSideUpdatedAt(copy.cloud || copy.cloud_tombstone);
+        const signature = hashValue({
+            key,
+            type,
+            local_hash: copy.local?.hash || copy.local_tombstone?.last_synced_hash || localUpdatedAt || null,
+            cloud_hash: copy.cloud?.hash || copy.cloud_tombstone?.last_synced_hash || cloudUpdatedAt || null
+        }).slice(0, 16);
+        return {
+            ...copy,
+            conflict_id: copy.conflict_id || `${key}:${type}:${signature}`,
+            key,
+            table: copy.table || splitEntityKey(key).table,
+            id: copy.id ?? splitEntityKey(key).id,
+            conflict_type: type,
+            local_updated_at: copy.local_updated_at || localUpdatedAt,
+            cloud_updated_at: copy.cloud_updated_at || cloudUpdatedAt,
+            detected_at: copy.detected_at || nowISO()
+        };
+    }
+
     async function saveGoogleSyncConflicts(db, conflicts = [], patch = {}) {
-        const list = Array.isArray(conflicts) ? clone(conflicts) : [];
+        const list = Array.isArray(conflicts)
+            ? conflicts.map((conflict, index) => normalizeGoogleSyncConflict(conflict, index))
+            : [];
         await setSettingValue(db, GOOGLE_SYNC_CONFLICTS_KEY, list);
         if (list.length > 0) {
             return await saveGoogleSyncState(db, {
@@ -874,9 +1065,9 @@
         const id = recordKey(table, record);
         if (id == null) return null;
         const key = syncEntityKey(table, id);
-        const cleanRecord = comparableRecord(record);
-        const hash = hashValue(cleanRecord);
         const syncMeta = meta[key] || {};
+        const cleanRecord = makeComparableRecordForSync(table, record, syncMeta);
+        const hash = hashValue(cleanRecord);
         return {
             key,
             table,
@@ -1182,9 +1373,15 @@
         }
         const table = getTableAdapter(db, entity.table);
         if (!table) throw new Error(`Cannot write ${entity.table}`);
-        await table.put(clone(entity.record));
+        let nextRecord = clone(entity.record);
+        if (entity.table === 'tasks') {
+            const meta = await readSyncMeta(db);
+            const localRecord = typeof table.get === 'function' ? await table.get(entity.id) : null;
+            nextRecord = mergeRecordWithActiveDerivedFields(entity.table, nextRecord, localRecord, meta[entity.key] || {});
+        }
+        await table.put(nextRecord);
         if (!options.skipMeta) await markEntityClean(db, entity);
-        return entity.record;
+        return nextRecord;
     }
 
     async function deleteEntityFromLocal(db, tableName, id, options = {}) {
@@ -1204,7 +1401,9 @@
 
     async function markEntityClean(db, entity) {
         const meta = await readSyncMeta(db);
-        meta[entity.key] = {
+        const previous = meta[entity.key] || {};
+        const derivedFields = refreshDerivedFieldBaseValues(previous.derived_fields, entity);
+        const next = {
             table: entity.table,
             id: entity.id,
             dirty: false,
@@ -1213,6 +1412,8 @@
             last_synced_at: nowISO(),
             source_device_id: entity.source_device_id || null
         };
+        if (hasDerivedFields(derivedFields)) next.derived_fields = derivedFields;
+        meta[entity.key] = next;
         await writeSyncMeta(db, meta);
     }
 
@@ -1244,7 +1445,8 @@
         for (const key of mergePlan.upload_keys || []) {
             const entity = uploadDoc.entities[key];
             if (!entity) continue;
-            meta[key] = {
+            const derivedFields = refreshDerivedFieldBaseValues(meta[key]?.derived_fields, entity);
+            const next = {
                 table: entity.table,
                 id: entity.id,
                 dirty: false,
@@ -1253,6 +1455,8 @@
                 last_synced_at: syncedAt,
                 source_device_id: entity.source_device_id || null
             };
+            if (hasDerivedFields(derivedFields)) next.derived_fields = derivedFields;
+            meta[key] = next;
         }
         for (const key of mergePlan.upload_tombstones || []) {
             if (tombstones[key]) tombstones[key].last_synced_at = syncedAt;
@@ -1324,10 +1528,17 @@
         try {
             return await runAutoSync(db, driveClient, options);
         } catch (error) {
+            const syncError = serializeSyncError(error);
             await saveGoogleSyncState(db, {
                 status: 'failed',
-                last_error: error.message,
-                last_failed_at: nowISO()
+                reason: syncError.reason,
+                last_error: syncError.message,
+                last_failed_at: nowISO(),
+                last_http_status: syncError.http_status,
+                last_google_reason: syncError.google_reason,
+                last_google_status: syncError.google_status,
+                last_google_message: syncError.google_message,
+                retryable: syncError.retryable
             });
             throw error;
         }
@@ -1340,7 +1551,20 @@
         return createDriveAppDataClient({ authAdapter });
     }
 
+    function getDesktopSyncService() {
+        if (global.TimeWherePlatform?.name !== 'desktop-electron') return null;
+        const service = global.TimeWhereDesktopSyncService;
+        return service && typeof service.requestRun === 'function' ? service : null;
+    }
+
     async function runPageAutoSync(db, options = {}) {
+        const service = getDesktopSyncService();
+        if (service && !options.bypassDesktopSyncService) {
+            return await service.requestRun({
+                reason: options.reason || 'page_open',
+                force: options.force === true
+            });
+        }
         const driveClient = options.driveClient || createDefaultDriveClient();
         return await maybeRunAutoSync(db, driveClient, options);
     }
@@ -1361,6 +1585,14 @@
     }
 
     function schedulePageAutoSync(db, options = {}) {
+        const service = getDesktopSyncService();
+        if (service && !options.bypassDesktopSyncService && typeof service.scheduleRun === 'function') {
+            return service.scheduleRun({
+                reason: options.reason || 'local_write',
+                debounce_ms: options.debounce_ms ?? SAVE_DEBOUNCE_MS,
+                force: true
+            });
+        }
         return scheduleAutoSync(db, () => createDefaultDriveClient(), options);
     }
 
@@ -1403,7 +1635,7 @@
     async function resolveSyncConflicts(db, driveClient, conflicts = [], choices = {}, options = {}) {
         const applied = [];
         for (const conflict of conflicts || []) {
-            const choice = choices[conflict.key] || 'skip';
+            const choice = choices[conflict.conflict_id] || choices[conflict.key] || 'skip';
             if (choice === 'skip') continue;
             if (choice === 'cloud') {
                 if (conflict.cloud) {
@@ -1426,11 +1658,34 @@
         const remaining = (conflicts || []).filter(conflict => !applied.includes(conflict.key));
         if (remaining.length > 0) {
             await saveGoogleSyncConflicts(db, remaining);
-            return { status: 'conflict_remaining', applied_count: applied.length, remaining_count: remaining.length };
+            return {
+                status: 'conflict_remaining',
+                resolved_count: applied.length,
+                applied_count: applied.length,
+                remaining_count: remaining.length,
+                conflicts: remaining.map((conflict, index) => normalizeGoogleSyncConflict(conflict, index))
+            };
         }
         await saveGoogleSyncConflicts(db, [], { status: 'connected' });
         const result = await runAutoSync(db, driveClient, { ...options, force: true });
-        return { status: 'resolved', applied_count: applied.length, sync_result: result };
+        if (result?.status === 'conflict') {
+            return {
+                status: 'conflict_remaining',
+                resolved_count: applied.length,
+                applied_count: applied.length,
+                remaining_count: result.conflicts?.length || 0,
+                conflicts: result.conflicts || [],
+                sync_result: result
+            };
+        }
+        return {
+            status: 'resolved',
+            resolved_count: applied.length,
+            applied_count: applied.length,
+            remaining_count: 0,
+            conflicts: [],
+            sync_result: result
+        };
     }
 
     const api = {
@@ -1477,6 +1732,8 @@
         getGoogleSyncState,
         saveGoogleSyncState,
         saveGoogleSyncConflicts,
+        normalizeGoogleSyncConflict,
+        serializeSyncError,
         backupToDrive,
         loadCloudSnapshot,
         buildLocalSyncDocument,
