@@ -268,6 +268,7 @@
                                             <button class="action-btn" id="connectGoogleSyncBtn" type="button">连接 Google 账户同步</button>
                                             <button class="action-btn" id="switchGoogleSyncAccountBtn" type="button" hidden>切换账户</button>
                                             <button class="action-btn danger" id="disconnectGoogleSyncBtn" type="button" hidden>断开连接</button>
+                                            <button class="action-btn danger" id="revokeGoogleSyncBtn" type="button" hidden>撤销授权</button>
                                         </div>
                                     </div>
                                     <div class="google-sync-state-line">
@@ -288,7 +289,10 @@
                                 <div class="google-sync-card">
                                     <div class="google-sync-card-header">
                                         <span class="setting-label">同步状态</span>
-                                        <button class="action-btn" id="syncGoogleNowBtn" type="button">手动同步</button>
+                                        <div class="google-sync-status-actions">
+                                            <button class="action-btn" id="toggleGoogleSyncHistoryBtn" type="button">同步记录</button>
+                                            <button class="action-btn" id="syncGoogleNowBtn" type="button">手动同步</button>
+                                        </div>
                                     </div>
                                     <div class="google-sync-meta-line">
                                         <span id="googleSyncAutoStatus">自动同步：已开启</span>
@@ -301,6 +305,14 @@
                                         <button class="action-btn danger" id="restoreGoogleSyncBtn" type="button">↓ 下载到本地</button>
                                     </div>
                                     <button class="action-btn google-sync-conflict-btn" id="processGoogleConflictsBtn" type="button" hidden>处理冲突</button>
+                                </div>
+                                <div class="google-sync-card google-sync-history-card" id="googleSyncHistoryPanel" hidden>
+                                    <div class="google-sync-card-header">
+                                        <span class="setting-label">同步记录</span>
+                                        <button class="action-btn danger" id="clearGoogleSyncHistoryBtn" type="button">清空记录</button>
+                                    </div>
+                                    <p class="setting-desc">仅保存本机最近同步摘要，用于排查同步中、失败、冲突和等待重试，不上传到 Google Drive。</p>
+                                    <div class="google-sync-history-list" id="googleSyncHistoryList"></div>
                                 </div>
                                 <div class="google-sync-preview" id="googleSyncPreview" hidden></div>
                             </div>

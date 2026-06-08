@@ -62,6 +62,11 @@ async function loadSettings() {
     }
     await loadSettingsManageBacLink();
     await loadGoogleSyncStatus();
+    await renderGoogleSyncHistory();
+    if (window.location.hash === '#googleSyncHistoryPanel') {
+        const panel = document.getElementById('googleSyncHistoryPanel');
+        if (panel) panel.hidden = false;
+    }
 }
 
 function setupEventListeners() {
@@ -82,9 +87,12 @@ function setupEventListeners() {
     document.getElementById('restoreGoogleSyncBtn')?.addEventListener('click', handleRestoreGoogleSync);
     document.getElementById('uploadGoogleSyncBtn')?.addEventListener('click', handleUploadGoogleSync);
     document.getElementById('disconnectGoogleSyncBtn')?.addEventListener('click', handleDisconnectGoogleSync);
+    document.getElementById('revokeGoogleSyncBtn')?.addEventListener('click', handleRevokeGoogleSyncAuthorization);
     document.getElementById('processGoogleConflictsBtn')?.addEventListener('click', () => {
         showStoredGoogleSyncConflicts({ fallbackSync: true, showHintOnEmpty: true });
     });
+    document.getElementById('toggleGoogleSyncHistoryBtn')?.addEventListener('click', toggleGoogleSyncHistoryPanel);
+    document.getElementById('clearGoogleSyncHistoryBtn')?.addEventListener('click', handleClearGoogleSyncHistory);
     document.getElementById('testNotificationBtn')?.addEventListener('click', handleTestNotification);
     document.getElementById('desktopBridgeExtensionPreset')?.addEventListener('change', updateDesktopBridgeCustomField);
     document.getElementById('connectDesktopBridgeBtn')?.addEventListener('click', handleConnectDesktopBridge);
@@ -98,6 +106,12 @@ function setupEventListeners() {
     document.getElementById('desktopStartAtLogin')?.addEventListener('change', handleDesktopSystemSettingsChange);
     window.addEventListener('timewhere-desktop-sync-status', () => {
         updateGoogleSyncServiceDisplay();
+    });
+    window.addEventListener('timewhere-google-sync-state', () => {
+        loadGoogleSyncStatus().catch(error => console.warn('刷新 Google 同步状态失败：', error));
+    });
+    window.addEventListener('timewhere-google-sync-history', () => {
+        renderGoogleSyncHistory().catch(error => console.warn('刷新 Google 同步记录失败：', error));
     });
     setupImportEvents();
 }
@@ -447,6 +461,12 @@ function getGoogleSyncFailureMessage(error = {}) {
     if (reason === 'desktop_oauth_account_required') {
         return '当前桌面授权缺少账户身份信息。请重新连接 Google，TimeWhere 会用账户身份隔离本地数据空间。';
     }
+    if (reason === 'desktop_oauth_refresh_token_revoked' || /expired or revoked/i.test(message)) {
+        return 'Google 授权已过期、被撤销，或与当前内部桌面包的 OAuth client metadata 不匹配。请重新连接 Google；本地数据不会删除。';
+    }
+    if (reason === 'desktop_oauth_session_control_required' || /invalid_rapt/i.test(message)) {
+        return 'Google Workspace 会话策略要求重新授权。请重新连接 Google 后再同步；本地数据不会删除。';
+    }
     if (reason === 'account_mismatch') {
         return '当前 Google 账户与这个 TimeWhere 本地数据空间不一致。请确认切换账户，或断开后回到原账户。';
     }
@@ -475,7 +495,7 @@ function getGoogleSyncFailureMessage(error = {}) {
         return '当前 Google 账号未被允许使用此 OAuth 应用。请确认 OAuth 同意屏幕测试用户/发布状态。';
     }
     if (reason === 'invalid_grant' || /invalid_grant/i.test(message)) {
-        return 'Google 授权码或旧授权已失效，请重新连接 Google。';
+        return 'Google 授权码或旧授权已失效。若刚更换过内部桌面包，请先核对 OAuth client metadata 是否一致；否则请重新连接 Google。';
     }
     if (/Google Drive request failed \(403\)/i.test(message)) {
         return error.google_reason
@@ -503,11 +523,27 @@ async function getGoogleSyncAccountEmail() {
     return await TimeWhereDB.getSetting('google_sync_account_email');
 }
 
+function isSafeGoogleAccountPictureUrl(url) {
+    if (!url) return false;
+    try {
+        const parsed = new URL(String(url));
+        return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+    } catch (_) {
+        return false;
+    }
+}
+
+function getGoogleSyncAccountInitial(info = {}) {
+    const source = String(info.name || info.email || 'G').trim();
+    return (source[0] || 'G').toUpperCase();
+}
+
 async function getGoogleSyncAccountDisplayInfo() {
     const cached = {
         account_key: await TimeWhereDB.getSetting('google_sync_account_key'),
         name: await TimeWhereDB.getSetting('google_sync_account_name'),
-        email: await getGoogleSyncAccountEmail()
+        email: await getGoogleSyncAccountEmail(),
+        picture: await TimeWhereDB.getSetting('google_sync_account_picture')
     };
     if (!isDesktopElectronPlatform() || typeof globalThis.TimeWherePlatform?.auth?.getAccountInfo !== 'function') {
         return cached;
@@ -516,12 +552,14 @@ async function getGoogleSyncAccountDisplayInfo() {
         const info = await globalThis.TimeWherePlatform.auth.getAccountInfo();
         if (info?.connected) {
             if (info.account_key) await TimeWhereDB.setSetting('google_sync_account_key', info.account_key);
-            if (info.name) await TimeWhereDB.setSetting('google_sync_account_name', info.name);
-            if (info.email) await TimeWhereDB.setSetting('google_sync_account_email', info.email);
+            await TimeWhereDB.setSetting('google_sync_account_name', info.name || null);
+            await TimeWhereDB.setSetting('google_sync_account_email', info.email || null);
+            await TimeWhereDB.setSetting('google_sync_account_picture', isSafeGoogleAccountPictureUrl(info.picture) ? info.picture : null);
             return {
                 account_key: info.account_key || cached.account_key,
-                name: info.name || cached.name,
-                email: info.email || cached.email
+                name: info.name || null,
+                email: info.email || null,
+                picture: isSafeGoogleAccountPictureUrl(info.picture) ? info.picture : null
             };
         }
     } catch (_) {
@@ -539,17 +577,51 @@ function formatGoogleSyncAccountLabel(info = {}) {
     return '已连接：Google 账户';
 }
 
+function renderGoogleSyncAccountChip(accountEl, info = {}) {
+    if (!accountEl) return;
+    const label = formatGoogleSyncAccountLabel(info);
+    accountEl.textContent = '';
+    accountEl.title = label;
+    const avatar = document.createElement('span');
+    avatar.className = 'google-sync-account-avatar';
+    const picture = isSafeGoogleAccountPictureUrl(info.picture) ? info.picture : '';
+    if (picture) {
+        const img = document.createElement('img');
+        img.alt = '';
+        img.referrerPolicy = 'no-referrer';
+        img.src = picture;
+        img.addEventListener('error', () => {
+            avatar.textContent = getGoogleSyncAccountInitial(info);
+            avatar.classList.add('fallback');
+        }, { once: true });
+        avatar.appendChild(img);
+    } else {
+        avatar.textContent = getGoogleSyncAccountInitial(info);
+        avatar.classList.add('fallback');
+    }
+    const text = document.createElement('span');
+    text.className = 'google-sync-account-label';
+    text.textContent = label;
+    accountEl.appendChild(avatar);
+    accountEl.appendChild(text);
+}
+
 async function updateGoogleSyncAccountDisplay(state = null) {
     const accountEl = document.getElementById('googleSyncAccountEmail');
     const connectBtn = document.getElementById('connectGoogleSyncBtn');
     const switchBtn = document.getElementById('switchGoogleSyncAccountBtn');
     const disconnectBtn = document.getElementById('disconnectGoogleSyncBtn');
+    const revokeBtn = document.getElementById('revokeGoogleSyncBtn');
     const connected = isGoogleSyncConnectedState(state);
     const accountInfo = connected ? await getGoogleSyncAccountDisplayInfo() : null;
     if (accountEl) {
         accountEl.hidden = !connected;
-        accountEl.textContent = connected ? formatGoogleSyncAccountLabel(accountInfo || {}) : '';
-        accountEl.title = accountEl.textContent;
+        if (connected) {
+            renderGoogleSyncAccountChip(accountEl, accountInfo || {});
+        } else {
+            accountEl.textContent = '';
+            accountEl.title = '';
+        }
     }
     if (connectBtn) {
         connectBtn.hidden = connected;
@@ -561,7 +633,13 @@ async function updateGoogleSyncAccountDisplay(state = null) {
     }
     if (disconnectBtn) {
         disconnectBtn.hidden = !connected;
-        disconnectBtn.textContent = '断开连接';
+        disconnectBtn.textContent = '断开本机同步';
+        disconnectBtn.title = '仅断开这台设备，不撤销 Google 授权，也不影响其他设备。';
+    }
+    if (revokeBtn) {
+        revokeBtn.hidden = !connected || !isDesktopElectronPlatform();
+        revokeBtn.textContent = '撤销授权';
+        revokeBtn.title = '向 Google 撤销 TimeWhere 授权；同一 Google 项目下其他设备的授权也可能失效。';
     }
 }
 
@@ -584,8 +662,18 @@ async function updateGoogleSyncServiceDisplay() {
             el.textContent = `桌面后台同步：冲突暂停${status.conflict_count ? `（${status.conflict_count}）` : ''}`;
             return;
         }
+        if (status?.status === 'long_running') {
+            el.textContent = `桌面后台同步：同步耗时较长（${formatGoogleSyncDuration(status.current_run_duration_ms)}）`;
+            return;
+        }
         if (status?.running) {
-            el.textContent = '桌面后台同步：同步中';
+            el.textContent = `桌面后台同步：同步中（${formatGoogleSyncDuration(status.current_run_duration_ms)}）`;
+            return;
+        }
+        if (status?.pending || status?.status === 'queued') {
+            const triggerCount = Number(status.pending_trigger_count || 0);
+            const reasonText = formatGoogleSyncReasonList(status.pending_reasons);
+            el.textContent = `桌面后台同步：同步排队中${triggerCount ? `（${triggerCount} 次触发：${reasonText}）` : ''}`;
             return;
         }
         if (status?.status === 'backoff' || status?.retry_after) {
@@ -598,7 +686,7 @@ async function updateGoogleSyncServiceDisplay() {
         }
         if (status?.started) {
             el.textContent = status?.next_run_at
-                ? `桌面后台同步：已开启，下次 ${formatGoogleSyncDateTime(status.next_run_at)}`
+                ? `桌面后台同步：等待下次自动同步 ${formatGoogleSyncDateTime(status.next_run_at)}`
                 : '桌面后台同步：已开启';
             return;
         }
@@ -614,6 +702,129 @@ function updateGoogleSyncConflictButton(count = 0) {
     const hasConflicts = Number(count) > 0;
     btn.hidden = !hasConflicts;
     btn.textContent = hasConflicts ? `处理 ${count} 项冲突` : '处理冲突';
+}
+
+function toggleGoogleSyncHistoryPanel() {
+    const panel = document.getElementById('googleSyncHistoryPanel');
+    if (!panel) return;
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) {
+        renderGoogleSyncHistory().catch(error => console.warn('加载 Google 同步记录失败：', error));
+    }
+}
+
+function formatGoogleSyncDuration(ms) {
+    const number = Number(ms || 0);
+    if (!Number.isFinite(number) || number <= 0) return '0 秒';
+    if (number < 1000) return `${Math.round(number)} ms`;
+    return `${Math.round(number / 100) / 10} 秒`;
+}
+
+function formatGoogleSyncReasonList(reasons = []) {
+    const safeReasons = Array.isArray(reasons) ? reasons.filter(Boolean).slice(0, 3) : [];
+    return safeReasons.length ? safeReasons.join(' / ') : '自动同步';
+}
+
+function formatGoogleSyncHistoryStatus(record = {}) {
+    const labels = {
+        synced: '同步成功',
+        up_to_date: '已是最新',
+        conflict: '有冲突',
+        conflict_remaining: '冲突未完成',
+        resolved: '冲突已处理',
+        pending_retry: '等待重试',
+        force_uploaded: '已上传覆盖云端',
+        restored: '已下载到本地',
+        not_configured: '未连接',
+        no_cloud_sync_document: '云端暂无数据',
+        failed: '同步失败'
+    };
+    return labels[record.status] || record.status || '未知状态';
+}
+
+function formatGoogleSyncHistoryCounts(record = {}) {
+    const counts = record.counts || {};
+    const parts = [];
+    if (counts.applied_local) parts.push(`下载/应用 ${counts.applied_local}`);
+    if (counts.uploaded) parts.push(`上传 ${counts.uploaded}`);
+    if (counts.tombstones) parts.push(`删除同步 ${counts.tombstones}`);
+    if (record.conflict_count) parts.push(`冲突 ${record.conflict_count}`);
+    if (counts.entity_count) parts.push(`云端记录 ${counts.entity_count}`);
+    return parts.join(' · ') || '无数据变更';
+}
+
+function renderGoogleSyncHistoryError(record = {}) {
+    const error = record.error || {};
+    const parts = [
+        error.reason || record.reason,
+        error.http_status ? `HTTP ${error.http_status}` : '',
+        error.google_reason,
+        error.google_status,
+        error.message
+    ].filter(Boolean);
+    return parts.length ? parts.join(' · ') : '无失败详情';
+}
+
+function renderGoogleSyncHistoryRecord(record = {}) {
+    const status = escapeGoogleSyncText(formatGoogleSyncHistoryStatus(record));
+    const counts = escapeGoogleSyncText(formatGoogleSyncHistoryCounts(record));
+    const started = escapeGoogleSyncText(formatGoogleSyncDateTime(record.started_at));
+    const finished = escapeGoogleSyncText(formatGoogleSyncDateTime(record.finished_at));
+    const trigger = escapeGoogleSyncText(record.trigger || 'unknown');
+    const duration = escapeGoogleSyncText(formatGoogleSyncDuration(record.duration_ms));
+    const cloudUpdated = escapeGoogleSyncText(formatGoogleSyncDateTime(record.cloud_updated_at));
+    const queueDetail = record.queue_wait_ms
+        ? `<div><span>排队等待</span><strong>${escapeGoogleSyncText(formatGoogleSyncDuration(record.queue_wait_ms))}</strong></div>`
+        : '';
+    const coalescedDetail = record.coalesced_trigger_count
+        ? `<div><span>合并触发</span><strong>${escapeGoogleSyncText(record.coalesced_trigger_count)} 次 · ${escapeGoogleSyncText(formatGoogleSyncReasonList(record.coalesced_reasons))}</strong></div>`
+        : '';
+    const longRunningDetail = record.long_running
+        ? '<div><span>运行状态</span><strong>同步耗时较长</strong></div>'
+        : '';
+    const error = record.status === 'failed'
+        ? `<div><span>失败原因</span><strong>${escapeGoogleSyncText(renderGoogleSyncHistoryError(record))}</strong></div>`
+        : '';
+    return `
+        <details class="google-sync-history-item" data-status="${escapeGoogleSyncText(record.status || 'unknown')}">
+            <summary>
+                <span class="google-sync-history-status">${status}</span>
+                <span class="google-sync-history-time">${finished}</span>
+                <span class="google-sync-history-counts">${counts}</span>
+            </summary>
+            <div class="google-sync-history-detail">
+                <div><span>触发来源</span><strong>${trigger}</strong></div>
+                <div><span>开始</span><strong>${started}</strong></div>
+                <div><span>结束</span><strong>${finished}</strong></div>
+                <div><span>耗时</span><strong>${duration}</strong></div>
+                ${queueDetail}
+                ${coalescedDetail}
+                ${longRunningDetail}
+                <div><span>云端修订</span><strong>${cloudUpdated}</strong></div>
+                ${error}
+            </div>
+        </details>
+    `;
+}
+
+async function renderGoogleSyncHistory() {
+    const listEl = document.getElementById('googleSyncHistoryList');
+    if (!listEl || typeof TimeWhereGoogleSync === 'undefined') return;
+    const history = await TimeWhereGoogleSync.getGoogleSyncHistory(TimeWhereDB, { limit: 20 });
+    if (!history.length) {
+        listEl.innerHTML = '<p class="setting-desc google-sync-history-empty">暂无同步记录。</p>';
+        return;
+    }
+    listEl.innerHTML = history.map(renderGoogleSyncHistoryRecord).join('');
+}
+
+async function handleClearGoogleSyncHistory() {
+    if (typeof TimeWhereGoogleSync === 'undefined') return;
+    const confirmed = window.confirm('清空本机同步记录？这不会删除任务、日程或云端同步数据。');
+    if (!confirmed) return;
+    await TimeWhereGoogleSync.clearGoogleSyncHistory(TimeWhereDB);
+    await renderGoogleSyncHistory();
+    showToast('同步记录已清空', 'success');
 }
 
 function isGoogleSyncConnectedState(state = null) {
@@ -688,7 +899,8 @@ function updateGoogleSyncControls() {
         'syncGoogleNowBtn',
         'restoreGoogleSyncBtn',
         'uploadGoogleSyncBtn',
-        'disconnectGoogleSyncBtn'
+        'disconnectGoogleSyncBtn',
+        'revokeGoogleSyncBtn'
     ].forEach(id => document.getElementById(id)?.toggleAttribute('disabled', disabled));
 }
 
@@ -716,10 +928,11 @@ async function loadGoogleSyncStatus() {
         setGoogleSyncStatus(`● 有冲突待处理${state.conflict_count ? `（${state.conflict_count}）` : ''}`, 'conflict');
         await syncAndShowGoogleSyncConflicts(state.conflict_count || 0, { fallbackSync: true });
     } else if (state?.status === 'failed') {
-        setGoogleSyncStatus(state?.last_error ? `● 失败：${state.last_error}` : '● 失败', 'failed');
+        const message = state?.last_error ? getGoogleSyncFailureMessage({ ...state, message: state.last_error }) : '';
+        setGoogleSyncStatus(message ? `● 同步失败：${message}` : '● 同步失败', 'failed');
         updateGoogleSyncConflictButton(0);
     } else if (state?.status === 'pending_retry') {
-        setGoogleSyncStatus('● 离线待重试', 'failed');
+        setGoogleSyncStatus('● 等待重试', 'retry');
         updateGoogleSyncConflictButton(0);
     } else if (state?.status === 'syncing') {
         setGoogleSyncStatus('● 同步中', 'syncing');
@@ -777,17 +990,38 @@ async function connectGoogleSyncAccount(options = {}) {
     if (accountInfo?.account_key) {
         await TimeWhereDB.setSetting('google_sync_account_key', accountInfo.account_key);
     }
-    if (accountInfo?.name) {
-        await TimeWhereDB.setSetting('google_sync_account_name', accountInfo.name);
-    }
-    if (accountInfo?.email) {
-        await TimeWhereDB.setSetting('google_sync_account_email', accountInfo.email);
-    }
+    await TimeWhereDB.setSetting('google_sync_account_name', accountInfo?.name || null);
+    await TimeWhereDB.setSetting('google_sync_account_email', accountInfo?.email || null);
+    await TimeWhereDB.setSetting('google_sync_account_picture', isSafeGoogleAccountPictureUrl(accountInfo?.picture) ? accountInfo.picture : null);
     await api.saveGoogleSyncState(TimeWhereDB, {
         status: 'connected',
         connected_at: new Date().toISOString()
     });
     return { status: 'connected' };
+}
+
+function requestDesktopSyncAfterConnect(reason = 'connect_success') {
+    if (!isDesktopElectronPlatform() || typeof globalThis.TimeWherePlatform?.sync?.requestRun !== 'function') {
+        return false;
+    }
+    setGoogleSyncStatus('● 首次同步已启动', 'syncing');
+    globalThis.TimeWherePlatform.sync.requestRun({ reason, force: true })
+        .then(result => {
+            if (result?.status === 'queued') {
+                setGoogleSyncStatus('● 同步排队中', 'queued');
+                showToast('Google 已连接，首次同步已排队。', 'info');
+                return;
+            }
+            if (result?.status === 'failed') {
+                markGoogleSyncFailed(result).catch(() => null);
+                return;
+            }
+            loadGoogleSyncStatus().catch(() => null);
+        })
+        .catch(error => {
+            markGoogleSyncFailed(error).catch(() => null);
+        });
+    return true;
 }
 
 async function handleConnectGoogleSync() {
@@ -816,9 +1050,12 @@ async function handleConnectGoogleSync() {
             showToast(getGoogleSyncFailureMessage({ reason: 'account_mismatch' }), 'info');
             return;
         }
-        setGoogleSyncStatus('● 已连接', 'connected');
+        const desktopSyncRequested = requestDesktopSyncAfterConnect('connect_success');
+        if (!desktopSyncRequested) {
+            setGoogleSyncStatus('● 已连接', 'connected');
+        }
         await loadGoogleSyncStatus();
-        showToast('Google 数据同步已连接', 'success');
+        showToast(desktopSyncRequested ? 'Google 数据同步已连接，正在启动首次同步。' : 'Google 数据同步已连接', 'success');
     } catch (error) {
         await markGoogleSyncFailed(error);
     } finally {
@@ -902,12 +1139,12 @@ async function handleGoogleSyncNow() {
             ? await globalThis.TimeWherePlatform.sync.requestRun({ reason: 'manual_sync', force: true })
             : await api.runAutoSync(TimeWhereDB, driveClient, { force: true });
         if (result?.status === 'queued') {
-            setGoogleSyncStatus('● 已排队同步', 'syncing');
+            setGoogleSyncStatus('● 同步排队中', 'queued');
             showToast('已有同步正在运行，已排队本次手动同步。', 'info');
             return;
         }
         if (result?.status === 'backoff') {
-            setGoogleSyncStatus('● 等待重试', 'failed');
+            setGoogleSyncStatus('● 等待重试', 'retry');
             showToast(`同步正在等待重试：${formatGoogleSyncDateTime(result.retry_after)}`, 'info');
             return;
         }
@@ -977,7 +1214,7 @@ async function executeRestoreGoogleSync() {
 }
 
 async function handleDisconnectGoogleSync() {
-    setGoogleSyncInProgress(true, '正在断开 Google 同步…');
+    setGoogleSyncInProgress(true, '正在断开本机 Google 同步…');
     try {
         const { api, authAdapter } = createGoogleSyncRuntime();
         await authAdapter.disconnect();
@@ -988,12 +1225,51 @@ async function handleDisconnectGoogleSync() {
         await TimeWhereDB.setSetting('google_sync_account_key', null);
         await TimeWhereDB.setSetting('google_sync_account_name', null);
         await TimeWhereDB.setSetting('google_sync_account_email', null);
+        await TimeWhereDB.setSetting('google_sync_account_picture', null);
         hideGoogleSyncPreview();
         setGoogleSyncStatus('○ 未连接', 'not_configured');
         await updateGoogleSyncAccountDisplay({ status: 'not_configured' });
         updateGoogleSyncLastSyncDisplay(null);
         updateGoogleSyncConflictButton(0);
-        showToast('已断开 Google 数据同步。本地数据保留。', 'success');
+        showToast('已断开这台设备的 Google 数据同步。本地数据保留，其他设备授权不受影响。', 'success');
+    } catch (error) {
+        await markGoogleSyncFailed(error);
+    } finally {
+        setGoogleSyncInProgress(false);
+    }
+}
+
+function handleRevokeGoogleSyncAuthorization() {
+    openGoogleSyncDangerModal('revoke_auth');
+}
+
+async function executeRevokeGoogleSyncAuthorization() {
+    setGoogleSyncInProgress(true, '正在撤销 Google 授权…');
+    try {
+        const { api, authAdapter } = createGoogleSyncRuntime();
+        if (typeof authAdapter.revoke !== 'function') {
+            showToast('当前平台不支持直接撤销 Google 授权。', 'info');
+            return;
+        }
+        const result = await authAdapter.revoke();
+        if (result?.status === 'not_supported') {
+            showToast('当前平台不支持直接撤销 Google 授权。', 'info');
+            return;
+        }
+        await api.saveGoogleSyncState(TimeWhereDB, {
+            status: 'not_configured',
+            revoked_at: new Date().toISOString()
+        });
+        await TimeWhereDB.setSetting('google_sync_account_key', null);
+        await TimeWhereDB.setSetting('google_sync_account_name', null);
+        await TimeWhereDB.setSetting('google_sync_account_email', null);
+        await TimeWhereDB.setSetting('google_sync_account_picture', null);
+        hideGoogleSyncPreview();
+        setGoogleSyncStatus('○ 未连接', 'not_configured');
+        await updateGoogleSyncAccountDisplay({ status: 'not_configured' });
+        updateGoogleSyncLastSyncDisplay(null);
+        updateGoogleSyncConflictButton(0);
+        showToast('已向 Google 撤销 TimeWhere 授权。本地数据保留。', 'success');
     } catch (error) {
         await markGoogleSyncFailed(error);
     } finally {
@@ -1015,6 +1291,8 @@ async function markGoogleSyncFailed(error) {
                 last_google_reason: error.google_reason || null,
                 last_google_status: error.google_status || null,
                 last_google_message: error.google_message || null,
+                last_auth_error_subtype: error.auth_error_subtype || error.google_error_subtype || null,
+                last_oauth_diagnostics: error.oauth_diagnostics || null,
                 retryable: error.retryable === true
             });
         }
@@ -1049,6 +1327,18 @@ const GOOGLE_SYNC_DANGER_COPY = {
             '此操作不是普通同步，仅用于确认云端数据最可信的情况。'
         ],
         action: executeRestoreGoogleSync
+    },
+    revoke_auth: {
+        title: '撤销 Google 授权',
+        message: '此操作会向 Google 撤销 TimeWhere 对当前账户的授权。本地数据会保留，但同一 Google 项目下其他设备的授权也可能失效。',
+        phrase: '撤销 Google 授权',
+        confirmText: '确认撤销授权',
+        risks: [
+            '这不是普通断开连接；它会请求 Google 作废已授予 TimeWhere 的 OAuth 授权。',
+            'Windows、macOS 或其他使用同一 Google 项目的 TimeWhere 内部包可能需要重新连接。',
+            '本地任务、日历和配置不会被删除。'
+        ],
+        action: executeRevokeGoogleSyncAuthorization
     }
 };
 

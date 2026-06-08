@@ -145,6 +145,7 @@ async function run() {
     const calendarHtml = fs.readFileSync(path.join(root, 'extension', 'pages', 'calendar', 'calendar.html'), 'utf8');
     const calendarScript = fs.readFileSync(path.join(root, 'extension', 'pages', 'calendar', 'script.js'), 'utf8');
     const calendarStyles = fs.readFileSync(path.join(root, 'extension', 'pages', 'calendar', 'styles.css'), 'utf8');
+    const googleSyncStatusUi = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'google-sync-status-ui.js'), 'utf8');
     const schedulingScript = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'scheduling.js'), 'utf8');
     const dbScript = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'db.js'), 'utf8');
     assert('Calendar product UI no longer contains visible 单次事件 wording', !/单次事件/.test(calendarHtml + calendarScript + calendarStyles));
@@ -251,6 +252,15 @@ async function run() {
         && calendarScript.includes('matrixview_subject_mappings')
         && !calendarScript.includes('managebac_ics_url')
         && !calendarScript.includes('managebac_ics_token'));
+    assert('Calendar loads and initializes avatar-based Google sync status entry',
+        calendarHtml.includes('shared/styles/google-sync-status.css')
+        && calendarHtml.includes('shared/js/google-sync-status-ui.js')
+        && calendarHtml.indexOf('desktop-sync-service.js') < calendarHtml.indexOf('google-sync-status-ui.js')
+        && calendarHtml.includes('class="user-avatar"')
+        && calendarScript.includes('TimeWhereGoogleSyncStatusUI?.init?.()')
+        && calendarScript.includes('TimeWhereGoogleSyncStatusUI?.refreshAll?.()')
+        && !calendarScript.includes('setTransientStatus')
+        && googleSyncStatusUi.includes('attachSidebarAvatar'));
     assert('Calendar week task display no longer uses Daily Settle rolling task pool', !calendarScript.includes('buildDailyTaskPool')
         && !calendarScript.includes('dailySettle')
         && calendarScript.includes('buildCalendarDayProjection({')

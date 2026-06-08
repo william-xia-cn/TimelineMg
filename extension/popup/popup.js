@@ -50,6 +50,7 @@ async function initApp() {
     }
 
     await reloadPopup();
+    globalThis.TimeWhereGoogleSyncStatusUI?.init?.();
     runGoogleSyncCheck();
 }
 
@@ -57,6 +58,8 @@ function runGoogleSyncCheck() {
     if (typeof TimeWhereGoogleSync === 'undefined' || typeof TimeWhereDB === 'undefined') return;
     TimeWhereGoogleSync.runPageAutoSync(TimeWhereDB).catch(error => {
         console.warn('Google auto sync check failed:', error);
+    }).finally(() => {
+        globalThis.TimeWhereGoogleSyncStatusUI?.refreshAll?.();
     });
 }
 

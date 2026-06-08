@@ -10,6 +10,12 @@ contextBridge.exposeInMainWorld('TimeWhereElectronPlatform', {
     ipcRenderer.on('timewhere-platform:notification-click', listener);
     return () => ipcRenderer.removeListener('timewhere-platform:notification-click', listener);
   },
+  onWindowActivated(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('timewhere-platform:window-activated', listener);
+    return () => ipcRenderer.removeListener('timewhere-platform:window-activated', listener);
+  },
   consumePendingNotificationClicks() {
     return ipcRenderer.invoke('timewhere-platform', {
       method: 'notification.consumePendingClicks',

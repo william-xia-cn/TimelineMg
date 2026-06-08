@@ -172,6 +172,19 @@
                         chromeRef.identity.getProfileUserInfo({ accountStatus: 'ANY' }, done)
                     );
                 },
+                getDiagnostics() {
+                    return {
+                        status: 'not_supported',
+                        reason: 'chrome_identity_diagnostics_unavailable'
+                    };
+                },
+                async disconnectGoogleToken() {
+                    if (!chromeRef?.identity?.clearAllCachedAuthTokens) {
+                        return { status: 'not_supported' };
+                    }
+                    await chromeCallbackPromise(chromeRef, done => chromeRef.identity.clearAllCachedAuthTokens(done));
+                    return { status: 'disconnected' };
+                },
                 async revokeGoogleToken() {
                     if (!chromeRef?.identity?.clearAllCachedAuthTokens) {
                         return { status: 'not_supported' };
@@ -257,6 +270,12 @@
                 focus(route = DEFAULT_MAIN_ROUTE) {
                     return call('window.focus', { route });
                 },
+                onActivated(callback) {
+                    if (typeof bridge?.onWindowActivated !== 'function' || typeof callback !== 'function') {
+                        return () => {};
+                    }
+                    return bridge.onWindowActivated(callback);
+                },
                 openSettings() {
                     return call('window.openMain', { route: DEFAULT_SETTINGS_ROUTE });
                 }
@@ -328,6 +347,12 @@
                 },
                 getAccountInfo() {
                     return call('auth.getAccountInfo');
+                },
+                getDiagnostics() {
+                    return call('auth.getDiagnostics');
+                },
+                disconnectGoogleToken() {
+                    return call('auth.disconnectGoogleToken');
                 },
                 revokeGoogleToken() {
                     return call('auth.revokeGoogleToken');
@@ -413,6 +438,8 @@
                 getStatus: () => ({ status: 'not_configured', reason: 'platform_unavailable' }),
                 getGoogleToken: () => ({ status: 'not_configured', reason: 'platform_unavailable' }),
                 getAccountInfo: () => ({ email: null }),
+                getDiagnostics: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
+                disconnectGoogleToken: () => ({ status: 'not_supported' }),
                 revokeGoogleToken: () => ({ status: 'not_supported' })
             },
             chromeBridge: { connectExtension: notSupported, getStatus: notSupported },
@@ -442,11 +469,11 @@
     global.TimeWherePlatform = global.TimeWherePlatform || platform;
     global.TimeWherePlatformContract = {
         name: true,
-        window: ['openMain', 'openQuickPanel', 'focus', 'show', 'hide'],
+        window: ['openMain', 'openQuickPanel', 'focus', 'show', 'hide', 'onActivated'],
         notification: ['notify', 'onClick'],
         reminderRuntime: ['schedule', 'cancel', 'rescheduleAll'],
         badge: ['set', 'clear'],
-        auth: ['getStatus', 'getGoogleToken', 'getAccountInfo', 'revokeGoogleToken'],
+        auth: ['getStatus', 'getGoogleToken', 'getAccountInfo', 'getDiagnostics', 'disconnectGoogleToken', 'revokeGoogleToken'],
         chromeBridge: ['connectExtension', 'getStatus'],
         sync: ['getStatus', 'requestRun', 'pause', 'resume'],
         external: ['openUrl'],

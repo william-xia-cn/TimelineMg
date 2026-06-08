@@ -8,8 +8,9 @@
 (function(global) {
     'use strict';
 
-    const DEFAULT_INTERVAL_MS = 60 * 1000;
-    const DEFAULT_DEBOUNCE_MS = 30 * 1000;
+    const DEFAULT_INTERVAL_MS = 3 * 60 * 1000;
+    const DEFAULT_DEBOUNCE_MS = 3 * 60 * 1000;
+    const LONG_RUNNING_MS = 90 * 1000;
     const BACKOFF_MS = [60 * 1000, 2 * 60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000];
 
     function nowISO() {
@@ -33,10 +34,12 @@
         const timers = {
             interval: null,
             debounce: null,
-            retry: null
+            retry: null,
+            longRunning: null
         };
         let currentRun = null;
-        let pendingRun = null;
+        let pendingState = null;
+        let currentRunId = 0;
         const state = {
             status: 'idle',
             running: false,
@@ -59,7 +62,15 @@
             retry_after: null,
             next_run_at: null,
             conflict_count: 0,
-            last_trigger_reason: null
+            last_trigger_reason: null,
+            current_run_started_at: null,
+            current_run_duration_ms: 0,
+            last_completed_at: null,
+            queued_at: null,
+            pending_duration_ms: 0,
+            pending_trigger_count: 0,
+            pending_reasons: [],
+            pending_force: false
         };
 
         const getApi = () => options.api || global.TimeWhereGoogleSync;
@@ -70,8 +81,18 @@
             return api?.createDefaultDriveClient?.();
         };
 
+        function durationSince(value) {
+            const time = value ? new Date(value).getTime() : NaN;
+            return Number.isFinite(time) ? Math.max(0, Date.now() - time) : 0;
+        }
+
         function snapshot() {
-            return { ...state };
+            return {
+                ...state,
+                current_run_duration_ms: state.running ? durationSince(state.current_run_started_at) : state.current_run_duration_ms,
+                pending_duration_ms: state.pending ? durationSince(state.queued_at) : 0,
+                pending_reasons: state.pending_reasons.slice()
+            };
         }
 
         function emitStatus() {
@@ -107,6 +128,62 @@
         function clearRetryTimer() {
             if (timers.retry) global.clearTimeout(timers.retry);
             timers.retry = null;
+        }
+
+        function clearLongRunningTimer() {
+            if (timers.longRunning) global.clearTimeout(timers.longRunning);
+            timers.longRunning = null;
+        }
+
+        function applyPendingState() {
+            state.pending = Boolean(pendingState);
+            state.queued_at = pendingState?.queued_at || null;
+            state.pending_trigger_count = pendingState?.trigger_count || 0;
+            state.pending_reasons = pendingState?.reasons ? pendingState.reasons.slice() : [];
+            state.pending_force = pendingState?.force === true;
+        }
+
+        function queuePendingRun(runOptions = {}) {
+            const reason = runOptions.reason || 'pending';
+            if (!pendingState) {
+                pendingState = {
+                    queued_at: nowISO(),
+                    reasons: [],
+                    trigger_count: 0,
+                    force: false
+                };
+            }
+            pendingState.trigger_count += 1;
+            if (!pendingState.reasons.includes(reason)) {
+                pendingState.reasons.push(reason);
+            }
+            pendingState.force = pendingState.force === true || runOptions.force === true;
+            applyPendingState();
+            emitStatus();
+            return {
+                status: 'queued',
+                running: true,
+                pending: true,
+                queued_at: pendingState.queued_at,
+                pending_trigger_count: pendingState.trigger_count,
+                pending_reasons: pendingState.reasons.slice(),
+                force: pendingState.force
+            };
+        }
+
+        function takePendingRun() {
+            if (!pendingState) return null;
+            const next = {
+                reason: pendingState.reasons.length > 1 ? 'coalesced_pending' : (pendingState.reasons[0] || 'pending'),
+                force: pendingState.force === true,
+                queued_at: pendingState.queued_at,
+                pending_trigger_count: pendingState.trigger_count,
+                pending_reasons: pendingState.reasons.slice(),
+                coalesced_pending: true
+            };
+            pendingState = null;
+            applyPendingState();
+            return next;
         }
 
         function scheduleRetry(reason = 'retry') {
@@ -166,12 +243,23 @@
         async function runJob(runOptions = {}) {
             const api = getApi();
             const db = getDb();
+            const runId = currentRunId + 1;
+            currentRunId = runId;
             state.running = true;
             state.status = 'syncing';
             state.last_run_at = nowISO();
+            state.current_run_started_at = state.last_run_at;
+            state.current_run_duration_ms = 0;
             state.last_trigger_reason = runOptions.reason || 'manual';
             state.retry_after = null;
             state.next_run_at = null;
+            clearLongRunningTimer();
+            timers.longRunning = global.setTimeout(() => {
+                if (currentRunId !== runId || !state.running) return;
+                state.status = 'long_running';
+                state.current_run_duration_ms = durationSince(state.current_run_started_at);
+                emitStatus();
+            }, Number(runOptions.long_running_ms ?? options.long_running_ms ?? LONG_RUNNING_MS));
             emitStatus();
 
             try {
@@ -190,7 +278,11 @@
                 if (!driveClient) return { status: 'not_ready', reason: 'drive_client_unavailable' };
                 const result = await api.runAutoSync(db, driveClient, {
                     force: true,
-                    sync_trigger: runOptions.reason || 'desktop_service'
+                    sync_trigger: runOptions.reason || 'desktop_service',
+                    queued_at: runOptions.queued_at || null,
+                    pending_trigger_count: runOptions.pending_trigger_count || 0,
+                    pending_reasons: runOptions.pending_reasons || [],
+                    coalesced_pending: runOptions.coalesced_pending === true
                 });
 
                 if (result?.status === 'conflict') {
@@ -248,15 +340,17 @@
                 else emitStatus();
                 return { status: 'failed', reason: syncError.reason, message: syncError.message, retryable: state.retryable };
             } finally {
+                clearLongRunningTimer();
                 state.running = false;
+                state.current_run_duration_ms = durationSince(state.current_run_started_at);
+                state.current_run_started_at = null;
+                state.last_completed_at = nowISO();
                 currentRun = null;
-                if (pendingRun) {
-                    const next = pendingRun;
-                    pendingRun = null;
-                    state.pending = false;
+                const next = takePendingRun();
+                if (next) {
                     global.setTimeout(() => requestRun(next), 0);
                 } else {
-                    state.pending = false;
+                    applyPendingState();
                     emitStatus();
                 }
             }
@@ -269,13 +363,7 @@
                 return { status: 'backoff', retry_after: state.retry_after };
             }
             if (currentRun) {
-                pendingRun = {
-                    reason: runOptions.reason || pendingRun?.reason || 'pending',
-                    force: runOptions.force === true || pendingRun?.force === true
-                };
-                state.pending = true;
-                emitStatus();
-                return { status: 'queued', running: true, pending: true };
+                return queuePendingRun(runOptions);
             }
             currentRun = runJob(runOptions);
             return await currentRun;
@@ -300,7 +388,9 @@
             state.started = true;
             state.service_started_at = nowISO();
             const intervalMs = Number(startOptions.interval_ms || DEFAULT_INTERVAL_MS);
+            state.next_run_at = new Date(Date.now() + intervalMs).toISOString();
             timers.interval = global.setInterval(() => {
+                state.next_run_at = new Date(Date.now() + intervalMs).toISOString();
                 requestRun({ reason: 'interval', force: false });
             }, intervalMs);
             global.addEventListener?.('online', () => requestRun({ reason: 'network_online', force: true }));
@@ -319,6 +409,7 @@
             if (timers.interval) global.clearInterval(timers.interval);
             if (timers.debounce) global.clearTimeout(timers.debounce);
             clearRetryTimer();
+            clearLongRunningTimer();
             timers.interval = null;
             timers.debounce = null;
             state.started = false;

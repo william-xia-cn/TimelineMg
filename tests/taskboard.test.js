@@ -20,6 +20,7 @@ const matrixViewJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js'
 const taskArrangeAutoJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'task-arrange-auto.js'), 'utf8');
 const iconsJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'icons.js'), 'utf8');
 const externalLinksJs = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'external-links.js'), 'utf8');
+const googleSyncStatusUi = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'google-sync-status-ui.js'), 'utf8');
 const boardCss = fs.readFileSync(path.join(root, 'extension', 'pages', 'tasks', 'styles.css'), 'utf8');
 
 let passed = 0;
@@ -217,6 +218,15 @@ assert('Task Board exposes Calendar tab and container', tasksHtml.includes('data
     && tasksHtml.includes('id="taskCalendarView"')
     && stateJs.includes("currentView: 'board'")
     && stateJs.includes("'board' | 'list' | 'calendar'"));
+assert('Task Board loads and initializes avatar-based Google sync status entry',
+    tasksHtml.includes('shared/styles/google-sync-status.css')
+    && tasksHtml.includes('shared/js/google-sync-status-ui.js')
+    && tasksHtml.indexOf('desktop-sync-service.js') < tasksHtml.indexOf('google-sync-status-ui.js')
+    && tasksHtml.includes('class="user-avatar"')
+    && scriptJs.includes('TimeWhereGoogleSyncStatusUI?.init?.()')
+    && scriptJs.includes('TimeWhereGoogleSyncStatusUI?.refreshAll?.()')
+    && !scriptJs.includes('setTransientStatus')
+    && googleSyncStatusUi.includes('attachSidebarAvatar'));
 assert('Task Board renderBoard supports Calendar view', boardJs.includes("TaskApp.currentView === 'calendar'")
     && boardJs.includes('renderCalendarView()')
     && boardJs.includes("calendarEl.style.display = ''"));

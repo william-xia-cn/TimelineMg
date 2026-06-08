@@ -16,8 +16,10 @@ const DEFAULT_DESKTOP_OAUTH_CLIENT_ID = [
   '0koum8v8mms5d4lrnhuavuh5b55hhben.apps.googleusercontent.com'
 ].join('-');
 let DEFAULT_DESKTOP_OAUTH_CLIENT_SECRET = '';
+let DEFAULT_DESKTOP_OAUTH_SECRET_MODULE_LOADED = false;
 try {
   ({ DEFAULT_DESKTOP_OAUTH_CLIENT_SECRET } = require('./desktop-oauth-secrets'));
+  DEFAULT_DESKTOP_OAUTH_SECRET_MODULE_LOADED = true;
 } catch (_) {
   DEFAULT_DESKTOP_OAUTH_CLIENT_SECRET = '';
 }
@@ -72,10 +74,44 @@ function hasEncryptedStorage() {
   }
 }
 
-function makeAuthError(message, code) {
+function makeAuthError(message, code, details = {}) {
   const error = new Error(message);
   error.code = code;
+  for (const [key, value] of Object.entries(details || {})) {
+    if (value != null) error[key] = value;
+  }
   return error;
+}
+
+function getClientIdTail(clientId = '') {
+  const normalized = String(clientId || '').trim();
+  const localPart = normalized.replace(/\.apps\.googleusercontent\.com$/i, '');
+  return localPart ? localPart.slice(-8) : '';
+}
+
+function getOauthFingerprint(value = '') {
+  const text = String(value || '');
+  return text ? sha256Hex(`timewhere-oauth-diagnostic:${text}`).slice(0, 12) : null;
+}
+
+function getOAuthConfigDiagnostics(credentials = getDesktopOAuthCredentials()) {
+  const clientId = credentials.clientId || '';
+  const clientSecret = credentials.clientSecret || '';
+  const envClientId = String(process.env.TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID || '').trim();
+  return {
+    status: 'ok',
+    auth_mode: clientSecret
+      ? 'pkce_desktop_client_metadata_secret'
+      : 'pkce_public_client_override',
+    client_id_tail: getClientIdTail(clientId),
+    client_id_fingerprint: getOauthFingerprint(clientId),
+    env_client_id_override: Boolean(envClientId),
+    client_secret_present: Boolean(clientSecret),
+    client_secret_fingerprint: getOauthFingerprint(clientSecret),
+    bundled_client_secret_present: Boolean(DEFAULT_DESKTOP_OAUTH_CLIENT_SECRET),
+    bundled_secret_module_loaded: DEFAULT_DESKTOP_OAUTH_SECRET_MODULE_LOADED,
+    scopes: DEFAULT_SCOPES.slice()
+  };
 }
 
 function getDesktopFetchImpl(fetchImpl = null) {
@@ -129,6 +165,63 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
     });
   }
 
+  function classifyRefreshTokenFailure(error = {}) {
+    const code = String(error.code || error.google_error || '');
+    const message = String(error.message || '');
+    const subtype = String(error.google_error_subtype || '');
+    if (code !== 'invalid_grant' && !/invalid_grant|expired or revoked/i.test(message)) {
+      return null;
+    }
+    if (subtype === 'invalid_rapt') {
+      return {
+        reason: 'desktop_oauth_session_control_required',
+        message: 'Google Workspace session policy requires reauthorization before TimeWhere can sync again.'
+      };
+    }
+    return {
+      reason: 'desktop_oauth_refresh_token_revoked',
+      message: 'Google authorization expired, was revoked, or no longer matches this desktop package OAuth client metadata. Please reconnect Google.'
+    };
+  }
+
+  async function markStoredRefreshTokenInvalid(reason, error = {}) {
+    memoryAccessToken = null;
+    const state = normalizeAuthState(await readState());
+    const activeKey = state.active_account_key;
+    const now = new Date().toISOString();
+    if (activeKey && state.accounts?.[activeKey]) {
+      state.accounts[activeKey] = {
+        ...state.accounts[activeKey],
+        encrypted_refresh_token: null,
+        disconnected_at: state.accounts[activeKey].disconnected_at || now,
+        updated_at: now,
+        last_token_error_reason: reason,
+        last_token_error_code: error.code || error.google_error || null,
+        last_token_error_subtype: error.google_error_subtype || null,
+        last_token_error_at: now
+      };
+      state.updated_at = now;
+      await writeState(state);
+      return state.accounts[activeKey];
+    }
+    if (state.legacy?.encrypted_refresh_token) {
+      state.legacy = {
+        ...state.legacy,
+        encrypted_refresh_token: null,
+        disconnected_at: state.legacy.disconnected_at || now,
+        updated_at: now,
+        last_token_error_reason: reason,
+        last_token_error_code: error.code || error.google_error || null,
+        last_token_error_subtype: error.google_error_subtype || null,
+        last_token_error_at: now
+      };
+      state.updated_at = now;
+      await writeState(state);
+      return null;
+    }
+    return null;
+  }
+
   function encryptRefreshToken(refreshToken) {
     if (!refreshToken) return null;
     if (!hasEncryptedStorage()) {
@@ -178,14 +271,15 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
 
   function publicAccountInfo(account = null, connected = false) {
     if (!account) {
-      return { status: 'not_connected', connected: false, account_key: null, name: null, email: null };
+      return { status: 'not_connected', connected: false, account_key: null, name: null, email: null, picture: null };
     }
     return {
       status: connected ? 'connected' : 'disconnected',
       connected: Boolean(connected),
       account_key: account.account_key || null,
       name: account.name || null,
-      email: account.email || null
+      email: account.email || null,
+      picture: account.picture || null
     };
   }
 
@@ -225,10 +319,17 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
     }
     const json = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const errorCode = json.error || `http_${response.status}`;
+      const googleError = json.error || `http_${response.status}`;
+      const googleMessage = json.error_description || json.error || 'unknown error';
       throw makeAuthError(
-        `Google OAuth token request failed (${response.status}): ${json.error_description || json.error || 'unknown error'}`,
-        errorCode
+        `Google OAuth token request failed (${response.status}): ${googleMessage}`,
+        googleError,
+        {
+          http_status: response.status,
+          google_error: json.error || null,
+          google_error_description: json.error_description || null,
+          google_error_subtype: json.error_subtype || null
+        }
       );
     }
     return json;
@@ -265,7 +366,8 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
     return {
       account_key: sha256Hex(json.sub),
       name: json.name || null,
-      email: json.email || null
+      email: json.email || null,
+      picture: json.picture || null
     };
   }
 
@@ -378,7 +480,10 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
     authorizationUrl.searchParams.set('code_challenge', pkce.challenge);
     authorizationUrl.searchParams.set('code_challenge_method', 'S256');
     authorizationUrl.searchParams.set('access_type', 'offline');
-    authorizationUrl.searchParams.set('prompt', options.force_account_selection ? 'select_account consent' : 'consent');
+    const promptValue = options.force_account_selection
+      ? 'select_account consent'
+      : (options.force_consent ? 'consent' : '');
+    if (promptValue) authorizationUrl.searchParams.set('prompt', promptValue);
     await shell.openExternal(authorizationUrl.toString());
     const code = await authServer.codePromise;
     const tokenResponse = await requestToken(compactObject({
@@ -408,6 +513,7 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
     }
     let refreshToken = null;
     let refreshAccount = activeAccount;
+    let forceConsentForInteractive = false;
     try {
       if (!options.force_account_selection && activeAccount?.encrypted_refresh_token) {
         refreshToken = decryptRefreshToken(activeAccount);
@@ -424,6 +530,7 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
         };
       }
       await clearState();
+      forceConsentForInteractive = true;
     }
     if (refreshToken) {
       try {
@@ -439,9 +546,30 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
           };
         }
         await clearState();
+        forceConsentForInteractive = true;
       } catch (error) {
-        if (!options.interactive) throw error;
-        await clearState();
+        const tokenFailure = classifyRefreshTokenFailure(error);
+        if (tokenFailure) {
+          const invalidAccount = await markStoredRefreshTokenInvalid(tokenFailure.reason, error);
+          const accountInfo = invalidAccount || refreshAccount;
+          const result = {
+            status: 'not_authorized',
+            reason: tokenFailure.reason,
+            message: tokenFailure.message,
+            google_error: error.google_error || error.code || null,
+            google_error_subtype: error.google_error_subtype || null,
+            oauth_diagnostics: getOAuthConfigDiagnostics(credentials),
+            account_info: publicAccountInfo(accountInfo, false)
+          };
+          if (!options.interactive) return result;
+          refreshToken = null;
+          refreshAccount = accountInfo;
+          forceConsentForInteractive = true;
+        } else {
+          if (!options.interactive) throw error;
+          await clearState();
+          forceConsentForInteractive = true;
+        }
       }
     }
     if (!options.interactive) return { status: 'not_authorized', reason: 'desktop_oauth_not_connected' };
@@ -451,7 +579,10 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
         'desktop_token_storage_unavailable'
       );
     }
-    const authorized = await interactiveAuthorize(credentials, scopes, options);
+    const authorized = await interactiveAuthorize(credentials, scopes, {
+      ...options,
+      force_consent: options.force_consent === true || options.force_account_selection === true || forceConsentForInteractive || !refreshToken
+    });
     return { status: 'ok', token: authorized.token.token, account_info: publicAccountInfo(authorized.accountInfo, true) };
   }
 
@@ -473,6 +604,11 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
     return { status: 'revoked' };
   }
 
+  async function disconnectGoogleToken() {
+    await clearState();
+    return { status: 'disconnected' };
+  }
+
   return {
     async getStatus() {
       const credentials = getDesktopOAuthCredentials();
@@ -489,12 +625,35 @@ function createDesktopAuth({ fetchImpl = null } = {}) {
         encrypted_storage_available: hasEncryptedStorage()
       };
     },
+    async getDiagnostics() {
+      const credentials = getDesktopOAuthCredentials();
+      const state = normalizeAuthState(await readState());
+      const activeAccount = getActiveAccount(state);
+      return {
+        status: 'ok',
+        oauth: getOAuthConfigDiagnostics(credentials),
+        state: {
+          schema: state.schema,
+          account_count: Object.keys(state.accounts || {}).length,
+          has_active_account: Boolean(activeAccount),
+          active_account_key_fingerprint: activeAccount?.account_key ? getOauthFingerprint(activeAccount.account_key) : null,
+          active_has_refresh_token: Boolean(activeAccount?.encrypted_refresh_token),
+          active_connected_at: activeAccount?.connected_at || null,
+          active_disconnected_at: activeAccount?.disconnected_at || null,
+          active_updated_at: activeAccount?.updated_at || null,
+          active_last_token_error_reason: activeAccount?.last_token_error_reason || null,
+          active_last_token_error_subtype: activeAccount?.last_token_error_subtype || null,
+          legacy_has_refresh_token: Boolean(state.legacy?.encrypted_refresh_token)
+        }
+      };
+    },
     getGoogleToken,
     async getAccountInfo() {
       const state = normalizeAuthState(await readState());
       const activeAccount = getActiveAccount(state);
       return publicAccountInfo(activeAccount, Boolean(activeAccount?.encrypted_refresh_token));
     },
+    disconnectGoogleToken,
     revokeGoogleToken
   };
 }

@@ -376,6 +376,8 @@ select, input[type="number"], input[type="text"] {
 }
 
 .google-sync-status[data-status="syncing"],
+.google-sync-status[data-status="queued"],
+.google-sync-status[data-status="retry"],
 .google-sync-status[data-status="conflict"] {
     color: #92400e;
     background: #fef3c7;
@@ -501,6 +503,14 @@ select, input[type="number"], input[type="text"] {
     min-width: 0;
 }
 
+.google-sync-status-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
 .google-sync-state-line,
 .google-sync-meta-line {
     display: flex;
@@ -524,6 +534,122 @@ select, input[type="number"], input[type="text"] {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.google-sync-account-avatar {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.google-sync-account-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.google-sync-account-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.google-sync-history-card {
+    background: rgba(248, 250, 252, 0.76);
+}
+
+.google-sync-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 320px;
+    overflow-y: auto;
+    margin-top: 10px;
+}
+
+.google-sync-history-item {
+    border: 1px solid var(--border-stroke);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.86);
+}
+
+.google-sync-history-item summary {
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: minmax(100px, 0.9fr) minmax(120px, 1fr) minmax(120px, 1.4fr);
+    gap: 10px;
+    align-items: center;
+    padding: 10px 12px;
+    font-size: 12px;
+}
+
+.google-sync-history-status {
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.google-sync-history-time,
+.google-sync-history-counts {
+    color: var(--text-sub);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.google-sync-history-item[data-status="failed"] .google-sync-history-status {
+    color: #b91c1c;
+}
+
+.google-sync-history-item[data-status="conflict"] .google-sync-history-status,
+.google-sync-history-item[data-status="conflict_remaining"] .google-sync-history-status,
+.google-sync-history-item[data-status="pending_retry"] .google-sync-history-status {
+    color: #b45309;
+}
+
+.google-sync-history-item[data-status="synced"] .google-sync-history-status,
+.google-sync-history-item[data-status="up_to_date"] .google-sync-history-status,
+.google-sync-history-item[data-status="restored"] .google-sync-history-status,
+.google-sync-history-item[data-status="force_uploaded"] .google-sync-history-status,
+.google-sync-history-item[data-status="resolved"] .google-sync-history-status {
+    color: #047857;
+}
+
+.google-sync-history-detail {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+    padding: 0 12px 12px;
+    font-size: 12px;
+}
+
+.google-sync-history-detail div {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.google-sync-history-detail span {
+    color: var(--text-sub);
+}
+
+.google-sync-history-detail strong {
+    color: var(--text-main);
+    font-weight: 700;
+    overflow-wrap: anywhere;
 }
 
 .google-sync-conflict-empty {
@@ -682,6 +808,11 @@ select, input[type="number"], input[type="text"] {
     .google-sync-card-header {
         align-items: stretch;
         flex-direction: column;
+    }
+
+    .google-sync-history-item summary,
+    .google-sync-history-detail {
+        grid-template-columns: 1fr;
     }
 
     .google-sync-preview-row,

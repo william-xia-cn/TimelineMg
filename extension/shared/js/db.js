@@ -328,7 +328,7 @@ const TimeWhereDB = {
             const result = await api.markEntityDirty(this, table, id, record, options);
             if (result?.derived_only && result?.dirty !== true) return;
             if (api.schedulePageAutoSync) {
-                api.schedulePageAutoSync(this, { debounce_ms: 30 * 1000 });
+                api.schedulePageAutoSync(this);
             }
         } catch (error) {
             console.warn('Google sync dirty marker failed:', error);
@@ -342,7 +342,7 @@ const TimeWhereDB = {
         try {
             await api.markEntityDeleted(this, table, id, record, options);
             if (api.schedulePageAutoSync) {
-                api.schedulePageAutoSync(this, { debounce_ms: 30 * 1000 });
+                api.schedulePageAutoSync(this);
             }
         } catch (error) {
             console.warn('Google sync tombstone marker failed:', error);
@@ -1890,6 +1890,9 @@ const TimeWhereDB = {
                 google_email: null,
                 google_sync_account_key: null,
                 google_sync_account_name: null,
+                google_sync_account_email: null,
+                google_sync_account_picture: null,
+                google_sync_history: [],
                 access_token: null,
                 refresh_token: null,
                 sync_enabled: false,

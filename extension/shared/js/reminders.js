@@ -8,6 +8,21 @@
     const REMINDER_ADVANCE_MINUTES = 1;
     const REMINDER_REPEAT_MINUTES = 15;
     const DEFAULT_TASK_DURATION_MINUTES = 45;
+    const REMINDER_TYPE_RANK = {
+        'scheduled-start': 0,
+        'scheduled-repeat': 1,
+        'container-repeat': 2
+    };
+    const PRIORITY_RANK = {
+        urgent: 0,
+        p1: 0,
+        important: 1,
+        p2: 1,
+        medium: 2,
+        p3: 2,
+        low: 3,
+        p4: 3
+    };
 
     function pad2(value) {
         return String(value).padStart(2, '0');
@@ -145,9 +160,100 @@
         return [...scheduled, ...container];
     }
 
+    function prioritySortValue(value) {
+        const key = String(value || 'medium').trim().toLowerCase();
+        return Object.prototype.hasOwnProperty.call(PRIORITY_RANK, key) ? PRIORITY_RANK[key] : PRIORITY_RANK.medium;
+    }
+
+    function dueDateSortValue(value) {
+        return value ? String(value) : '9999-12-31';
+    }
+
+    function reminderScheduleSortValue(reminder = {}) {
+        const time = reminder.scheduled_time || reminder.task?.schedule_time || '';
+        return time ? timeToMinutes(time) : 24 * 60 + 1;
+    }
+
+    function compareReminders(a = {}, b = {}) {
+        const typeA = REMINDER_TYPE_RANK[a.type] ?? 99;
+        const typeB = REMINDER_TYPE_RANK[b.type] ?? 99;
+        if (typeA !== typeB) return typeA - typeB;
+
+        const timeA = reminderScheduleSortValue(a);
+        const timeB = reminderScheduleSortValue(b);
+        if (timeA !== timeB) return timeA - timeB;
+
+        const priorityA = prioritySortValue(a.task?.priority);
+        const priorityB = prioritySortValue(b.task?.priority);
+        if (priorityA !== priorityB) return priorityA - priorityB;
+
+        const dueA = dueDateSortValue(a.task?.due_date || a.task?.deadline);
+        const dueB = dueDateSortValue(b.task?.due_date || b.task?.deadline);
+        if (dueA !== dueB) return dueA.localeCompare(dueB);
+
+        return String(a.task_id || a.task?.id || '').localeCompare(String(b.task_id || b.task?.id || ''));
+    }
+
+    function selectPrimaryReminder(reminders = []) {
+        const list = Array.isArray(reminders) ? reminders.filter(Boolean) : [];
+        if (list.length === 0) return null;
+        return [...list].sort(compareReminders)[0] || null;
+    }
+
+    function summarizeReminderItem(reminder = {}) {
+        const task = reminder.task || {};
+        return {
+            title: truncate(task.title || '无标题任务', 28),
+            scheduled_time: reminder.scheduled_time || task.schedule_time || null,
+            plan_name: task.plan_name || task.planName || '',
+            type: reminder.type || null,
+            priority: task.priority || 'medium'
+        };
+    }
+
+    function getAggregateReminderBucket(primary = {}, now = new Date()) {
+        if (primary.type === 'scheduled-start') {
+            const startMin = timeToMinutes(primary.scheduled_time || primary.task?.schedule_time || '');
+            return `${formatDateISO(now)}:advance:${startMin}`;
+        }
+        return primary.bucket || `${formatDateISO(now)}:${primary.type || 'task'}`;
+    }
+
+    function computeAggregatedReminder(tasks, containers, now, scheduling, sentState = {}) {
+        const reminders = computeTaskReminders(tasks, containers, now, scheduling, {});
+        if (reminders.length === 0) return null;
+        const sortedReminders = [...reminders].sort(compareReminders);
+        const primary = sortedReminders[0] || null;
+        if (!primary) return null;
+        const bucket = getAggregateReminderBucket(primary, now);
+        const key = makeReminderKey('aggregate', primary.type || 'task', bucket);
+        if (sentState[key]) return null;
+        const taskIds = Array.from(new Set(sortedReminders
+            .map(reminder => reminder.task_id || reminder.task?.id)
+            .filter(id => id != null)
+            .map(id => String(id))));
+        return {
+            ...primary,
+            key,
+            bucket,
+            primary_key: primary.key,
+            primary_bucket: primary.bucket,
+            total_count: reminders.length,
+            overflow_count: Math.max(0, reminders.length - 1),
+            task_ids: taskIds,
+            items: sortedReminders.slice(0, 3).map(summarizeReminderItem)
+        };
+    }
+
     function truncate(value, max = 48) {
         const text = String(value || '').replace(/\s+/g, ' ').trim();
         return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+    }
+
+    function formatReminderListItem(item = {}, index = 0) {
+        const title = truncate(item.title || '无标题任务', 28);
+        const meta = item.scheduled_time || item.plan_name || '';
+        return `${index + 1}. ${title}${meta ? ` ${truncate(meta, 16)}` : ''}`;
     }
 
     function buildReminderNotificationPayload(reminder) {
@@ -157,8 +263,27 @@
         const duration = Number(task.duration) || DEFAULT_TASK_DURATION_MINUTES;
         const details = truncate(task.notes || task.description || '');
         const detailText = details ? ` · ${details}` : '';
+        const totalCount = Number(reminder?.total_count) || 1;
         let title;
         let message;
+
+        if (Array.isArray(reminder?.items) && reminder.items.length > 0) {
+            title = `当前有 ${totalCount} 个任务待处理`;
+            const listText = reminder.items
+                .slice(0, 3)
+                .map(formatReminderListItem)
+                .join('；');
+            const hiddenCount = Math.max(0, totalCount - reminder.items.length);
+            message = hiddenCount > 0 ? `${listText} · 另有 ${hiddenCount} 项` : listText;
+            return {
+                type: 'basic',
+                iconUrl: 'icons/icon128.png',
+                title,
+                message,
+                priority: 2,
+                requireInteraction: true
+            };
+        }
 
         if (reminder?.type === 'scheduled-start') {
             title = `即将开始：${taskTitle}`;
@@ -194,6 +319,9 @@
         computeScheduledTaskReminder,
         computeContainerTaskReminders,
         computeTaskReminders,
+        selectPrimaryReminder,
+        computeAggregatedReminder,
+        summarizeReminderItem,
         buildReminderNotificationPayload,
         truncate
     };

@@ -19,6 +19,8 @@ const popupScript = fs.readFileSync(path.join(root, 'extension', 'popup', 'popup
 const calendarScript = fs.readFileSync(path.join(root, 'extension', 'pages', 'calendar', 'script.js'), 'utf8');
 const schedulingScript = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'scheduling.js'), 'utf8');
 const externalLinksScript = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'external-links.js'), 'utf8');
+const googleSyncStatusUi = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'google-sync-status-ui.js'), 'utf8');
+const googleSyncStatusCss = fs.readFileSync(path.join(root, 'extension', 'shared', 'styles', 'google-sync-status.css'), 'utf8');
 const dashboardQuickAddPanelBlock = (focusScript.match(/async function openDashboardQuickAddTaskPanel[\s\S]*?function closeDashboardQuickAddTaskPanel/) || [''])[0];
 
 let passed = 0;
@@ -64,6 +66,41 @@ assert('Dashboard Popup and Side Panel load external link helper after platform 
     && focusHtml.indexOf('shared/js/platform.js') < focusHtml.indexOf('shared/js/external-links.js')
     && popupHtml.indexOf('shared/js/platform.js') < popupHtml.indexOf('shared/js/external-links.js')
     && sidepanelHtml.indexOf('shared/js/platform.js') < sidepanelHtml.indexOf('shared/js/external-links.js'));
+assert('Dashboard Popup and Side Panel load shared Google sync status UI',
+    focusHtml.includes('shared/styles/google-sync-status.css')
+    && focusHtml.includes('shared/js/google-sync-status-ui.js')
+    && focusHtml.indexOf('shared/js/desktop-sync-service.js') < focusHtml.indexOf('shared/js/google-sync-status-ui.js')
+    && popupHtml.includes('shared/styles/google-sync-status.css')
+    && popupHtml.includes('shared/js/google-sync-status-ui.js')
+    && sidepanelHtml.includes('shared/styles/google-sync-status.css')
+    && sidepanelHtml.includes('shared/js/google-sync-status-ui.js'));
+assert('Dashboard initializes Google sync status from existing avatar account entry',
+    focusHtml.includes('class="user-avatar"')
+    && focusScript.includes('TimeWhereGoogleSyncStatusUI?.init?.()')
+    && focusScript.includes('TimeWhereGoogleSyncStatusUI?.refreshAll?.()')
+    && !focusScript.includes('setTransientStatus'));
+assert('Popup and Side Panel use Settings button as compact sync status entry',
+    popupHtml.includes('id="btnSettings"')
+    && sidepanelHtml.includes('id="btnSettings"')
+    && popupScript.includes('TimeWhereGoogleSyncStatusUI?.init?.()')
+    && googleSyncStatusUi.includes('attachSettingsButton')
+    && googleSyncStatusCss.includes('.google-sync-settings-status-button'));
+assert('Shared Google sync status UI defines avatar dot states and popover actions',
+    googleSyncStatusUi.includes('Google 未连接')
+    && googleSyncStatusUi.includes('Google 已连接')
+    && googleSyncStatusUi.includes('同步排队中')
+    && googleSyncStatusUi.includes('同步失败')
+    && googleSyncStatusUi.includes('有冲突待处理')
+    && googleSyncStatusUi.includes('Google 账户不匹配')
+    && googleSyncStatusUi.includes('打开同步设置')
+    && googleSyncStatusUi.includes('查看同步记录')
+    && googleSyncStatusUi.includes('account_picture')
+    && googleSyncStatusUi.includes('google-sync-account-initial')
+    && !googleSyncStatusUi.includes('setTransientStatus')
+    && googleSyncStatusCss.includes('.google-sync-account-button')
+    && googleSyncStatusCss.includes('.google-sync-account-popover')
+    && googleSyncStatusCss.includes('.google-sync-status-dot.syncing')
+    && googleSyncStatusCss.includes('.google-sync-status-dot.queued'));
 assert('Side Panel keeps Popup menu content and exposes four bottom navigation entries',
     sidepanelHtml.includes('id="taskSummary"')
     && sidepanelHtml.includes('id="currentTaskList"')

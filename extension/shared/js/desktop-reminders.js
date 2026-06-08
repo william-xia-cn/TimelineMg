@@ -5,9 +5,14 @@
 
     const ACK_STATE_KEY = 'timewhere_desktop_reminder_ack_v1';
     const POLL_MS = 60 * 1000;
+    const UNACKED_REPEAT_MS = 3 * 60 * 1000;
     let timer = null;
     let running = false;
     let unsubscribeNotificationClick = null;
+    let unsubscribeWindowActivated = null;
+    let windowResponseHandlerInstalled = false;
+    let windowFocusHandler = null;
+    let visibilityChangeHandler = null;
 
     function isDesktopPlatform() {
         return global.TimeWherePlatform?.name === 'desktop-electron';
@@ -86,11 +91,57 @@
         return { status: 'acknowledged', key };
     }
 
+    function acknowledgeOpenReminders(now = new Date(), source = 'window_open') {
+        if (!isDesktopPlatform()) return { status: 'not_supported', acknowledged: 0 };
+        const state = readAckState();
+        let acknowledged = 0;
+        for (const [key, value] of Object.entries(state || {})) {
+            if (!String(key).startsWith('reminder:') || value?.ack_at) continue;
+            state[key] = {
+                ...(value || {}),
+                key,
+                ack_at: now.toISOString(),
+                ack_source: source
+            };
+            acknowledged++;
+        }
+        if (acknowledged > 0) writeAckState(state);
+        return { status: 'acknowledged', acknowledged };
+    }
+
     function ensureNotificationClickHandler() {
         if (unsubscribeNotificationClick || typeof global.TimeWherePlatform?.notification?.onClick !== 'function') return;
         unsubscribeNotificationClick = global.TimeWherePlatform.notification.onClick(payload => {
             acknowledgeNotificationClick(payload);
         });
+    }
+
+    function ensureWindowResponseHandler() {
+        if (windowResponseHandlerInstalled) return;
+        windowResponseHandlerInstalled = true;
+        const onResponse = source => acknowledgeOpenReminders(new Date(), source);
+        if (typeof global.TimeWherePlatform?.window?.onActivated === 'function') {
+            unsubscribeWindowActivated = global.TimeWherePlatform.window.onActivated(() => onResponse('window_activated'));
+        }
+        if (typeof global.addEventListener === 'function') {
+            windowFocusHandler = () => onResponse('window_focus');
+            global.addEventListener('focus', windowFocusHandler);
+        }
+        if (global.document?.addEventListener) {
+            visibilityChangeHandler = () => {
+                if (!global.document.hidden) onResponse('window_visible');
+            };
+            global.document.addEventListener('visibilitychange', visibilityChangeHandler);
+        }
+    }
+
+    function canRepeatUnackedReminder(state = {}, reminder = {}, now = new Date()) {
+        const entry = state[reminder.key];
+        if (!entry || entry.ack_at) return true;
+        if (!entry.sent_at) return true;
+        const sentAt = new Date(entry.sent_at).getTime();
+        if (!Number.isFinite(sentAt)) return true;
+        return now.getTime() - sentAt >= UNACKED_REPEAT_MS;
     }
 
     async function writeWidgetSnapshot(tasks = [], containers = [], now = new Date()) {
@@ -128,14 +179,17 @@
         if (settings?.notification_enabled === false) return [];
         const ackState = pruneAckState(readAckState(), now, tasks);
         const sentState = buildAckedSentState(ackState);
-        const reminders = global.TimeWhereReminders.computeTaskReminders(
+        const reminder = global.TimeWhereReminders.computeAggregatedReminder(
             tasks,
             containers,
             now,
             global.TimeWhereScheduling,
             sentState
         );
-        for (const reminder of reminders) recordReminderSent(ackState, reminder, now);
+        const reminders = reminder && canRepeatUnackedReminder(ackState, reminder, now)
+            ? [reminder]
+            : [];
+        for (const item of reminders) recordReminderSent(ackState, item, now);
         writeAckState(ackState);
         return reminders;
     }
@@ -152,6 +206,9 @@
             key: reminder.key,
             type: reminder.type,
             bucket: reminder.bucket,
+            total_count: reminder.total_count || 1,
+            task_ids: reminder.task_ids || [],
+            items: reminder.items || [],
             task_id: taskId,
             route: taskId ? `pages/focus/focus.html?task_id=${encodeURIComponent(taskId)}` : 'pages/focus/focus.html'
         };
@@ -175,6 +232,7 @@
     function start() {
         if (!isDesktopPlatform() || timer) return { status: 'not_started' };
         ensureNotificationClickHandler();
+        ensureWindowResponseHandler();
         rescheduleNow().catch(error => console.warn('Desktop reminder bridge failed:', error));
         timer = global.setInterval(() => {
             rescheduleNow().catch(error => console.warn('Desktop reminder bridge failed:', error));
@@ -185,7 +243,18 @@
     function stop() {
         if (timer) global.clearInterval(timer);
         if (unsubscribeNotificationClick) unsubscribeNotificationClick();
+        if (unsubscribeWindowActivated) unsubscribeWindowActivated();
+        if (windowFocusHandler && typeof global.removeEventListener === 'function') {
+            global.removeEventListener('focus', windowFocusHandler);
+        }
+        if (visibilityChangeHandler && global.document?.removeEventListener) {
+            global.document.removeEventListener('visibilitychange', visibilityChangeHandler);
+        }
         unsubscribeNotificationClick = null;
+        unsubscribeWindowActivated = null;
+        windowFocusHandler = null;
+        visibilityChangeHandler = null;
+        windowResponseHandlerInstalled = false;
         timer = null;
         return { status: 'stopped' };
     }
@@ -196,6 +265,7 @@
         rescheduleNow,
         collectDueReminders,
         acknowledgeNotificationClick,
+        acknowledgeOpenReminders,
         writeWidgetSnapshot,
         readAckState
     };

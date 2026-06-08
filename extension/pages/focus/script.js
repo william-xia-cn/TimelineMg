@@ -39,6 +39,7 @@ async function initApp() {
     } catch(e) {
         console.error('initDefaultSettings failed:', e);
     }
+    globalThis.TimeWhereGoogleSyncStatusUI?.init?.();
     // 确保默认容器存在
     try {
         await TimeWhereScheduling.initDefaultContainers(TimeWhereDB);
@@ -55,6 +56,8 @@ async function runGoogleSyncCheck() {
     if (typeof TimeWhereGoogleSync === 'undefined' || typeof TimeWhereDB === 'undefined') return;
     TimeWhereGoogleSync.runPageAutoSync(TimeWhereDB).catch(error => {
         console.warn('Google auto sync check failed:', error);
+    }).finally(() => {
+        globalThis.TimeWhereGoogleSyncStatusUI?.refreshAll?.();
     });
 }
 

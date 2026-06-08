@@ -705,13 +705,14 @@ async function runTaskReminderTick(now = new Date()) {
     }
     const todayContainers = getTodayContainers(containers, now);
     const sentState = await getReminderSentState();
-    const reminders = globalThis.TimeWhereReminders.computeTaskReminders(
+    const aggregatedReminder = globalThis.TimeWhereReminders.computeAggregatedReminder(
         tasks,
         todayContainers,
         now,
         globalThis.TimeWhereScheduling,
         sentState
     );
+    const reminders = aggregatedReminder ? [aggregatedReminder] : [];
 
     for (const reminder of reminders) {
         await createTaskReminderNotification(reminder);

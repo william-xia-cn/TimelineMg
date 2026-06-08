@@ -11,6 +11,7 @@ function formatDateISO(date) {
 
 document.addEventListener('DOMContentLoaded', async () => {
     await initApp();
+    globalThis.TimeWhereGoogleSyncStatusUI?.init?.();
     runCalendarArrangeCheck();
     runGoogleSyncCheck();
     setupCalendar();
@@ -28,6 +29,8 @@ function runGoogleSyncCheck() {
     if (typeof TimeWhereGoogleSync === 'undefined' || typeof TimeWhereDB === 'undefined') return;
     TimeWhereGoogleSync.runPageAutoSync(TimeWhereDB).catch(error => {
         console.warn('Google auto sync check failed:', error);
+    }).finally(() => {
+        globalThis.TimeWhereGoogleSyncStatusUI?.refreshAll?.();
     });
 }
 

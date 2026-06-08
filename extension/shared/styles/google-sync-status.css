@@ -1,0 +1,197 @@
+.google-sync-account-wrap {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.google-sync-account-button {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.18s ease, background-color 0.18s ease;
+}
+
+.google-sync-account-button:hover {
+    background: rgba(255, 255, 255, 0.12);
+    transform: translateY(-1px);
+}
+
+.google-sync-account-button.account-mismatch .user-avatar {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.3);
+}
+
+.google-sync-status-dot {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    right: 3px;
+    bottom: 3px;
+    border-radius: 999px;
+    border: 2px solid #0b2a66;
+    background: #94a3b8;
+    box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.12);
+    pointer-events: none;
+}
+
+.google-sync-status-dot.disconnected {
+    background: transparent;
+    border-color: #cbd5e1;
+}
+
+.google-sync-status-dot.connected {
+    background: #10b981;
+}
+
+.google-sync-status-dot.syncing {
+    background: #3b82f6;
+    animation: google-sync-pulse 1s ease-in-out infinite;
+}
+
+.google-sync-status-dot.queued {
+    background: #60a5fa;
+    animation: google-sync-pulse 1.4s ease-in-out infinite;
+}
+
+.google-sync-status-dot.failed,
+.google-sync-status-dot.account-mismatch {
+    background: #ef4444;
+}
+
+.google-sync-status-dot.conflict,
+.google-sync-status-dot.retry {
+    background: #f59e0b;
+}
+
+.google-sync-account-popover {
+    position: absolute;
+    left: 48px;
+    bottom: -8px;
+    z-index: 2000;
+    width: 248px;
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.98);
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+    color: #1e293b;
+    text-align: left;
+}
+
+.google-sync-account-initial {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #dbeafe;
+    color: #1d4ed8;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.google-sync-account-initial[hidden] {
+    display: none;
+}
+
+.google-sync-account-button[data-google-account-avatar="picture"] .user-avatar {
+    object-fit: cover;
+}
+
+.google-sync-account-popover[hidden] {
+    display: none;
+}
+
+.sync-popover-status {
+    font-size: 13px;
+    font-weight: 800;
+    color: #0f172a;
+    margin-bottom: 4px;
+}
+
+.sync-popover-account {
+    font-size: 12px;
+    color: #475569;
+    overflow-wrap: anywhere;
+    margin-bottom: 8px;
+}
+
+.sync-popover-detail {
+    font-size: 12px;
+    line-height: 1.45;
+    color: #64748b;
+    margin-bottom: 10px;
+}
+
+.sync-popover-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.sync-popover-action {
+    border: 1px solid rgba(29, 140, 248, 0.25);
+    border-radius: 8px;
+    padding: 6px 9px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    background: rgba(29, 140, 248, 0.08);
+    color: #0f4f8f;
+}
+
+.sync-popover-action.primary {
+    background: #1d8cf8;
+    color: #ffffff;
+    border-color: #1d8cf8;
+}
+
+.sync-popover-action.secondary {
+    background: #fff7ed;
+    color: #9a3412;
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.google-sync-settings-status-button {
+    position: relative;
+}
+
+.google-sync-settings-status-button .google-sync-status-dot {
+    right: 5px;
+    bottom: 5px;
+    border-color: #ffffff;
+}
+
+.sidepanel-body .google-sync-settings-status-button .google-sync-status-dot {
+    right: 3px;
+    bottom: 3px;
+}
+
+@keyframes google-sync-pulse {
+    0% {
+        transform: scale(0.9);
+        opacity: 0.6;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(0.9);
+        opacity: 0.6;
+    }
+}

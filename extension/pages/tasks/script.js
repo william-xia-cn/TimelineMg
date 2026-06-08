@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         // Init default settings
         await TimeWhereDB.initDefaultSettings();
+        globalThis.TimeWhereGoogleSyncStatusUI?.init?.();
 
         // Load all plans
         await TaskApp.loadPlans();
@@ -288,6 +289,8 @@ function runGoogleSyncCheck() {
     if (typeof TimeWhereGoogleSync === 'undefined' || typeof TimeWhereDB === 'undefined') return;
     TimeWhereGoogleSync.runPageAutoSync(TimeWhereDB).catch(error => {
         console.warn('Google auto sync check failed:', error);
+    }).finally(() => {
+        globalThis.TimeWhereGoogleSyncStatusUI?.refreshAll?.();
     });
 }
 

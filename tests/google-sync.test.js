@@ -7,6 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const GoogleSync = require('../extension/shared/js/google-sync.js');
+const GoogleSyncStatusUI = require('../extension/shared/js/google-sync-status-ui.js');
+const { createDesktopSyncService } = require('../extension/shared/js/desktop-sync-service.js');
 
 let passed = 0;
 let failed = 0;
@@ -23,6 +25,10 @@ function assert(desc, condition) {
 
 function assertEqual(desc, got, expected) {
     assert(`${desc} (expected ${JSON.stringify(expected)}, got ${JSON.stringify(got)})`, JSON.stringify(got) === JSON.stringify(expected));
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function extensionIdFromManifestKey(manifestKey) {
@@ -96,6 +102,8 @@ class FakeDB {
             google_sync_account_key: 'account-key-redacted',
             google_sync_account_name: 'Student Name',
             google_sync_account_email: 'student@example.invalid',
+            google_sync_account_picture: 'https://lh3.googleusercontent.com/a/redacted',
+            google_sync_history: [],
             access_token: 'secret-access-token',
             refresh_token: 'secret-refresh-token',
             google_email: 'student@example.invalid',
@@ -195,6 +203,8 @@ async function run() {
     assert('snapshot excludes local Google account email display', !('google_sync_account_email' in snapshot.data.settings));
     assert('snapshot excludes local Google account name display', !('google_sync_account_name' in snapshot.data.settings));
     assert('snapshot excludes local Google account key display', !('google_sync_account_key' in snapshot.data.settings));
+    assert('snapshot excludes local Google account picture display', !('google_sync_account_picture' in snapshot.data.settings));
+    assert('snapshot excludes local Google sync history', !('google_sync_history' in snapshot.data.settings));
     assert('snapshot excludes OAuth access token', !('access_token' in snapshot.data.settings));
     assert('snapshot excludes OAuth refresh token', !('refresh_token' in snapshot.data.settings));
     assert('snapshot excludes Google email display', !('google_email' in snapshot.data.settings));
@@ -231,6 +241,36 @@ async function run() {
     const profileInfo = await profileAuth.getAccountInfo();
     assertEqual('auth adapter reads local Google account email for UI only', profileInfo.email, 'student@example.invalid');
 
+    let localDisconnectCalled = false;
+    let revokeCalled = false;
+    const desktopDisconnectAuth = GoogleSync.createTimeWherePlatformAuthAdapter({
+        auth: {
+            getStatus: async () => ({ status: 'configured' }),
+            getGoogleToken: async () => ({ status: 'not_authorized', reason: 'desktop_oauth_not_connected' }),
+            getAccountInfo: async () => ({
+                connected: true,
+                account_key: 'account-key-redacted',
+                name: 'Student Name',
+                email: 'student@example.invalid',
+                picture: 'https://lh3.googleusercontent.com/a/redacted'
+            }),
+            disconnectGoogleToken: async () => {
+                localDisconnectCalled = true;
+                return { status: 'disconnected' };
+            },
+            revokeGoogleToken: async () => {
+                revokeCalled = true;
+                return { status: 'revoked' };
+            }
+        }
+    });
+    const desktopAccountInfo = await desktopDisconnectAuth.getAccountInfo();
+    assert('Platform auth adapter returns account picture for local UI only', desktopAccountInfo.picture === 'https://lh3.googleusercontent.com/a/redacted');
+    await desktopDisconnectAuth.disconnect();
+    assert('Platform auth adapter disconnect is local-only and does not revoke Google authorization', localDisconnectCalled && !revokeCalled);
+    await desktopDisconnectAuth.revoke();
+    assert('Platform auth adapter exposes explicit revoke for dangerous authorization removal', revokeCalled);
+
     const fetchCalls = [];
     const mockFetch = async (url, options = {}) => {
         fetchCalls.push({ url, options });
@@ -262,6 +302,39 @@ async function run() {
         disconnectedReason = error.code || error.reason || '';
     }
     assertEqual('Drive adapter preserves desktop not-authorized reason for Settings diagnostics', disconnectedReason, 'desktop_oauth_not_connected');
+
+    let revokedFetchCalled = false;
+    const revokedDrive = GoogleSync.createDriveAppDataClient({
+        authAdapter: {
+            getToken: async () => ({
+                status: 'not_authorized',
+                reason: 'desktop_oauth_refresh_token_revoked',
+                message: 'Google authorization expired, was revoked, or no longer matches this desktop package OAuth client metadata.',
+                google_error: 'invalid_grant',
+                google_error_subtype: 'invalid_rapt',
+                oauth_diagnostics: {
+                    oauth: {
+                        client_id_tail: 'redacted',
+                        env_client_id_override: false,
+                        client_secret_present: true
+                    }
+                }
+            })
+        },
+        fetchImpl: async () => {
+            revokedFetchCalled = true;
+            return { ok: true, status: 200, json: async () => ({}) };
+        }
+    });
+    let revokedError = null;
+    try {
+        await revokedDrive.downloadJsonFile(GoogleSync.SYNC_FILE_NAME);
+    } catch (error) {
+        revokedError = error;
+    }
+    assertEqual('Drive adapter preserves revoked refresh token reason', revokedError?.code || revokedError?.reason || '', 'desktop_oauth_refresh_token_revoked');
+    assertEqual('Drive adapter preserves desktop auth error subtype', revokedError?.auth_error_subtype || '', 'invalid_rapt');
+    assert('Drive adapter preserves sanitized OAuth diagnostics without calling Drive', revokedError?.oauth_diagnostics?.oauth?.client_secret_present === true && !revokedFetchCalled);
 
     let mismatchFetchCalled = false;
     const mismatchDrive = GoogleSync.createDriveAppDataClient({
@@ -384,6 +457,157 @@ async function run() {
     const driveForAuto = makeDriveClient(makeSyncDoc({}, {}, '2026-05-15T00:00:00.000Z'));
     const autoResult = await GoogleSync.runAutoSync(dirtyDb, driveForAuto, { device_id: 'device-a' });
     assert('sync v1 auto sync uploads dirty local record', autoResult.status === 'synced' && driveForAuto.state.uploads.some(upload => upload.name === GoogleSync.SYNC_FILE_NAME));
+    const autoHistory = await GoogleSync.getGoogleSyncHistory(dirtyDb, { limit: 5 });
+    assert('sync v1 auto sync records local history summary',
+        autoHistory[0]?.status === 'synced'
+        && autoHistory[0].counts.uploaded >= 1
+        && autoHistory[0].cloud_updated_at);
+
+    const historyDb = new FakeDB();
+    const sensitiveAccessToken = `${['ya', '29'].join('')}.redacted-token-fragment`;
+    const sensitiveClientSecret = `${['GOC', 'SPX-'].join('')}redactedSecret`;
+    await GoogleSync.appendGoogleSyncHistory(historyDb, {
+        trigger: 'manual_sync',
+        status: 'failed',
+        reason: 'invalid_grant',
+        error: {
+            reason: 'invalid_grant',
+            http_status: 400,
+            message: `student@example.invalid ${sensitiveAccessToken} ${sensitiveClientSecret}`
+        }
+    });
+    const failureHistory = await GoogleSync.getGoogleSyncHistory(historyDb, { limit: 1 });
+    const sanitizedFailure = failureHistory[0];
+    assert('sync history sanitizes account token and secret-like values',
+        sanitizedFailure?.error?.message?.includes('[account]')
+        && sanitizedFailure.error.message.includes('[token]')
+        && sanitizedFailure.error.message.includes('[secret]')
+        && !sanitizedFailure.error.message.includes('student@example.invalid')
+        && !sanitizedFailure.error.message.includes(sensitiveAccessToken)
+        && !sanitizedFailure.error.message.includes(sensitiveClientSecret));
+    for (let i = 0; i < 55; i += 1) {
+        await GoogleSync.appendGoogleSyncHistory(historyDb, { trigger: 'auto', status: 'up_to_date', id: `history-${i}` });
+    }
+    const cappedHistory = await GoogleSync.getGoogleSyncHistory(historyDb, { limit: 80 });
+    assert('sync history is capped to 50 records', cappedHistory.length === 50);
+    await GoogleSync.clearGoogleSyncHistory(historyDb);
+    assert('sync history can be cleared without touching sync state', Array.isArray(historyDb.settings.google_sync_history) && historyDb.settings.google_sync_history.length === 0);
+
+    await GoogleSync.appendGoogleSyncHistory(historyDb, {
+        trigger: 'coalesced_pending',
+        status: 'synced',
+        queued_at: '2026-05-15T00:00:00.000Z',
+        queue_wait_ms: 65000,
+        coalesced_pending: true,
+        pending_trigger_count: 3,
+        pending_reasons: ['interval', 'local_write', 'manual_sync'],
+        long_running: true,
+        request_timeout_ms: GoogleSync.DEFAULT_DRIVE_REQUEST_TIMEOUT_MS
+    });
+    const queuedHistory = await GoogleSync.getGoogleSyncHistory(historyDb, { limit: 1 });
+    assert('sync history records queue wait and coalesced trigger details',
+        queuedHistory[0]?.queue_wait_ms === 65000
+        && queuedHistory[0]?.coalesced_pending === true
+        && queuedHistory[0]?.coalesced_trigger_count === 3
+        && queuedHistory[0]?.coalesced_reasons.includes('local_write')
+        && queuedHistory[0]?.long_running === true
+        && queuedHistory[0]?.request_timeout_ms === GoogleSync.DEFAULT_DRIVE_REQUEST_TIMEOUT_MS);
+
+    const previousPlatform = globalThis.TimeWherePlatform;
+    globalThis.TimeWherePlatform = { name: 'desktop-electron' };
+    const syncDb = new FakeDB();
+    syncDb.settings.google_sync_state = { status: 'connected' };
+    const runCalls = [];
+    const runResolvers = [];
+    const desktopService = createDesktopSyncService({
+        db: syncDb,
+        driveClientFactory: () => ({ status: 'drive-ready' }),
+        api: {
+            GOOGLE_SYNC_CONFLICTS_KEY: GoogleSync.GOOGLE_SYNC_CONFLICTS_KEY,
+            getGoogleSyncState: db => GoogleSync.getGoogleSyncState(db),
+            saveGoogleSyncState: (db, patch) => GoogleSync.saveGoogleSyncState(db, patch),
+            serializeSyncError: error => GoogleSync.serializeSyncError(error),
+            runAutoSync: async (db, driveClient, options) => {
+                runCalls.push(options);
+                if (runCalls.length === 1) {
+                    await new Promise(resolve => runResolvers.push(resolve));
+                }
+                return { status: 'up_to_date' };
+            }
+        }
+    });
+    const firstRun = desktopService.requestRun({ reason: 'startup', force: false });
+    await sleep(0);
+    const queuedInterval = await desktopService.requestRun({ reason: 'interval', force: false });
+    const queuedWrite = await desktopService.requestRun({ reason: 'local_write', force: true });
+    const queuedStatus = await desktopService.getStatus();
+    assert('desktop sync coalesces triggers while a run is active',
+        queuedInterval.status === 'queued'
+        && queuedWrite.status === 'queued'
+        && queuedStatus.pending_trigger_count === 2
+        && queuedStatus.pending_reasons.includes('interval')
+        && queuedStatus.pending_reasons.includes('local_write')
+        && queuedStatus.pending_force === true);
+    runResolvers.shift()();
+    await firstRun;
+    await sleep(20);
+    assert('desktop sync runs one force follow-up for coalesced pending triggers',
+        runCalls.length === 2
+        && runCalls[1].force === true
+        && runCalls[1].sync_trigger === 'coalesced_pending'
+        && runCalls[1].pending_trigger_count === 2
+        && runCalls[1].pending_reasons.includes('local_write')
+        && runCalls[1].coalesced_pending === true);
+
+    const longDb = new FakeDB();
+    longDb.settings.google_sync_state = { status: 'connected' };
+    const longResolvers = [];
+    const longService = createDesktopSyncService({
+        db: longDb,
+        long_running_ms: 5,
+        driveClientFactory: () => ({ status: 'drive-ready' }),
+        api: {
+            GOOGLE_SYNC_CONFLICTS_KEY: GoogleSync.GOOGLE_SYNC_CONFLICTS_KEY,
+            getGoogleSyncState: db => GoogleSync.getGoogleSyncState(db),
+            saveGoogleSyncState: (db, patch) => GoogleSync.saveGoogleSyncState(db, patch),
+            serializeSyncError: error => GoogleSync.serializeSyncError(error),
+            runAutoSync: async () => {
+                await new Promise(resolve => longResolvers.push(resolve));
+                return { status: 'up_to_date' };
+            }
+        }
+    });
+    const longRun = longService.requestRun({ reason: 'manual_sync', force: true });
+    await sleep(15);
+    const longStatus = await longService.getStatus();
+    assert('desktop sync marks long running jobs without starting a concurrent sync',
+        longStatus.status === 'long_running'
+        && longStatus.running === true
+        && longStatus.current_run_duration_ms > 0);
+    longResolvers.shift()();
+    await longRun;
+    globalThis.TimeWherePlatform = previousPlatform;
+
+    const timeoutClient = GoogleSync.createDriveAppDataClient({
+        authAdapter: { getToken: async () => ({ token: 'test-access-token' }) },
+        request_timeout_ms: 5,
+        fetchImpl: async (_url, options = {}) => await new Promise((_resolve, reject) => {
+            options.signal?.addEventListener('abort', () => {
+                const error = new Error('aborted');
+                error.name = 'AbortError';
+                reject(error);
+            }, { once: true });
+        })
+    });
+    let timeoutError = null;
+    try {
+        await timeoutClient.findJsonFile('timewhere-sync-v1.json');
+    } catch (error) {
+        timeoutError = error;
+    }
+    assert('Drive appDataFolder client converts request timeout into retryable sync error',
+        timeoutError?.reason === 'google_drive_request_timeout'
+        && timeoutError.retryable === true);
 
     const conflictDb = new FakeDB();
     const savedConflict = makeEntity('tasks', 'conflict-save', { title: 'Saved conflict' });
@@ -467,6 +691,10 @@ async function run() {
     await GoogleSync.markEntityDirty(raceDb, 'tasks', 'task-1', { id: 'task-1', title: 'Race edit' }, { device_id: 'device-a' });
     const raceResult = await GoogleSync.runAutoSync(raceDb, raceDrive, { device_id: 'device-a' });
     assertEqual('sync v1 detects cloud revision changed before upload', raceResult.status, 'stale_cloud_retry');
+    const raceHistory = await GoogleSync.getGoogleSyncHistory(raceDb, { limit: 1 });
+    assert('sync v1 records pending retry history when cloud changes mid-sync',
+        raceHistory[0]?.status === 'pending_retry'
+        && raceHistory[0]?.reason === 'cloud_changed_during_sync');
 
     const settingsHtml = read('extension/pages/settings/settings.html');
     const settingsScript = read('extension/pages/settings/script.js');
@@ -494,6 +722,11 @@ async function run() {
         && !settingsScript.includes('checkAndShowWizard'));
     assert('Settings UI contains connection status card', settingsHtml.includes('连接状态') && settingsHtml.includes('googleSyncAccountEmail'));
     assert('Settings UI contains sync status card', settingsHtml.includes('同步状态') && settingsHtml.includes('googleSyncLastSyncAt'));
+    assert('Settings UI includes sync history entry and local-only history panel',
+        settingsHtml.includes('toggleGoogleSyncHistoryBtn')
+        && settingsHtml.includes('googleSyncHistoryPanel')
+        && settingsHtml.includes('googleSyncHistoryList')
+        && settingsHtml.includes('仅保存本机最近同步摘要'));
     assert('Settings UI includes connect button', settingsHtml.includes('connectGoogleSyncBtn') && settingsHtml.includes('连接 Google 账户同步'));
     assert('Settings UI includes reinstall recovery prompt',
         settingsHtml.includes('googleSyncRecoveryHint')
@@ -504,11 +737,12 @@ async function run() {
     assert('Settings UI includes cloud download danger button', settingsHtml.includes('restoreGoogleSyncBtn') && settingsHtml.includes('↓ 下载到本地'));
     assert('Settings UI includes cloud upload danger button', settingsHtml.includes('uploadGoogleSyncBtn') && settingsHtml.includes('↑ 上传到云端'));
     assert('Settings UI includes disconnect button', settingsHtml.includes('disconnectGoogleSyncBtn') && settingsHtml.includes('断开连接'));
+    assert('Settings UI includes explicit Google authorization revoke button', settingsHtml.includes('revokeGoogleSyncBtn') && settingsHtml.includes('撤销授权'));
     assert('Settings UI includes conflict processing entry', settingsHtml.includes('processGoogleConflictsBtn') && settingsHtml.includes('处理冲突'));
     assert('Settings UI includes formal dangerous sync modal', settingsHtml.includes('googleSyncDangerModal') && settingsHtml.includes('googleSyncDangerConfirmInput'));
     assert('Settings UI dangerous modal requires phrase-gated confirmation', settingsScript.includes('updateGoogleSyncDangerConfirmState') && settingsScript.includes("config.phrase"));
     assert('Google upload/download danger actions open modal instead of window.confirm', settingsScript.includes("openGoogleSyncDangerModal('upload')") && settingsScript.includes("openGoogleSyncDangerModal('restore')"));
-    assert('Google danger modal contains upload and download confirmation phrases', settingsScript.includes("phrase: '上传到云端'") && settingsScript.includes("phrase: '下载到本地'"));
+    assert('Google danger modal contains upload download and revoke confirmation phrases', settingsScript.includes("phrase: '上传到云端'") && settingsScript.includes("phrase: '下载到本地'") && settingsScript.includes("phrase: '撤销 Google 授权'"));
     assert('Settings loads google-sync.js before page script', settingsHtml.indexOf('google-sync.js') > -1 && settingsHtml.indexOf('google-sync.js') < settingsHtml.indexOf('script.js"></script>'));
     assert('Settings loads platform adapter before google-sync runtime',
         settingsHtml.indexOf('platform.js') > -1
@@ -519,6 +753,20 @@ async function run() {
     assert('Settings Google sync runtime prefers TimeWherePlatform auth adapter',
         settingsScript.includes('createTimeWherePlatformAuthAdapter(globalThis.TimeWherePlatform)')
         && settingsScript.includes('createChromeIdentityAuthAdapter(typeof chrome'));
+    assert('Settings caches Google account picture locally and clears it on disconnect/revoke',
+        settingsScript.includes('google_sync_account_picture')
+        && settingsScript.includes('isSafeGoogleAccountPictureUrl')
+        && (settingsScript.match(/setSetting\('google_sync_account_picture', null\)/g) || []).length >= 2);
+    assert('Settings renders sync history and listens to real sync state/history events',
+        settingsScript.includes('renderGoogleSyncHistory')
+        && settingsScript.includes('getGoogleSyncHistory(TimeWhereDB')
+        && settingsScript.includes('timewhere-google-sync-state')
+        && settingsScript.includes('timewhere-google-sync-history')
+        && settingsScript.includes('同步排队中')
+        && settingsScript.includes('同步耗时较长')
+        && settingsScript.includes('requestDesktopSyncAfterConnect')
+        && settingsScript.includes("reason = 'connect_success'")
+        && settingsScript.includes("setGoogleSyncStatus('● 等待重试', 'retry')"));
     assert('Google sync exposes platform auth adapter and default Drive client uses it',
         typeof GoogleSync.createTimeWherePlatformAuthAdapter === 'function'
         && settingsScript.includes('TimeWherePlatform?.auth?.getGoogleToken')
@@ -526,14 +774,27 @@ async function run() {
     assert('Google sync platform auth adapter propagates structured desktop auth failures',
         googleSyncScript.includes('makePlatformAuthError')
         && googleSyncScript.includes("result?.status === 'failed'")
-        && googleSyncScript.includes('error.code = reason'));
+        && googleSyncScript.includes('error.code = reason')
+        && googleSyncScript.includes('disconnectGoogleToken')
+        && googleSyncScript.includes('async revoke()'));
     assert('Desktop sync service serializes background sync with pending runs and retry backoff',
         desktopSyncServiceScript.includes('createDesktopSyncService')
         && desktopSyncServiceScript.includes('currentRun')
-        && desktopSyncServiceScript.includes('pendingRun')
+        && desktopSyncServiceScript.includes('pendingState')
+        && desktopSyncServiceScript.includes('DEFAULT_INTERVAL_MS = 3 * 60 * 1000')
+        && desktopSyncServiceScript.includes('DEFAULT_DEBOUNCE_MS = 3 * 60 * 1000')
+        && desktopSyncServiceScript.includes('LONG_RUNNING_MS = 90 * 1000')
         && desktopSyncServiceScript.includes('BACKOFF_MS')
+        && desktopSyncServiceScript.includes('pending_trigger_count')
+        && desktopSyncServiceScript.includes('pending_reasons')
         && desktopSyncServiceScript.includes("pause('conflict')")
         && desktopSyncServiceScript.includes("requestRun({ reason: 'interval'"));
+    assert('Google sync cadence and Drive timeout use desktop-friendly defaults',
+        GoogleSync.AUTO_SYNC_THROTTLE_MS === 3 * 60 * 1000
+        && GoogleSync.SAVE_DEBOUNCE_MS === 3 * 60 * 1000
+        && GoogleSync.DEFAULT_DRIVE_REQUEST_TIMEOUT_MS === 45 * 1000
+        && googleSyncScript.includes('makeDriveTimeoutError')
+        && googleSyncScript.includes('request_timeout_ms = DEFAULT_DRIVE_REQUEST_TIMEOUT_MS'));
     assert('Google page sync delegates to desktop sync service when running in Electron',
         googleSyncScript.includes('getDesktopSyncService')
         && googleSyncScript.includes('service.requestRun')
@@ -560,6 +821,16 @@ async function run() {
         && desktopAuthScript.includes('sha256Hex')
         && !desktopAuthScript.includes('return { email: null }')
         && desktopAuthScript.includes('desktop_oauth_network_failed')
+        && desktopAuthScript.includes('desktop_oauth_refresh_token_revoked')
+        && desktopAuthScript.includes('desktop_oauth_session_control_required')
+        && desktopAuthScript.includes('markStoredRefreshTokenInvalid')
+        && desktopAuthScript.includes('getOAuthConfigDiagnostics')
+        && desktopAuthScript.includes('client_id_tail')
+        && desktopAuthScript.includes('client_secret_fingerprint')
+        && desktopAuthScript.includes('env_client_id_override')
+        && desktopAuthScript.includes('google_error_subtype')
+        && desktopAuthScript.includes('force_consent')
+        && desktopAuthScript.includes('disconnectGoogleToken')
         && desktopAuthScript.includes('client_secret: credentials.clientSecret')
         && desktopAuthScript.includes("auth_mode: credentials.clientSecret")
         && desktopAuthScript.includes('pkce_desktop_client_metadata_secret')
@@ -582,6 +853,15 @@ async function run() {
         && settingsScript.includes('desktop_oauth_not_connected')
         && settingsScript.includes('desktop_oauth_network_failed')
         && settingsScript.includes('desktop_oauth_account_required')
+        && settingsScript.includes('desktop_oauth_refresh_token_revoked')
+        && settingsScript.includes('desktop_oauth_session_control_required')
+        && settingsScript.includes('expired or revoked')
+        && settingsScript.includes('OAuth client metadata 不匹配')
+        && settingsScript.includes('handleRevokeGoogleSyncAuthorization')
+        && settingsScript.includes('executeRevokeGoogleSyncAuthorization')
+        && settingsScript.includes('断开这台设备的 Google 数据同步')
+        && settingsScript.includes('其他设备授权不受影响')
+        && settingsScript.includes('同一 Google 项目下其他设备的授权也可能失效')
         && settingsScript.includes('account_mismatch')
         && settingsScript.includes('conflict_detail_missing')
         && settingsScript.includes('oauth2.googleapis.com')
@@ -592,6 +872,8 @@ async function run() {
         && !settingsScript.includes('desktop-oauth.local.json')
         && settingsScript.includes('redirect_uri_mismatch')
         && settingsScript.includes('Drive API')
+        && settingsScript.includes('last_auth_error_subtype')
+        && settingsScript.includes('last_oauth_diagnostics')
         && settingsScript.includes('last_error: message'));
     assert('Settings surfaces detailed Drive 403 reasons and desktop background sync state',
         settingsScript.includes('insufficientPermissions')
@@ -687,6 +969,9 @@ async function run() {
         ].every(file => read(file).includes('runPageAutoSync(TimeWhereDB)')));
     assert('DB write paths mark Google sync dirty metadata', dbScript.includes('markGoogleSyncDirty') && dbScript.includes('markEntityDirty'));
     assert('DB delete paths mark Google sync tombstones', dbScript.includes('markGoogleSyncDeleted') && dbScript.includes('markEntityDeleted'));
+    assert('DB write/delete sync scheduling uses shared 3-minute debounce default without local 30-second override',
+        dbScript.includes('api.schedulePageAutoSync(this);')
+        && !dbScript.includes('debounce_ms: 30 * 1000'));
     assert('DB updateTask can preserve user updated_at for derived Arrange writes',
         dbScript.includes('skipUserUpdatedAt')
         && dbScript.includes('googleSyncDerivedBaseRecord')
@@ -706,7 +991,14 @@ async function run() {
     assert('Google account display keys are excluded from cloud settings',
         GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.GOOGLE_SYNC_ACCOUNT_EMAIL_KEY)
         && GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.GOOGLE_SYNC_ACCOUNT_NAME_KEY)
-        && GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.GOOGLE_SYNC_ACCOUNT_KEY_KEY));
+        && GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.GOOGLE_SYNC_ACCOUNT_KEY_KEY)
+        && GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.GOOGLE_SYNC_ACCOUNT_PICTURE_KEY)
+        && GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.GOOGLE_SYNC_HISTORY_KEY));
+    assert('Google sync history helpers are exported for Settings diagnostics',
+        typeof GoogleSync.appendGoogleSyncHistory === 'function'
+        && typeof GoogleSync.getGoogleSyncHistory === 'function'
+        && typeof GoogleSync.clearGoogleSyncHistory === 'function'
+        && GoogleSync.GOOGLE_SYNC_HISTORY_LIMIT === 50);
 
     const manifestJson = JSON.parse(read('extension/manifest.json'));
     assert('manifest includes Chrome identity permission', manifestJson.permissions.includes('identity'));
@@ -739,12 +1031,75 @@ async function run() {
         read('tests/google-sync.test.js'),
         read('extension/pages/settings/settings.html'),
         read('extension/pages/settings/script.js'),
+        read('extension/shared/js/google-sync-status-ui.js'),
         read('platforms/desktop-electron/desktop-auth.js'),
         read('tools/prepare-desktop-oauth-secret.ps1')
     ].join('\n');
     assert('repo Google sync code/tests do not contain real OAuth token values or client secrets',
         !repoText.includes(['ya', '29.'].join(''))
         && !repoText.includes(['GOC', 'SPX-'].join('')));
+
+    const disconnectedDisplay = GoogleSyncStatusUI._test.deriveDisplayState({ syncState: { status: 'not_configured' } });
+    assertEqual('product sync indicator maps not configured to disconnected UI', disconnectedDisplay.state, 'disconnected');
+    assertEqual('product sync indicator disconnected label is clear', disconnectedDisplay.label, 'Google 未连接');
+
+    const connectedDisplay = GoogleSyncStatusUI._test.deriveDisplayState({
+        syncState: { status: 'connected', last_success_at: new Date().toISOString() },
+        accountInfo: { connected: true, name: 'Student', email: 'student@example.invalid', picture: 'https://lh3.googleusercontent.com/a/redacted' }
+    });
+    assertEqual('product sync indicator maps connected account to connected UI', connectedDisplay.state, 'connected');
+    assert('product sync indicator connected account shows account identity in popover data', connectedDisplay.account_label.includes('Student'));
+    assert('product sync indicator keeps Google account picture for avatar rendering', connectedDisplay.account_picture === 'https://lh3.googleusercontent.com/a/redacted');
+
+    const syncingDisplay = GoogleSyncStatusUI._test.deriveDisplayState({ syncState: { status: 'syncing' } });
+    assertEqual('product sync indicator maps active sync to syncing UI', syncingDisplay.state, 'syncing');
+
+    const longRunningDisplay = GoogleSyncStatusUI._test.deriveDisplayState({
+        serviceState: { status: 'long_running', running: true, current_run_duration_ms: 92000 }
+    });
+    assertEqual('product sync indicator maps long running service state to long running UI', longRunningDisplay.state, 'long_running');
+    assert('product sync indicator shows long running duration', longRunningDisplay.detail.includes('同步耗时较长'));
+
+    const queuedDisplay = GoogleSyncStatusUI._test.deriveDisplayState({
+        serviceState: { pending: true, pending_trigger_count: 2, pending_reasons: ['interval', 'local_write'] }
+    });
+    assertEqual('product sync indicator maps pending service queue to queued UI', queuedDisplay.state, 'queued');
+    assert('product sync indicator includes queued trigger summary', queuedDisplay.detail.includes('2 次触发'));
+
+    const conflictDisplay = GoogleSyncStatusUI._test.deriveDisplayState({
+        syncState: { status: 'conflict' },
+        conflicts: [{ key: 'tasks:1' }, { key: 'tasks:2' }]
+    });
+    assertEqual('product sync indicator maps conflicts to conflict UI', conflictDisplay.state, 'conflict');
+    assertEqual('product sync indicator derives conflict count from conflict details', conflictDisplay.conflict_count, 2);
+
+    const retryDisplay = GoogleSyncStatusUI._test.deriveDisplayState({
+        syncState: { status: 'failed', retryable: true },
+        serviceState: { retry_after: new Date(Date.now() + 60000).toISOString() }
+    });
+    assertEqual('product sync indicator maps retryable failure to waiting retry UI', retryDisplay.state, 'retry');
+
+    const failedDisplay = GoogleSyncStatusUI._test.deriveDisplayState({
+        syncState: {
+            status: 'failed',
+            last_error: `Token ${['ya', '29.secret'].join('')} failed for student@example.invalid with ${['GOC', 'SPX-secret'].join('')}`
+        }
+    });
+    assertEqual('product sync indicator maps non-retry failure to failed UI', failedDisplay.state, 'failed');
+    assert('product sync indicator redacts tokens emails and secrets from failure text',
+        failedDisplay.detail.includes('[token]')
+        && failedDisplay.detail.includes('[account]')
+        && failedDisplay.detail.includes('[secret]')
+        && !failedDisplay.detail.includes('student@example.invalid')
+        && !failedDisplay.detail.includes(['GOC', 'SPX-secret'].join('')));
+
+    const mismatchDisplay = GoogleSyncStatusUI._test.deriveDisplayState({ syncState: { status: 'failed', reason: 'account_mismatch' } });
+    assertEqual('product sync indicator maps account mismatch to blocking UI', mismatchDisplay.state, 'account_mismatch');
+    assert('product sync indicator offers sync history action and no longer exposes transient syncing API',
+        googleSyncScript.includes('timewhere-google-sync-state')
+        && read('extension/shared/js/google-sync-status-ui.js').includes('查看同步记录')
+        && read('extension/shared/js/google-sync-status-ui.js').includes('google-sync-account-initial')
+        && !read('extension/shared/js/google-sync-status-ui.js').includes('setTransientStatus'));
 
     console.log('\n' + '='.repeat(42));
     console.log(`Total: ${passed + failed} checks   PASS ${passed}   ${failed > 0 ? 'FAIL' : 'PASS'} ${failed}`);

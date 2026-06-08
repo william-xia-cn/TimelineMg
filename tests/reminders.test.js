@@ -160,6 +160,75 @@ const both = Reminders.computeTaskReminders(
 assertEqual('schedule_time wins over container reminder for same task', both.length, 1);
 assertEqual('schedule_time priority emits scheduled reminder', both[0]?.type, 'scheduled-repeat');
 
+const aggregate = Reminders.computeAggregatedReminder(
+    [
+        task({ id: 'scheduled-start', title: 'Essay', schedule_time: '20:00', priority: 'medium', notes: 'Do not show this note' }),
+        task({ id: 'container-waiting', title: 'Reading', schedule_time: null, priority: 'urgent', description: 'Do not show this description' })
+    ],
+    [container()],
+    at('19:59'),
+    Scheduling
+);
+assertEqual('aggregated reminder emits one representative notification', aggregate?.task_id, 'scheduled-start');
+assertEqual('aggregated reminder records total due task count', aggregate?.total_count, 2);
+assertEqual('aggregated reminder records overflow count', aggregate?.overflow_count, 1);
+assert('aggregated reminder carries all due task ids',
+    aggregate?.task_ids?.includes('scheduled-start') && aggregate.task_ids.includes('container-waiting'));
+assertEqual('aggregated reminder stores sorted list preview items',
+    aggregate?.items?.map(item => item.title),
+    ['Essay', 'Reading']);
+
+const selectedPrimary = Reminders.selectPrimaryReminder([
+    { type: 'container-repeat', task_id: 'container', task: task({ id: 'container', priority: 'urgent', schedule_time: null }) },
+    { type: 'scheduled-repeat', task_id: 'repeat', scheduled_time: '20:00', task: task({ id: 'repeat', priority: 'low', schedule_time: '20:00' }) },
+    { type: 'scheduled-start', task_id: 'start', scheduled_time: '21:00', task: task({ id: 'start', priority: 'low', schedule_time: '21:00' }) }
+]);
+assertEqual('scheduled-start wins over scheduled-repeat and container reminders', selectedPrimary?.task_id, 'start');
+
+const aggregateSentState = {};
+const aggregateFirst = Reminders.computeAggregatedReminder(
+    [
+        task({ id: 'a', schedule_time: '20:00' }),
+        task({ id: 'b', schedule_time: '20:00', priority: 'urgent' })
+    ],
+    [container()],
+    at('20:00'),
+    Scheduling,
+    aggregateSentState
+);
+aggregateSentState[aggregateFirst.key] = true;
+assertEqual('aggregated sent state blocks duplicate Chrome reminder in same 15 minute bucket',
+    Reminders.computeAggregatedReminder(
+        [
+            task({ id: 'a', schedule_time: '20:00' }),
+            task({ id: 'b', schedule_time: '20:00', priority: 'urgent' })
+        ],
+        [container()],
+        at('20:07'),
+        Scheduling,
+        aggregateSentState
+    ),
+    null);
+
+const singleAggregate = Reminders.computeAggregatedReminder(
+    [task({ id: 'single', title: 'Solo Work', schedule_time: '20:00', notes: 'Private implementation detail' })],
+    [container()],
+    at('20:00'),
+    Scheduling
+);
+const overflowAggregate = Reminders.computeAggregatedReminder(
+    [
+        task({ id: 'a', title: 'Alpha', schedule_time: '20:00' }),
+        task({ id: 'b', title: 'Beta', schedule_time: '20:00' }),
+        task({ id: 'c', title: 'Gamma', schedule_time: '20:00' }),
+        task({ id: 'd', title: 'Delta', schedule_time: '20:00' }),
+        task({ id: 'e', title: 'Epsilon', schedule_time: '20:00' })
+    ],
+    [container()],
+    at('20:00'),
+    Scheduling
+);
+
 const payload = Reminders.buildReminderNotificationPayload({
     ...scheduledStart,
     task: { ...scheduledStart.task, plan_name: 'English Plan', notes: 'Draft body paragraph' }
@@ -179,6 +248,34 @@ assert('scheduled repeat notification title uses unfinished semantics', repeatPa
 const containerPayload = Reminders.buildReminderNotificationPayload(containerReminder[0]);
 assert('container notification title uses current task semantics', containerPayload.title === '当前任务提醒：Essay');
 assert('container notification body includes container name', containerPayload.message.includes('学习时间'));
+
+const aggregatePayload = Reminders.buildReminderNotificationPayload({
+    ...aggregate,
+    task: { ...aggregate.task, plan_name: 'English Plan' }
+});
+assert('aggregated notification title summarizes waiting task count',
+    aggregatePayload.title === '当前有 2 个任务待处理');
+assert('aggregated notification body renders current work list without task notes',
+    aggregatePayload.message.includes('1. Essay')
+    && aggregatePayload.message.includes('20:00')
+    && aggregatePayload.message.includes('2. Reading')
+    && !aggregatePayload.message.includes('Do not show'));
+
+const singleAggregatePayload = Reminders.buildReminderNotificationPayload(singleAggregate);
+assert('single aggregated notification also uses list-style title and body',
+    singleAggregatePayload.title === '当前有 1 个任务待处理'
+    && singleAggregatePayload.message.includes('1. Solo Work')
+    && !singleAggregatePayload.message.includes('Private implementation detail'));
+
+const overflowPayload = Reminders.buildReminderNotificationPayload(overflowAggregate);
+assert('aggregated notification body shows first three items and hidden count',
+    overflowPayload.title === '当前有 5 个任务待处理'
+    && overflowPayload.message.includes('1. Alpha')
+    && overflowPayload.message.includes('2. Beta')
+    && overflowPayload.message.includes('3. Gamma')
+    && overflowPayload.message.includes('另有 2 项')
+    && !overflowPayload.message.includes('Delta')
+    && !overflowPayload.message.includes('Epsilon'));
 
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '../extension/manifest.json'), 'utf8'));
 assert('manifest includes notifications and alarms permissions',
@@ -203,6 +300,9 @@ assert('background handles notification click to Dashboard task expansion',
     && background.includes('focus.html?task_id='));
 assert('background respects notification_enabled setting',
     background.includes("settings?.notification_enabled === false"));
+assert('background sends at most one aggregated task reminder per tick',
+    background.includes('computeAggregatedReminder')
+    && background.includes('const reminders = aggregatedReminder ? [aggregatedReminder] : []'));
 assert('background exposes manual test notification message',
     background.includes('TIMEWHERE_TASK_REMINDER_TEST')
     && background.includes('timewhere-test-reminder:'));
@@ -266,16 +366,20 @@ assert('Settings reports diagnostic alarm scheduled time',
     && settingsJs.includes('30 秒诊断')
     && settingsJs.includes('scheduleDiagnosticAlarmFollowUp'));
 assert('Desktop reminder bridge uses shared reminder rules and platform rescheduleAll',
-    desktopReminders.includes('TimeWhereReminders.computeTaskReminders')
+    desktopReminders.includes('TimeWhereReminders.computeAggregatedReminder')
     && desktopReminders.includes('TimeWherePlatform.reminderRuntime.rescheduleAll')
     && desktopReminders.includes('TimeWhereReminders.buildReminderNotificationPayload')
     && desktopReminders.includes('ack_at')
     && desktopReminders.includes('acknowledgeNotificationClick')
+    && desktopReminders.includes('acknowledgeOpenReminders')
+    && desktopReminders.includes('UNACKED_REPEAT_MS = 3 * 60 * 1000')
+    && desktopReminders.includes('items: reminder.items || []')
     && desktopReminders.includes("global.TimeWherePlatform?.name === 'desktop-electron'"));
 assert('Electron main implements app-running reminder timers and notification click routing',
     desktopMain.includes('const reminderTimers = new Map()')
     && desktopMain.includes('const pendingNotificationClicks = []')
     && desktopMain.includes('function scheduleReminder')
+    && desktopMain.includes('timewhere-platform:window-activated')
     && desktopMain.includes('notification.consumePendingClicks')
     && desktopMain.includes("method === 'reminderRuntime.rescheduleAll'")
     && desktopMain.includes('sendNotificationClick(payload)')
@@ -284,6 +388,7 @@ assert('Electron main implements app-running reminder timers and notification cl
 function createDesktopReminderHarness() {
     let tasks = [task({ id: 'task-1', schedule_time: '20:00' })];
     let clickHandler = null;
+    let activationHandler = null;
     let scheduled = [];
     const storage = {};
     const context = {
@@ -313,6 +418,12 @@ function createDesktopReminderHarness() {
                     return () => { clickHandler = null; };
                 }
             },
+            window: {
+                onActivated(callback) {
+                    activationHandler = callback;
+                    return () => { activationHandler = null; };
+                }
+            },
             reminderRuntime: {
                 rescheduleAll: async reminders => {
                     scheduled = reminders;
@@ -331,6 +442,9 @@ function createDesktopReminderHarness() {
         click(payload) {
             if (clickHandler) clickHandler(payload);
         },
+        activate() {
+            if (activationHandler) activationHandler({ activated_at: new Date().toISOString() });
+        },
         get scheduled() {
             return scheduled;
         }
@@ -342,9 +456,13 @@ async function runDesktopAcknowledgementTests() {
     const first = await harness.api.collectDueReminders(at('20:00'));
     assertEqual('desktop reminder sends first due scheduled task', first.length, 1);
 
-    const sameBucket = await harness.api.collectDueReminders(at('20:01'));
-    assertEqual('desktop reminder repeats every minute while notification is unclicked', sameBucket.length, 1);
-    assertEqual('desktop minute repeat keeps same 15-minute reminder key', sameBucket[0]?.key, first[0]?.key);
+    const afterOneMinute = await harness.api.collectDueReminders(at('20:01'));
+    assertEqual('desktop reminder does not repeat after one unacknowledged minute', afterOneMinute.length, 0);
+    const afterTwoMinutes = await harness.api.collectDueReminders(at('20:02'));
+    assertEqual('desktop reminder does not repeat after two unacknowledged minutes', afterTwoMinutes.length, 0);
+    const sameBucket = await harness.api.collectDueReminders(at('20:03'));
+    assertEqual('desktop reminder repeats after three unacknowledged minutes', sameBucket.length, 1);
+    assertEqual('desktop three-minute repeat keeps same 15-minute reminder key', sameBucket[0]?.key, first[0]?.key);
 
     harness.api.acknowledgeNotificationClick({
         key: first[0].key,
@@ -353,7 +471,7 @@ async function runDesktopAcknowledgementTests() {
         type: first[0].type,
         bucket: first[0].bucket
     }, at('20:02'));
-    const afterAck = await harness.api.collectDueReminders(at('20:03'));
+    const afterAck = await harness.api.collectDueReminders(at('20:04'));
     assertEqual('desktop reminder stops in same bucket after notification click acknowledgement', afterAck.length, 0);
 
     const nextBucket = await harness.api.collectDueReminders(at('20:15'));
@@ -363,6 +481,15 @@ async function runDesktopAcknowledgementTests() {
     harness.setTasks([task({ id: 'task-1', schedule_time: '20:00', progress: 'completed' })]);
     const completed = await harness.api.collectDueReminders(at('20:16'));
     assertEqual('desktop completed task does not send acknowledgement repeats', completed.length, 0);
+
+    const openHarness = createDesktopReminderHarness();
+    openHarness.api.start();
+    const openFirst = await openHarness.api.collectDueReminders(at('20:00'));
+    openHarness.activate();
+    const afterWindowOpenAck = await openHarness.api.collectDueReminders(at('20:03'));
+    assertEqual('desktop active window restore acknowledges current reminder bucket', afterWindowOpenAck.length, 0);
+    assert('desktop active window restore test sent initial reminder before acknowledgement', openFirst.length === 1);
+    openHarness.api.stop();
 
     const clickHarness = createDesktopReminderHarness();
     clickHarness.api.start();

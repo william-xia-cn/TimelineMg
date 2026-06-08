@@ -166,7 +166,18 @@ function showWindow(win) {
   }
   win.show();
   win.focus();
+  notifyWindowActivated(win);
   return win;
+}
+
+function notifyWindowActivated(win) {
+  if (!win || win.isDestroyed()) return;
+  setTimeout(() => {
+    if (win.isDestroyed() || win.webContents.isDestroyed()) return;
+    win.webContents.send('timewhere-platform:window-activated', {
+      activated_at: new Date().toISOString()
+    });
+  }, 0);
 }
 
 function hideToTray(win) {
@@ -795,8 +806,14 @@ function scheduleReminder(reminder = {}) {
     reminderTimers.delete(id);
     showDesktopNotification({
       id,
+      key: reminder.key || id,
       title: reminder.title || reminder.notification?.title || 'TimeWhere',
       message: reminder.message || reminder.notification?.message || reminder.notification?.body || '',
+      type: reminder.type,
+      bucket: reminder.bucket,
+      total_count: reminder.total_count || 1,
+      task_ids: reminder.task_ids || [],
+      items: Array.isArray(reminder.items) ? reminder.items : [],
       task_id: reminder.task_id,
       journal_date: reminder.journal_date,
       route: reminder.route
@@ -827,7 +844,11 @@ function serializeAuthError(error) {
   return {
     status: 'failed',
     reason: error?.code || 'desktop_oauth_failed',
-    message: error?.message || 'Desktop Google authorization failed'
+    message: error?.message || 'Desktop Google authorization failed',
+    http_status: error?.http_status || null,
+    google_error: error?.google_error || error?.code || null,
+    google_error_subtype: error?.google_error_subtype || null,
+    oauth_diagnostics: error?.oauth_diagnostics || null
   };
 }
 
@@ -878,6 +899,9 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
   if (method === 'auth.getStatus') {
     return await desktopAuth.getStatus();
   }
+  if (method === 'auth.getDiagnostics') {
+    return await desktopAuth.getDiagnostics();
+  }
   if (method === 'auth.getGoogleToken') {
     try {
       const result = await desktopAuth.getGoogleToken(payload);
@@ -896,6 +920,9 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
   if (method === 'auth.getAccountInfo') {
     const info = await desktopAuth.getAccountInfo();
     return { ...info, desktop_profile: getDesktopProfileSnapshot() };
+  }
+  if (method === 'auth.disconnectGoogleToken') {
+    return await desktopAuth.disconnectGoogleToken();
   }
   if (method === 'auth.revokeGoogleToken') {
     return await desktopAuth.revokeGoogleToken();

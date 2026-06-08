@@ -59,6 +59,8 @@ const electronPreload = read('platforms/desktop-electron/preload.js');
 const desktopAuth = read('platforms/desktop-electron/desktop-auth.js');
 const chromeBridge = read('platforms/desktop-electron/chrome-bridge.js');
 const externalLinks = read('extension/shared/js/external-links.js');
+const googleSyncStatusUi = read('extension/shared/js/google-sync-status-ui.js');
+const googleSyncStatusCss = read('extension/shared/styles/google-sync-status.css');
 const desktopSyncService = read('extension/shared/js/desktop-sync-service.js');
 const bridgeHtml = read('extension/pages/desktop-bridge/bridge.html');
 const bridgeJs = read('extension/pages/desktop-bridge/bridge.js');
@@ -94,8 +96,9 @@ assert('Platform boundary forbids Chrome extension dependency for Windows app',
 assert('TimeWherePlatform exposes desktop-capable contract',
     platformJs.includes('global.TimeWherePlatform')
     && platformJs.includes('TimeWherePlatformContract')
+    && platformJs.includes("window: ['openMain', 'openQuickPanel', 'focus', 'show', 'hide', 'onActivated']")
     && platformJs.includes("reminderRuntime: ['schedule', 'cancel', 'rescheduleAll']")
-    && platformJs.includes("auth: ['getStatus', 'getGoogleToken', 'getAccountInfo', 'revokeGoogleToken']")
+    && platformJs.includes("auth: ['getStatus', 'getGoogleToken', 'getAccountInfo', 'getDiagnostics', 'disconnectGoogleToken', 'revokeGoogleToken']")
     && platformJs.includes("chromeBridge: ['connectExtension', 'getStatus']")
     && platformJs.includes("sync: ['getStatus', 'requestRun', 'pause', 'resume']")
     && platformJs.includes("external: ['openUrl']")
@@ -113,6 +116,8 @@ assert('Desktop adapter delegates auth, reminders, and Chrome bridge to Electron
     platformJs.includes("name: 'desktop-electron'")
     && platformJs.includes("call('auth.getGoogleToken'")
     && platformJs.includes("call('auth.getStatus'")
+    && platformJs.includes("call('auth.getDiagnostics'")
+    && platformJs.includes("call('auth.disconnectGoogleToken'")
     && platformJs.includes("call('reminderRuntime.rescheduleAll'")
     && platformJs.includes("call('chromeBridge.connectExtension'")
     && platformJs.includes("call('system.getDesktopSettings'")
@@ -120,6 +125,7 @@ assert('Desktop adapter delegates auth, reminders, and Chrome bridge to Electron
     && platformJs.includes("call('system.writeWidgetSnapshot'")
     && platformJs.includes("call('system.getDesktopProfile'")
     && platformJs.includes("call('system.confirmGoogleAccountSwitch'")
+    && platformJs.includes('bridge.onWindowActivated')
     && platformJs.includes('TimeWhereDesktopSyncService?.requestRun')
     && platformJs.includes("call('external.openUrl'"));
 assert('Fallback platform returns desktop system settings capability as not_supported',
@@ -132,9 +138,13 @@ assert('Fallback platform returns desktop system settings capability as not_supp
     && platformJs.includes("confirmGoogleAccountSwitch: () => ({ status: 'not_supported'"));
 assert('Desktop sync service keeps Electron sync alive with serialized jobs and conflict pause',
     desktopSyncService.includes('createDesktopSyncService')
-    && desktopSyncService.includes('DEFAULT_INTERVAL_MS = 60 * 1000')
-    && desktopSyncService.includes('DEFAULT_DEBOUNCE_MS = 30 * 1000')
-    && desktopSyncService.includes('pendingRun')
+    && desktopSyncService.includes('DEFAULT_INTERVAL_MS = 3 * 60 * 1000')
+    && desktopSyncService.includes('DEFAULT_DEBOUNCE_MS = 3 * 60 * 1000')
+    && desktopSyncService.includes('LONG_RUNNING_MS = 90 * 1000')
+    && desktopSyncService.includes('pendingState')
+    && desktopSyncService.includes('pending_trigger_count')
+    && desktopSyncService.includes('pending_reasons')
+    && desktopSyncService.includes("status = 'long_running'")
     && desktopSyncService.includes("pause('conflict')")
     && desktopSyncService.includes('retry_after')
     && desktopSyncService.includes('TimeWhereDesktopSyncService'));
@@ -165,6 +175,32 @@ assert('Desktop-capable pages load desktop sync service after google-sync',
         const text = read(file);
         return text.indexOf('desktop-sync-service.js') > text.indexOf('google-sync.js');
     }));
+assert('Primary product pages load shared Google sync account indicator after desktop sync service',
+    [
+        'extension/pages/focus/focus.html',
+        'extension/pages/tasks/tasks.html',
+        'extension/pages/calendar/calendar.html',
+        'extension/popup/popup.html',
+        'extension/popup/sidepanel.html'
+    ].every(file => {
+        const text = read(file);
+        return text.includes('google-sync-status-ui.js')
+            && text.includes('google-sync-status.css')
+            && text.indexOf('google-sync-status-ui.js') > text.indexOf('desktop-sync-service.js');
+    })
+    && googleSyncStatusUi.includes('deriveDisplayState')
+    && googleSyncStatusUi.includes('attachSidebarAvatar')
+    && googleSyncStatusUi.includes('attachSettingsButton')
+    && googleSyncStatusUi.includes('account_picture')
+    && googleSyncStatusUi.includes('查看同步记录')
+    && googleSyncStatusUi.includes('timewhere-google-sync-state')
+    && googleSyncStatusUi.includes('timewhere-google-sync-history')
+    && !googleSyncStatusUi.includes('setTransientStatus')
+    && googleSyncStatusCss.includes('.google-sync-status-dot.failed')
+    && googleSyncStatusCss.includes('.google-sync-status-dot.conflict')
+    && googleSyncStatusCss.includes('.google-sync-status-dot.syncing')
+    && googleSyncStatusCss.includes('.google-sync-status-dot.queued')
+    && googleSyncStatusCss.includes('.google-sync-account-initial'));
 assert('Desktop app pages load reminders and desktop reminder bridge',
     [
         'extension/pages/focus/focus.html',
@@ -231,8 +267,14 @@ assert('Desktop main loads packaged extension resources and exposes navigation r
 assert('Desktop main exposes auth, reminders, notifications, and Chrome bridge IPC',
     electronMain.includes("method === 'auth.getGoogleToken'")
     && electronMain.includes('serializeAuthError')
+    && electronMain.includes("method === 'auth.getDiagnostics'")
+    && electronMain.includes("method === 'auth.disconnectGoogleToken'")
+    && electronMain.includes('google_error_subtype')
+    && electronMain.includes('oauth_diagnostics')
     && electronMain.includes("method === 'reminderRuntime.rescheduleAll'")
     && electronMain.includes("method === 'notification.consumePendingClicks'")
+    && electronMain.includes('timewhere-platform:window-activated')
+    && electronMain.includes('items: Array.isArray(reminder.items) ? reminder.items : []')
     && electronMain.includes('pendingNotificationClicks')
     && electronMain.includes("method === 'chromeBridge.connectExtension'")
     && electronMain.includes("method === 'system.getDesktopProfile'")
@@ -241,6 +283,7 @@ assert('Desktop main exposes auth, reminders, notifications, and Chrome bridge I
 assert('Electron preload exposes TimeWhereElectronPlatform bridge',
     electronPreload.includes("contextBridge.exposeInMainWorld('TimeWhereElectronPlatform'")
     && electronPreload.includes("ipcRenderer.invoke('timewhere-platform'")
+    && electronPreload.includes('onWindowActivated')
     && electronPreload.includes('consumePendingNotificationClicks'));
 
 assert('Desktop OAuth uses installed-app PKCE with bundled client metadata secret',
@@ -258,12 +301,22 @@ assert('Desktop OAuth uses installed-app PKCE with bundled client metadata secre
     && desktopAuth.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID')
     && desktopAuth.includes('net.fetch')
     && desktopAuth.includes('desktop_oauth_network_failed')
+    && desktopAuth.includes('desktop_oauth_refresh_token_revoked')
+    && desktopAuth.includes('desktop_oauth_session_control_required')
+    && desktopAuth.includes('markStoredRefreshTokenInvalid')
+    && desktopAuth.includes('getOAuthConfigDiagnostics')
+    && desktopAuth.includes('client_id_tail')
+    && desktopAuth.includes('env_client_id_override')
+    && desktopAuth.includes('client_secret_fingerprint')
+    && desktopAuth.includes('google_error_subtype')
+    && desktopAuth.includes('disconnectGoogleToken')
     && desktopAuth.includes('client_secret: credentials.clientSecret')
     && desktopAuth.includes('pkce_desktop_client_metadata_secret')
     && desktopAuth.includes('pkce_public_client_override')
     && desktopAuth.includes('code_challenge_method')
     && desktopAuth.includes('S256')
     && desktopAuth.includes('access_type')
+    && desktopAuth.includes('force_consent')
     && desktopAuth.includes('safeStorage.encryptString')
     && desktopAuth.includes('refusing to save a plaintext refresh token'));
 assert('Desktop profile store isolates Google accounts by Electron partition',

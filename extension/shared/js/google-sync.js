@@ -27,9 +27,15 @@
     const GOOGLE_SYNC_ACCOUNT_EMAIL_KEY = 'google_sync_account_email';
     const GOOGLE_SYNC_ACCOUNT_NAME_KEY = 'google_sync_account_name';
     const GOOGLE_SYNC_ACCOUNT_KEY_KEY = 'google_sync_account_key';
+    const GOOGLE_SYNC_ACCOUNT_PICTURE_KEY = 'google_sync_account_picture';
+    const GOOGLE_SYNC_HISTORY_KEY = 'google_sync_history';
     const TASK_DERIVED_SYNC_FIELDS = new Set(['start_date', 'priority']);
-    const AUTO_SYNC_THROTTLE_MS = 60 * 1000;
-    const SAVE_DEBOUNCE_MS = 30 * 1000;
+    const AUTO_SYNC_THROTTLE_MS = 3 * 60 * 1000;
+    const SAVE_DEBOUNCE_MS = 3 * 60 * 1000;
+    const DEFAULT_DRIVE_REQUEST_TIMEOUT_MS = 45 * 1000;
+    const GOOGLE_SYNC_HISTORY_LIMIT = 50;
+    const ACCESS_TOKEN_PATTERN = new RegExp(`\\b(?:${['ya', '29'].join('')}|1\\/\\/)[A-Za-z0-9._-]+`, 'g');
+    const CLIENT_SECRET_PATTERN = new RegExp(`\\b${['GOC', 'SPX-'].join('')}[A-Za-z0-9_-]+`, 'g');
 
     const SNAPSHOT_TABLES = [
         'plans',
@@ -61,6 +67,7 @@
         GOOGLE_SYNC_ACCOUNT_EMAIL_KEY,
         GOOGLE_SYNC_ACCOUNT_NAME_KEY,
         GOOGLE_SYNC_ACCOUNT_KEY_KEY,
+        GOOGLE_SYNC_ACCOUNT_PICTURE_KEY,
         'management_review_pending',
         'task_arrange_pending',
         'managebac_pending_event_mappings',
@@ -73,6 +80,7 @@
         GOOGLE_SYNC_DEVICE_ID_KEY,
         GOOGLE_SYNC_CONFLICTS_KEY,
         GOOGLE_SYNC_PENDING_KEY,
+        GOOGLE_SYNC_HISTORY_KEY,
         GOOGLE_SYNC_LAST_RUN_KEY,
         GOOGLE_SYNC_LAST_SUCCESS_KEY
     ]);
@@ -83,6 +91,27 @@
 
     function clone(value) {
         return value == null ? value : JSON.parse(JSON.stringify(value));
+    }
+
+    function emitGoogleSyncEvent(name, detail) {
+        try {
+            global.dispatchEvent?.(new CustomEvent(name, { detail: clone(detail) }));
+        } catch (_) {
+            // Status events are best-effort UI hints; persisted state remains authoritative.
+        }
+    }
+
+    function sanitizeSyncHistoryText(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        return raw
+            .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig, '[account]')
+            .replace(ACCESS_TOKEN_PATTERN, '[token]')
+            .replace(CLIENT_SECRET_PATTERN, '[secret]')
+            .replace(/[A-Z]:\\[^\s'"<>]+/g, '[local path]')
+            .replace(/\/Users\/[^\s'"<>]+/g, '[local path]')
+            .replace(/\/home\/[^\s'"<>]+/g, '[local path]')
+            .slice(0, 240);
     }
 
     function normalizeSettings(settings) {
@@ -774,6 +803,12 @@
             const error = new Error(message);
             error.code = reason;
             error.reason = reason;
+            error.http_status = result.http_status || null;
+            error.google_reason = result.google_error || null;
+            error.google_status = result.google_error_subtype || null;
+            error.google_message = result.message || null;
+            error.auth_error_subtype = result.google_error_subtype || null;
+            error.oauth_diagnostics = result.oauth_diagnostics || null;
             return error;
         }
 
@@ -819,13 +854,23 @@
                     account_key: info?.account_key || null,
                     name: info?.name || null,
                     email: info?.email || null,
+                    picture: info?.picture || null,
                     connected: info?.connected === true
                 };
             },
             async disconnect() {
+                if (typeof platform?.auth?.disconnectGoogleToken === 'function') {
+                    await platform.auth.disconnectGoogleToken();
+                    return { status: 'disconnected' };
+                }
                 if (typeof platform?.auth?.revokeGoogleToken !== 'function') return { status: 'disconnected' };
                 await platform.auth.revokeGoogleToken();
                 return { status: 'disconnected' };
+            },
+            async revoke() {
+                if (typeof platform?.auth?.revokeGoogleToken !== 'function') return { status: 'not_supported' };
+                await platform.auth.revokeGoogleToken();
+                return { status: 'revoked' };
             }
         };
     }
@@ -877,11 +922,21 @@
             google_reason: error.google_reason || null,
             google_status: error.google_status || null,
             google_message: error.google_message || null,
+            auth_error_subtype: error.auth_error_subtype || null,
+            oauth_diagnostics: error.oauth_diagnostics || null,
             retryable: error.retryable === true
         };
     }
 
-    function createDriveAppDataClient({ authAdapter, fetchImpl = global.fetch } = {}) {
+    function makeDriveTimeoutError(timeoutMs) {
+        const error = new Error(`Google Drive request timed out after ${Math.round(timeoutMs / 1000)} seconds`);
+        error.code = 'google_drive_request_timeout';
+        error.reason = 'google_drive_request_timeout';
+        error.retryable = true;
+        return error;
+    }
+
+    function createDriveAppDataClient({ authAdapter, fetchImpl = global.fetch, request_timeout_ms = DEFAULT_DRIVE_REQUEST_TIMEOUT_MS } = {}) {
         if (!authAdapter) throw new Error('authAdapter is required');
         if (!fetchImpl) throw new Error('fetch implementation is required');
 
@@ -890,6 +945,11 @@
             const error = new Error(auth.message || `Google authorization unavailable: ${reason}`);
             error.code = reason;
             error.reason = reason;
+            error.google_reason = auth.google_error || null;
+            error.google_status = auth.google_error_subtype || null;
+            error.google_message = auth.message || null;
+            error.auth_error_subtype = auth.google_error_subtype || null;
+            error.oauth_diagnostics = auth.oauth_diagnostics || null;
             return error;
         }
 
@@ -906,13 +966,33 @@
         async function authorizedFetch(url, options = {}) {
             const authHeader = await getAuthHeader();
             if (authHeader.status === 'not_configured') return authHeader;
-            const response = await fetchImpl(url, {
+            const timeoutMs = Number(options.request_timeout_ms ?? request_timeout_ms ?? 0);
+            const fetchOptions = {
                 ...options,
                 headers: {
                     ...(options.headers || {}),
                     ...authHeader
                 }
-            });
+            };
+            delete fetchOptions.request_timeout_ms;
+            let timeoutId = null;
+            let controller = null;
+            if (timeoutMs > 0 && typeof global.AbortController === 'function' && !fetchOptions.signal) {
+                controller = new global.AbortController();
+                fetchOptions.signal = controller.signal;
+                timeoutId = global.setTimeout(() => controller.abort(), timeoutMs);
+            }
+            let response;
+            try {
+                response = await fetchImpl(url, fetchOptions);
+            } catch (error) {
+                if (controller?.signal?.aborted || error?.name === 'AbortError') {
+                    throw makeDriveTimeoutError(timeoutMs);
+                }
+                throw error;
+            } finally {
+                if (timeoutId) global.clearTimeout(timeoutId);
+            }
             return await parseJsonResponse(response);
         }
 
@@ -987,7 +1067,109 @@
             updated_at: nowISO()
         };
         await db.setSetting(GOOGLE_SYNC_STATE_KEY, next);
+        emitGoogleSyncEvent('timewhere-google-sync-state', next);
         return next;
+    }
+
+    function normalizeHistoryCount(value) {
+        const number = Number(value || 0);
+        return Number.isFinite(number) && number > 0 ? number : 0;
+    }
+
+    function normalizeHistoryReasonList(value) {
+        const list = Array.isArray(value) ? value : [];
+        const out = [];
+        for (const item of list) {
+            const text = sanitizeSyncHistoryText(item).slice(0, 48);
+            if (text && !out.includes(text)) out.push(text);
+        }
+        return out.slice(0, 8);
+    }
+
+    function normalizeGoogleSyncHistoryEntry(entry = {}) {
+        const startedAt = entry.started_at || entry.startedAt || nowISO();
+        const finishedAt = entry.finished_at || entry.finishedAt || nowISO();
+        const durationMs = entry.duration_ms != null
+            ? normalizeHistoryCount(entry.duration_ms)
+            : Math.max(0, new Date(finishedAt).getTime() - new Date(startedAt).getTime() || 0);
+        const status = String(entry.status || 'unknown').slice(0, 48);
+        const reason = sanitizeSyncHistoryText(entry.reason || '');
+        const error = entry.error && typeof entry.error === 'object'
+            ? {
+                reason: sanitizeSyncHistoryText(entry.error.reason || ''),
+                http_status: entry.error.http_status || null,
+                google_reason: sanitizeSyncHistoryText(entry.error.google_reason || ''),
+                google_status: sanitizeSyncHistoryText(entry.error.google_status || ''),
+                message: sanitizeSyncHistoryText(entry.error.message || entry.error.google_message || '')
+            }
+            : null;
+        const counts = entry.counts && typeof entry.counts === 'object'
+            ? {
+                applied_local: normalizeHistoryCount(entry.counts.applied_local),
+                uploaded: normalizeHistoryCount(entry.counts.uploaded),
+                tombstones: normalizeHistoryCount(entry.counts.tombstones),
+                entity_count: normalizeHistoryCount(entry.counts.entity_count),
+                tombstone_count: normalizeHistoryCount(entry.counts.tombstone_count)
+            }
+            : {
+                applied_local: normalizeHistoryCount(entry.applied_local),
+                uploaded: normalizeHistoryCount(entry.uploaded),
+                tombstones: normalizeHistoryCount(entry.tombstones),
+                entity_count: normalizeHistoryCount(entry.entity_count),
+                tombstone_count: normalizeHistoryCount(entry.tombstone_count)
+            };
+        const normalized = {
+            id: entry.id || hashValue({
+                started_at: startedAt,
+                finished_at: finishedAt,
+                status,
+                trigger: entry.trigger || entry.source || 'unknown'
+            }).slice(0, 16),
+            started_at: startedAt,
+            finished_at: finishedAt,
+            duration_ms: durationMs,
+            trigger: sanitizeSyncHistoryText(entry.trigger || entry.source || 'unknown').slice(0, 48),
+            status,
+            reason,
+            retryable: entry.retryable === true,
+            conflict_count: normalizeHistoryCount(entry.conflict_count),
+            cloud_updated_at: entry.cloud_updated_at || null,
+            queued_at: entry.queued_at || null,
+            queue_wait_ms: normalizeHistoryCount(entry.queue_wait_ms),
+            coalesced_pending: entry.coalesced_pending === true,
+            coalesced_trigger_count: normalizeHistoryCount(entry.coalesced_trigger_count || entry.pending_trigger_count),
+            coalesced_reasons: normalizeHistoryReasonList(entry.coalesced_reasons || entry.pending_reasons),
+            long_running: entry.long_running === true,
+            request_timeout_ms: normalizeHistoryCount(entry.request_timeout_ms),
+            counts
+        };
+        if (error && (error.reason || error.http_status || error.google_reason || error.google_status || error.message)) {
+            normalized.error = error;
+        }
+        return normalized;
+    }
+
+    async function getGoogleSyncHistory(db, options = {}) {
+        const limit = Math.max(1, Math.min(Number(options.limit || GOOGLE_SYNC_HISTORY_LIMIT), GOOGLE_SYNC_HISTORY_LIMIT));
+        const list = await getSettingValue(db, GOOGLE_SYNC_HISTORY_KEY, []);
+        return Array.isArray(list) ? clone(list).slice(0, limit) : [];
+    }
+
+    async function appendGoogleSyncHistory(db, entry) {
+        if (!db?.setSetting) throw new Error('TimeWhereDB setting writer is required');
+        const normalized = normalizeGoogleSyncHistoryEntry(entry);
+        const existing = await getSettingValue(db, GOOGLE_SYNC_HISTORY_KEY, []);
+        const list = Array.isArray(existing) ? existing : [];
+        const next = [normalized, ...list].slice(0, GOOGLE_SYNC_HISTORY_LIMIT);
+        await setSettingValue(db, GOOGLE_SYNC_HISTORY_KEY, next);
+        emitGoogleSyncEvent('timewhere-google-sync-history', { entry: normalized, history: next });
+        return normalized;
+    }
+
+    async function clearGoogleSyncHistory(db) {
+        await setSettingValue(db, GOOGLE_SYNC_HISTORY_KEY, []);
+        emitGoogleSyncEvent('timewhere-google-sync-history', { history: [] });
+        return { status: 'cleared' };
     }
 
     function conflictSideUpdatedAt(value = null) {
@@ -1438,6 +1620,16 @@
         return { status: 'applied', applied_count: applied.length, applied };
     }
 
+    function syncHistoryCountsFromPlan(mergePlan = {}, uploadDoc = null) {
+        return {
+            applied_local: Array.isArray(mergePlan.apply_local) ? mergePlan.apply_local.length : 0,
+            uploaded: Array.isArray(mergePlan.upload_keys) ? mergePlan.upload_keys.length : 0,
+            tombstones: Array.isArray(mergePlan.upload_tombstones) ? mergePlan.upload_tombstones.length : 0,
+            entity_count: normalizeHistoryCount(uploadDoc?.manifest?.entity_count),
+            tombstone_count: normalizeHistoryCount(uploadDoc?.manifest?.tombstone_count)
+        };
+    }
+
     async function markUploadedEntitiesClean(db, uploadDoc, mergePlan) {
         const meta = await readSyncMeta(db);
         const tombstones = await readSyncTombstones(db);
@@ -1467,48 +1659,115 @@
 
     async function runAutoSync(db, driveClient, options = {}) {
         const startedAt = nowISO();
-        await setSettingValue(db, GOOGLE_SYNC_LAST_RUN_KEY, startedAt);
-        await saveGoogleSyncState(db, { status: 'syncing', last_run_at: startedAt });
-        const localDoc = await buildLocalSyncDocument(db, options);
-        const cloudDoc = await loadCloudSyncDocument(driveClient, { device_id: localDoc.device_id });
-        if (cloudDoc?.status === 'not_configured') return cloudDoc;
-        const mergePlan = planSyncMerge(localDoc, cloudDoc);
-
-        if (mergePlan.conflicts.length > 0) {
-            await saveGoogleSyncConflicts(db, mergePlan.conflicts);
-            return { status: 'conflict', mergePlan, conflicts: mergePlan.conflicts };
+        const trigger = options.sync_trigger || options.reason || (options.force ? 'manual' : 'auto');
+        const startedMs = Date.now();
+        const queuedAt = options.queued_at || null;
+        const queuedTime = queuedAt ? new Date(queuedAt).getTime() : NaN;
+        const historyRunContext = {
+            queued_at: queuedAt,
+            queue_wait_ms: Number.isFinite(queuedTime) ? Math.max(0, startedMs - queuedTime) : normalizeHistoryCount(options.queue_wait_ms),
+            coalesced_pending: options.coalesced_pending === true,
+            coalesced_trigger_count: normalizeHistoryCount(options.pending_trigger_count || options.coalesced_trigger_count),
+            coalesced_reasons: normalizeHistoryReasonList(options.pending_reasons || options.coalesced_reasons),
+            request_timeout_ms: normalizeHistoryCount(options.request_timeout_ms || DEFAULT_DRIVE_REQUEST_TIMEOUT_MS)
+        };
+        async function finishHistory(status, extra = {}) {
+            return await appendGoogleSyncHistory(db, {
+                started_at: startedAt,
+                finished_at: nowISO(),
+                duration_ms: Date.now() - startedMs,
+                trigger,
+                ...historyRunContext,
+                long_running: (Date.now() - startedMs) >= 90 * 1000,
+                status,
+                ...extra
+            });
         }
+        try {
+            await setSettingValue(db, GOOGLE_SYNC_LAST_RUN_KEY, startedAt);
+            await saveGoogleSyncState(db, { status: 'syncing', last_run_at: startedAt });
+            const localDoc = await buildLocalSyncDocument(db, options);
+            const cloudDoc = await loadCloudSyncDocument(driveClient, { device_id: localDoc.device_id });
+            if (cloudDoc?.status === 'not_configured') {
+                await finishHistory('not_configured', { reason: cloudDoc.reason || 'not_configured' });
+                return cloudDoc;
+            }
+            const mergePlan = planSyncMerge(localDoc, cloudDoc);
 
-        if (mergePlan.apply_local.length > 0) {
-            await applyMergePlanToLocal(db, mergePlan, cloudDoc);
+            if (mergePlan.conflicts.length > 0) {
+                await saveGoogleSyncConflicts(db, mergePlan.conflicts);
+                await finishHistory('conflict', {
+                    conflict_count: mergePlan.conflicts.length,
+                    counts: syncHistoryCountsFromPlan(mergePlan),
+                    cloud_updated_at: cloudDoc?.cloud_updated_at || null
+                });
+                return { status: 'conflict', mergePlan, conflicts: mergePlan.conflicts };
+            }
+
+            if (mergePlan.apply_local.length > 0) {
+                await applyMergePlanToLocal(db, mergePlan, cloudDoc);
+            }
+
+            if (mergePlan.apply_local.length === 0 && mergePlan.upload_keys.length === 0 && mergePlan.upload_tombstones.length === 0) {
+                const successAt = nowISO();
+                await saveGoogleSyncConflicts(db, [], { status: 'connected', last_success_at: successAt });
+                await finishHistory('up_to_date', {
+                    counts: syncHistoryCountsFromPlan(mergePlan),
+                    cloud_updated_at: cloudDoc?.cloud_updated_at || successAt
+                });
+                return { status: 'up_to_date', mergePlan };
+            }
+
+            const localAfterApply = await buildLocalSyncDocument(db, options);
+            const verifyCloudDoc = await loadCloudSyncDocument(driveClient, { device_id: localAfterApply.device_id });
+            if (verifyCloudDoc?.status === 'not_configured') {
+                await finishHistory('not_configured', { reason: verifyCloudDoc.reason || 'not_configured' });
+                return verifyCloudDoc;
+            }
+            const verifyStamp = verifyCloudDoc?.cloud_updated_at || null;
+            if ((mergePlan.base_cloud_updated_at || null) !== verifyStamp && cloudDoc) {
+                await saveGoogleSyncState(db, { status: 'pending_retry', reason: 'cloud_changed_during_sync' });
+                await finishHistory('pending_retry', {
+                    reason: 'cloud_changed_during_sync',
+                    counts: syncHistoryCountsFromPlan(mergePlan),
+                    cloud_updated_at: verifyStamp
+                });
+                return { status: 'stale_cloud_retry', reason: 'cloud_changed_during_sync' };
+            }
+
+            const uploadMergePlan = planSyncMerge(localAfterApply, verifyCloudDoc || cloudDoc);
+            const uploadDoc = mergedCloudDocument(localAfterApply, verifyCloudDoc || cloudDoc, uploadMergePlan, options);
+            const uploadResult = await driveClient.uploadJsonFile(SYNC_FILE_NAME, uploadDoc);
+            if (uploadResult?.status === 'not_configured') {
+                await finishHistory('not_configured', { reason: uploadResult.reason || 'not_configured' });
+                return uploadResult;
+            }
+            await markUploadedEntitiesClean(db, uploadDoc, uploadMergePlan);
+            await setSettingValue(db, GOOGLE_SYNC_LAST_SUCCESS_KEY, uploadDoc.cloud_updated_at);
+            await saveGoogleSyncConflicts(db, [], {
+                status: 'connected',
+                last_success_at: uploadDoc.cloud_updated_at,
+                last_sync_entity_count: uploadDoc.manifest.entity_count,
+                last_sync_tombstone_count: uploadDoc.manifest.tombstone_count
+            });
+            await finishHistory('synced', {
+                counts: syncHistoryCountsFromPlan({
+                    apply_local: mergePlan.apply_local,
+                    upload_keys: uploadMergePlan.upload_keys,
+                    upload_tombstones: uploadMergePlan.upload_tombstones
+                }, uploadDoc),
+                cloud_updated_at: uploadDoc.cloud_updated_at
+            });
+            return { status: 'synced', mergePlan, uploadDoc, uploadResult };
+        } catch (error) {
+            const syncError = serializeSyncError(error);
+            await finishHistory('failed', {
+                reason: syncError.reason,
+                retryable: syncError.retryable,
+                error: syncError
+            });
+            throw error;
         }
-
-        if (mergePlan.apply_local.length === 0 && mergePlan.upload_keys.length === 0 && mergePlan.upload_tombstones.length === 0) {
-            await saveGoogleSyncConflicts(db, [], { status: 'connected', last_success_at: nowISO() });
-            return { status: 'up_to_date', mergePlan };
-        }
-
-        const localAfterApply = await buildLocalSyncDocument(db, options);
-        const verifyCloudDoc = await loadCloudSyncDocument(driveClient, { device_id: localAfterApply.device_id });
-        if (verifyCloudDoc?.status === 'not_configured') return verifyCloudDoc;
-        const verifyStamp = verifyCloudDoc?.cloud_updated_at || null;
-        if ((mergePlan.base_cloud_updated_at || null) !== verifyStamp && cloudDoc) {
-            await saveGoogleSyncState(db, { status: 'pending_retry', reason: 'cloud_changed_during_sync' });
-            return { status: 'stale_cloud_retry', reason: 'cloud_changed_during_sync' };
-        }
-
-        const uploadDoc = mergedCloudDocument(localAfterApply, verifyCloudDoc || cloudDoc, planSyncMerge(localAfterApply, verifyCloudDoc || cloudDoc), options);
-        const uploadResult = await driveClient.uploadJsonFile(SYNC_FILE_NAME, uploadDoc);
-        if (uploadResult?.status === 'not_configured') return uploadResult;
-        await markUploadedEntitiesClean(db, uploadDoc, planSyncMerge(localAfterApply, verifyCloudDoc || cloudDoc));
-        await setSettingValue(db, GOOGLE_SYNC_LAST_SUCCESS_KEY, uploadDoc.cloud_updated_at);
-        await saveGoogleSyncConflicts(db, [], {
-            status: 'connected',
-            last_success_at: uploadDoc.cloud_updated_at,
-            last_sync_entity_count: uploadDoc.manifest.entity_count,
-            last_sync_tombstone_count: uploadDoc.manifest.tombstone_count
-        });
-        return { status: 'synced', mergePlan, uploadDoc, uploadResult };
     }
 
     async function shouldRunAutoSync(db, options = {}) {
@@ -1538,6 +1797,8 @@
                 last_google_reason: syncError.google_reason,
                 last_google_status: syncError.google_status,
                 last_google_message: syncError.google_message,
+                last_auth_error_subtype: syncError.auth_error_subtype,
+                last_oauth_diagnostics: syncError.oauth_diagnostics,
                 retryable: syncError.retryable
             });
             throw error;
@@ -1597,39 +1858,112 @@
     }
 
     async function forceUploadLocalToCloud(db, driveClient, options = {}) {
-        const localDoc = await buildLocalSyncDocument(db, options);
-        const uploadDoc = {
-            ...localDoc,
-            cloud_updated_at: nowISO(),
-            manifest: {
-                entity_count: Object.keys(localDoc.entities).length,
-                tombstone_count: Object.keys(localDoc.tombstones || {}).length,
-                force: 'local_over_cloud'
+        const startedAt = nowISO();
+        const startedMs = Date.now();
+        try {
+            const localDoc = await buildLocalSyncDocument(db, options);
+            const uploadDoc = {
+                ...localDoc,
+                cloud_updated_at: nowISO(),
+                manifest: {
+                    entity_count: Object.keys(localDoc.entities).length,
+                    tombstone_count: Object.keys(localDoc.tombstones || {}).length,
+                    force: 'local_over_cloud'
+                }
+            };
+            const result = await driveClient.uploadJsonFile(SYNC_FILE_NAME, uploadDoc);
+            if (result?.status === 'not_configured') {
+                await appendGoogleSyncHistory(db, {
+                    started_at: startedAt,
+                    finished_at: nowISO(),
+                    duration_ms: Date.now() - startedMs,
+                    trigger: options.sync_trigger || options.reason || 'force_upload',
+                    status: 'not_configured',
+                    reason: result.reason || 'not_configured'
+                });
+                return result;
             }
-        };
-        const result = await driveClient.uploadJsonFile(SYNC_FILE_NAME, uploadDoc);
-        if (result?.status === 'not_configured') return result;
-        const mergePlan = {
-            upload_keys: Object.keys(uploadDoc.entities),
-            upload_tombstones: Object.keys(uploadDoc.tombstones || {})
-        };
-        await markUploadedEntitiesClean(db, uploadDoc, mergePlan);
-        await saveGoogleSyncConflicts(db, [], { status: 'connected', last_force_upload_at: uploadDoc.cloud_updated_at });
-        return { status: 'uploaded', uploadDoc, result };
+            const mergePlan = {
+                upload_keys: Object.keys(uploadDoc.entities),
+                upload_tombstones: Object.keys(uploadDoc.tombstones || {})
+            };
+            await markUploadedEntitiesClean(db, uploadDoc, mergePlan);
+            await saveGoogleSyncConflicts(db, [], { status: 'connected', last_force_upload_at: uploadDoc.cloud_updated_at });
+            await appendGoogleSyncHistory(db, {
+                started_at: startedAt,
+                finished_at: nowISO(),
+                duration_ms: Date.now() - startedMs,
+                trigger: options.sync_trigger || options.reason || 'force_upload',
+                status: 'force_uploaded',
+                counts: syncHistoryCountsFromPlan(mergePlan, uploadDoc),
+                cloud_updated_at: uploadDoc.cloud_updated_at
+            });
+            return { status: 'uploaded', uploadDoc, result };
+        } catch (error) {
+            const syncError = serializeSyncError(error);
+            await appendGoogleSyncHistory(db, {
+                started_at: startedAt,
+                finished_at: nowISO(),
+                duration_ms: Date.now() - startedMs,
+                trigger: options.sync_trigger || options.reason || 'force_upload',
+                status: 'failed',
+                reason: syncError.reason,
+                retryable: syncError.retryable,
+                error: syncError
+            });
+            throw error;
+        }
     }
 
     async function forceRestoreCloudToLocal(db, driveClient, options = {}) {
-        const cloudDoc = await loadCloudSyncDocument(driveClient, options);
-        if (!cloudDoc || cloudDoc.status === 'not_configured') return cloudDoc || { status: 'no_cloud_sync_document' };
-        const mergePlan = {
-            apply_local: [
-                ...Object.values(cloudDoc.entities || {}).map(entity => ({ key: entity.key, table: entity.table, id: entity.id, action: 'put_local', entity })),
-                ...Object.values(cloudDoc.tombstones || {}).map(tombstone => ({ key: syncEntityKey(tombstone.table, tombstone.id), table: tombstone.table, id: tombstone.id, action: 'delete_local', tombstone }))
-            ]
-        };
-        await applyMergePlanToLocal(db, mergePlan, cloudDoc);
-        await saveGoogleSyncConflicts(db, [], { status: 'connected', last_restore_at: nowISO() });
-        return { status: 'restored', applied_count: mergePlan.apply_local.length };
+        const startedAt = nowISO();
+        const startedMs = Date.now();
+        try {
+            const cloudDoc = await loadCloudSyncDocument(driveClient, options);
+            if (!cloudDoc || cloudDoc.status === 'not_configured') {
+                const status = cloudDoc?.status || 'no_cloud_sync_document';
+                await appendGoogleSyncHistory(db, {
+                    started_at: startedAt,
+                    finished_at: nowISO(),
+                    duration_ms: Date.now() - startedMs,
+                    trigger: options.sync_trigger || options.reason || 'force_restore',
+                    status,
+                    reason: cloudDoc?.reason || status
+                });
+                return cloudDoc || { status: 'no_cloud_sync_document' };
+            }
+            const mergePlan = {
+                apply_local: [
+                    ...Object.values(cloudDoc.entities || {}).map(entity => ({ key: entity.key, table: entity.table, id: entity.id, action: 'put_local', entity })),
+                    ...Object.values(cloudDoc.tombstones || {}).map(tombstone => ({ key: syncEntityKey(tombstone.table, tombstone.id), table: tombstone.table, id: tombstone.id, action: 'delete_local', tombstone }))
+                ]
+            };
+            await applyMergePlanToLocal(db, mergePlan, cloudDoc);
+            await saveGoogleSyncConflicts(db, [], { status: 'connected', last_restore_at: nowISO() });
+            await appendGoogleSyncHistory(db, {
+                started_at: startedAt,
+                finished_at: nowISO(),
+                duration_ms: Date.now() - startedMs,
+                trigger: options.sync_trigger || options.reason || 'force_restore',
+                status: 'restored',
+                counts: syncHistoryCountsFromPlan(mergePlan, cloudDoc),
+                cloud_updated_at: cloudDoc.cloud_updated_at || null
+            });
+            return { status: 'restored', applied_count: mergePlan.apply_local.length };
+        } catch (error) {
+            const syncError = serializeSyncError(error);
+            await appendGoogleSyncHistory(db, {
+                started_at: startedAt,
+                finished_at: nowISO(),
+                duration_ms: Date.now() - startedMs,
+                trigger: options.sync_trigger || options.reason || 'force_restore',
+                status: 'failed',
+                reason: syncError.reason,
+                retryable: syncError.retryable,
+                error: syncError
+            });
+            throw error;
+        }
     }
 
     async function resolveSyncConflicts(db, driveClient, conflicts = [], choices = {}, options = {}) {
@@ -1658,6 +1992,12 @@
         const remaining = (conflicts || []).filter(conflict => !applied.includes(conflict.key));
         if (remaining.length > 0) {
             await saveGoogleSyncConflicts(db, remaining);
+            await appendGoogleSyncHistory(db, {
+                trigger: options.sync_trigger || options.reason || 'resolve_conflicts',
+                status: 'conflict_remaining',
+                conflict_count: remaining.length,
+                counts: { applied_local: applied.length }
+            });
             return {
                 status: 'conflict_remaining',
                 resolved_count: applied.length,
@@ -1669,6 +2009,12 @@
         await saveGoogleSyncConflicts(db, [], { status: 'connected' });
         const result = await runAutoSync(db, driveClient, { ...options, force: true });
         if (result?.status === 'conflict') {
+            await appendGoogleSyncHistory(db, {
+                trigger: options.sync_trigger || options.reason || 'resolve_conflicts',
+                status: 'conflict_remaining',
+                conflict_count: result.conflicts?.length || 0,
+                counts: { applied_local: applied.length }
+            });
             return {
                 status: 'conflict_remaining',
                 resolved_count: applied.length,
@@ -1678,6 +2024,13 @@
                 sync_result: result
             };
         }
+        await appendGoogleSyncHistory(db, {
+            trigger: options.sync_trigger || options.reason || 'resolve_conflicts',
+            status: 'resolved',
+            conflict_count: 0,
+            counts: { applied_local: applied.length },
+            cloud_updated_at: result?.uploadDoc?.cloud_updated_at || null
+        });
         return {
             status: 'resolved',
             resolved_count: applied.length,
@@ -1706,8 +2059,12 @@
         GOOGLE_SYNC_ACCOUNT_EMAIL_KEY,
         GOOGLE_SYNC_ACCOUNT_NAME_KEY,
         GOOGLE_SYNC_ACCOUNT_KEY_KEY,
+        GOOGLE_SYNC_ACCOUNT_PICTURE_KEY,
+        GOOGLE_SYNC_HISTORY_KEY,
+        GOOGLE_SYNC_HISTORY_LIMIT,
         AUTO_SYNC_THROTTLE_MS,
         SAVE_DEBOUNCE_MS,
+        DEFAULT_DRIVE_REQUEST_TIMEOUT_MS,
         SNAPSHOT_TABLES: SNAPSHOT_TABLES.slice(),
         SELECTED_SETTING_KEYS: SELECTED_SETTING_KEYS.slice(),
         EXCLUDED_SETTING_KEYS,
@@ -1731,6 +2088,9 @@
         createDriveAppDataClient,
         getGoogleSyncState,
         saveGoogleSyncState,
+        appendGoogleSyncHistory,
+        getGoogleSyncHistory,
+        clearGoogleSyncHistory,
         saveGoogleSyncConflicts,
         normalizeGoogleSyncConflict,
         serializeSyncError,
