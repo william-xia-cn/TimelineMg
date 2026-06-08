@@ -41,6 +41,7 @@ const desktopAuth = createDesktopAuth();
 const chromeBridge = createChromeBridge();
 const reminderTimers = new Map();
 const pendingNotificationClicks = [];
+const pendingNotificationCloses = [];
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
@@ -769,9 +770,26 @@ function sendNotificationClick(payload = {}) {
   mainWindow.webContents.send('timewhere-platform:notification-click', clickPayload);
 }
 
+function sendNotificationClose(payload = {}) {
+  const closePayload = {
+    ...payload,
+    closed_at: new Date().toISOString()
+  };
+  pendingNotificationCloses.push(closePayload);
+  if (pendingNotificationCloses.length > 25) pendingNotificationCloses.shift();
+
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('timewhere-platform:notification-close', closePayload);
+}
+
 function consumePendingNotificationClicks() {
   const clicks = pendingNotificationClicks.splice(0, pendingNotificationClicks.length);
   return { status: 'ok', clicks };
+}
+
+function consumePendingNotificationCloses() {
+  const closes = pendingNotificationCloses.splice(0, pendingNotificationCloses.length);
+  return { status: 'ok', closes };
 }
 
 function showDesktopNotification(payload = {}) {
@@ -782,6 +800,7 @@ function showDesktopNotification(payload = {}) {
     silent: payload.silent === true
   });
   notification.on('click', () => sendNotificationClick(payload));
+  notification.on('close', () => sendNotificationClose(payload));
   notification.show();
   return { status: 'created', id: payload.id || null };
 }
@@ -877,6 +896,9 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
   }
   if (method === 'notification.consumePendingClicks') {
     return consumePendingNotificationClicks();
+  }
+  if (method === 'notification.consumePendingCloses') {
+    return consumePendingNotificationCloses();
   }
   if (method === 'reminderRuntime.schedule') {
     return scheduleReminder(payload);

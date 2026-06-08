@@ -225,6 +225,7 @@ async function loadTaskColumn() {
     const settle = dailySettle(taskPool, todayContainers, now);
     const journalEntryHTML = await renderTodayJournalEntry(todayStr, now);
     const quickAddHTML = renderCurrentTaskQuickAdd(todayStr);
+    const reminderBannerHTML = await renderDesktopWorkReminderBanner();
 
     // 更新 header badge — 容器状态 or 任务计数
     const badge = document.querySelector('.column-now .badge');
@@ -255,6 +256,7 @@ async function loadTaskColumn() {
     const displayTasks = settle.displayTasks || settle.currentTasks || [];
     if (displayTasks.length === 0) {
         section.innerHTML = `
+            ${reminderBannerHTML}
             <div class="current-task-scroll-body custom-scrollbar">
                 <div class="empty-state">
                     <span class="material-symbols-outlined" style="font-size: 48px;">check_circle</span>
@@ -300,6 +302,7 @@ async function loadTaskColumn() {
         });
     });
     section.innerHTML = `
+        ${reminderBannerHTML}
         <div class="current-task-scroll-body custom-scrollbar">
             ${html}
         </div>
@@ -308,6 +311,61 @@ async function loadTaskColumn() {
     if (targetTaskId) {
         section.querySelector(`[data-task-card-id="${CSS.escape(targetTaskId)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
+}
+
+async function renderDesktopWorkReminderBanner() {
+    if (globalThis.TimeWherePlatform?.name !== 'desktop-electron') return '';
+    const api = globalThis.TimeWhereDesktopReminders;
+    if (typeof api?.readReminderState !== 'function') return '';
+    let state = null;
+    try {
+        state = await api.readReminderState();
+    } catch (_) {
+        return '';
+    }
+    if (!state || state.status === 'idle' || !state.session_id) return '';
+    const statusTextMap = {
+        notification_visible: '任务提醒已发出',
+        renotify_waiting: '通知已关闭，稍后再次提醒',
+        execution_check_waiting: '本次提醒已处理',
+        stopped: '本次提醒已停止'
+    };
+    const detailTextMap = {
+        notification_visible: '系统通知仍在等待处理。',
+        renotify_waiting: state.cooldown_until ? `${formatReminderClock(state.cooldown_until)} 后再次提醒。` : '稍后再次提醒。',
+        execution_check_waiting: state.execution_check_at ? `${formatReminderClock(state.execution_check_at)} 后检查是否仍有工作待处理。` : '稍后检查是否仍有工作待处理。',
+        stopped: '当前这轮工作提醒不会继续弹出。'
+    };
+    const countText = Number(state.total_count) > 0 ? `${Number(state.total_count)} 项待处理` : '当前工作提醒';
+    const itemsText = (state.items || [])
+        .slice(0, 3)
+        .map(item => item.title)
+        .filter(Boolean)
+        .join('、');
+    const canStop = state.status !== 'stopped';
+    return `
+        <div class="desktop-work-reminder-banner ${escapeAttribute(state.status)}" data-desktop-work-reminder>
+            <div class="desktop-work-reminder-icon"><span class="material-symbols-outlined">notifications</span></div>
+            <div class="desktop-work-reminder-copy">
+                <strong>${escapeHTML(statusTextMap[state.status] || '任务提醒')}</strong>
+                <span>${escapeHTML(countText)}${itemsText ? ` · ${escapeHTML(itemsText)}` : ''}</span>
+                <small>${escapeHTML(detailTextMap[state.status] || '')}</small>
+            </div>
+            ${canStop ? '<button class="btn-micro secondary" type="button" data-action="stop-desktop-work-reminder">停止本次提醒</button>' : ''}
+        </div>`;
+}
+
+function formatReminderClock(isoString) {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return '';
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+async function stopDesktopWorkReminder() {
+    const result = await globalThis.TimeWhereDesktopReminders?.stopCurrentReminder?.();
+    await loadTaskColumn();
+    showToast(result?.status === 'stopped' ? '本次提醒已停止' : '当前没有进行中的提醒', 'info');
 }
 
 function renderCurrentTaskQuickAdd(todayStr) {
@@ -1398,6 +1456,9 @@ function setupEventListeners() {
     document.addEventListener('click', handleFocusDelegatedClick);
     document.addEventListener('change', handleFocusDelegatedChange);
     document.addEventListener('keydown', handleFocusDelegatedKeydown);
+    window.addEventListener('timewhere-desktop-reminder-state', () => {
+        loadTaskColumn().catch(error => console.warn('[Focus] reminder status refresh failed:', error));
+    });
 
     // Habit check buttons (delegated)
     const feedColumn = document.querySelector('.column-feed');
@@ -1445,6 +1506,11 @@ function handleFocusDelegatedClick(e) {
     if (action === 'quick-add-current-task') {
         e.preventDefault();
         runFocusAction(actionEl, async () => quickAddCurrentTask());
+        return;
+    }
+    if (action === 'stop-desktop-work-reminder') {
+        e.preventDefault();
+        runFocusAction(actionEl, stopDesktopWorkReminder);
         return;
     }
     if (action === 'dashboard-quick-add-progress') {

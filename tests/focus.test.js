@@ -540,6 +540,15 @@ assert('Dashboard current task column renders quick add before today journal', f
     && !focusScript.includes('current-task-quick-add-meta')
     && /current-task-scroll-body custom-scrollbar[\s\S]*\$\{html\}[\s\S]*<\/div>[\s\S]*\$\{quickAddHTML\}[\s\S]*\$\{journalEntryHTML\}/.test(focusScript)
     && /current-task-scroll-body custom-scrollbar[\s\S]*empty-state[\s\S]*<\/div>[\s\S]*\$\{quickAddHTML\}[\s\S]*\$\{journalEntryHTML\}/.test(focusScript));
+assert('Dashboard exposes lightweight Desktop work reminder status and stop action',
+    focusScript.includes('renderDesktopWorkReminderBanner')
+    && focusScript.includes('desktop-work-reminder-banner')
+    && focusScript.includes("action === 'stop-desktop-work-reminder'")
+    && focusScript.includes('TimeWhereDesktopReminders?.stopCurrentReminder')
+    && focusScript.includes('timewhere-desktop-reminder-state')
+    && focusCss.includes('.desktop-work-reminder-banner')
+    && focusCss.includes('.desktop-work-reminder-banner.execution_check_waiting')
+    && focusCss.includes('.desktop-work-reminder-banner.renotify_waiting'));
 assert('Dashboard quick add uses delegated action without inline handler', focusScript.includes('data-action="quick-add-current-task"')
     && focusScript.includes("action === 'quick-add-current-task'")
     && !/current-task-quick-add[\s\S]{0,500}onclick\s*=/.test(focusScript));

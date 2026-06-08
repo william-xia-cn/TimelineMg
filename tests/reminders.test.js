@@ -369,18 +369,26 @@ assert('Desktop reminder bridge uses shared reminder rules and platform reschedu
     desktopReminders.includes('TimeWhereReminders.computeAggregatedReminder')
     && desktopReminders.includes('TimeWherePlatform.reminderRuntime.rescheduleAll')
     && desktopReminders.includes('TimeWhereReminders.buildReminderNotificationPayload')
-    && desktopReminders.includes('ack_at')
+    && desktopReminders.includes('desktop_work_reminder_state_v1')
+    && desktopReminders.includes('renotify_waiting')
+    && desktopReminders.includes('execution_check_waiting')
     && desktopReminders.includes('acknowledgeNotificationClick')
-    && desktopReminders.includes('acknowledgeOpenReminders')
-    && desktopReminders.includes('UNACKED_REPEAT_MS = 3 * 60 * 1000')
+    && desktopReminders.includes('handleNotificationClosed')
+    && desktopReminders.includes('stopCurrentReminder')
+    && desktopReminders.includes('RENOTIFY_COOLDOWN_MS = 60 * 1000')
+    && desktopReminders.includes('EXECUTION_CHECK_MS = 30 * 60 * 1000')
     && desktopReminders.includes('items: reminder.items || []')
+    && desktopReminders.includes("route: 'pages/focus/focus.html'")
     && desktopReminders.includes("global.TimeWherePlatform?.name === 'desktop-electron'"));
 assert('Electron main implements app-running reminder timers and notification click routing',
     desktopMain.includes('const reminderTimers = new Map()')
     && desktopMain.includes('const pendingNotificationClicks = []')
+    && desktopMain.includes('const pendingNotificationCloses = []')
     && desktopMain.includes('function scheduleReminder')
     && desktopMain.includes('timewhere-platform:window-activated')
     && desktopMain.includes('notification.consumePendingClicks')
+    && desktopMain.includes('notification.consumePendingCloses')
+    && desktopMain.includes("notification.on('close'")
     && desktopMain.includes("method === 'reminderRuntime.rescheduleAll'")
     && desktopMain.includes('sendNotificationClick(payload)')
     && desktopMain.includes('Notification.isSupported'));
@@ -388,24 +396,32 @@ assert('Electron main implements app-running reminder timers and notification cl
 function createDesktopReminderHarness() {
     let tasks = [task({ id: 'task-1', schedule_time: '20:00' })];
     let clickHandler = null;
-    let activationHandler = null;
+    let closeHandler = null;
     let scheduled = [];
-    const storage = {};
+    const settings = {};
     const context = {
         console,
         setInterval: () => 1,
         clearInterval: () => {},
+        CustomEvent: function CustomEvent(name, init) {
+            return { type: name, detail: init?.detail };
+        },
+        dispatchEvent: () => {},
         localStorage: {
             getItem(key) {
-                return Object.prototype.hasOwnProperty.call(storage, key) ? storage[key] : null;
+                return Object.prototype.hasOwnProperty.call(settings, key) ? JSON.stringify(settings[key]) : null;
             },
             setItem(key, value) {
-                storage[key] = String(value);
+                settings[key] = JSON.parse(value);
             }
         },
         TimeWhereReminders: Reminders,
         TimeWhereScheduling: Scheduling,
         TimeWhereDB: {
+            getSetting: async key => settings[key] || null,
+            setSetting: async (key, value) => {
+                settings[key] = value;
+            },
             getSettings: async () => ({ notification_enabled: true }),
             getAllTasks: async () => tasks,
             getContainers: async () => [container()]
@@ -416,12 +432,10 @@ function createDesktopReminderHarness() {
                 onClick(callback) {
                     clickHandler = callback;
                     return () => { clickHandler = null; };
-                }
-            },
-            window: {
-                onActivated(callback) {
-                    activationHandler = callback;
-                    return () => { activationHandler = null; };
+                },
+                onClose(callback) {
+                    closeHandler = callback;
+                    return () => { closeHandler = null; };
                 }
             },
             reminderRuntime: {
@@ -442,11 +456,14 @@ function createDesktopReminderHarness() {
         click(payload) {
             if (clickHandler) clickHandler(payload);
         },
-        activate() {
-            if (activationHandler) activationHandler({ activated_at: new Date().toISOString() });
+        close(payload) {
+            if (closeHandler) closeHandler(payload);
         },
         get scheduled() {
             return scheduled;
+        },
+        get settings() {
+            return settings;
         }
     };
 }
@@ -455,54 +472,81 @@ async function runDesktopAcknowledgementTests() {
     const harness = createDesktopReminderHarness();
     const first = await harness.api.collectDueReminders(at('20:00'));
     assertEqual('desktop reminder sends first due scheduled task', first.length, 1);
+    assertEqual('desktop reminder stores visible work reminder session',
+        (await harness.api.readReminderState()).status,
+        'notification_visible');
 
     const afterOneMinute = await harness.api.collectDueReminders(at('20:01'));
-    assertEqual('desktop reminder does not repeat after one unacknowledged minute', afterOneMinute.length, 0);
-    const afterTwoMinutes = await harness.api.collectDueReminders(at('20:02'));
-    assertEqual('desktop reminder does not repeat after two unacknowledged minutes', afterTwoMinutes.length, 0);
-    const sameBucket = await harness.api.collectDueReminders(at('20:03'));
-    assertEqual('desktop reminder repeats after three unacknowledged minutes', sameBucket.length, 1);
-    assertEqual('desktop three-minute repeat keeps same 15-minute reminder key', sameBucket[0]?.key, first[0]?.key);
+    assertEqual('desktop visible notification does not repeat without close or click', afterOneMinute.length, 0);
 
-    harness.api.acknowledgeNotificationClick({
+    await harness.api.handleNotificationClosed({
         key: first[0].key,
         id: first[0].key,
-        task_id: first[0].task_id,
-        type: first[0].type,
-        bucket: first[0].bucket
-    }, at('20:02'));
-    const afterAck = await harness.api.collectDueReminders(at('20:04'));
-    assertEqual('desktop reminder stops in same bucket after notification click acknowledgement', afterAck.length, 0);
+        bucket: first[0].bucket,
+        task_ids: first[0].task_ids
+    }, atExact('20:00:20'));
+    assertEqual('desktop notification close stores one-minute renotify wait',
+        (await harness.api.readReminderState()).status,
+        'renotify_waiting');
+    const beforeCooldown = await harness.api.collectDueReminders(atExact('20:01:10'));
+    assertEqual('desktop closed notification does not repeat before one-minute cooldown', beforeCooldown.length, 0);
+    const afterCooldown = await harness.api.collectDueReminders(atExact('20:01:21'));
+    assertEqual('desktop closed notification repeats after one-minute cooldown', afterCooldown.length, 1);
+    assertEqual('desktop renotify keeps same current-work reminder key', afterCooldown[0]?.key, first[0]?.key);
 
-    const nextBucket = await harness.api.collectDueReminders(at('20:15'));
-    assertEqual('desktop reminder resumes in next 15-minute bucket if task remains unfinished', nextBucket.length, 1);
-    assert('desktop next bucket uses a new acknowledgement key', nextBucket[0]?.key !== first[0]?.key);
+    await harness.api.acknowledgeNotificationClick({
+        key: afterCooldown[0].key,
+        id: afterCooldown[0].key,
+        bucket: afterCooldown[0].bucket,
+        task_ids: afterCooldown[0].task_ids,
+        items: afterCooldown[0].items,
+        total_count: afterCooldown[0].total_count
+    }, at('20:02'));
+    const afterClick = await harness.api.collectDueReminders(at('20:15'));
+    assertEqual('desktop click handling suppresses reminders until execution check', afterClick.length, 0);
+    assertEqual('desktop click creates 30-minute execution check state',
+        (await harness.api.readReminderState()).status,
+        'execution_check_waiting');
+    const executionCheck = await harness.api.collectDueReminders(at('20:32'));
+    assertEqual('desktop execution check reminds again when work remains unfinished', executionCheck.length, 1);
 
     harness.setTasks([task({ id: 'task-1', schedule_time: '20:00', progress: 'completed' })]);
-    const completed = await harness.api.collectDueReminders(at('20:16'));
-    assertEqual('desktop completed task does not send acknowledgement repeats', completed.length, 0);
+    const completed = await harness.api.collectDueReminders(at('20:33'));
+    assertEqual('desktop completed task clears active work reminder session', completed.length, 0);
+    assertEqual('desktop completed task leaves reminder state idle',
+        (await harness.api.readReminderState()).status,
+        'idle');
 
-    const openHarness = createDesktopReminderHarness();
-    openHarness.api.start();
-    const openFirst = await openHarness.api.collectDueReminders(at('20:00'));
-    openHarness.activate();
-    const afterWindowOpenAck = await openHarness.api.collectDueReminders(at('20:03'));
-    assertEqual('desktop active window restore acknowledges current reminder bucket', afterWindowOpenAck.length, 0);
-    assert('desktop active window restore test sent initial reminder before acknowledgement', openFirst.length === 1);
-    openHarness.api.stop();
+    const stopHarness = createDesktopReminderHarness();
+    const stopFirst = await stopHarness.api.collectDueReminders(at('20:00'));
+    await stopHarness.api.stopCurrentReminder(at('20:01'));
+    const stoppedSameBucket = await stopHarness.api.collectDueReminders(at('20:03'));
+    assertEqual('desktop stop current reminder suppresses same due session', stoppedSameBucket.length, 0);
+    const stoppedNextBucket = await stopHarness.api.collectDueReminders(at('20:15'));
+    assertEqual('desktop stopped reminder can resume in next due bucket', stoppedNextBucket.length, 1);
+    assert('desktop stop test sent initial reminder before suppression', stopFirst.length === 1);
 
     const clickHarness = createDesktopReminderHarness();
     clickHarness.api.start();
+    await new Promise(resolve => setTimeout(resolve, 5));
     clickHarness.click({
-        key: 'reminder:task-1:scheduled-repeat:2026-05-16:0',
-        id: 'reminder:task-1:scheduled-repeat:2026-05-16:0',
-        task_id: 'task-1',
-        type: 'scheduled-repeat',
+        key: 'reminder:aggregate:scheduled-repeat:2026-05-16:0',
+        id: 'reminder:aggregate:scheduled-repeat:2026-05-16:0',
         bucket: '2026-05-16:0'
     });
-    const ackState = clickHarness.api.readAckState();
-    assert('desktop notification click handler records acknowledgement state',
-        Boolean(ackState['reminder:task-1:scheduled-repeat:2026-05-16:0']?.ack_at));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const clickState = await clickHarness.api.readReminderState();
+    assert('desktop notification click handler records execution check state',
+        clickState.status === 'execution_check_waiting' && Boolean(clickState.execution_check_at));
+    clickHarness.close({
+        key: 'reminder:aggregate:scheduled-repeat:2026-05-16:0',
+        id: 'reminder:aggregate:scheduled-repeat:2026-05-16:0',
+        bucket: '2026-05-16:0'
+    });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assertEqual('desktop notification close after click does not undo handled state',
+        (await clickHarness.api.readReminderState()).status,
+        'execution_check_waiting');
     clickHarness.api.stop();
 }
 

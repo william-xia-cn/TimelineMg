@@ -1,6 +1,6 @@
 {
   "name": "timewhere-desktop-electron",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "TimeWhere standalone desktop Electron app",
   "main": "main.js",
@@ -59,7 +59,7 @@
           ]
         }
       ],
-      "artifactName": "TimeWhere-0.3.0-win-portable.exe"
+      "artifactName": "TimeWhere-0.3.1-win-portable.exe"
     },
     "mac": {
       "icon": "build/icon.png",
@@ -71,7 +71,7 @@
           ]
         }
       ],
-      "artifactName": "TimeWhere-0.3.0-mac-universal.zip"
+      "artifactName": "TimeWhere-0.3.1-mac-universal.zip"
     }
   }
 }

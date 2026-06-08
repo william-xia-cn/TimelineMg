@@ -29,6 +29,7 @@
     const GOOGLE_SYNC_ACCOUNT_KEY_KEY = 'google_sync_account_key';
     const GOOGLE_SYNC_ACCOUNT_PICTURE_KEY = 'google_sync_account_picture';
     const GOOGLE_SYNC_HISTORY_KEY = 'google_sync_history';
+    const DESKTOP_WORK_REMINDER_STATE_KEY = 'desktop_work_reminder_state_v1';
     const TASK_DERIVED_SYNC_FIELDS = new Set(['start_date', 'priority']);
     const AUTO_SYNC_THROTTLE_MS = 3 * 60 * 1000;
     const SAVE_DEBOUNCE_MS = 3 * 60 * 1000;
@@ -81,6 +82,7 @@
         GOOGLE_SYNC_CONFLICTS_KEY,
         GOOGLE_SYNC_PENDING_KEY,
         GOOGLE_SYNC_HISTORY_KEY,
+        DESKTOP_WORK_REMINDER_STATE_KEY,
         GOOGLE_SYNC_LAST_RUN_KEY,
         GOOGLE_SYNC_LAST_SUCCESS_KEY
     ]);
@@ -2061,6 +2063,7 @@
         GOOGLE_SYNC_ACCOUNT_KEY_KEY,
         GOOGLE_SYNC_ACCOUNT_PICTURE_KEY,
         GOOGLE_SYNC_HISTORY_KEY,
+        DESKTOP_WORK_REMINDER_STATE_KEY,
         GOOGLE_SYNC_HISTORY_LIMIT,
         AUTO_SYNC_THROTTLE_MS,
         SAVE_DEBOUNCE_MS,

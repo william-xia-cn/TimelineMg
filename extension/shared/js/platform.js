@@ -110,6 +110,14 @@
                     }
                     chromeRef.notifications.onClicked.addListener(callback);
                     return () => chromeRef.notifications.onClicked.removeListener?.(callback);
+                },
+                onClose(callback) {
+                    if (!chromeRef?.notifications?.onClosed?.addListener || typeof callback !== 'function') {
+                        return () => {};
+                    }
+                    const listener = (notificationId, byUser) => callback({ id: notificationId, key: notificationId, by_user: byUser === true });
+                    chromeRef.notifications.onClosed.addListener(listener);
+                    return () => chromeRef.notifications.onClosed.removeListener?.(listener);
                 }
             },
             reminderRuntime: {
@@ -317,6 +325,40 @@
                         return { status: 'not_supported', clicks: [] };
                     }
                     return await bridge.consumePendingNotificationClicks();
+                },
+                onClose(callback) {
+                    if (typeof bridge?.onNotificationClose !== 'function' || typeof callback !== 'function') {
+                        return () => {};
+                    }
+                    const seen = new Set();
+                    const dispatch = payload => {
+                        const identity = payload?.closed_at
+                            || `${payload?.id || payload?.key || ''}:${payload?.bucket || ''}:close`;
+                        if (identity && seen.has(identity)) return;
+                        if (identity) seen.add(identity);
+                        callback(payload);
+                    };
+                    const consumePending = async () => {
+                        if (typeof bridge?.consumePendingNotificationCloses !== 'function') return;
+                        try {
+                            const result = await bridge.consumePendingNotificationCloses();
+                            for (const payload of result?.closes || []) dispatch(payload);
+                        } catch (_) {
+                            // Pending notification closes are best-effort.
+                        }
+                    };
+                    const unsubscribe = bridge.onNotificationClose(payload => {
+                        dispatch(payload);
+                        consumePending();
+                    });
+                    consumePending();
+                    return unsubscribe;
+                },
+                async consumePendingCloses() {
+                    if (typeof bridge?.consumePendingNotificationCloses !== 'function') {
+                        return { status: 'not_supported', closes: [] };
+                    }
+                    return await bridge.consumePendingNotificationCloses();
                 }
             },
             reminderRuntime: {
@@ -431,7 +473,7 @@
                     return { status: 'opened', route: DEFAULT_SETTINGS_ROUTE };
                 }
             },
-            notification: { notify: notSupported, onClick: () => () => {} },
+            notification: { notify: notSupported, onClick: () => () => {}, onClose: () => () => {} },
             reminderRuntime: { schedule: notSupported, cancel: notSupported, rescheduleAll: notSupported },
             badge: { set: notSupported, clear: notSupported },
             auth: {
@@ -470,7 +512,7 @@
     global.TimeWherePlatformContract = {
         name: true,
         window: ['openMain', 'openQuickPanel', 'focus', 'show', 'hide', 'onActivated'],
-        notification: ['notify', 'onClick'],
+        notification: ['notify', 'onClick', 'onClose'],
         reminderRuntime: ['schedule', 'cancel', 'rescheduleAll'],
         badge: ['set', 'clear'],
         auth: ['getStatus', 'getGoogleToken', 'getAccountInfo', 'getDiagnostics', 'disconnectGoogleToken', 'revokeGoogleToken'],

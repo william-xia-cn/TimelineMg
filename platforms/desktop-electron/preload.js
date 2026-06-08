@@ -10,6 +10,12 @@ contextBridge.exposeInMainWorld('TimeWhereElectronPlatform', {
     ipcRenderer.on('timewhere-platform:notification-click', listener);
     return () => ipcRenderer.removeListener('timewhere-platform:notification-click', listener);
   },
+  onNotificationClose(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('timewhere-platform:notification-close', listener);
+    return () => ipcRenderer.removeListener('timewhere-platform:notification-close', listener);
+  },
   onWindowActivated(callback) {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => callback(payload);
@@ -19,6 +25,12 @@ contextBridge.exposeInMainWorld('TimeWhereElectronPlatform', {
   consumePendingNotificationClicks() {
     return ipcRenderer.invoke('timewhere-platform', {
       method: 'notification.consumePendingClicks',
+      payload: {}
+    });
+  },
+  consumePendingNotificationCloses() {
+    return ipcRenderer.invoke('timewhere-platform', {
+      method: 'notification.consumePendingCloses',
       payload: {}
     });
   }

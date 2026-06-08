@@ -554,6 +554,77 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
     text-overflow: ellipsis;
 }
 
+.desktop-work-reminder-banner {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid #bfdbfe;
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-md);
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.desktop-work-reminder-banner.renotify_waiting {
+    border-color: #fed7aa;
+    border-left-color: var(--orange);
+}
+
+.desktop-work-reminder-banner.execution_check_waiting {
+    border-color: #bbf7d0;
+    border-left-color: var(--green);
+}
+
+.desktop-work-reminder-banner.stopped {
+    border-color: #e2e8f0;
+    border-left-color: #94a3b8;
+}
+
+.desktop-work-reminder-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: #eaf5ff;
+    color: var(--accent);
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+}
+
+.desktop-work-reminder-icon .material-symbols-outlined {
+    font-size: 19px;
+}
+
+.desktop-work-reminder-copy {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.desktop-work-reminder-copy strong {
+    font-size: 12px;
+    color: var(--text-main);
+}
+
+.desktop-work-reminder-copy span,
+.desktop-work-reminder-copy small {
+    font-size: 11px;
+    color: var(--text-sub);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.btn-micro.secondary {
+    background: #f8fafc;
+    color: var(--text-main);
+    border-color: var(--border-stroke);
+}
+
 .dashboard-task-detail-panel {
     position: absolute;
     inset: 0;

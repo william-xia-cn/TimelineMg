@@ -104,6 +104,7 @@ class FakeDB {
             google_sync_account_email: 'student@example.invalid',
             google_sync_account_picture: 'https://lh3.googleusercontent.com/a/redacted',
             google_sync_history: [],
+            desktop_work_reminder_state_v1: { status: 'notification_visible', total_count: 2 },
             access_token: 'secret-access-token',
             refresh_token: 'secret-refresh-token',
             google_email: 'student@example.invalid',
@@ -205,6 +206,7 @@ async function run() {
     assert('snapshot excludes local Google account key display', !('google_sync_account_key' in snapshot.data.settings));
     assert('snapshot excludes local Google account picture display', !('google_sync_account_picture' in snapshot.data.settings));
     assert('snapshot excludes local Google sync history', !('google_sync_history' in snapshot.data.settings));
+    assert('snapshot excludes local Desktop work reminder state', !('desktop_work_reminder_state_v1' in snapshot.data.settings));
     assert('snapshot excludes OAuth access token', !('access_token' in snapshot.data.settings));
     assert('snapshot excludes OAuth refresh token', !('refresh_token' in snapshot.data.settings));
     assert('snapshot excludes Google email display', !('google_email' in snapshot.data.settings));
@@ -994,6 +996,10 @@ async function run() {
         && GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.GOOGLE_SYNC_ACCOUNT_KEY_KEY)
         && GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.GOOGLE_SYNC_ACCOUNT_PICTURE_KEY)
         && GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.GOOGLE_SYNC_HISTORY_KEY));
+    assert('Desktop work reminder state is excluded from cloud settings',
+        GoogleSync.DESKTOP_WORK_REMINDER_STATE_KEY === 'desktop_work_reminder_state_v1'
+        && GoogleSync.EXCLUDED_SETTING_KEYS.has(GoogleSync.DESKTOP_WORK_REMINDER_STATE_KEY)
+        && !GoogleSync.SELECTED_SETTING_KEYS.includes(GoogleSync.DESKTOP_WORK_REMINDER_STATE_KEY));
     assert('Google sync history helpers are exported for Settings diagnostics',
         typeof GoogleSync.appendGoogleSyncHistory === 'function'
         && typeof GoogleSync.getGoogleSyncHistory === 'function'

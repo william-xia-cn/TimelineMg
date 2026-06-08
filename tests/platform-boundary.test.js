@@ -75,6 +75,12 @@ assert('D-031 records standalone Windows desktop app direction',
     && decisions.includes('optional Chrome extension connection')
     && decisions.includes('safeStorage')
     && decisions.includes('does not approve CWS submission of bridge permissions'));
+assert('D-041 records Desktop work reminder session semantics',
+    decisions.includes('D-041')
+    && decisions.includes('current-work reminder session')
+    && decisions.includes('1-minute cooldown')
+    && decisions.includes('30-minute execution check')
+    && decisions.includes('without a task deep link'));
 assert('Project status records Windows desktop portable implementation boundary',
     projectMaster.includes('Windows desktop portable implementation')
     && projectMaster.includes('D-031 approves a standalone Windows Electron portable app')
@@ -84,7 +90,7 @@ assert('Dual-platform spec covers desktop OAuth, notifications, portable exe, an
     spec.includes('standalone Windows Electron app')
     && spec.includes('configured Google Desktop OAuth client ID')
     && spec.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID')
-    && spec.includes('TimeWhere-0.3.0-win-portable.exe')
+    && spec.includes('TimeWhere-0.3.1-win-portable.exe')
     && spec.includes('Missing extension, old bridge version, nonce mismatch, or timeout are shown as non-blocking'));
 assert('Platform boundary forbids Chrome extension dependency for Windows app',
     boundary.includes('Chrome extension connection is optional')
@@ -97,6 +103,7 @@ assert('TimeWherePlatform exposes desktop-capable contract',
     platformJs.includes('global.TimeWherePlatform')
     && platformJs.includes('TimeWherePlatformContract')
     && platformJs.includes("window: ['openMain', 'openQuickPanel', 'focus', 'show', 'hide', 'onActivated']")
+    && platformJs.includes("notification: ['notify', 'onClick', 'onClose']")
     && platformJs.includes("reminderRuntime: ['schedule', 'cancel', 'rescheduleAll']")
     && platformJs.includes("auth: ['getStatus', 'getGoogleToken', 'getAccountInfo', 'getDiagnostics', 'disconnectGoogleToken', 'revokeGoogleToken']")
     && platformJs.includes("chromeBridge: ['connectExtension', 'getStatus']")
@@ -108,6 +115,7 @@ assert('Chrome adapter wraps expected platform APIs',
     && platformJs.includes('chromeRef.tabs.create')
     && platformJs.includes('chromeRef.sidePanel.open')
     && platformJs.includes('chromeRef.notifications.create')
+    && platformJs.includes('chromeRef.notifications.onClosed')
     && platformJs.includes('chromeRef.alarms.create')
     && platformJs.includes('chromeRef.action.setBadgeText')
     && platformJs.includes('chromeRef.identity.getAuthToken')
@@ -126,6 +134,8 @@ assert('Desktop adapter delegates auth, reminders, and Chrome bridge to Electron
     && platformJs.includes("call('system.getDesktopProfile'")
     && platformJs.includes("call('system.confirmGoogleAccountSwitch'")
     && platformJs.includes('bridge.onWindowActivated')
+    && platformJs.includes('bridge.onNotificationClose')
+    && platformJs.includes('consumePendingNotificationCloses')
     && platformJs.includes('TimeWhereDesktopSyncService?.requestRun')
     && platformJs.includes("call('external.openUrl'"));
 assert('Fallback platform returns desktop system settings capability as not_supported',
@@ -226,14 +236,14 @@ assert('Desktop Electron package builds Windows portable exe',
     && electronPackage.dependencies?.ws
     && electronPackage.devDependencies?.electron === '^42.3.2'
     && electronPackage.devDependencies?.['electron-builder']
-    && electronPackage.build?.win?.artifactName === 'TimeWhere-0.3.0-win-portable.exe'
+    && electronPackage.build?.win?.artifactName === 'TimeWhere-0.3.1-win-portable.exe'
     && electronLock.packages?.['node_modules/electron']?.version === '42.3.2'
     && gitignore.includes('!platforms/desktop-electron/package-lock.json'));
 assert('Desktop Electron package builds macOS Universal zip',
     electronPackage.scripts?.['package:mac'] === 'electron-builder --mac zip --universal'
     && electronPackage.build?.mac?.target?.[0]?.target === 'zip'
     && electronPackage.build?.mac?.target?.[0]?.arch?.includes('universal')
-    && electronPackage.build?.mac?.artifactName === 'TimeWhere-0.3.0-mac-universal.zip');
+    && electronPackage.build?.mac?.artifactName === 'TimeWhere-0.3.1-mac-universal.zip');
 assert('Desktop Electron config carries explicit app and taskbar icons',
     electronMain.includes("app.setAppUserModelId(desktopAppId)")
     && electronMain.includes('function getWindowIcon()')
@@ -261,7 +271,7 @@ assert('Desktop main loads packaged extension resources and exposes navigation r
     && electronMain.includes("managebac: 'pages/settings/managebac-sync.html'")
     && electronMain.includes("const protocolScheme = 'timewhere'")
     && electronMain.includes('app.setAsDefaultProtocolClient(protocolScheme)')
-    && electronMain.includes('TimeWhere-0.3.0-win-portable.exe') === false
+    && electronMain.includes('TimeWhere-0.3.1-win-portable.exe') === false
     && electronMain.includes('Menu.setApplicationMenu')
     && electronMain.includes('TIMEWHERE_ELECTRON_SMOKE'));
 assert('Desktop main exposes auth, reminders, notifications, and Chrome bridge IPC',
@@ -273,9 +283,12 @@ assert('Desktop main exposes auth, reminders, notifications, and Chrome bridge I
     && electronMain.includes('oauth_diagnostics')
     && electronMain.includes("method === 'reminderRuntime.rescheduleAll'")
     && electronMain.includes("method === 'notification.consumePendingClicks'")
+    && electronMain.includes("method === 'notification.consumePendingCloses'")
     && electronMain.includes('timewhere-platform:window-activated')
     && electronMain.includes('items: Array.isArray(reminder.items) ? reminder.items : []')
     && electronMain.includes('pendingNotificationClicks')
+    && electronMain.includes('pendingNotificationCloses')
+    && electronMain.includes("notification.on('close'")
     && electronMain.includes("method === 'chromeBridge.connectExtension'")
     && electronMain.includes("method === 'system.getDesktopProfile'")
     && electronMain.includes("method === 'system.confirmGoogleAccountSwitch'")
@@ -284,7 +297,9 @@ assert('Electron preload exposes TimeWhereElectronPlatform bridge',
     electronPreload.includes("contextBridge.exposeInMainWorld('TimeWhereElectronPlatform'")
     && electronPreload.includes("ipcRenderer.invoke('timewhere-platform'")
     && electronPreload.includes('onWindowActivated')
-    && electronPreload.includes('consumePendingNotificationClicks'));
+    && electronPreload.includes('consumePendingNotificationClicks')
+    && electronPreload.includes('onNotificationClose')
+    && electronPreload.includes('consumePendingNotificationCloses'));
 
 assert('Desktop OAuth uses installed-app PKCE with bundled client metadata secret',
     desktopAuth.includes('541406150907')
