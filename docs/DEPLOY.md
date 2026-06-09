@@ -6,6 +6,34 @@
 
 ---
 
+## macOS 内部自签名路线（限定机器）
+
+当前另有一条 **限定 Mac 机器内部使用** 的 macOS 路线，详见：
+
+- `docs/release/MACOS_INTERNAL_SELF_SIGNED_RELEASE.md`
+
+该路线只适用于管理员管理的少量 Mac，并且只覆盖 TimeWhere.app：
+
+- 使用内部自签名 Code Signing 证书；
+- 目标机器手动导入并信任证书；
+- 签名、验证、打包和 SHA256 都针对最终 TimeWhere.app 内部产物；
+- Usage Agent 是外部项目，不在本仓库开发、安装、签名、配置或管理；
+- TimeWhere 未来如需读取 usage 数据，必须等待外部接口文档明确后再做单独计划。
+
+边界：
+
+- 自签名内部包不是 Developer ID signed build；
+- 自签名内部包不能等同 notarized public build；
+- 不创建 GitHub Release；
+- 不做 Developer ID notarization / stapling；
+- 不实现自动更新；
+- 不引入 Network Extension / Endpoint Security / System Extension；
+- 不在本仓库实现 Usage Agent 安装、LaunchAgent、保活、权限或日志保留策略。
+
+公开 macOS 发布仍需要 Apple Developer Program、Developer ID Application certificate、hardened runtime、notarization、stapling 和 Gatekeeper 验证。
+
+---
+
 ## 一、部署前准备
 
 ### 1.1 创建 Google Cloud 项目
