@@ -429,7 +429,7 @@ function renderCalendarView() {
     if (!calendarEl) return;
 
     const today = new Date();
-    const startMonth = new Date(today.getFullYear(), today.getMonth() - 3, 1);
+    const startMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
     const months = [];
     for (let i = 0; i < 13; i++) {
         months.push(new Date(startMonth.getFullYear(), startMonth.getMonth() + i, 1));
@@ -461,19 +461,17 @@ function renderTaskCalendarMonth(monthDate, tasks, today = new Date()) {
     let startOffset = firstDay.getDay();
     startOffset = startOffset === 0 ? 6 : startOffset - 1;
 
-    const startDate = new Date(firstDay);
-    startDate.setDate(firstDay.getDate() - startOffset);
-    const visibleDays = Math.ceil((lastDay - startDate) / 86400000) + 1;
-    const totalDays = Math.ceil(visibleDays / 7) * 7;
 
     const monthTitle = `${year}.${String(month + 1).padStart(2, '0')}`;
     const dayHeaders = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const isCurrentMonth = year === today.getFullYear() && month === today.getMonth();
 
     let cellsHTML = '';
-    for (let i = 0; i < totalDays; i++) {
-        const date = new Date(startDate);
-        date.setDate(startDate.getDate() + i);
+    for (let i = 0; i < startOffset; i++) {
+        cellsHTML += '<div class="task-calendar-spacer" aria-hidden="true"></div>';
+    }
+    for (let day = 1; day <= lastDay.getDate(); day++) {
+        const date = new Date(year, month, day);
         cellsHTML += renderTaskCalendarDay(date, month, tasks, today);
     }
 
@@ -493,7 +491,6 @@ function renderTaskCalendarDay(date, currentMonth, tasks, today = new Date()) {
     const dateStr = formatDateISO(date);
     const todayStr = formatDateISO(today);
     const classes = ['task-calendar-day'];
-    if (date.getMonth() !== currentMonth) classes.push('other-month');
     if (dateStr === todayStr) classes.push('today');
 
     const items = getTaskCalendarItemsForDate(tasks, dateStr);

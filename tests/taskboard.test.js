@@ -36,6 +36,14 @@ function assert(desc, condition) {
     }
 }
 
+function getCalendarItemHtml(html, taskId) {
+    const marker = 'data-task-id="' + taskId + '"';
+    const markerIndex = html.indexOf(marker);
+    if (markerIndex < 0) return '';
+    const start = html.lastIndexOf('<button', markerIndex);
+    const end = html.indexOf('</button>', markerIndex);
+    return start >= 0 && end >= 0 ? html.slice(start, end + '</button>'.length) : '';
+}
 console.log('\nTimeWhere Task Board tests\n' + '='.repeat(44));
 
 const RealDate = Date;
@@ -230,16 +238,32 @@ assert('Task Board loads and initializes avatar-based Google sync status entry',
 assert('Task Board renderBoard supports Calendar view', boardJs.includes("TaskApp.currentView === 'calendar'")
     && boardJs.includes('renderCalendarView()')
     && boardJs.includes("calendarEl.style.display = ''"));
-assert('Task Calendar renders 13 continuous months', boardJs.includes('for (let i = 0; i < 13; i++)')
-    && boardJs.includes('today.getMonth() - 3'));
+assert('Task Calendar renders a 13-month continuous date stream from previous month', boardJs.includes('for (let i = 0; i < 13; i++)')
+    && boardJs.includes('today.getMonth() - 1')
+    && !boardJs.includes('today.getMonth() - 3'));
 assert('Task Calendar focuses the current month after rendering surrounding months',
     boardJs.includes("task-calendar-month.current-month")
-    && boardJs.includes('scrollIntoView({ block: \'start\' })'));
+    && boardJs.includes("scrollIntoView({ block: 'start' })"));
+assert('Task Calendar month rendering uses spacer cells instead of duplicate other-month dates',
+    boardJs.includes('task-calendar-spacer')
+    && !boardJs.includes("classes.push('other-month')")
+    && boardCss.includes('.task-calendar-spacer'));
 assert('Task Calendar styles define green start and red due items', boardCss.includes('.task-calendar-item.start')
     && boardCss.includes('color: #047857')
     && boardCss.includes('.task-calendar-item.due')
     && boardCss.includes('color: #b91c1c'));
 
+const mayCalendarHtml = context.renderTaskCalendarMonth(new RealDate('2026-05-01T00:00:00'), [
+    { id: 'start-only', title: 'Start only', start_date: '2026-05-20', priority: 'medium' },
+    { id: 'due-only', title: 'Due only', due_date: '2026-05-20', priority: 'medium' },
+    { id: 'same-day', title: 'Same day', start_date: '2026-05-20', due_date: '2026-05-20', priority: 'medium' },
+    { id: 'cross-month', title: 'Cross month', start_date: '2026-05-31', due_date: '2026-06-01', priority: 'medium' },
+    { id: 'no-date', title: 'No date', priority: 'medium' },
+    { id: 'done', title: 'Done task', due_date: '2026-05-20', progress: 'completed', priority: 'low' }
+], new RealDate('2026-05-13T12:00:00'));
+const juneCalendarHtml = context.renderTaskCalendarMonth(new RealDate('2026-06-01T00:00:00'), [
+    { id: 'cross-month', title: 'Cross month', start_date: '2026-05-31', due_date: '2026-06-01', priority: 'medium' }
+], new RealDate('2026-05-13T12:00:00'));
 const calendarDayHtml = context.renderTaskCalendarDay(new RealDate('2026-05-20T00:00:00'), 4, [
     { id: 'start-only', title: 'Start only', start_date: '2026-05-20', priority: 'medium' },
     { id: 'due-only', title: 'Due only', due_date: '2026-05-20', priority: 'medium' },
@@ -247,18 +271,30 @@ const calendarDayHtml = context.renderTaskCalendarDay(new RealDate('2026-05-20T0
     { id: 'no-date', title: 'No date', priority: 'medium' },
     { id: 'done', title: 'Done task', due_date: '2026-05-20', progress: 'completed', priority: 'low' }
 ], new RealDate('2026-05-13T12:00:00'));
-assert('Task Calendar start_date task uses green start class', calendarDayHtml.includes('data-task-id="start-only"')
-    && calendarDayHtml.includes('task-calendar-item start')
-    && /data-task-id="start-only"[\s\S]*task-calendar-item-title[\s\S]*Start only[\s\S]*task-calendar-item-type[\s\S]*开始/.test(calendarDayHtml));
-assert('Task Calendar due_date task uses red due class', calendarDayHtml.includes('data-task-id="due-only"')
-    && calendarDayHtml.includes('task-calendar-item due')
-    && /data-task-id="due-only"[\s\S]*task-calendar-item-title[\s\S]*Due only[\s\S]*task-calendar-item-type[\s\S]*结束/.test(calendarDayHtml));
+const startOnlyItemHtml = getCalendarItemHtml(calendarDayHtml, 'start-only');
+assert('Task Calendar start_date task uses green start class', startOnlyItemHtml.includes('task-calendar-item start')
+    && startOnlyItemHtml.includes('Start only')
+    && startOnlyItemHtml.includes('开始'));
+const dueOnlyItemHtml = getCalendarItemHtml(calendarDayHtml, 'due-only');
+assert('Task Calendar due_date task uses red due class', dueOnlyItemHtml.includes('task-calendar-item due')
+    && dueOnlyItemHtml.includes('Due only')
+    && dueOnlyItemHtml.includes('结束'));
 assert('Task Calendar same-day start and due renders once as due', (() => {
     const sameCount = (calendarDayHtml.match(/data-task-id="same-day"/g) || []).length;
-    return sameCount === 1 && /task-calendar-item due[\s\S]*data-task-id="same-day"/.test(calendarDayHtml);
+    return sameCount === 1 && getCalendarItemHtml(calendarDayHtml, 'same-day').includes('task-calendar-item due');
 })());
 assert('Task Calendar omits no-date tasks and marks completed tasks', !calendarDayHtml.includes('data-task-id="no-date"')
-    && /task-calendar-item due completed[\s\S]*data-task-id="done"/.test(calendarDayHtml));
+    && getCalendarItemHtml(calendarDayHtml, 'done').includes('task-calendar-item due completed'));
+assert('Task Calendar adjacent month boundary dates render only in their own month sections',
+    (mayCalendarHtml.match(/data-date="2026-05-31"/g) || []).length === 1
+    && !mayCalendarHtml.includes('data-date="2026-06-01"')
+    && !juneCalendarHtml.includes('data-date="2026-05-31"')
+    && (juneCalendarHtml.match(/data-date="2026-06-01"/g) || []).length === 1);
+assert('Task Calendar cross-month task renders start and due on separate natural dates',
+    getCalendarItemHtml(mayCalendarHtml, 'cross-month').includes('task-calendar-item start')
+    && getCalendarItemHtml(mayCalendarHtml, 'cross-month').includes('开始')
+    && getCalendarItemHtml(juneCalendarHtml, 'cross-month').includes('task-calendar-item due')
+    && getCalendarItemHtml(juneCalendarHtml, 'cross-month').includes('结束'));
 assert('Task Calendar task click delegates to existing detail panel', scriptJs.includes("getElementById('taskCalendarView')")
     && scriptJs.includes("closest('.task-calendar-item')")
     && scriptJs.includes('openDetailPanel(taskId)'));

@@ -174,5 +174,5 @@ No shell may silently bind a Google account, silently sync, or silently overwrit
 |---|---|---|
 | Chrome Extension Side Panel | Supported shell | CWS/private release actions require Product Owner approval. |
 | Chrome local unpacked package | Internal testing only | Uses development extension ID and local package key handling. |
-| Windows desktop portable | Active implementation target | `platforms/desktop-electron/`; package target `TimeWhere-0.3.1-win-portable.exe`; complete local app without Chrome extension dependency. |
+| Windows desktop portable | Active implementation target | `platforms/desktop-electron/`; package target `TimeWhere-0.3.2-win-portable.exe`; complete local app without Chrome extension dependency. |
 | Shared Core staging package | Future evaluation | Required before moving shared code outside `extension/`. |
