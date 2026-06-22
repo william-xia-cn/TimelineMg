@@ -1814,15 +1814,16 @@
         return createDriveAppDataClient({ authAdapter });
     }
 
-    function getDesktopSyncService() {
-        if (global.TimeWherePlatform?.name !== 'desktop-electron') return null;
-        const service = global.TimeWhereDesktopSyncService;
+    function getPlatformSyncService() {
+        const service = global.TimeWherePlatform?.name === 'desktop-electron'
+            ? global.TimeWhereDesktopSyncService
+            : (global.TimeWherePlatform?.name === 'chrome-extension' ? global.TimeWhereChromeSyncService : null);
         return service && typeof service.requestRun === 'function' ? service : null;
     }
 
     async function runPageAutoSync(db, options = {}) {
-        const service = getDesktopSyncService();
-        if (service && !options.bypassDesktopSyncService) {
+        const service = getPlatformSyncService();
+        if (service && !options.bypassPlatformSyncService && !options.bypassDesktopSyncService) {
             return await service.requestRun({
                 reason: options.reason || 'page_open',
                 force: options.force === true
@@ -1848,8 +1849,8 @@
     }
 
     function schedulePageAutoSync(db, options = {}) {
-        const service = getDesktopSyncService();
-        if (service && !options.bypassDesktopSyncService && typeof service.scheduleRun === 'function') {
+        const service = getPlatformSyncService();
+        if (service && !options.bypassPlatformSyncService && !options.bypassDesktopSyncService && typeof service.scheduleRun === 'function') {
             return service.scheduleRun({
                 reason: options.reason || 'local_write',
                 debounce_ms: options.debounce_ms ?? SAVE_DEBOUNCE_MS,
@@ -2123,3 +2124,5 @@
         module.exports = api;
     }
 })(typeof globalThis !== 'undefined' ? globalThis : window);
+
+

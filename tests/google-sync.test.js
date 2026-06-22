@@ -8,6 +8,8 @@ const path = require('path');
 const crypto = require('crypto');
 const GoogleSync = require('../extension/shared/js/google-sync.js');
 const GoogleSyncStatusUI = require('../extension/shared/js/google-sync-status-ui.js');
+const SyncRuntimeService = require('../extension/shared/js/sync-runtime-service.js');
+const { createChromeSyncService } = require('../extension/shared/js/chrome-sync-service.js');
 const { createDesktopSyncService } = require('../extension/shared/js/desktop-sync-service.js');
 
 let passed = 0;
@@ -704,6 +706,8 @@ async function run() {
     const dbScript = read('extension/shared/js/db.js');
     const googleSyncScript = read('extension/shared/js/google-sync.js');
     const platformScript = read('extension/shared/js/platform.js');
+    const syncRuntimeServiceScript = read('extension/shared/js/sync-runtime-service.js');
+    const chromeSyncServiceScript = read('extension/shared/js/chrome-sync-service.js');
     const desktopSyncServiceScript = read('extension/shared/js/desktop-sync-service.js');
     const schedulingScript = read('extension/shared/js/scheduling.js');
     const taskArrangeAutoScript = read('extension/shared/js/task-arrange-auto.js');
@@ -749,8 +753,10 @@ async function run() {
     assert('Settings loads platform adapter before google-sync runtime',
         settingsHtml.indexOf('platform.js') > -1
         && settingsHtml.indexOf('platform.js') < settingsHtml.indexOf('google-sync.js'));
-    assert('Settings loads desktop sync service after google-sync runtime',
-        settingsHtml.indexOf('desktop-sync-service.js') > settingsHtml.indexOf('google-sync.js')
+    assert('Settings loads shared and platform sync services after google-sync runtime',
+        settingsHtml.indexOf('sync-runtime-service.js') > settingsHtml.indexOf('google-sync.js')
+        && settingsHtml.indexOf('chrome-sync-service.js') > settingsHtml.indexOf('sync-runtime-service.js')
+        && settingsHtml.indexOf('desktop-sync-service.js') > settingsHtml.indexOf('chrome-sync-service.js')
         && settingsHtml.indexOf('desktop-sync-service.js') < settingsHtml.indexOf('script.js"></script>'));
     assert('Settings Google sync runtime prefers TimeWherePlatform auth adapter',
         settingsScript.includes('createTimeWherePlatformAuthAdapter(globalThis.TimeWherePlatform)')
@@ -779,31 +785,39 @@ async function run() {
         && googleSyncScript.includes('error.code = reason')
         && googleSyncScript.includes('disconnectGoogleToken')
         && googleSyncScript.includes('async revoke()'));
-    assert('Desktop sync service serializes background sync with pending runs and retry backoff',
-        desktopSyncServiceScript.includes('createDesktopSyncService')
-        && desktopSyncServiceScript.includes('currentRun')
-        && desktopSyncServiceScript.includes('pendingState')
-        && desktopSyncServiceScript.includes('DEFAULT_INTERVAL_MS = 3 * 60 * 1000')
-        && desktopSyncServiceScript.includes('DEFAULT_DEBOUNCE_MS = 3 * 60 * 1000')
-        && desktopSyncServiceScript.includes('LONG_RUNNING_MS = 90 * 1000')
-        && desktopSyncServiceScript.includes('BACKOFF_MS')
-        && desktopSyncServiceScript.includes('pending_trigger_count')
-        && desktopSyncServiceScript.includes('pending_reasons')
-        && desktopSyncServiceScript.includes("pause('conflict')")
-        && desktopSyncServiceScript.includes("requestRun({ reason: 'interval'"));
+    assert('Shared sync runtime serializes jobs with pending runs and retry backoff for Chrome and Desktop',
+        typeof SyncRuntimeService.createSyncRuntimeService === 'function'
+        && typeof createChromeSyncService === 'function'
+        && syncRuntimeServiceScript.includes('createSyncRuntimeService')
+        && syncRuntimeServiceScript.includes('currentRun')
+        && syncRuntimeServiceScript.includes('pendingState')
+        && syncRuntimeServiceScript.includes('DEFAULT_INTERVAL_MS = 3 * 60 * 1000')
+        && syncRuntimeServiceScript.includes('DEFAULT_DEBOUNCE_MS = 3 * 60 * 1000')
+        && syncRuntimeServiceScript.includes('LONG_RUNNING_MS = 90 * 1000')
+        && syncRuntimeServiceScript.includes('BACKOFF_MS')
+        && syncRuntimeServiceScript.includes('pending_trigger_count')
+        && syncRuntimeServiceScript.includes('pending_reasons')
+        && syncRuntimeServiceScript.includes("pause('conflict')")
+        && syncRuntimeServiceScript.includes("requestRun({ reason: 'interval'")
+        && chromeSyncServiceScript.includes('chrome_page_runtime')
+        && desktopSyncServiceScript.includes('desktop_runtime'));
     assert('Google sync cadence and Drive timeout use desktop-friendly defaults',
         GoogleSync.AUTO_SYNC_THROTTLE_MS === 3 * 60 * 1000
         && GoogleSync.SAVE_DEBOUNCE_MS === 3 * 60 * 1000
         && GoogleSync.DEFAULT_DRIVE_REQUEST_TIMEOUT_MS === 45 * 1000
         && googleSyncScript.includes('makeDriveTimeoutError')
         && googleSyncScript.includes('request_timeout_ms = DEFAULT_DRIVE_REQUEST_TIMEOUT_MS'));
-    assert('Google page sync delegates to desktop sync service when running in Electron',
-        googleSyncScript.includes('getDesktopSyncService')
+    assert('Google page sync delegates to platform sync service when running in Chrome or Electron',
+        googleSyncScript.includes('getPlatformSyncService')
+        && googleSyncScript.includes('TimeWhereChromeSyncService')
+        && googleSyncScript.includes('TimeWhereDesktopSyncService')
         && googleSyncScript.includes('service.requestRun')
         && googleSyncScript.includes('service.scheduleRun')
-        && googleSyncScript.includes('bypassDesktopSyncService'));
-    assert('TimeWherePlatform exposes desktop sync service contract',
+        && googleSyncScript.includes('bypassPlatformSyncService'));
+    assert('TimeWherePlatform exposes Chrome and Desktop sync service contracts',
         platformScript.includes("sync: ['getStatus', 'requestRun', 'pause', 'resume']")
+        && platformScript.includes('TimeWhereChromeSyncService?.requestRun')
+        && platformScript.includes('chrome_page_sync_service_unavailable')
         && platformScript.includes('TimeWhereDesktopSyncService?.requestRun')
         && platformScript.includes('desktop_sync_service_unavailable'));
     assert('Desktop Google sync OAuth path uses bundled installed-app client id, PKCE plus bundled client metadata secret, and safe token storage',
@@ -953,7 +967,7 @@ async function run() {
             'extension/pages/tasks/tasks.html',
             'extension/popup/popup.html'
         ].every(file => read(file).includes('google-sync.js')));
-    assert('desktop pages load desktop-sync-service.js after google-sync.js',
+    assert('desktop-capable pages load shared sync services after google-sync.js',
         [
             'extension/pages/focus/focus.html',
             'extension/pages/calendar/calendar.html',
@@ -961,7 +975,12 @@ async function run() {
             'extension/pages/settings/settings.html',
             'extension/popup/popup.html',
             'extension/popup/sidepanel.html'
-        ].every(file => read(file).indexOf('desktop-sync-service.js') > read(file).indexOf('google-sync.js')));
+        ].every(file => {
+            const html = read(file);
+            return html.indexOf('sync-runtime-service.js') > html.indexOf('google-sync.js')
+                && html.indexOf('chrome-sync-service.js') > html.indexOf('sync-runtime-service.js')
+                && html.indexOf('desktop-sync-service.js') > html.indexOf('chrome-sync-service.js');
+        }));
     assert('main page scripts call non-blocking Google page sync check',
         [
             'extension/pages/focus/script.js',

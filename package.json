@@ -1,6 +1,6 @@
 {
   "name": "timewhere",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "IB 学生个人时间管理 Chrome 扩展",
   "directories": {
     "doc": "docs"
@@ -21,7 +21,11 @@
     "type": "git",
     "url": "git+https://github.com/william-xia-cn/TimelineMg.git"
   },
-  "keywords": ["chrome-extension", "time-management", "IB"],
+  "keywords": [
+    "chrome-extension",
+    "time-management",
+    "IB"
+  ],
   "author": "",
   "license": "ISC"
 }

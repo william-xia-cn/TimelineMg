@@ -223,16 +223,16 @@
             },
             sync: {
                 getStatus() {
-                    return { status: 'not_supported', reason: 'chrome_page_sync_managed' };
+                    return global.TimeWhereChromeSyncService?.getStatus?.() || { status: 'not_supported', reason: 'chrome_page_sync_service_unavailable' };
                 },
-                requestRun() {
-                    return { status: 'not_supported', reason: 'chrome_page_sync_managed' };
+                requestRun(options = {}) {
+                    return global.TimeWhereChromeSyncService?.requestRun?.(options) || { status: 'not_supported', reason: 'chrome_page_sync_service_unavailable' };
                 },
-                pause() {
-                    return { status: 'not_supported', reason: 'chrome_page_sync_managed' };
+                pause(options = {}) {
+                    return global.TimeWhereChromeSyncService?.pause?.(options.reason || 'platform_pause') || { status: 'not_supported', reason: 'chrome_page_sync_service_unavailable' };
                 },
-                resume() {
-                    return { status: 'not_supported', reason: 'chrome_page_sync_managed' };
+                resume(options = {}) {
+                    return global.TimeWhereChromeSyncService?.resume?.(options.reason || 'platform_resume') || { status: 'not_supported', reason: 'chrome_page_sync_service_unavailable' };
                 }
             },
             external: {
@@ -540,3 +540,4 @@
         system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'confirmGoogleAccountSwitch']
     };
 })(typeof globalThis !== 'undefined' ? globalThis : window);
+

@@ -61,6 +61,8 @@ const chromeBridge = read('platforms/desktop-electron/chrome-bridge.js');
 const externalLinks = read('extension/shared/js/external-links.js');
 const googleSyncStatusUi = read('extension/shared/js/google-sync-status-ui.js');
 const googleSyncStatusCss = read('extension/shared/styles/google-sync-status.css');
+const syncRuntimeService = read('extension/shared/js/sync-runtime-service.js');
+const chromeSyncService = read('extension/shared/js/chrome-sync-service.js');
 const desktopSyncService = read('extension/shared/js/desktop-sync-service.js');
 const bridgeHtml = read('extension/pages/desktop-bridge/bridge.html');
 const bridgeJs = read('extension/pages/desktop-bridge/bridge.js');
@@ -154,18 +156,21 @@ assert('Fallback platform returns desktop system settings capability as not_supp
     && platformJs.includes("getDesktopProfile: () => ({ status: 'not_supported'")
     && platformJs.includes('sync: { getStatus: notSupported, requestRun: notSupported, pause: notSupported, resume: notSupported }')
     && platformJs.includes("confirmGoogleAccountSwitch: () => ({ status: 'not_supported'"));
-assert('Desktop sync service keeps Electron sync alive with serialized jobs and conflict pause',
-    desktopSyncService.includes('createDesktopSyncService')
-    && desktopSyncService.includes('DEFAULT_INTERVAL_MS = 3 * 60 * 1000')
-    && desktopSyncService.includes('DEFAULT_DEBOUNCE_MS = 3 * 60 * 1000')
-    && desktopSyncService.includes('LONG_RUNNING_MS = 90 * 1000')
-    && desktopSyncService.includes('pendingState')
-    && desktopSyncService.includes('pending_trigger_count')
-    && desktopSyncService.includes('pending_reasons')
-    && desktopSyncService.includes("status = 'long_running'")
-    && desktopSyncService.includes("pause('conflict')")
-    && desktopSyncService.includes('retry_after')
-    && desktopSyncService.includes('TimeWhereDesktopSyncService'));
+assert('Shared sync runtime keeps Chrome and Desktop sync aligned with serialized jobs and conflict pause',
+    syncRuntimeService.includes('createSyncRuntimeService')
+    && syncRuntimeService.includes('DEFAULT_INTERVAL_MS = 3 * 60 * 1000')
+    && syncRuntimeService.includes('DEFAULT_DEBOUNCE_MS = 3 * 60 * 1000')
+    && syncRuntimeService.includes('LONG_RUNNING_MS = 90 * 1000')
+    && syncRuntimeService.includes('pendingState')
+    && syncRuntimeService.includes('pending_trigger_count')
+    && syncRuntimeService.includes('pending_reasons')
+    && syncRuntimeService.includes("state.status = 'long_running'")
+    && syncRuntimeService.includes("pause('conflict')")
+    && syncRuntimeService.includes('retry_after')
+    && chromeSyncService.includes('TimeWhereChromeSyncService')
+    && chromeSyncService.includes('chrome_page_runtime')
+    && desktopSyncService.includes('TimeWhereDesktopSyncService')
+    && desktopSyncService.includes('desktop_runtime'));
 assert('Platform external URL handling is limited to http/https browser opens',
     externalLinks.includes('extractHttpLinks')
     && externalLinks.includes('renderExternalLinkList')
@@ -188,10 +193,12 @@ const pagesWithPlatform = [
 ];
 assert('Primary pages load platform adapter before page scripts',
     pagesWithPlatform.every(file => read(file).includes('shared/js/platform.js')));
-assert('Desktop-capable pages load desktop sync service after google-sync',
+assert('Desktop-capable pages load shared sync runtime and platform wrappers after google-sync',
     pagesWithPlatform.every(file => {
         const text = read(file);
-        return text.indexOf('desktop-sync-service.js') > text.indexOf('google-sync.js');
+        return text.indexOf('sync-runtime-service.js') > text.indexOf('google-sync.js')
+            && text.indexOf('chrome-sync-service.js') > text.indexOf('sync-runtime-service.js')
+            && text.indexOf('desktop-sync-service.js') > text.indexOf('chrome-sync-service.js');
     }));
 assert('Primary product pages load shared Google sync account indicator after desktop sync service',
     [

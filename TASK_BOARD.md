@@ -41,6 +41,7 @@
 - [x] Build&Test corrected the `0.3.0` macOS artifact target from superseded x64 zip to Universal zip, generated GitHub Actions artifact `TimeWhere-0.3.0-mac-universal.zip` with SHA256 `0541F177DFB5754C5145BC65582A08D5ED0A533F4FC24A01F92219DE14410A4E`, and moved `v0.3.0` to the corrected candidate commit.
 - [x] Build&Test fixed Windows desktop Google authorization post-callback failure handling: stale/unreadable saved token state is cleared before re-authorization, structured OAuth failure reasons reach Settings, and first failed authorization keeps the connect button available.
 - [x] Build&Test replaced PKCE-only Desktop OAuth with PKCE plus artifact-bundled Desktop client metadata secret for the default Desktop client; `desktop-oauth.local.json` and `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET` are packaging inputs only, not ordinary runtime/user configuration.
+- [x] Chrome / Desktop Google Sync runtime alignment implemented under D-045: shared page-hosted sync runtime, Chrome page-runtime wrapper, Desktop runtime wrapper, unified status events, and preserved platform auth/storage boundaries.
 
 ## NEXT
 

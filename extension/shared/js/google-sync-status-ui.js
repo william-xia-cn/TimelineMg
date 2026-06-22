@@ -184,20 +184,24 @@
         let detail = config.detail;
 
         if (state === 'connected' && lastSuccessText) {
-            detail = `最近同步：${lastSuccessText}`;
+            detail = '最近同步：' + lastSuccessText;
+        } else if (state === 'connected' && serviceState.platform_scope === 'chrome_page_runtime') {
+            detail = '打开 TimeWhere 页面期间自动同步。';
+        } else if (state === 'connected' && serviceState.platform_scope === 'desktop_runtime') {
+            detail = '客户端运行期间自动同步。';
         } else if (state === 'long_running') {
-            detail = `同步耗时较长：${formatDuration(serviceState.current_run_duration_ms)}。`;
+            detail = '同步耗时较长：' + formatDuration(serviceState.current_run_duration_ms) + '。';
         } else if (state === 'queued') {
             const triggerCount = Number(serviceState.pending_trigger_count || 0);
             detail = triggerCount
-                ? `同步排队中：${triggerCount} 次触发，${formatReasonList(serviceState.pending_reasons)}。`
+                ? '同步排队中：' + triggerCount + ' 次触发，' + formatReasonList(serviceState.pending_reasons) + '。'
                 : config.detail;
         } else if (state === 'conflict') {
-            detail = `有 ${conflictCount || 1} 个冲突待处理。`;
+            detail = '有 ' + (conflictCount || 1) + ' 个冲突待处理。';
         } else if (state === 'failed' && safeFailure) {
-            detail = `同步失败：${safeFailure}`;
+            detail = '同步失败：' + safeFailure;
         } else if (state === 'retry' && serviceState.retry_after) {
-            detail = `等待重试：${formatRelativeTime(serviceState.retry_after) || '稍后'}`;
+            detail = '等待重试：' + (formatRelativeTime(serviceState.retry_after) || '稍后');
         }
 
         return {
@@ -474,6 +478,12 @@
         global.addEventListener?.('timewhere-desktop-sync-status', () => {
             refreshController(controller).catch(() => null);
         });
+        global.addEventListener?.('timewhere-chrome-sync-status', () => {
+            refreshController(controller).catch(() => null);
+        });
+        global.addEventListener?.('timewhere-sync-runtime-status', () => {
+            refreshController(controller).catch(() => null);
+        });
         global.addEventListener?.('timewhere-google-sync-state', () => {
             refreshController(controller).catch(() => null);
         });
@@ -507,3 +517,4 @@
         module.exports = api;
     }
 })(typeof globalThis !== 'undefined' ? globalThis : window);
+

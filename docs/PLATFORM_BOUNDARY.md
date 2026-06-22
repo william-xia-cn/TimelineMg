@@ -76,6 +76,8 @@ The Chrome adapter may use:
 
 Chrome permissions must stay minimal and match actual source usage. The local desktop bridge host permission is for local development / unpacked extension testing; CWS bridge submission requires a separate Product Owner approval.
 
+Chrome Google Sync uses the shared page-hosted sync runtime while a TimeWhere page or Side Panel is open. It may run startup/page-open sync, local-write debounce sync, focus/visibility/online sync, interval checks, retry backoff, long-running status, pending trigger coalescing, and conflict pause. It must not be described as a persistent MV3 background sync service until a separate service-worker DB/runtime plan is approved.
+
 ## Desktop Electron Adapter
 
 The desktop Electron adapter uses the preload bridge for:
@@ -112,6 +114,8 @@ separate local profile.
 
 Desktop refresh tokens must be encrypted with Electron `safeStorage`. If encrypted storage is unavailable, do not save a plaintext refresh token.
 
+Desktop Google Sync uses the same shared sync runtime state machine through a Desktop wrapper, but its platform scope is `desktop_runtime`: it may run for as long as the Electron app is open, uses installed-app OAuth, and enforces account-bound local profiles.
+
 The Chrome extension bridge may exchange only extension ID, extension version, bridge version, and nonce. It must not transfer tasks, calendars, journals, tokens, or other user data.
 
 The macOS WidgetKit preparation reads only the sanitized widget snapshot. It must
@@ -132,6 +136,24 @@ macOS artifact until a separate signing/App Group/package decision is approved.
 | `extension/pages/desktop-bridge/bridge.js` | Optional Chrome extension bridge page for desktop handshake only. |
 
 Tests in `tests/platform-boundary.test.js` print and constrain this list so accidental new direct calls are visible.
+
+## Shared Sync Runtime
+
+`extension/shared/js/sync-runtime-service.js` owns platform-neutral sync job orchestration for Chrome page runtime and Desktop runtime:
+
+- serialized sync jobs;
+- pending trigger coalescing;
+- conflict pause and resume;
+- retry backoff for retryable Drive/network failures;
+- long-running status;
+- common status fields including `platform_scope`.
+
+Platform wrappers provide shell boundaries:
+
+- `chrome-sync-service.js` exposes `chrome_page_runtime` and runs only while a TimeWhere Chrome page or Side Panel is open.
+- `desktop-sync-service.js` exposes `desktop_runtime` and runs while Electron is open.
+
+Both wrappers use `google-sync.js` for the actual Drive `appDataFolder` document, record merge, tombstones, and conflict rules. They must not change `timewhere-sync-v1.json` schema independently.
 
 ## Data And Restore Boundary
 
