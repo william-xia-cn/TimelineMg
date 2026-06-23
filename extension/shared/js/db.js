@@ -279,6 +279,18 @@ const TimeWhereDB = {
         return candidate > dueDate ? dueDate : candidate;
     },
 
+    getTaskConfiguredStartDate(task = {}) {
+        return task?.start_date || null;
+    },
+
+    getTaskArrangedDate(task = {}) {
+        return task?.arranged_date || null;
+    },
+
+    getTaskEffectiveStartDate(task = {}) {
+        return this.getTaskArrangedDate(task) || this.getTaskConfiguredStartDate(task);
+    },
+
     normalizeRecurrenceOptions(options = {}) {
         const frequency = options.frequency || options.recurrence_frequency || 'none';
         const count = Number(options.count || options.recurrence_count || 0);
@@ -362,11 +374,11 @@ const TimeWhereDB = {
     },
 
     hasArrangeRelevantTaskDate(task = {}) {
-        return !!(task.start_date || task.due_date || task.deadline || task.plan_id);
+        return !!(task.start_date || task.arranged_date || task.due_date || task.deadline || task.plan_id);
     },
 
     hasArrangeRelevantTaskUpdate(data = {}) {
-        return ['start_date', 'due_date', 'deadline', 'plan_id', 'subject_in_matrixview'].some(field =>
+        return ['start_date', 'arranged_date', 'due_date', 'deadline', 'plan_id', 'subject_in_matrixview'].some(field =>
             Object.prototype.hasOwnProperty.call(data || {}, field)
         );
     },
@@ -394,6 +406,41 @@ const TimeWhereDB = {
     },
 
     // ========== Plans ==========
+    async migrateLegacyDerivedStartDateToArrangedDate() {
+        const metaRow = await db.settings.get('google_sync_meta');
+        const meta = metaRow?.value;
+        if (!meta || typeof meta !== 'object' || Array.isArray(meta)) return { migrated: 0 };
+        let migrated = 0;
+        for (const [key, entry] of Object.entries(meta)) {
+            const derivedStart = entry?.table === 'tasks'
+                ? entry?.derived_fields?.start_date
+                : null;
+            if (!derivedStart || derivedStart.source !== 'task_arrange_auto') continue;
+            const taskId = entry.id || String(key).split(':').slice(1).join(':');
+            const task = await db.tasks.get(taskId);
+            if (!task || task.start_date !== derivedStart.value || task.arranged_date) continue;
+            const restoredStart = derivedStart.base_has_field === false ? null : (derivedStart.base_value ?? null);
+            await db.tasks.update(task.id, {
+                start_date: restoredStart,
+                arranged_date: derivedStart.value ?? null
+            });
+            const nextDerived = { ...(entry.derived_fields || {}) };
+            delete nextDerived.start_date;
+            nextDerived.arranged_date = {
+                ...derivedStart,
+                value: derivedStart.value ?? null,
+                base_value: null,
+                base_has_field: false
+            };
+            entry.derived_fields = nextDerived;
+            migrated++;
+        }
+        if (migrated > 0) {
+            await db.settings.put({ key: 'google_sync_meta', value: meta });
+        }
+        return { migrated };
+    },
+
     async getPlans() {
         const plans = await db.plans.toArray();
         return plans.sort((a, b) => {
@@ -784,6 +831,7 @@ const TimeWhereDB = {
             progress: progressVal,
             priority: task.priority || 'medium',
             start_date: normalizedTask.start_date || null,
+            arranged_date: task.arranged_date || null,
             due_date: normalizedTask.due_date || null,
             labels: task.labels || [],
             notes: task.notes || '',
@@ -1047,6 +1095,13 @@ const TimeWhereDB = {
             updateData.due_date = data.deadline;
         }
         if (
+            Object.prototype.hasOwnProperty.call(data, 'start_date') &&
+            !Object.prototype.hasOwnProperty.call(data, 'arranged_date') &&
+            options.clearArrangedDateOnStartDateChange !== false
+        ) {
+            updateData.arranged_date = null;
+        }
+        if (
             Object.prototype.hasOwnProperty.call(data, 'checklist') &&
             !Object.prototype.hasOwnProperty.call(data, 'progress') &&
             !Object.prototype.hasOwnProperty.call(data, 'status')
@@ -1245,6 +1300,8 @@ const TimeWhereDB = {
             bucket_id: task.bucket_id || null,
             subject: task.subject || null,
             start_date: task.start_date || null,
+            arranged_date: task.arranged_date || null,
+            effective_start_date: this.getTaskEffectiveStartDate(task),
             due_date: task.due_date || task.deadline || null,
             progress: task.progress || task.status || 'not_started',
             priority: task.priority || 'medium',
@@ -1378,7 +1435,10 @@ const TimeWhereDB = {
     buildDailyJournalPoolSnapshot(tasks, date, referenceDate = new Date(`${date}T12:00:00`)) {
         return (tasks || [])
             .filter(task => task.progress !== 'completed')
-            .filter(task => task.start_date == null || task.start_date <= date)
+            .filter(task => {
+                const effectiveStartDate = this.getTaskEffectiveStartDate(task);
+                return effectiveStartDate == null || effectiveStartDate <= date;
+            })
             .filter(task => task.deferred_until == null || new Date(task.deferred_until) <= referenceDate)
             .map(task => this.createJournalTaskSnapshot(task));
     },
@@ -2018,3 +2078,4 @@ const TimeWhereDB = {
 };
 
 window.TimeWhereDB = TimeWhereDB;
+

@@ -485,6 +485,20 @@ body::before {
     align-items: center;
     padding: 4px 0;
 }
+.column-header[data-group-focus-target="true"] {
+    cursor: pointer;
+    border-radius: 8px;
+}
+
+.column-header[data-group-focus-target="true"]:hover,
+.column-header[data-group-focus-target="true"]:focus-visible {
+    background: rgba(59, 130, 246, 0.08);
+    outline: none;
+}
+
+.focused-group-column .column-header[data-group-focus-target="true"] {
+    background: rgba(59, 130, 246, 0.12);
+}
 
 .column-title {
     display: flex;
@@ -2220,3 +2234,4 @@ body::before {
         flex-wrap: wrap;
     }
 }
+

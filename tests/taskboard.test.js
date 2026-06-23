@@ -36,6 +36,10 @@ function assert(desc, condition) {
     }
 }
 
+function countOccurrences(text, pattern) {
+    return (String(text || '').match(new RegExp(pattern, 'g')) || []).length;
+}
+
 function getCalendarItemHtml(html, taskId) {
     const marker = 'data-task-id="' + taskId + '"';
     const markerIndex = html.indexOf(marker);
@@ -91,6 +95,7 @@ const context = {
     requestAnimationFrame: (fn) => fn(),
     TaskApp: {
         groupBy: 'due_date',
+        focusedGroupKey: null,
         currentPlanBuckets: [],
         plans: [],
         getBucketName: () => '',
@@ -197,7 +202,7 @@ assert('DB updateTask recalculates subject when plan_id changes', dbJs.includes(
 assert('DB marks Task Arrange dirty for task date or plan changes only', taskArrangeAutoJs.includes("task_arrange_dirty_at")
     && dbJs.includes('markTaskArrangeDirty')
     && dbJs.includes('hasArrangeRelevantTaskUpdate')
-    && dbJs.includes("['start_date', 'due_date', 'deadline', 'plan_id', 'subject_in_matrixview']")
+    && dbJs.includes("['start_date', 'arranged_date', 'due_date', 'deadline', 'plan_id', 'subject_in_matrixview']")
     && dbJs.includes('task_created_with_arrange_date')
     && dbJs.includes('task_arrange_field_changed')
     && !/if \(data\.progress\)[\s\S]{0,120}markTaskArrangeDirty/.test(dbJs));
@@ -271,8 +276,12 @@ const calendarDayHtml = context.renderTaskCalendarDay(new RealDate('2026-05-20T0
     { id: 'no-date', title: 'No date', priority: 'medium' },
     { id: 'done', title: 'Done task', due_date: '2026-05-20', progress: 'completed', priority: 'low' }
 ], new RealDate('2026-05-13T12:00:00'));
+const arrangedCalendarDayHtml = context.renderTaskCalendarDay(new RealDate('2026-05-21T00:00:00'), 4, [
+    { id: 'arranged-same-start', title: 'Arranged same start', start_date: '2026-05-21', arranged_date: '2026-05-21', priority: 'medium' },
+    { id: 'arranged-only', title: 'Arranged only', start_date: '2026-05-18', arranged_date: '2026-05-21', priority: 'medium' }
+], new RealDate('2026-05-13T12:00:00'));
 const startOnlyItemHtml = getCalendarItemHtml(calendarDayHtml, 'start-only');
-assert('Task Calendar start_date task uses green start class', startOnlyItemHtml.includes('task-calendar-item start')
+assert('Task Calendar start_date task uses green start class', /class="[^"]*task-calendar-item start[^"]*"[^>]*data-task-id="start-only"/.test(calendarDayHtml)
     && startOnlyItemHtml.includes('Start only')
     && startOnlyItemHtml.includes('开始'));
 const dueOnlyItemHtml = getCalendarItemHtml(calendarDayHtml, 'due-only');
@@ -283,6 +292,12 @@ assert('Task Calendar same-day start and due renders once as due', (() => {
     const sameCount = (calendarDayHtml.match(/data-task-id="same-day"/g) || []).length;
     return sameCount === 1 && getCalendarItemHtml(calendarDayHtml, 'same-day').includes('task-calendar-item due');
 })());
+assert('Task Calendar same-day start and arranged renders once as arranged', (() => {
+    const sameCount = (arrangedCalendarDayHtml.match(/data-task-id="arranged-same-start"/g) || []).length;
+    return sameCount === 1 && /class="[^"]*task-calendar-item arranged[^"]*"[^>]*data-task-id="arranged-same-start"/.test(arrangedCalendarDayHtml);
+})());
+assert('Task Calendar arranged_date task uses arranged class', getCalendarItemHtml(arrangedCalendarDayHtml, 'arranged-only').includes('task-calendar-item arranged')
+    && getCalendarItemHtml(arrangedCalendarDayHtml, 'arranged-only').includes('安排'));
 assert('Task Calendar omits no-date tasks and marks completed tasks', !calendarDayHtml.includes('data-task-id="no-date"')
     && getCalendarItemHtml(calendarDayHtml, 'done').includes('task-calendar-item due completed'));
 assert('Task Calendar adjacent month boundary dates render only in their own month sections',
@@ -361,6 +376,56 @@ const bucketGrouped = context.groupTasks([
 ], 'bucket');
 assert('bucket grouped column tasks also sort by due_date',
     bucketGrouped.get('bucket_12').tasks.map(task => task.id).join(',') === 'b1,b2');
+assert('Task Board column header exposes group focus target without adding all-groups UI', (() => {
+    const html = context.renderColumnHTML({ key: 'today', title: 'Today', icon: 'today', tasks: [] });
+    return html.includes('data-group-focus-target="true"')
+        && html.includes('data-column-key="today"')
+        && html.includes('role="button"')
+        && !html.includes('全部分组')
+        && !html.includes('All groups');
+})());
+
+assert('Task Board render focuses one selected group column only', (() => {
+    const originalDocument = context.document;
+    const elements = {
+        kanbanBoard: { innerHTML: '' },
+        btnGroupBy: { innerHTML: '' },
+        btnFilter: { classList: { toggle() {} } }
+    };
+    context.document = {
+        createElement: originalDocument.createElement,
+        getElementById: id => elements[id] || null,
+        querySelector: selector => ['.bc-parent', '.bc-sep', '.bc-current'].includes(selector)
+            ? { textContent: '', style: {} }
+            : null
+    };
+    context.TaskApp.getFilteredTasks = () => [
+        { id: 'today', title: 'Today task', due_date: '2026-05-13', priority: 'medium' },
+        { id: 'future', title: 'Future task', due_date: '2026-05-25', priority: 'medium' }
+    ];
+    context.TaskApp.hasActiveFilters = () => false;
+    context.TaskApp.getViewTitle = () => 'My Tasks';
+    context.TaskApp.getBreadcrumbParent = () => '';
+    context.TaskApp.groupBy = 'due_date';
+    context.TaskApp.focusedGroupKey = null;
+    context.renderKanbanBoard();
+    const allHtml = elements.kanbanBoard.innerHTML;
+    context.TaskApp.focusedGroupKey = 'today';
+    context.renderKanbanBoard();
+    const focusedHtml = elements.kanbanBoard.innerHTML;
+    context.TaskApp.focusedGroupKey = 'missing';
+    context.renderKanbanBoard();
+    const invalidHtml = elements.kanbanBoard.innerHTML;
+    const invalidCleared = context.TaskApp.focusedGroupKey === null;
+    context.document = originalDocument;
+    return countOccurrences(allHtml, 'data-column-key=') === 7
+        && countOccurrences(focusedHtml, 'data-column-key=') === 1
+        && focusedHtml.includes('data-column-key="today"')
+        && focusedHtml.includes('Today task')
+        && !focusedHtml.includes('Future task')
+        && invalidCleared
+        && countOccurrences(invalidHtml, 'data-column-key=') === 7;
+})());
 
 context.TaskApp.plans = [{ id: 'plan-eng', name: 'English Language Acquisition' }];
 context.TimeWhereManageBac = { isManageBacTask: task => task.source === 'managebac' };
@@ -884,6 +949,19 @@ assert('Task Board restores group and filters after each view load', stateJs.inc
 
 assert('Task Board saved bucket group is not applied to cross-plan views', stateJs.includes("viewMode !== 'plan' && this.groupBy === 'bucket'")
     && stateJs.includes('this.groupBy = this.getDefaultGroupBy(viewMode)'));
+assert('Task Board group focus is temporary and cleared by navigation and controls',
+    stateJs.includes('focusedGroupKey: null')
+    && /async loadMyTasks\(\) \{[\s\S]*?this\.focusedGroupKey = null;/.test(stateJs)
+    && /async loadPlan\(planId\) \{[\s\S]*?this\.focusedGroupKey = null;/.test(stateJs)
+    && /clearFilters\(\) \{[\s\S]*?this\.focusedGroupKey = null;/.test(stateJs)
+    && /TaskApp\.groupBy = opt\.dataset\.groupby;[\s\S]*?TaskApp\.focusedGroupKey = null;/.test(dialogsJs)
+    && /filterApply'[\s\S]*?TaskApp\.focusedGroupKey = null;/.test(dialogsJs)
+    && /TaskApp\.currentView = tab\.dataset\.view;[\s\S]*?TaskApp\.focusedGroupKey = null;/.test(scriptJs));
+
+assert('Task Board group focus click handler runs after task add and bucket menu actions',
+    /closest\('\.col-add-task'\)[\s\S]*?showQuickAdd\(column\)[\s\S]*?closest\('\.bucket-menu-btn'\)[\s\S]*?showBucketColumnMenu\(bucketMenuBtn\)[\s\S]*?closest\('\[data-group-focus-target\]'\)/.test(scriptJs)
+    && /closest\('\.task-card'\)[\s\S]*?openDetailPanel\(taskId\)[\s\S]*?closest\('\.col-add-task'\)/.test(scriptJs)
+    && /TaskApp\.focusedGroupKey !== groupKey[\s\S]*?TaskApp\.focusedGroupKey = groupKey[\s\S]*?TaskApp\.renderBoard\(\)/.test(scriptJs));
 
 assert('Planner visible sidebar label is My ManageBac', tasksHtml.includes('My ManageBac') && stateJs.includes("return 'My ManageBac'"));
 
@@ -920,3 +998,8 @@ assert('Group By changes persist preferences', dialogsJs.includes("menu.addEvent
 console.log('\n' + '='.repeat(44));
 console.log(`Total: ${passed + failed} checks   PASS ${passed}   ${failed > 0 ? 'FAIL' : 'PASS'} ${failed}`);
 if (failed > 0) process.exit(1);
+
+
+
+
+

@@ -30,7 +30,7 @@
     const GOOGLE_SYNC_ACCOUNT_PICTURE_KEY = 'google_sync_account_picture';
     const GOOGLE_SYNC_HISTORY_KEY = 'google_sync_history';
     const DESKTOP_WORK_REMINDER_STATE_KEY = 'desktop_work_reminder_state_v1';
-    const TASK_DERIVED_SYNC_FIELDS = new Set(['start_date', 'priority']);
+    const TASK_DERIVED_SYNC_FIELDS = new Set(['arranged_date', 'priority']);
     const AUTO_SYNC_THROTTLE_MS = 3 * 60 * 1000;
     const SAVE_DEBOUNCE_MS = 3 * 60 * 1000;
     const DEFAULT_DRIVE_REQUEST_TIMEOUT_MS = 45 * 1000;
@@ -2124,5 +2124,6 @@
         module.exports = api;
     }
 })(typeof globalThis !== 'undefined' ? globalThis : window);
+
 
 

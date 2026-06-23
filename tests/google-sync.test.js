@@ -637,11 +637,11 @@ async function run() {
             last_synced_at: '2026-05-15T00:00:00.000Z'
         }
     };
-    const arrangedTask = { ...baseArrangeTask, start_date: '2026-05-29', priority: 'urgent' };
+    const arrangedTask = { ...baseArrangeTask, arranged_date: '2026-05-29', priority: 'urgent' };
     await arrangeOnlyDb.db.tasks.put(arrangedTask);
     const arrangeOnlyMeta = await GoogleSync.markEntityDirty(arrangeOnlyDb, 'tasks', 'task-1', arrangedTask, {
-        changedFields: ['start_date', 'priority'],
-        googleSyncDerivedFields: ['start_date', 'priority'],
+        changedFields: ['arranged_date', 'priority'],
+        googleSyncDerivedFields: ['arranged_date', 'priority'],
         googleSyncDerivedBaseRecord: baseArrangeTask,
         googleSyncDerivedSource: 'task_arrange_auto',
         device_id: 'device-a'
@@ -649,7 +649,7 @@ async function run() {
     const arrangeOnlyDoc = await GoogleSync.buildLocalSyncDocument(arrangeOnlyDb, { device_id: 'device-a' });
     const arrangeOnlyEntity = arrangeOnlyDoc.entities[baseArrangeEntity.key];
     const arrangeOnlyPlan = GoogleSync.planSyncMerge(arrangeOnlyDoc, makeSyncDoc({ [baseArrangeEntity.key]: baseArrangeEntity }));
-    assert('Arrange-only start_date and priority changes are recorded as derived but not dirty',
+    assert('Arrange-only arranged_date and priority changes are recorded as derived but not dirty',
         arrangeOnlyMeta.derived_only === true
         && arrangeOnlyMeta.dirty === false
         && arrangeOnlyEntity.dirty === false
@@ -667,7 +667,7 @@ async function run() {
     const afterCloudApply = await arrangeOnlyDb.db.tasks.get('task-1');
     assert('Applying cloud user changes preserves local Arrange-derived fields',
         afterCloudApply.notes === 'Remote note'
-        && afterCloudApply.start_date === '2026-05-29'
+        && afterCloudApply.arranged_date === '2026-05-29'
         && afterCloudApply.priority === 'urgent');
 
     const manualTask = { ...afterCloudApply, start_date: '2026-06-01' };
@@ -676,9 +676,9 @@ async function run() {
         changedFields: ['start_date'],
         device_id: 'device-a'
     });
-    assert('Manual edit of start_date clears derived marker and becomes a real dirty task change',
+    assert('Manual edit of start_date is a real dirty task change while arranged_date derived marker remains separate',
         manualMeta.dirty === true
-        && !manualMeta.derived_fields?.start_date);
+        && !manualMeta.derived_fields?.start_date && manualMeta.derived_fields?.arranged_date);
 
     const raceDrive = makeDriveClient(makeSyncDoc({}, {}, '2026-05-15T00:00:00.000Z'));
     let firstDownload = true;
@@ -997,7 +997,7 @@ async function run() {
         dbScript.includes('skipUserUpdatedAt')
         && dbScript.includes('googleSyncDerivedBaseRecord')
         && dbScript.includes('changedFields: Object.keys(data || {})'));
-    assert('Task Arrange writes start_date and priority as local derived sync fields',
+    assert('Task Arrange writes arranged_date and priority as local derived sync fields',
         schedulingScript.includes('googleSyncDerivedFields')
         && schedulingScript.includes('googleSyncDerivedSource')
         && schedulingScript.includes('task_arrange_auto')

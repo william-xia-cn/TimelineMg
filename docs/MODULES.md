@@ -22,7 +22,7 @@
 
 ## Cross-Module: Task Date Arrange
 
-Task Date Arrange 负责决定任务“哪天做”，可更新未完成任务的本地 `start_date` 和可升级 priority。它不是后台 alarm，也不修改来源事实字段。
+Task Date Arrange 负责决定任务“哪天做”，可更新未完成任务的本地 `arranged_date` 和可升级 priority。它不是后台 alarm，也不修改来源事实字段。
 
 - 触发入口：Dashboard / Focus、Planner / Task Board、Calendar 页面打开时运行共享自动 helper；不再使用 6 小时节流。
 - 自动 helper 可直接 apply 合格的本地调度变更；无变更时只写检查时间作为诊断信息。
@@ -114,7 +114,7 @@ Focus Dashboard 是用户**每日使用的主入口**，以时间维度层层展
 - 操作执行期间应防止重复点击，避免同一任务被连续写入。
 - Focus Dashboard 运行在 Chrome extension MV3 页面中，操作按钮不得依赖 inline `onclick` / `onchange` 等 HTML handler；所有动态卡片、checkbox、modal 按钮必须使用 `data-*` action + delegated `addEventListener` 绑定。否则按钮在 extension CSP 下会表现为可点击但实际不执行。
 - ManageBac 来源任务在 Focus Dashboard 中仍可执行本地状态操作：`开始` / `暂停` / `完成` 应更新 `progress` / `completed_at`。
-- ManageBac 来源任务的来源字段仍只读；本地 `start_date` 可以作为 TimeWhere 内部开始日期使用，但 ManageBac 的 `due_date` / deadline 不可修改。Focus 中的 `延后` 操作不适用于 ManageBac 来源任务，不应显示为普通可点击操作；如用户通过异常路径触发，必须显示“ManageBac 来源任务不能延后”的明确提示。
+- ManageBac 来源任务的来源字段仍只读；本地 `start_date` 是用户/来源配置开始日期，`arranged_date` 是 TimeWhere 内部安排日期，但 ManageBac 的 `due_date` / deadline 不可修改。Focus 中的 `延后` 操作不适用于 ManageBac 来源任务，不应显示为普通可点击操作；如用户通过异常路径触发，必须显示“ManageBac 来源任务不能延后”的明确提示。
 - Focus Dashboard 不得把 DB 写入被拒绝表现成“操作无效”；所有失败都要以 toast / inline 状态反馈给用户。
 
 **空状态**：
@@ -718,8 +718,8 @@ my ManageBac 视图
 - ManageBac 是 Task source metadata，不是 Bucket，也不是 Label。ManageBac 来源任务仍通过 `plan_id` 归属于某个 Plan，并可通过 `bucket_id` 归入该 Plan 内的某个 Bucket。
 - 用户选择空值表示该 ManageBac 事件暂不创建任务；清空已保存的事件确认应删除对应确认记录，避免旧确认误创建。
 - ManageBac 来源任务的“来源内容”只读：用户不能直接修改或删除由 ICS 决定的字段，例如 title / summary、description、due date、source UID、source URL、ManageBac subject、source metadata。唯一事实来源是 ManageBac ICS 链接。
-- ManageBac 来源任务的“本地执行和调度字段”可由 TimeWhere 修改：`progress` / `completed_at` 可以在 Task Board / Planner / Popup 等任务执行入口切换，`start_date` / `priority` 可以由 Task Date Arrange 调整。该状态不是 ManageBac 的事实来源字段，不能因为 `readonly` 或 source protection 被禁止。
-- ManageBac 同步更新已有任务时，应保留用户本地执行和调度字段，除非 ICS 明确表达该任务取消 / 删除并按缺失事件策略处理。同步不得把用户已完成状态、TimeWhere `start_date` 或本地 priority 无故重置。
+- ManageBac 来源任务的“本地执行和调度字段”可由 TimeWhere 修改：`progress` / `completed_at` 可以在 Task Board / Planner / Popup 等任务执行入口切换，`arranged_date` / `priority` 可以由 Task Date Arrange 调整。该状态不是 ManageBac 的事实来源字段，不能因为 `readonly` 或 source protection 被禁止。
+- ManageBac 同步更新已有任务时，应保留用户本地执行和调度字段，除非 ICS 明确表达该任务取消 / 删除并按缺失事件策略处理。同步不得把用户已完成状态、TimeWhere `start_date`、`arranged_date` 或本地 priority 无故重置。
 - 当前数据层不会天然区分来源内容只读与本地执行状态可写；实现时必须通过来源元数据和 Task Board / DB 写操作保护显式区分。
 - 已存在的 ManageBac 来源任务按 ICS UID 自动更新，不重复要求确认，也不创建重复任务。
 - 如果用户修改链接，应提示这会切换 ManageBac 数据源，并要求确认如何处理旧链接来源任务。
@@ -834,7 +834,7 @@ Side Panel / Popup 当前任务规则：
 
 - Header 右侧显示今日统计，不再单独占用统计卡片区域。建议视觉为两个轻量指标 chip：`今日完成 N` 与 `今日待办 M`。
 - `今日完成 N` 只统计今天完成的任务，即 `completed_at` 日期为今天的任务。
-- `今日待办 M` 只统计今天可执行的未完成任务，口径应与 Dashboard / Daily Settle 当日 task pool 一致：`start_date == null || start_date <= today`，排除 completed 和 future `deferred_until`。
+- `今日待办 M` 只统计今天可执行的未完成任务，口径应与 Dashboard / Daily Settle 当日 task pool 一致：`arranged_date || start_date` 为 null 或不晚于 today，排除 completed 和 future `deferred_until`。
 - `开始` / `暂停` / `完成` / `延后` 操作位于当前任务卡内部，与 Dashboard 当前任务卡一致。
 - Side Panel / Popup 当前任务区显示 Daily Settle `currentTasks` 列表，不能只显示 `currentTasks[0]` 或 `sortedPool[0]`。
 - Side Panel / Popup 当前任务列表的展开规则应与 Dashboard 一致：第一项或进行中任务展开；其他项可保持紧凑。

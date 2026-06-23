@@ -30,6 +30,7 @@ window.TaskApp = {
     currentView: 'board',          // 'board' | 'list' | 'calendar'
     viewMode: 'plan',              // 'plan' | 'my_day' | 'my_tasks' | 'my_managebac'
     groupBy: 'due_date',           // 'due_date' | 'bucket' | 'priority' | 'progress' | 'labels'
+    focusedGroupKey: null,
     selectedTaskId: null,
     searchQuery: '',
     filters: createDefaultTaskFilters(),
@@ -86,6 +87,7 @@ window.TaskApp = {
     },
 
     async loadPlan(planId) {
+        this.focusedGroupKey = null;
         this.currentPlanId = planId;
         this.viewMode = 'plan';
         const [buckets, labels, tasks] = await Promise.all([
@@ -100,6 +102,7 @@ window.TaskApp = {
     },
 
     async loadMyDay() {
+        this.focusedGroupKey = null;
         this.viewMode = 'my_day';
         this.currentPlanId = null;
 
@@ -131,6 +134,7 @@ window.TaskApp = {
     },
 
     async loadMyTasks() {
+        this.focusedGroupKey = null;
         this.viewMode = 'my_tasks';
         this.currentPlanId = null;
 
@@ -154,6 +158,7 @@ window.TaskApp = {
     },
 
     async loadMyManageBac() {
+        this.focusedGroupKey = null;
         this.viewMode = 'my_managebac';
         this.currentPlanId = null;
 
@@ -238,6 +243,7 @@ window.TaskApp = {
     clearFilters() {
         this.searchQuery = '';
         this.filters = createDefaultTaskFilters();
+        this.focusedGroupKey = null;
     },
 
     // --- Render triggers (implemented by other modules) ---

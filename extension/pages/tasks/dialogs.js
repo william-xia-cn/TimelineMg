@@ -494,6 +494,7 @@ function showFilterPanel() {
         TaskApp.filters.bucket_id = bucketVal ? parseInt(bucketVal) : null;
         // Read labels
         TaskApp.filters.labels = Array.from(panel.querySelectorAll('.filter-label-chip.selected')).map(c => parseInt(c.dataset.labelId));
+        TaskApp.focusedGroupKey = null;
 
         panel.remove();
         await TaskApp.saveCurrentViewPreferences();
@@ -550,6 +551,7 @@ function showGroupByMenu() {
         if (!opt) return;
         if (opt.dataset.groupby === 'bucket' && !isBucketGroupingAllowed()) return;
         TaskApp.groupBy = opt.dataset.groupby;
+        TaskApp.focusedGroupKey = null;
         menu.remove();
         await TaskApp.saveCurrentViewPreferences();
         TaskApp.renderBoard();

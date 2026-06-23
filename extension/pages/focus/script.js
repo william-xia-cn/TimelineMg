@@ -529,6 +529,7 @@ function sanitizeDebugTask(task) {
         plan_id: task.plan_id || null,
         bucket_id: task.bucket_id || null,
         start_date: task.start_date || null,
+        arranged_date: task.arranged_date || null,
         due_date: task.due_date || task.deadline || null,
         schedule_time: task.schedule_time || null,
         duration: task.duration || null,
@@ -2544,3 +2545,4 @@ async function completeHabitNow(habitId) {
         showToast('操作失败：' + e.message, 'error');
     }
 }
+

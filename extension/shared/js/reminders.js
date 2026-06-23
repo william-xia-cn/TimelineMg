@@ -58,7 +58,8 @@
     function isTaskEligibleToday(task, now) {
         if (!task || isTaskCompleted(task)) return false;
         const todayStr = formatDateISO(now);
-        if (task.start_date && task.start_date > todayStr) return false;
+        const effectiveStartDate = task.arranged_date || task.start_date || null;
+            if (effectiveStartDate && effectiveStartDate > todayStr) return false;
         if (task.deferred_until && new Date(task.deferred_until) > now) return false;
         return true;
     }

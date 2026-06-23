@@ -575,7 +575,7 @@ async function runAsyncChecks() {
         { id:'same-day-music', source:'timetable', subject_in_matrixview:'Music', title:'Music', date:'2026-05-20' }
     ], '2026-05-20');
     assert("当天同学科课表可作为 Arrange 依据且原地不动", sameDaySubjectTimetable[0].start_date, '2026-05-20');
-    assertBool("当天同学科课表原地不动不产生日期变更", sameDaySubjectTimetable[0].changed, false);
+    assertBool("当天同学科课表原地不动但首次写入 arranged_date", sameDaySubjectTimetable[0].changed, true);
 
     const sameDayInitializedSubject = S.arrangeTaskStartDates([
         { id:'chinese-uninitialized', subject:'Chinese Language & Literature 9', subject_in_matrixview:'Chinese - Chinese Language & Literature 9', progress:'not_started', priority:'medium', due_date:'2026-05-22', start_date:'2026-05-22' }
@@ -643,8 +643,8 @@ async function runAsyncChecks() {
         confirmFn: () => true
     });
     assert("用户确认后 Arrange 更新两个未完成任务", arrangeResult.arranged, 2);
-    assert("arrangeTasks subject 任务先初始化且不被课表拉早，无后续课表时走 due-relative fallback", fakeDb.tasks.find(t => t.id === 'a').start_date, '2026-05-29');
-    assert("arrangeTasks ManageBac 异常明确窗口限制到 due_date", fakeDb.tasks.find(t => t.id === 'b').start_date, '2026-05-16');
+    assert("arrangeTasks subject 任务先初始化且不被课表拉早，无后续课表时写 arranged_date", fakeDb.tasks.find(t => t.id === 'a').arranged_date, '2026-05-29');
+    assert("arrangeTasks ManageBac 异常明确窗口限制到 due_date 并写 arranged_date", fakeDb.tasks.find(t => t.id === 'b').arranged_date, '2026-05-16');
     assert("arrangeTasks ManageBac 异常明确窗口仍升级 priority", fakeDb.tasks.find(t => t.id === 'b').priority, 'important');
     assert("arrangeTasks 不处理 completed", fakeDb.tasks.find(t => t.id === 'c').start_date, '2026-05-20');
     assert("arrangeTasks 不处理停用学科 Plan 下任务", fakeDb.tasks.find(t => t.id === 'inactive').start_date, '2026-05-22');

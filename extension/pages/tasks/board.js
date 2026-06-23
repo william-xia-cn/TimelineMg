@@ -205,6 +205,14 @@ function createTaskCardHTML(task) {
                 开始 ${formatDueDate(task.start_date)}
             </span>`;
     }
+    let arrangedDateHTML = '';
+    if (task.arranged_date && task.arranged_date !== task.start_date) {
+        arrangedDateHTML = `
+            <span class="task-arranged-badge">
+                <span class="material-symbols-outlined">event_available</span>
+                安排 ${formatDueDate(task.arranged_date)}
+            </span>`;
+    }
     if (task.due_date) {
         const isOverdue = task.due_date < todayStr;
         const isDueToday = task.due_date === todayStr;
@@ -261,6 +269,7 @@ function createTaskCardHTML(task) {
                 <div class="task-card-meta">
                     ${bucketHTML}
                     ${startDateHTML}
+                    ${arrangedDateHTML}
                     ${dueDateHTML}
                     ${recurrenceLabel ? `<span class="task-recurrence-badge">${escapeHTML(recurrenceLabel)}</span>` : ''}
                     ${checklistHTML}
@@ -281,6 +290,7 @@ function renderColumnHTML(colData) {
     const canManageBucket = TaskApp.groupBy === 'bucket'
         && TaskApp.viewMode === 'plan'
         && colData.bucketId;
+    const isFocusedGroup = TaskApp.focusedGroupKey === colData.key;
 
     const iconHTML = icon
         ? `<span class="material-symbols-outlined">${icon}</span>`
@@ -303,8 +313,8 @@ function renderColumnHTML(colData) {
     }
 
     return `
-        <div class="kanban-column ${isPlannerColumn ? 'planner-column' : ''}" data-column-key="${colData.key}" ${colData.bucketId ? `data-bucket-id="${colData.bucketId}"` : ''}>
-            <div class="column-header ${isPlannerColumn ? 'planner-column-header' : ''}">
+        <div class="kanban-column ${isPlannerColumn ? 'planner-column' : ''} ${isFocusedGroup ? 'focused-group-column' : ''}" data-column-key="${colData.key}" ${colData.bucketId ? `data-bucket-id="${colData.bucketId}"` : ''}>
+            <div class="column-header ${isPlannerColumn ? 'planner-column-header' : ''}" data-group-focus-target="true" role="button" tabindex="0" title="Show only this group">
                 <div class="column-title">
                     ${iconHTML}
                     <h3 data-column-title>${escapeHTML(title)}</h3>
@@ -376,7 +386,14 @@ function renderKanbanBoard() {
     if (!boardEl) return;
 
     const tasks = TaskApp.getFilteredTasks();
-    const grouped = groupTasks(tasks, TaskApp.groupBy);
+    let grouped = groupTasks(tasks, TaskApp.groupBy);
+    if (TaskApp.focusedGroupKey) {
+        if (grouped.has(TaskApp.focusedGroupKey)) {
+            grouped = new Map([[TaskApp.focusedGroupKey, grouped.get(TaskApp.focusedGroupKey)]]);
+        } else {
+            TaskApp.focusedGroupKey = null;
+        }
+    }
 
     let html = '';
     for (const [key, colData] of grouped) {
@@ -512,14 +529,18 @@ function getTaskCalendarItemsForDate(tasks, dateStr) {
     for (const task of tasks || []) {
         const dueDate = task.due_date || task.deadline || null;
         const startDate = task.start_date || null;
+        const arrangedDate = task.arranged_date || null;
         if (dueDate === dateStr) {
             items.push({ task, type: 'due' });
+        } else if (arrangedDate === dateStr) {
+            items.push({ task, type: 'arranged' });
         } else if (startDate === dateStr) {
             items.push({ task, type: 'start' });
         }
     }
     return items.sort((a, b) => {
-        if (a.type !== b.type) return a.type === 'due' ? -1 : 1;
+        const order = { due: 0, arranged: 1, start: 2 };
+        if (a.type !== b.type) return (order[a.type] ?? 9) - (order[b.type] ?? 9);
         const aPriority = taskPrioritySortValue(a.task.priority);
         const bPriority = taskPrioritySortValue(b.task.priority);
         if (aPriority !== bPriority) return aPriority - bPriority;
@@ -529,11 +550,11 @@ function getTaskCalendarItemsForDate(tasks, dateStr) {
 
 function renderTaskCalendarItem(item) {
     const task = item.task;
-    const type = item.type === 'due' ? 'due' : 'start';
+    const type = ['due', 'arranged', 'start'].includes(item.type) ? item.type : 'start';
     const completed = task.progress === 'completed' || task.status === 'completed';
     const classes = ['task-calendar-item', type];
     if (completed) classes.push('completed');
-    const typeLabel = type === 'due' ? '结束' : '开始';
+    const typeLabel = type === 'due' ? '结束' : (type === 'arranged' ? '安排' : '开始');
     return `
         <button type="button" class="${classes.join(' ')}" data-task-id="${escapeAttribute(task.id)}" title="${escapeAttribute(task.title || '')}">
             <span class="task-calendar-item-title">${escapeHTML(task.title || 'Untitled task')}</span>
@@ -1066,4 +1087,5 @@ function showToast(message, type = 'info') {
         setTimeout(() => toast.remove(), 300);
     }, 2500);
 }
+
 

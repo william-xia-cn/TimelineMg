@@ -33,7 +33,7 @@ if (Test-Path -LiteralPath $stage) {
 Copy-Item -Path $extensionRoot -Destination $stage -Recurse
 
 $manifestPath = Join-Path $stage "manifest.json"
-$manifest = Get-Content -Raw -Path $manifestPath | ConvertFrom-Json
+$manifest = Get-Content -Raw -Encoding UTF8 -Path $manifestPath | ConvertFrom-Json
 $manifest.version = $Version
 $manifest.oauth2.client_id = $CwsOAuthClientId
 if ($manifest.PSObject.Properties.Name -contains "key") {
@@ -44,7 +44,9 @@ if ($manifest.host_permissions) {
         $_ -ne "ws://127.0.0.1/*" -and $_ -ne "ws://localhost/*"
     })
 }
-$manifest | ConvertTo-Json -Depth 20 | Set-Content -Path $manifestPath -Encoding UTF8
+$manifestJson = $manifest | ConvertTo-Json -Depth 20
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($manifestPath, $manifestJson, $utf8NoBom)
 
 $desktopBridgePath = Join-Path $stage "pages\desktop-bridge"
 if (Test-Path -LiteralPath $desktopBridgePath) {

@@ -93,7 +93,8 @@ assert('daily draft analyzes checklist progress without treating ordinary edits 
 
 assert('daily pool snapshot follows Daily Settle task-pool eligibility',
     dbJs.includes("task.progress !== 'completed'")
-    && dbJs.includes('task.start_date == null || task.start_date <= date')
+    && dbJs.includes('const effectiveStartDate = this.getTaskEffectiveStartDate(task)')
+    && dbJs.includes('return effectiveStartDate == null || effectiveStartDate <= date')
     && dbJs.includes('task.deferred_until == null || new Date(task.deferred_until) <= referenceDate'));
 
 assert('task snapshots preserve Daily Settle assignment metadata',
@@ -315,7 +316,7 @@ const DailySettleDB = loadTimeWhereDBForUnitChecks({
             const todayStr = DailySettleDB.formatDateISO(now);
             return (tasks || []).filter(task =>
                 task.progress !== 'completed'
-                && (task.start_date == null || task.start_date <= todayStr)
+                && ((task.arranged_date || task.start_date) == null || (task.arranged_date || task.start_date) <= todayStr)
                 && (task.deferred_until == null || new Date(task.deferred_until) <= now)
             );
         },
@@ -338,10 +339,11 @@ assert('Daily Settle snapshot includes today overdue and null-start tasks and ex
         { id: 'overdue', title: 'Overdue', progress: 'not_started', start_date: '2026-05-25' },
         { id: 'null-start', title: 'No start', progress: 'not_started', start_date: null },
         { id: 'future', title: 'Future', progress: 'not_started', start_date: '2026-05-27' },
+        { id: 'arranged-today', title: 'Arranged today', progress: 'not_started', start_date: '2026-05-27', arranged_date: '2026-05-26' },
         { id: 'done', title: 'Done', progress: 'completed', start_date: '2026-05-26' },
         { id: 'deferred-future', title: 'Deferred', progress: 'not_started', start_date: '2026-05-26', deferred_until: '2026-05-26T13:00:00' }
     ], [{ id: 'c1', name: 'Study', enabled: true, repeat: 'daily' }], '2026-05-26', new Date('2026-05-26T08:00:00'));
-    return snapshot.map(task => task.id).join(',') === 'today,overdue,null-start'
+    return snapshot.map(task => task.id).join(',') === 'today,overdue,null-start,arranged-today'
         && snapshot[0].assignment.status === 'current'
         && snapshot[0].assignment.container_id === 'c1';
 })());

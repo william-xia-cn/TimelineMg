@@ -160,6 +160,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showBucketColumnMenu(bucketMenuBtn);
                 return;
             }
+
+            const groupFocusTarget = e.target.closest('[data-group-focus-target]');
+            if (groupFocusTarget) {
+                e.preventDefault();
+                const column = groupFocusTarget.closest('.kanban-column');
+                const groupKey = column?.dataset?.columnKey || null;
+                if (groupKey && TaskApp.focusedGroupKey !== groupKey) {
+                    TaskApp.focusedGroupKey = groupKey;
+                    TaskApp.renderBoard();
+                }
+                return;
+            }
         });
     }
 
@@ -262,6 +274,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.querySelectorAll('.btn-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             TaskApp.currentView = tab.dataset.view;
+            TaskApp.focusedGroupKey = null;
             TaskApp.renderAll();
         });
     });
@@ -319,6 +332,7 @@ function sanitizePlannerTask(task) {
         plan_id: task.plan_id ?? null,
         bucket_id: task.bucket_id ?? null,
         start_date: task.start_date || null,
+        arranged_date: task.arranged_date || null,
         due_date: task.due_date || task.deadline || null,
         schedule_time: task.schedule_time || null,
         duration: task.duration ?? null,
@@ -397,11 +411,14 @@ function sanitizePlannerArrangeChange(change) {
         title: change.title || task.title || '',
         source: change.source || task.source || task.source_type || null,
         old_start_date: change.old_start_date || task.start_date || null,
-        new_start_date: change.new_start_date || change.start_date || null,
+        new_start_date: change.new_start_date || change.start_date || task.start_date || null,
+        old_arranged_date: change.old_arranged_date || task.arranged_date || null,
+        new_arranged_date: change.new_arranged_date || change.arranged_date || null,
         old_priority: change.old_priority || task.priority || null,
         new_priority: change.new_priority || change.priority || null,
         updates: {
             start_date: change.updates?.start_date || null,
+            arranged_date: change.updates?.arranged_date || null,
             priority: change.updates?.priority || null
         }
     };
@@ -667,3 +684,5 @@ async function syncManageBacFromSidebar({ force = false, openPending = false } =
         setManageBacSidebarSyncState(false);
     }
 }
+
+

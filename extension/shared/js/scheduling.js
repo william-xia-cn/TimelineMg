@@ -155,14 +155,21 @@
         (tasks || []).forEach(task => {
             if (!task || task.progress === 'completed' || task.status === 'completed') return;
             const dueDate = task.due_date || task.deadline || null;
+            const arrangedDate = getTaskArrangedDate(task);
+            const startDate = getTaskConfiguredStartDate(task);
             if (dueDate === dateStr) {
                 items.push({ ...task, calendar_item_type: 'due' });
-            } else if (task.start_date === dateStr) {
+            } else if (arrangedDate === dateStr) {
+                items.push({ ...task, calendar_item_type: 'arranged' });
+            } else if (startDate === dateStr) {
                 items.push({ ...task, calendar_item_type: 'start' });
             }
         });
         return items.sort((a, b) => {
-            if (a.calendar_item_type !== b.calendar_item_type) return a.calendar_item_type === 'due' ? -1 : 1;
+            const order = { due: 0, arranged: 1, start: 2 };
+            if (a.calendar_item_type !== b.calendar_item_type) {
+                return (order[a.calendar_item_type] ?? 9) - (order[b.calendar_item_type] ?? 9);
+            }
             return String(a.title || '').localeCompare(String(b.title || ''));
         });
     }
@@ -270,11 +277,12 @@
     function buildDailyTaskPool(tasks, referenceDate) {
         const now = referenceDate || new Date();
         const todayStr = formatDateISO(now);
-        return (tasks || []).filter(t =>
-            t.progress !== 'completed' &&
-            (t.start_date == null || t.start_date <= todayStr) &&
-            (t.deferred_until == null || new Date(t.deferred_until) <= now)
-        );
+        return (tasks || []).filter(t => {
+            const effectiveStartDate = getTaskEffectiveStartDate(t);
+            return t.progress !== 'completed' &&
+                (effectiveStartDate == null || effectiveStartDate <= todayStr) &&
+                (t.deferred_until == null || new Date(t.deferred_until) <= now);
+        });
     }
 
     function getDeferredStartDate(days, referenceDate) {
@@ -334,6 +342,18 @@
 
     function normalizeTaskDate(value) {
         return value ? String(value).slice(0, 10) : null;
+    }
+
+    function getTaskConfiguredStartDate(task) {
+        return normalizeTaskDate(task?.start_date);
+    }
+
+    function getTaskArrangedDate(task) {
+        return normalizeTaskDate(task?.arranged_date);
+    }
+
+    function getTaskEffectiveStartDate(task) {
+        return getTaskArrangedDate(task) || getTaskConfiguredStartDate(task);
     }
 
     function hasExplicitStartDateWindow(task) {
@@ -500,11 +520,12 @@
             nextStartDate = constrainArrangeStartDate(task, nextStartDate, todayStr, baseStartDate);
 
             const updates = {};
-            if (nextStartDate && nextStartDate !== task.start_date) updates.start_date = nextStartDate;
+            if (nextStartDate && nextStartDate !== normalizeTaskDate(task.arranged_date)) updates.arranged_date = nextStartDate;
             if (nextPriority && nextPriority !== task.priority) updates.priority = nextPriority;
             arranged.push({
                 task,
                 task_id: task.id,
+                arranged_date: nextStartDate,
                 start_date: nextStartDate,
                 priority: nextPriority,
                 updates,
@@ -519,7 +540,7 @@
         return {
             total_tasks: (plan || []).length,
             changed_tasks: changes.length,
-            date_changes: changes.filter(item => Object.prototype.hasOwnProperty.call(item.updates, 'start_date')).length,
+            date_changes: changes.filter(item => Object.prototype.hasOwnProperty.call(item.updates, 'arranged_date')).length,
             priority_changes: changes.filter(item => Object.prototype.hasOwnProperty.call(item.updates, 'priority')).length,
             managebac_changes: changes.filter(item => isManageBacTask(item.task)).length
         };
@@ -849,7 +870,7 @@
                 await db.updateTask(item.task_id, item.updates, {
                     skipTaskArrangeDirty: true,
                     skipUserUpdatedAt: true,
-                    googleSyncDerivedFields: Object.keys(item.updates || {}).filter(field => field === 'start_date' || field === 'priority'),
+                    googleSyncDerivedFields: Object.keys(item.updates || {}).filter(field => field === 'arranged_date' || field === 'priority'),
                     googleSyncDerivedSource: 'task_arrange_auto'
                 });
                 arranged++;
@@ -935,3 +956,4 @@
         _nthWeekdayOfMonth
     };
 })(typeof window !== 'undefined' ? window : this);
+

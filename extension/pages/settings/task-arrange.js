@@ -103,8 +103,8 @@ function renderArrangeChanges(rows) {
                 <tr>
                     <th class="managebac-check-cell">应用</th>
                     <th>Task</th>
-                    <th>当前日期</th>
-                    <th>建议日期</th>
+                    <th>当前安排</th>
+                    <th>建议安排</th>
                     <th>当前优先级</th>
                     <th>建议优先级</th>
                 </tr>
@@ -122,8 +122,8 @@ function renderArrangeChanges(rows) {
                                 <strong>${escapeArrangeHTML(task.title || task.name || row.task_id || 'Untitled task')}</strong>
                                 ${task.source === 'managebac' ? '<div class="managebac-change-note">ManageBac 来源任务</div>' : ''}
                             </td>
-                            <td>${escapeArrangeHTML(task.start_date || '未设置')}</td>
-                            <td>${escapeArrangeHTML(updates.start_date || row.start_date || task.start_date || '不变')}</td>
+                            <td>${escapeArrangeHTML(task.arranged_date || '未设置')}</td>
+                            <td>${escapeArrangeHTML(updates.arranged_date || updates.start_date || row.arranged_date || row.start_date || task.arranged_date || '不变')}</td>
                             <td>${escapeArrangeHTML(task.priority || 'medium')}</td>
                             <td>${escapeArrangeHTML(updates.priority || row.priority || task.priority || '不变')}</td>
                         </tr>
@@ -209,3 +209,4 @@ async function handleSkipArrangeReview() {
         setArrangeInProgress(false);
     }
 }
+

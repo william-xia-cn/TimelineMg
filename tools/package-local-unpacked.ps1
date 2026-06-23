@@ -72,7 +72,7 @@ New-Item -ItemType Directory -Force -Path $stage | Out-Null
 Copy-Item -Path $extensionRoot -Destination $stageExtension -Recurse
 
 $manifestPath = Join-Path $stageExtension "manifest.json"
-$manifest = Get-Content -Raw -Path $manifestPath | ConvertFrom-Json
+$manifest = Get-Content -Raw -Encoding UTF8 -Path $manifestPath | ConvertFrom-Json
 if ($manifest.version -ne $Version) {
     throw "Manifest version mismatch. Expected $Version, got $($manifest.version)"
 }

@@ -52,7 +52,9 @@
                 title: task.title || task.name || taskId || 'Untitled task',
                 source: task.source || row.source || 'manual',
                 from_start_date: task.start_date || null,
-                to_start_date: getArrangeChangeFinalValue(row, 'start_date'),
+                to_start_date: task.start_date || null,
+                from_arranged_date: task.arranged_date || null,
+                to_arranged_date: getArrangeChangeFinalValue(row, 'arranged_date') || getArrangeChangeFinalValue(row, 'start_date'),
                 from_priority: task.priority || 'medium',
                 to_priority: getArrangeChangeFinalValue(row, 'priority'),
                 updates: row.updates || {},
@@ -98,7 +100,7 @@
                 await db.updateTask(row.task_id, row.updates, {
                     skipTaskArrangeDirty: true,
                     skipUserUpdatedAt: true,
-                    googleSyncDerivedFields: Object.keys(row.updates || {}).filter(field => field === 'start_date' || field === 'priority'),
+                    googleSyncDerivedFields: Object.keys(row.updates || {}).filter(field => field === 'arranged_date' || field === 'priority'),
                     googleSyncDerivedSource: 'task_arrange_auto'
                 });
                 appliedCount++;
@@ -173,3 +175,4 @@
         runTaskArrangeAutoReview
     };
 })(typeof window !== 'undefined' ? window : globalThis);
+

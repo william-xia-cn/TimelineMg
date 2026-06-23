@@ -72,8 +72,9 @@ interface Task {
   checklist: ChecklistItem[];    // 子任务清单 [{id, text, checked}]
   
   // 时间属性 — 调度核心
-  start_date?: string;           // 计划日期 (YYYY-MM-DD)，"哪天做"；手动新建任务未填时默认等于 due_date
-  due_date?: string;             // 截止日期 (YYYY-MM-DD)，"最晚什么时候完成"；手动新建任务必填
+  start_date?: string;           // 用户/来源配置开始日期 (YYYY-MM-DD)
+  arranged_date?: string;        // Task Arrange 本地安排日期 (YYYY-MM-DD)，本地派生字段
+  due_date?: string;             // 截止日期 (YYYY-MM-DD)，"最晚什么时候完成"
   schedule_time?: string;        // 指定时间 (HH:MM)，有则为定时任务
   duration: number;              // 预计耗时 (分钟)，默认 45
   
@@ -103,14 +104,15 @@ interface Task {
 
 | 字段 | 含义 | Daily Settle 用途 |
 |------|------|-------------------|
-| `start_date` | 计划日期，本地调度字段，决定哪天做 | 构建当日池：`start_date <= today \|\| null` |
-| `due_date` | 截止日期，来源/用户事实字段 | 排序权重：overdue 优先、近者优先；用于 Task Date Arrange 的 priority 升级判断 |
+| `start_date` | 用户/来源配置开始日期 | 创建、导入或用户编辑；手动任务默认 `max(today, due_date - 7 days)`，ManageBac 默认 `max(today, due_date - 14 days)` |
+| `arranged_date` | Task Arrange 本地安排日期，本地派生字段 | Daily Settle 优先使用；不作为普通云端同步事实字段 |
+| `due_date` | 截止日期，来源/用户事实字段 | 截止、逾期、priority 升级和排序依据 |
 | `schedule_time` | 定时时间 | 容器内最高优先级；过时后降级 |
 | `duration` | 预计耗时 | 容器容量计算与溢出判断 |
 
 手动创建任务的产品规则：`due_date` 必填；如果用户没有填写 `start_date`，创建时应把 `start_date` 设置为同一个 `due_date`。该规则约束 Task Board / Planner 的手动创建和快捷新增入口，不要求立刻执行 DB schema migration；历史任务、导入任务和来源同步任务可按各自来源规则保留兼容字段。
 
-Task Date Arrange 可更新未完成任务的本地 `start_date`，并根据 `due_date` 将 `priority` 升级到 `important` 或 `urgent`。Arrange 不应降低用户已经设置得更高的 `priority`，也不应处理 `progress='completed'` 的任务。Dashboard / Focus、Planner / Task Board、Calendar 页面打开时可运行无 6 小时节流的自动 Arrange，并直接 apply 合格的本地调度字段变更；Popup 打开不运行自动 Arrange。Arrange 不得覆盖 ManageBac / MatrixView 等来源事实字段。
+Task Date Arrange 可更新未完成任务的本地 `arranged_date`，并根据 `due_date` 将 `priority` 升级到 `important` 或 `urgent`。Arrange 不应降低用户已经设置得更高的 `priority`，也不应处理 `progress='completed'` 的任务。Dashboard / Focus、Planner / Task Board、Calendar 页面打开时可运行无 6 小时节流的自动 Arrange，并直接 apply 合格的本地调度字段变更；Popup 打开不运行自动 Arrange。Arrange 不得覆盖 ManageBac / MatrixView 等来源事实字段。
 
 Task Arrange 与管理确认流程使用 `settings` 表保存本地诊断 / pending 状态：
 
