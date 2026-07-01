@@ -186,6 +186,11 @@ section('TC-S-09B Daily Settle task-pool helpers');
         ['null-start', 'today', 'overdue', 'deferred-past']
     );
     assert("延后 1 天 → next start_date", S.getDeferredStartDate(1, now), '2026-04-16');
+    const tomorrowStartPool = [
+        { id:'tomorrow-start', progress:'not_started', start_date:'2026-04-16', due_date:'2026-04-16' },
+        { id:'arranged-today', progress:'not_started', start_date:'2026-04-16', arranged_date:'2026-04-15', due_date:'2026-04-16' }
+    ];
+    assert("明天开始且无 arranged_date 的任务今天不进入任务池", S.buildDailyTaskPool(tomorrowStartPool, now).map(t => t.id), ['arranged-today']);
 }
 
 // ─── TC-S-10 dailySettle ─────────────────────────────────────────
@@ -261,24 +266,28 @@ section('TC-S-10 dailySettle — 场景E：定时任务置顶（未来）');
 section('TC-S-10 dailySettle — 场景E2：定时任务已过则不置顶');
 {
     const tasks = [
-        { id:'t1', priority:'urgent', duration:30, progress:'not_started', start_date:'2026-04-15' },
-        { id:'t2', priority:'low',    duration:30, progress:'not_started', start_date:'2026-04-15', schedule_time:'16:00' }
+        { id:'urgent-current', priority:'urgent', duration:30, progress:'not_started', start_date:'2026-04-15' },
+        { id:'timed-past-overdue-low', priority:'low', duration:30, progress:'not_started', start_date:'2026-04-15', due_date:'2026-04-14', schedule_time:'16:00' }
     ];
     const now = new Date('2026-04-15T18:00:00'); // 16:00 已过
     const r = S.dailySettle(tasks, [], now);
-    assert("定时已过不置顶，urgent 排前", r.sortedPool[0].id, 't1');
+    assert("定时已过不置顶，逾期仍优先", r.sortedPool[0].id, 'timed-past-overdue-low');
 }
 
 section('TC-S-10 dailySettle — 场景F：逾期任务提前');
 {
-    const today = '2026-04-15';
     const tasks = [
-        { id:'t1', priority:'medium', duration:30, progress:'not_started', start_date:'2026-04-15', due_date:'2026-04-20' },
-        { id:'t2', priority:'medium', duration:30, progress:'not_started', start_date:'2026-04-15', due_date:'2026-04-10' }
+        { id:'important-current', priority:'important', duration:30, progress:'not_started', start_date:'2026-04-15', due_date:'2026-04-20' },
+        { id:'low-overdue', priority:'low', duration:30, progress:'not_started', start_date:'2026-04-15', due_date:'2026-04-10' },
+        { id:'urgent-overdue', priority:'urgent', duration:30, progress:'not_started', start_date:'2026-04-15', due_date:'2026-04-12' },
+        { id:'future-timed-low', priority:'low', duration:30, progress:'not_started', start_date:'2026-04-15', due_date:'2026-04-20', schedule_time:'20:00' }
     ];
     const now = new Date('2026-04-15T17:00:00');
     const r = S.dailySettle(tasks, [], now);
-    assert("逾期任务(t2)排前", r.sortedPool[0].id, 't2');
+    assert("未到时间的定时任务仍高于逾期任务", r.sortedPool[0].id, 'future-timed-low');
+    assert("逾期组内部仍按 priority 排序", r.sortedPool[1].id, 'urgent-overdue');
+    assert("low 逾期任务排在 important 未逾期任务前", r.sortedPool[2].id, 'low-overdue');
+    assert("未逾期任务在逾期任务之后", r.sortedPool[3].id, 'important-current');
 }
 
 section('TC-S-10 dailySettle — 场景G：Layer1 优先，Layer2 接收溢出');
@@ -461,8 +470,8 @@ section('TC-S-10 dailySettle — 场景N：urgent / overdue 可溢出到 Layer2'
         { id:'od', priority:'medium', duration:30, progress:'not_started', start_date:'2026-04-15', due_date:'2026-04-14' }
     ];
     const r = S.dailySettle(tasks, [l1, l2], new Date('2026-04-15T17:00:00'));
-    assert("Layer1 先填 urgent", r.result.get('l1').tasks.map(t => t.id), ['u1', 'u2']);
-    assert("Layer2 接收 urgent/overdue 溢出", r.result.get('l2').tasks.map(t => t.id), ['u3', 'od']);
+    assert("Layer1 先填 overdue 再填 urgent", r.result.get('l1').tasks.map(t => t.id), ['od', 'u1']);
+    assert("Layer2 接收剩余 urgent 溢出", r.result.get('l2').tasks.map(t => t.id), ['u2', 'u3']);
     assert("urgent/overdue 溢出后无未分配", r.unassigned.map(t => t.id), []);
 }
 
@@ -517,13 +526,13 @@ async function runAsyncChecks() {
         { id:'tolerant', subject:'English: Language Acquisition Phase 5', progress:'not_started', priority:'medium', due_date:'2026-06-01' }
     ], timetable, '2026-05-14');
     assert("SubjectInMatrixView 标准化后仍受初始化开始日期下界约束并向后寻找可用课表日", tolerantMatch[0].start_date, '2026-05-26');
-    assert("start_date 等于 due_date 视为未初始化，urgent 不能早于初始化日期", byId.get('urgent').start_date, '2026-05-14');
+    assert("start_date 等于 due_date 也尊重配置开始日期，urgent 不能提前到今天", byId.get('urgent').start_date, '2026-05-15');
     assert("important/urgent 任务写入 urgent priority", byId.get('urgent').priority, 'urgent');
     assert("明确开始日期窗口的 important 任务不能被拉早到今天，且当天同学科课表可原地匹配", byId.get('explicit-important').start_date, '2026-05-16');
     assert("明确开始日期窗口的 important 任务仍可升级 priority", byId.get('explicit-important').priority, 'important');
     assert("无 subject 任务也使用下一个可用课表日", byId.get('nosubject').start_date, '2026-05-26');
     assert("有 subject 但无课表匹配的任务使用下一个可用课表日", byId.get('unmatched-subject').start_date, '2026-05-26');
-    assert("有 subject 且 start_date 等于 due_date 时先初始化再排到下一个可用课表日", byId.get('unmatched-subject-due-start').start_date, '2026-05-26');
+    assert("有 subject 且 start_date 等于 due_date 时不重新初始化，不能早于配置开始日期", byId.get('unmatched-subject-due-start').start_date, '2026-06-01');
     assert("ManageBac 无课表匹配不再使用 14 天 fallback，而是排到下一个可用课表日", byId.get('unmatched-managebac').start_date, '2026-05-26');
     assertBool("无 due_date 任务不参与 Task Arrange", byId.has('no-due'), false);
     assertBool("逾期未完成任务不参与 Task Arrange", byId.has('overdue-no-start'), false);
@@ -596,7 +605,7 @@ async function runAsyncChecks() {
     ], [
         { id:'same-day-chinese', source:'timetable', subject_in_matrixview:'Chinese - Chinese Language & Literature 9', title:'Chinese', date:'2026-05-20' }
     ], '2026-05-20');
-    assert("未初始化任务可排到初始化基准日当天同学科课表", sameDayInitializedSubject[0].start_date, '2026-05-20');
+    assert("start_date 等于 due_date 的任务不被同学科课表提前到配置开始日期之前", sameDayInitializedSubject[0].start_date, '2026-05-22');
 
     const laterSubjectTimetable = S.arrangeTaskStartDates([
         { id:'music-later-subject', subject:'Music', subject_in_matrixview:'Music', source:'managebac', progress:'not_started', priority:'medium', due_date:'2026-05-28', start_date:'2026-05-20' }

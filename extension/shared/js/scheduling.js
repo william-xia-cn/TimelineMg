@@ -371,9 +371,9 @@
     function getArrangeBaseStartDate(task, today) {
         const startDate = normalizeTaskDate(task?.start_date);
         const dueDate = normalizeTaskDate(task?.due_date || task?.deadline);
-        if (!dueDate) return startDate || normalizeTaskDate(today || new Date());
-        if (!startDate || startDate === dueDate) return getDefaultStartDate(task, today);
-        return startDate;
+        if (startDate) return startDate;
+        if (!dueDate) return normalizeTaskDate(today || new Date());
+        return getDefaultStartDate(task, today);
     }
 
     function constrainArrangeStartDate(task, candidateDate, today, baseStartDate = null) {
@@ -627,21 +627,22 @@
         // === Step 1: 排序任务池 ===
         const sorted = [...taskPool].sort((a, b) => {
             // 1) 定时任务（未过时间）最高
-            const aTimedFuture = a.schedule_time && timeToMinutes(a.schedule_time) >= nowMin;
-            const bTimedFuture = b.schedule_time && timeToMinutes(b.schedule_time) >= nowMin;
+            const aTimedFuture = !!(a.schedule_time && timeToMinutes(a.schedule_time) >= nowMin);
+            const bTimedFuture = !!(b.schedule_time && timeToMinutes(b.schedule_time) >= nowMin);
             if (aTimedFuture !== bTimedFuture) return aTimedFuture ? -1 : 1;
 
-            // 2) priority: urgent(0) > important(1) > medium(2) > low(3)
-            const pa = prioritySortValue(a.priority);
-            const pb = prioritySortValue(b.priority);
-            if (pa !== pb) return pa - pb;
-
-            // 3) 同 priority：overdue 优先
             const aDue = a.due_date || a.deadline || '9999-12-31';
             const bDue = b.due_date || b.deadline || '9999-12-31';
             const aOD = aDue < todayStr;
             const bOD = bDue < todayStr;
+
+            // 2) overdue 优先于普通 priority
             if (aOD !== bOD) return aOD ? -1 : 1;
+
+            // 3) priority: urgent(0) > important(1) > medium(2) > low(3)
+            const pa = prioritySortValue(a.priority);
+            const pb = prioritySortValue(b.priority);
+            if (pa !== pb) return pa - pb;
 
             // 4) due_date 越近越前
             return aDue.localeCompare(bDue);

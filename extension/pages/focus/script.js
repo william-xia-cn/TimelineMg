@@ -279,8 +279,12 @@ async function loadTaskColumn() {
     if (dashboardCurrentTaskExpandedTaskId && !hasExpandedTask && !targetTaskId) {
         dashboardCurrentTaskExpandedTaskId = null;
     }
+    const requestedExpandedIndex = hasExpandedTask
+        ? displayTasks.findIndex(task => String(task.id) === String(requestedExpandedTaskId))
+        : -1;
+    const inProgressIndex = displayTasks.findIndex(task => task.progress === 'in_progress');
+    const expandedIndex = requestedExpandedIndex >= 0 ? requestedExpandedIndex : (inProgressIndex >= 0 ? inProgressIndex : 0);
     displayTasks.forEach((task, index) => {
-        const isFirst = index === 0;
         const dueDate = task.due_date || task.deadline || '';
         const isOverdue = dueDate && dueDate < todayStr;
         const isDueToday = dueDate === todayStr;
@@ -289,7 +293,7 @@ async function loadTaskColumn() {
         const assignment = task.assignment || { status: 'unassigned', label: '当前未分配' };
 
         html += createTaskCard(task, {
-            expanded: hasExpandedTask ? String(task.id) === String(requestedExpandedTaskId) : (isFirst || isInProgress),
+            expanded: index === expandedIndex,
             isOverdue,
             isDueToday,
             isTimed,

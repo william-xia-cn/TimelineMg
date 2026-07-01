@@ -491,6 +491,12 @@ assert('Dashboard current task column renders Daily Settle displayTasks list',
     focusScript.includes('const displayTasks = settle.displayTasks || settle.currentTasks || []')
     && focusScript.includes('displayTasks.forEach((task, index)')
     && focusScript.includes("assignment.status !== 'unassigned'"));
+assert('Dashboard current task list expands only one task, preferring requested then in-progress task',
+    focusScript.includes('const requestedExpandedIndex = hasExpandedTask')
+    && focusScript.includes('const inProgressIndex = displayTasks.findIndex')
+    && focusScript.includes('const expandedIndex = requestedExpandedIndex >= 0 ? requestedExpandedIndex : (inProgressIndex >= 0 ? inProgressIndex : 0)')
+    && focusScript.includes('expanded: index === expandedIndex')
+    && !focusScript.includes('(isFirst || isInProgress)'));
 assert('Dashboard current task column marks unassigned tasks without hiding actions',
     focusScript.includes('tag-unassigned')
     && focusScript.includes('当前未分配')
