@@ -272,8 +272,8 @@ const TimeWhereDB = {
         if (task.start_date) return task.start_date;
         const todayStr = typeof referenceDate === 'string' ? referenceDate.slice(0, 10) : this.formatDateISO(referenceDate);
         if (dueDate < todayStr) return dueDate;
-        const leadDays = this.isManageBacSourceTask(task) ? 14 : 7;
-        const earlyStart = this.addDaysISO(dueDate, -leadDays);
+        if (!this.isManageBacSourceTask(task)) return dueDate;
+        const earlyStart = this.addDaysISO(dueDate, -14);
         if (!earlyStart) return dueDate;
         const candidate = todayStr > earlyStart ? todayStr : earlyStart;
         return candidate > dueDate ? dueDate : candidate;
@@ -1702,6 +1702,9 @@ const TimeWhereDB = {
             monthly_dow: container.monthly_dow ?? null,
             yearly_month: container.yearly_month ?? null,
             yearly_dom: container.yearly_dom ?? null,
+            once_date: container.once_date ?? null,
+            active_start_date: container.active_start_date ?? null,
+            active_end_date: container.active_end_date ?? null,
             task_types: container.task_types || ['homework', 'test', 'ia', 'notes'],
             subjects: container.subjects || null,
             defense: container.defense || 'soft',
@@ -1785,6 +1788,8 @@ const TimeWhereDB = {
             yearly_month: event.yearly_month ?? null,
             yearly_dom: event.yearly_dom ?? null,
             once_date: event.once_date ?? null,
+            active_start_date: event.active_start_date ?? null,
+            active_end_date: event.active_end_date ?? null,
             source: event.source || 'manual',
             container_id: event.container_id || null,
             google_calendar_event_id: null,

@@ -225,7 +225,7 @@ async function loadTaskColumn() {
     const settle = dailySettle(taskPool, todayContainers, now);
     const journalEntryHTML = await renderTodayJournalEntry(todayStr, now);
     const quickAddHTML = renderCurrentTaskQuickAdd(todayStr);
-    const reminderBannerHTML = await renderDesktopWorkReminderBanner();
+    const footerActionsHTML = renderDashboardFooterActions(quickAddHTML, journalEntryHTML);
 
     // 更新 header badge — 容器状态 or 任务计数
     const badge = document.querySelector('.column-now .badge');
@@ -256,7 +256,6 @@ async function loadTaskColumn() {
     const displayTasks = settle.displayTasks || settle.currentTasks || [];
     if (displayTasks.length === 0) {
         section.innerHTML = `
-            ${reminderBannerHTML}
             <div class="current-task-scroll-body custom-scrollbar">
                 <div class="empty-state">
                     <span class="material-symbols-outlined" style="font-size: 48px;">check_circle</span>
@@ -266,8 +265,7 @@ async function loadTaskColumn() {
                     </button>
                 </div>
             </div>
-            ${quickAddHTML}
-            ${journalEntryHTML}`;
+            ${footerActionsHTML}`;
         return;
     }
 
@@ -302,12 +300,10 @@ async function loadTaskColumn() {
         });
     });
     section.innerHTML = `
-        ${reminderBannerHTML}
         <div class="current-task-scroll-body custom-scrollbar">
             ${html}
         </div>
-        ${quickAddHTML}
-        ${journalEntryHTML}`;
+        ${footerActionsHTML}`;
     if (targetTaskId) {
         section.querySelector(`[data-task-card-id="${CSS.escape(targetTaskId)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
@@ -364,22 +360,22 @@ function formatReminderClock(isoString) {
 
 async function stopDesktopWorkReminder() {
     const result = await globalThis.TimeWherePlatform?.reminderRuntime?.stopCurrentWorkReminder?.();
-    await loadTaskColumn();
+    await loadFeedColumn();
     showToast(result?.status === 'stopped' ? '本次提醒已停止' : '当前没有进行中的提醒', 'info');
+}
+
+function renderDashboardFooterActions(quickAddHTML, journalEntryHTML) {
+    return `<div class="dashboard-footer-actions">${quickAddHTML}${journalEntryHTML}</div>`;
 }
 
 function renderCurrentTaskQuickAdd(todayStr) {
     return `
-        <div class="current-task-quick-add" data-quick-add-date="${escapeAttribute(todayStr)}">
-            <div class="current-task-quick-add-main">
-                <div class="current-task-quick-add-icon"><span class="material-symbols-outlined">playlist_add</span></div>
-                <div class="current-task-quick-add-copy">
-                    <h3>未计划的任务添加</h3>
-                    <p>比如课后作业及其他临时任务</p>
-                </div>
-            </div>
-            <button class="btn-micro primary current-task-quick-add-action" type="button" data-action="quick-add-current-task" data-quick-add-date="${escapeAttribute(todayStr)}">临时添加任务</button>
-        </div>`;
+        <button class="current-task-quick-add dashboard-footer-action" type="button" data-action="quick-add-current-task" data-quick-add-date="${escapeAttribute(todayStr)}" aria-label="临时添加任务">
+            <span class="current-task-quick-add-icon"><span class="material-symbols-outlined">playlist_add</span></span>
+            <span class="current-task-quick-add-copy">
+                <span class="dashboard-footer-action-title">临时添加</span>
+            </span>
+        </button>`;
 }
 
 async function renderTodayJournalEntry(todayStr, now = new Date()) {
@@ -396,18 +392,14 @@ async function renderTodayJournalEntry(todayStr, now = new Date()) {
         draft: '草稿',
         submitted: '已提交'
     };
-    const buttonText = status === 'submitted' ? '查看今日总结' : '整理今日总结';
+    const statusLabel = labelMap[status] || labelMap.none;
     return `
-        <div class="daily-journal-entry" data-journal-date="${escapeAttribute(todayStr)}">
-            <div class="daily-journal-main">
-                <div class="daily-journal-icon"><span class="material-symbols-outlined">edit</span></div>
-                <div class="daily-journal-copy">
-                    <h3>今日总结</h3>
-                    <p>${escapeHTML(formatDate(todayStr))} · ${escapeHTML(labelMap[status] || labelMap.none)}</p>
-                </div>
-            </div>
-            <button class="btn-micro primary" data-action="open-today-journal" data-journal-date="${escapeAttribute(todayStr)}">${buttonText}</button>
-        </div>`;
+        <button class="daily-journal-entry dashboard-footer-action daily-journal-status-${escapeAttribute(status)}" type="button" data-action="open-today-journal" data-journal-date="${escapeAttribute(todayStr)}" title="今日总结：${escapeAttribute(statusLabel)}" aria-label="今日总结，${escapeAttribute(statusLabel)}">
+            <span class="daily-journal-icon" aria-hidden="true"><span class="material-symbols-outlined">edit</span></span>
+            <span class="daily-journal-copy">
+                <span class="dashboard-footer-action-title">今日总结</span>
+            </span>
+        </button>`;
 }
 
 function createTaskCard(task, opts = {}) {
@@ -1300,6 +1292,7 @@ async function loadFeedColumn() {
     });
 
     const feedItems = [];
+    const reminderBannerHTML = await renderDesktopWorkReminderBanner();
 
     // 过期任务
     allTasks.filter(t => {
@@ -1406,7 +1399,7 @@ async function loadFeedColumn() {
     }
 
     if (limited.length === 0) {
-        if (todayHabits.length === 0) {
+        if (todayHabits.length === 0 && !reminderBannerHTML) {
             html += `
                 <div class="empty-state">
                     <span class="material-symbols-outlined" style="font-size: 48px;">notifications_none</span>
@@ -1417,6 +1410,7 @@ async function loadFeedColumn() {
         html += `<div class="feed-list">${limited.map(item => createFeedItem(item)).join('')}</div>`;
     }
 
+    html = `${reminderBannerHTML}${html}`;
     section.innerHTML = html;
 }
 
@@ -1458,7 +1452,7 @@ function setupEventListeners() {
     document.addEventListener('change', handleFocusDelegatedChange);
     document.addEventListener('keydown', handleFocusDelegatedKeydown);
     window.addEventListener('timewhere-desktop-reminder-state', () => {
-        loadTaskColumn().catch(error => console.warn('[Focus] reminder status refresh failed:', error));
+        loadFeedColumn().catch(error => console.warn('[Focus] reminder status refresh failed:', error));
     });
 
     // Habit check buttons (delegated)

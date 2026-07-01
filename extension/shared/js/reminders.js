@@ -116,7 +116,10 @@
         const taskPool = scheduling.buildDailyTaskPool
             ? scheduling.buildDailyTaskPool(tasks || [], now)
             : (tasks || []).filter(task => isTaskEligibleToday(task, now));
-        const settle = scheduling.dailySettle(taskPool, containers || [], now);
+        const todayContainers = scheduling.containerAppliesOn
+            ? (containers || []).filter(container => scheduling.containerAppliesOn(container, now))
+            : (containers || []);
+        const settle = scheduling.dailySettle(taskPool, todayContainers, now);
         const activeContainer = settle.activeContainer;
         if (!activeContainer) return [];
 

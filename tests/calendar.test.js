@@ -101,6 +101,27 @@ async function run() {
     const beforeStart = helpers.expandEventsForDateRange([weeklyEvent], '2026-05-01', '2026-05-11');
     assertEqual('recurring schedule event does not render before its start date', beforeStart.length, 0);
 
+    const activeRangeWeekly = { ...weeklyEvent, active_start_date: '2026-05-19', active_end_date: '2026-05-26' };
+    assertEqual(
+        'recurring event renders only inside active date range including boundaries',
+        helpers.expandEventsForDateRange([activeRangeWeekly], '2026-05-12', '2026-06-02').map(event => event.date),
+        ['2026-05-19', '2026-05-26']
+    );
+    assertEqual(
+        'legacy recurring event without active range keeps old expansion behavior',
+        helpers.expandEventsForDateRange([weeklyEvent], '2026-05-12', '2026-05-26').map(event => event.date),
+        ['2026-05-12', '2026-05-19', '2026-05-26']
+    );
+    assertEqual(
+        'non-repeating event does not expand across active date range',
+        helpers.expandEventsForDateRange([{ ...noneEvent, active_start_date: '2026-05-01', active_end_date: '2026-05-31' }], '2026-05-01', '2026-05-31').map(event => event.date),
+        ['2026-05-13']
+    );
+    assertEqual(
+        'container override event ignores active range and remains date-exact',
+        helpers.expandEventsForDateRange([{ id: 'override', date: '2026-05-13', source: 'container_override', active_start_date: '2026-05-14', active_end_date: '2026-05-31' }], '2026-05-13', '2026-05-14').map(event => event.date),
+        ['2026-05-13']
+    );
     const arrangedTasks = [
         { id: 'today-start', title: 'Today start', progress: 'not_started', start_date: '2026-05-18' },
         { id: 'today-due', title: 'Today due', progress: 'not_started', due_date: '2026-05-18' },
@@ -141,6 +162,7 @@ async function run() {
     assertEqual('custom event repeat payload persists selected days', customPayload.repeat_days, [1, 5]);
     const nonePayload = helpers._repeatPayload({ repeat: 'none' });
     assertEqual('default event repeat payload can persist none', nonePayload.repeat, 'none');
+    assertEqual('container active end default clamps one month later', helpers.addMonthsClampedISO('2026-01-31', 1), '2026-02-28');
 
     const calendarHtml = fs.readFileSync(path.join(root, 'extension', 'pages', 'calendar', 'calendar.html'), 'utf8');
     const calendarScript = fs.readFileSync(path.join(root, 'extension', 'pages', 'calendar', 'script.js'), 'utf8');
@@ -172,8 +194,17 @@ async function run() {
         && !/id="modalAllDay"[^>]*(disabled|readonly)/.test(calendarScript));
     assert('event edit mode shows disabled only-this scope instead of faking event override', calendarScript.includes('日程事件暂不支持仅修改此次'));
     assert('addContainer payload includes layer', /addContainer\(\{[\s\S]*layer:\s*v\.layer/.test(calendarScript));
+    assert('Calendar container modal includes active date range inputs and default helper', calendarScript.includes('id="modalActiveStartDate"')
+        && calendarScript.includes('id="modalActiveEndDate"')
+        && calendarScript.includes('addMonthsClampedISO(activeStartDate, 1)'));
+    assert('Calendar active date inputs render for container and event forms', (calendarScript.match(/id="modalActiveStartDate"/g) || []).length === 2
+        && (calendarScript.match(/id="modalActiveEndDate"/g) || []).length === 2);
+    assert('Calendar container create payload persists active range', /addContainer\(\{[\s\S]*active_start_date:\s*v\.active_start_date[\s\S]*active_end_date:\s*v\.active_end_date/.test(calendarScript));
+    assert('Calendar event create payload persists active range', /addEvent\(\{[\s\S]*source:\s*'manual'[\s\S]*active_start_date:\s*v\.active_start_date[\s\S]*active_end_date:\s*v\.active_end_date/.test(calendarScript));
     assert('container edit save payload updates normal fields on original record', /updateContainer\(_modal\.id,\s*\{[\s\S]*name:\s*v\.name[\s\S]*color:\s*v\.color[\s\S]*time_start:\s*v\.start[\s\S]*time_end:\s*v\.end[\s\S]*layer:\s*v\.layer[\s\S]*\.\.\._repeatPayload\(v\)/.test(calendarScript));
+    assert('container edit save payload updates active range on original record', /updateContainer\(_modal\.id,\s*\{[\s\S]*active_start_date:\s*v\.active_start_date[\s\S]*active_end_date:\s*v\.active_end_date/.test(calendarScript));
     assert('event edit save payload updates normal fields on original record', /updateEvent\(_modal\.id,\s*\{[\s\S]*title:\s*v\.name[\s\S]*date:\s*v\.date \|\| _modal\.date[\s\S]*time_start:\s*v\.allDay \? null : v\.start[\s\S]*time_end:\s+v\.allDay \? null : v\.end[\s\S]*color:\s*v\.color[\s\S]*\.\.\._repeatPayload\(v\)/.test(calendarScript));
+    assert('event edit save payload updates active range on original record', /updateEvent\(_modal\.id,\s*\{[\s\S]*active_start_date:\s*v\.active_start_date[\s\S]*active_end_date:\s*v\.active_end_date/.test(calendarScript));
     assert('container edit derives legacy layer before save', calendarScript.includes('const selectedLayer = data ? getContainerLayer(data) : 1')
         && calendarScript.includes('selectedLayer === 1')
         && calendarScript.includes('selectedLayer === 2'));

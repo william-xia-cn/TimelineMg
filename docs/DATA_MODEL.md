@@ -104,7 +104,7 @@ interface Task {
 
 | 字段 | 含义 | Daily Settle 用途 |
 |------|------|-------------------|
-| `start_date` | 用户/来源配置开始日期 | 创建、导入或用户编辑；手动任务默认 `max(today, due_date - 7 days)`，ManageBac 默认 `max(today, due_date - 14 days)` |
+| `start_date` | 用户/来源配置开始日期 | 创建、导入或用户编辑；手动任务默认等于 `due_date`，ManageBac 默认 `max(today, due_date - 14 days)` |
 | `arranged_date` | Task Arrange 本地安排日期，本地派生字段 | Daily Settle 优先使用；不作为普通云端同步事实字段 |
 | `due_date` | 截止日期，来源/用户事实字段 | 截止、逾期、priority 升级和排序依据 |
 | `schedule_time` | 定时时间 | 容器内最高优先级；过时后降级 |
@@ -346,8 +346,10 @@ interface TimeContainer {
   layer: 1 | 2;                  // 1=学习时间(主力), 2=自由时间(溢出接收)
 
   // 时间配置
-  time_start: string;            // 开始时间 (HH:MM)
-  time_end: string;              // 结束时间 (HH:MM)
+  time_start: string;            // 每天的开始时间 (HH:MM)
+  time_end: string;              // 每天的结束时间 (HH:MM)
+  active_start_date?: string | null; // 重复容器生效开始日期 YYYY-MM-DD；旧数据可为空表示无下界
+  active_end_date?: string | null;   // 重复容器生效结束日期 YYYY-MM-DD；空表示长期
 
   repeat: 'none' | 'daily' | 'weekday' | 'weekend' | 'weekly'
         | 'monthly_nth' | 'yearly' | 'custom' | 'once';
@@ -397,6 +399,8 @@ interface TimeContainer {
 | `yearly` | 每年在 M 月 D 日 | `yearly_month`, `yearly_dom` |
 | `custom` | 自定义多天 | `repeat_days: [dow, ...]` |
 | `once` | 仅一次 | `once_date` |
+
+`active_start_date` / `active_end_date` 在重复规则前生效，边界日期包含在内。旧容器缺少这两个字段时保持历史无边界行为。`repeat='once'` 仍以 `once_date` 为准，但也必须满足 active range。active range 只限制容器在哪些自然日期出现，不改变每天的 `time_start` / `time_end`。`containers` 作为 Google sync 普通记录同步这两个字段。
 
 ### 3.3 默认容器配置
 
@@ -477,6 +481,8 @@ interface Event {
   // 时间 (全天事件时均为 null)
   time_start: string | null;    // HH:MM
   time_end: string | null;      // HH:MM
+  active_start_date?: string | null; // 日程事件重复生效开始日期 YYYY-MM-DD；旧数据可为空表示无下界
+  active_end_date?: string | null;   // 日程事件重复生效结束日期 YYYY-MM-DD；空表示长期
 
   // 重复规则。日程事件可以是一次性，也可以重复发生。
   repeat: 'none' | 'daily' | 'weekday' | 'weekend' | 'weekly'
@@ -510,6 +516,8 @@ interface Event {
 - `Event` 表示 Calendar 中的日程事件，不应被理解为只能出现一次的“单次事件”。
 - `Event.repeat = 'none'` 或 `once` 时才是一次性日程事件。
 - `TimeContainer` 与 `Event` 都可以有重复规则，但语义不同：`TimeContainer` 用于任务容量/承载规则，`Event` 用于显示外部课表、手动日程、全天事项或容器 override/skip。
+
+`active_start_date` / `active_end_date` 在日程事件 repeat/date 规则前生效，边界日期包含在内。旧事件缺少这两个字段时保持历史无边界行为。`repeat='none'` 仍只在 `date` 当天显示，不会因为 active range 扩展成多日事件；`container_override` / `container_skip` 仍只按 `date` 精确匹配。`events` 作为 Google sync 普通记录同步这两个字段。
 
 ### 4.2 source 字段说明
 

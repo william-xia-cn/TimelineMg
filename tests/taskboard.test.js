@@ -117,7 +117,7 @@ const normalized = context.normalizeManualTaskPayload({
     due_date: '2026-05-20',
     start_date: null
 });
-assert('manual task start_date initializes by default 7 day rule', normalized.start_date === '2026-05-13');
+assert('manual task start_date defaults to due_date when omitted', normalized.start_date === '2026-05-20');
 
 assert('manual overdue task start_date initializes to due_date', context.normalizeManualTaskPayload({
     title: 'Overdue due date',
@@ -191,9 +191,10 @@ assert('DB can backfill historical Plan and Task subject_in_matrixview from time
 assert('MatrixView import immediately backfills subject_in_matrixview to existing tasks',
     matrixViewJs.includes('db.backfillMatrixViewSubjectIds')
     && matrixViewJs.includes("source: 'matrixview_initialize'"));
-assert('DB addTask initializes start_date from due date rules and no longer defaults to today',
+assert('DB addTask initializes manual start_date from due_date and no longer defaults to today',
     dbJs.includes('getInitialTaskStartDate(task = {}, referenceDate = new Date())')
-    && dbJs.includes('const leadDays = this.isManageBacSourceTask(task) ? 14 : 7')
+    && dbJs.includes('if (!this.isManageBacSourceTask(task)) return dueDate')
+    && dbJs.includes('this.addDaysISO(dueDate, -14)')
     && dbJs.includes('start_date: normalizedTask.start_date || null')
     && !dbJs.includes('start_date: task.start_date || this.formatDateISO(new Date())'));
 assert('DB updateTask recalculates subject when plan_id changes', dbJs.includes("Object.prototype.hasOwnProperty.call(data, 'plan_id')")

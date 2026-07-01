@@ -978,11 +978,7 @@ function getInitialTaskStartDate(task, referenceDate = new Date()) {
     if (task.start_date) return task.start_date;
     const todayStr = formatDateISO(referenceDate);
     if (dueDate < todayStr) return dueDate;
-    const due = new Date(dueDate + 'T00:00:00');
-    due.setDate(due.getDate() - 7);
-    const earlyStart = formatDateISO(due);
-    const candidate = todayStr > earlyStart ? todayStr : earlyStart;
-    return candidate > dueDate ? dueDate : candidate;
+    return dueDate;
 }
 
 function normalizeManualTaskPayload(task) {

@@ -112,6 +112,23 @@ npm test
 | 11 | `'yearly'`, yearly_month:4, yearly_dom:15 | 2026-04-15 | `true` |
 | 12 | `'yearly'`, yearly_month:4, yearly_dom:15 | 2026-04-16 | `false` |
 
+| 13 | `'daily'`, active range 覆盖目标日 | 2026-04-15 在 2026-04-01 至 2026-04-30 内 | `true` |
+| 14 | `'daily'`, active_start_date 晚于目标日 | 2026-04-15 早于 2026-04-16 | `false` |
+| 15 | `'daily'`, active_end_date 早于目标日 | 2026-04-15 晚于 2026-04-14 | `false` |
+| 16 | `'daily'`, active range 边界日 | 目标日等于开始或结束日期 | `true` |
+| 17 | `'daily'`, 无 active range 旧容器 | 任意 | `true` |
+| 18 | `'once'`, once_date 匹配但 active range 不匹配 | once_date=目标日，active_start_date 晚于目标日 | `false` |
+
+### TC-CAL-01 Event active range
+| # | 输入 | 期望 |
+|---|------|------|
+| 1 | 重复日程事件，目标日在 `active_start_date` / `active_end_date` 内 | 展开显示 |
+| 2 | 目标日早于 `active_start_date` | 不显示 |
+| 3 | 目标日晚于 `active_end_date` | 不显示 |
+| 4 | 目标日等于 active range 边界 | 显示 |
+| 5 | 旧日程事件无 active range | 保持原展开行为 |
+| 6 | `repeat='none'` 且 active range 覆盖多日 | 只在 `date` 当天显示 |
+| 7 | `container_override` / `container_skip` | 忽略 active range，仅按 `date` 精确匹配 |
 ### TC-S-08 _nthWeekdayOfMonth
 | # | 输入 | 期望 { dayOfWeek, nth } |
 |---|------|---------|

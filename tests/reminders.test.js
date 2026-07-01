@@ -124,6 +124,13 @@ const containerReminder = Reminders.computeContainerTaskReminders(
 );
 assertEqual('container task reminds inside current container every 15 minutes', containerReminder.length, 1);
 assertEqual('container reminder uses container-repeat type', containerReminder[0]?.type, 'container-repeat');
+const outOfRangeContainerReminder = Reminders.computeContainerTaskReminders(
+    [task({ id: 'container-task', schedule_time: null })],
+    [container({ active_start_date: '2026-05-17', active_end_date: '2026-06-17' })],
+    at('18:45'),
+    Scheduling
+);
+assertEqual('container reminder does not fire outside active date range', outOfRangeContainerReminder.length, 0);
 
 const containerSameBucketSent = {};
 const firstContainer = Reminders.computeContainerTaskReminders(

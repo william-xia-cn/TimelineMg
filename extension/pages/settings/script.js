@@ -1932,6 +1932,7 @@ function setupImportEvents() {
     document.getElementById('icsFileInput')?.addEventListener('change', handleFileSelect);
     document.getElementById('importBtn')?.addEventListener('click', handleImport);
     document.getElementById('addContainerBtn')?.addEventListener('click', () => {
+        setDefaultContainerActiveDates();
         document.getElementById('addContainerModal').style.display = 'flex';
     });
 
@@ -1955,6 +1956,13 @@ function setupImportEvents() {
         btn.classList.add('active');
     });
 
+    document.getElementById('newContainerActiveStartDate')?.addEventListener('change', e => {
+        const startDate = e.target.value;
+        const endInput = document.getElementById('newContainerActiveEndDate');
+        if (startDate && endInput && (!endInput.value || endInput.value < startDate)) {
+            endInput.value = addMonthsClampedISO(startDate, 1);
+        }
+    });
     // Container modal — confirm add
     document.getElementById('confirmAddContainer')?.addEventListener('click', async () => {
         const name = document.getElementById('newContainerName')?.value.trim();
@@ -1965,14 +1973,52 @@ function setupImportEvents() {
         const repeat = document.getElementById('newContainerRepeat')?.value || 'weekday';
         const color = document.querySelector('#newContainerColorPicker .color-option.active')?.dataset.color || '#4A90D9';
         const layer = parseInt(document.querySelector('#newContainerLayerToggle .layer-btn.active')?.dataset.layer || '1');
+        const active_start_date = document.getElementById('newContainerActiveStartDate')?.value || null;
+        const active_end_date = document.getElementById('newContainerActiveEndDate')?.value || null;
+        if (active_start_date && active_end_date && active_end_date < active_start_date) {
+            showToast('生效结束日期不能早于生效开始日期', 'error');
+            return;
+        }
 
-        await TimeWhereDB.addContainer({ name, color, time_start: start, time_end: end, repeat, layer });
+        await TimeWhereDB.addContainer({ name, color, time_start: start, time_end: end, repeat, layer, active_start_date, active_end_date });
         showToast('时间容器已添加', 'success');
         closeContainerModal();
         loadContainers();
     });
 }
 
+function formatDateISO(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function addMonthsClampedISO(dateStr, months = 1) {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-').map(Number);
+    if (!year || !month || !day) return '';
+    const target = new Date(year, month - 1 + months, 1);
+    const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+    target.setDate(Math.min(day, lastDay));
+    return formatDateISO(target);
+}
+
+function setDefaultContainerActiveDates(startDate = formatDateISO(new Date())) {
+    const startInput = document.getElementById('newContainerActiveStartDate');
+    const endInput = document.getElementById('newContainerActiveEndDate');
+    if (startInput) startInput.value = startDate;
+    if (endInput) endInput.value = addMonthsClampedISO(startDate, 1);
+}
+
+function formatContainerActiveRange(container = {}) {
+    const start = container.active_start_date || '';
+    const end = container.active_end_date || '';
+    if (!start && !end) return '长期';
+    if (start && end) return `${start} 至 ${end}`;
+    if (start) return `${start} 起长期`;
+    return `截至 ${end}`;
+}
 function handleFileSelect(event) {
     const file = event.target.files[0];
     if (file) {
@@ -2068,7 +2114,7 @@ async function loadContainers() {
                     <span class="container-name">${escapeHTML(container.name)}</span>
                     ${layerBadge}
                 </div>
-                <span class="container-time">${escapeHTML(container.time_start)} - ${escapeHTML(container.time_end)} · ${escapeHTML(getRepeatText(container.repeat))}</span>
+                <span class="container-time">${escapeHTML(container.time_start)} - ${escapeHTML(container.time_end)} · ${escapeHTML(getRepeatText(container.repeat))} · ${escapeHTML(formatContainerActiveRange(container))}</span>
             </div>
             <div class="container-actions">
                 <label class="toggle-switch">
@@ -2300,6 +2346,7 @@ function closeContainerModal() {
     document.getElementById('newContainerName').value = '';
     document.getElementById('newContainerStart').value = '18:30';
     document.getElementById('newContainerEnd').value = '21:30';
+    setDefaultContainerActiveDates();
     document.getElementById('newContainerRepeat').value = 'weekday';
     // Reset color picker
     document.querySelectorAll('#newContainerColorPicker .color-option').forEach((b, i) => {

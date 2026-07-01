@@ -138,6 +138,20 @@ assertBool("yearly month=4 dom=15 + 4月15 → true",
 assertBool("yearly month=4 dom=15 + 4月16 → false",
     S.containerAppliesToDate({repeat:'yearly', yearly_month:4, yearly_dom:15}, date, '2026-04-16', 3, true, false), false);
 
+assertBool("active range inside + daily → true",
+    S.containerAppliesToDate({repeat:'daily', active_start_date:'2026-04-01', active_end_date:'2026-04-30'}, date, dateStr, 3, true, false), true);
+assertBool("active range before start → false",
+    S.containerAppliesToDate({repeat:'daily', active_start_date:'2026-04-16', active_end_date:'2026-04-30'}, date, dateStr, 3, true, false), false);
+assertBool("active range after end → false",
+    S.containerAppliesToDate({repeat:'daily', active_start_date:'2026-04-01', active_end_date:'2026-04-14'}, date, dateStr, 3, true, false), false);
+assertBool("active range start boundary inclusive → true",
+    S.containerAppliesToDate({repeat:'daily', active_start_date:'2026-04-15', active_end_date:'2026-04-30'}, date, dateStr, 3, true, false), true);
+assertBool("active range end boundary inclusive → true",
+    S.containerAppliesToDate({repeat:'daily', active_start_date:'2026-04-01', active_end_date:'2026-04-15'}, date, dateStr, 3, true, false), true);
+assertBool("legacy container without active range keeps old behavior",
+    S.containerAppliesToDate({repeat:'daily'}, date, dateStr, 3, true, false), true);
+assertBool("once date still blocked when outside active range",
+    S.containerAppliesToDate({repeat:'once', once_date:'2026-04-15', active_start_date:'2026-04-16'}, date, dateStr, 3, true, false), false);
 // ─── TC-S-08 _nthWeekdayOfMonth ──────────────────────────────────
 section('TC-S-08 _nthWeekdayOfMonth');
 assert("2026-04-06 → 第1个周一", S._nthWeekdayOfMonth('2026-04-06'), { dayOfWeek:1, nth:1 });

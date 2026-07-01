@@ -85,8 +85,8 @@ class FakeDB {
             buckets: new FakeTable([{ id: 10, plan_id: 1, name: '作业' }]),
             labels: new FakeTable([{ id: 20, plan_id: 1, name: 'Draft', color: '#334155' }]),
             tasks: new FakeTable([{ id: 'task-1', plan_id: 1, title: 'Essay', due_date: '2026-05-20', progress: 'not_started' }]),
-            containers: new FakeTable([{ id: 'container-1', name: '学习时间', time_start: '18:30', time_end: '21:30' }]),
-            events: new FakeTable([{ id: 'event-1', title: 'Class', date: '2026-05-20', source: 'timetable' }]),
+            containers: new FakeTable([{ id: 'container-1', name: '学习时间', time_start: '18:30', time_end: '21:30', active_start_date: '2026-05-01', active_end_date: '2026-06-01' }]),
+            events: new FakeTable([{ id: 'event-1', title: 'Class', date: '2026-05-20', source: 'timetable', active_start_date: '2026-05-20', active_end_date: '2026-06-20' }]),
             habits: new FakeTable([{ id: 'habit-1', title: 'Words', created_at: '2026-05-01T00:00:00.000Z' }]),
             daily_journals: new FakeTable([{ date: '2026-05-15', status: 'submitted', updated_at: '2026-05-15T22:00:00.000Z' }])
         };
@@ -194,7 +194,11 @@ async function run() {
     assert('snapshot exports labels', snapshot.data.labels.length === 1);
     assert('snapshot exports tasks', snapshot.data.tasks.length === 1);
     assert('snapshot exports containers', snapshot.data.containers.length === 1);
+    assert('snapshot keeps container active range fields', snapshot.data.containers[0].active_start_date === '2026-05-01'
+        && snapshot.data.containers[0].active_end_date === '2026-06-01');
     assert('snapshot exports events', snapshot.data.events.length === 1);
+    assert('snapshot keeps event active range fields', snapshot.data.events[0].active_start_date === '2026-05-20'
+        && snapshot.data.events[0].active_end_date === '2026-06-20');
     assert('snapshot exports habits', snapshot.data.habits.length === 1);
     assert('snapshot exports daily journals', snapshot.data.daily_journals.length === 1);
     assert('snapshot includes MatrixView subject mappings', Array.isArray(snapshot.data.settings.matrixview_subject_mappings));

@@ -8,6 +8,15 @@ function formatDateISO(date) {
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
 }
+function addMonthsClampedISO(dateStr, months = 1) {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-').map(Number);
+    if (!year || !month || !day) return '';
+    const target = new Date(year, month - 1 + months, 1);
+    const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+    target.setDate(Math.min(day, lastDay));
+    return formatDateISO(target);
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
     await initApp();
@@ -1390,6 +1399,8 @@ async function _renderModal({ date, timeStart, timeEnd }) {
 
     if (isContainer) {
         const refDate = _modal.date || date || formatDateISO(new Date());
+        const activeStartDate = isCreate ? refDate : (data?.active_start_date || '');
+        const activeEndDate = isCreate ? addMonthsClampedISO(activeStartDate, 1) : (data?.active_end_date || '');
         const repeatControls = buildRepeatControlHTML(refDate, data || {}, 'weekday');
         const selectedLayer = data ? getContainerLayer(data) : 1;
 
@@ -1406,6 +1417,16 @@ async function _renderModal({ date, timeStart, timeEnd }) {
                 <div class="form-group">
                     <label>结束</label>
                     <input type="time" id="modalEnd" value="${escapeAttribute(data?.time_end || timeEnd || '10:00')}">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>生效开始日期</label>
+                    <input type="date" id="modalActiveStartDate" value="${escapeAttribute(activeStartDate)}" data-default-value="${escapeAttribute(activeStartDate)}">
+                </div>
+                <div class="form-group">
+                    <label>生效结束日期</label>
+                    <input type="date" id="modalActiveEndDate" value="${escapeAttribute(activeEndDate)}" data-default-value="${escapeAttribute(activeEndDate)}">
                 </div>
             </div>
             ${repeatControls}
@@ -1432,6 +1453,8 @@ async function _renderModal({ date, timeStart, timeEnd }) {
         const isAllDay = data ? (!data.time_start && !data.time_end) : false;
         const timeRowDisplay = isAllDay ? 'display:none' : '';
         const refDate = data?.date || date || _modal.date || formatDateISO(new Date());
+        const activeStartDate = isCreate ? refDate : (data?.active_start_date || '');
+        const activeEndDate = isCreate ? addMonthsClampedISO(activeStartDate, 1) : (data?.active_end_date || '');
         const repeatControls = buildRepeatControlHTML(refDate, data || {}, 'none');
         bodyHTML += `
             <div class="form-group">
@@ -1458,6 +1481,17 @@ async function _renderModal({ date, timeStart, timeEnd }) {
                     <input type="time" id="modalEnd" value="${escapeAttribute(data?.time_end || timeEnd || '10:00')}">
                 </div>
             </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>生效开始日期</label>
+                    <input type="date" id="modalActiveStartDate" value="${escapeAttribute(activeStartDate)}" data-default-value="${escapeAttribute(activeStartDate)}">
+                </div>
+                <div class="form-group">
+                    <label>生效结束日期</label>
+                    <input type="date" id="modalActiveEndDate" value="${escapeAttribute(activeEndDate)}" data-default-value="${escapeAttribute(activeEndDate)}">
+                </div>
+            </div>
+
             ${repeatControls}
             <div class="form-group">
                 <label>颜色</label>
@@ -1544,6 +1578,31 @@ function _bindModalEvents() {
         if (btn) btn.classList.toggle('active');
     });
 
+    document.getElementById('modalActiveStartDate')?.addEventListener('change', e => {
+        const startDate = e.target.value;
+        const endInput = document.getElementById('modalActiveEndDate');
+        if (startDate && endInput && (!endInput.value || endInput.value < startDate)) {
+            endInput.value = addMonthsClampedISO(startDate, 1);
+        }
+    });
+
+    document.getElementById('modalDate')?.addEventListener('change', e => {
+        const dateValue = e.target.value;
+        const startInput = document.getElementById('modalActiveStartDate');
+        const endInput = document.getElementById('modalActiveEndDate');
+        if (!dateValue || !startInput) return;
+        const oldStartDefault = startInput.dataset.defaultValue || '';
+        const oldEndDefault = endInput?.dataset.defaultValue || '';
+        if (!startInput.value || startInput.value === oldStartDefault) {
+            startInput.value = dateValue;
+            startInput.dataset.defaultValue = dateValue;
+        }
+        if (endInput && (!endInput.value || endInput.value === oldEndDefault || endInput.value < startInput.value)) {
+            const nextEnd = addMonthsClampedISO(startInput.value, 1);
+            endInput.value = nextEnd;
+            endInput.dataset.defaultValue = nextEnd;
+        }
+    });
     // All-day toggle (event only)
     document.getElementById('modalAllDay')?.addEventListener('change', e => {
         const timeRow = document.getElementById('modalTimeRow');
@@ -1591,6 +1650,8 @@ function _getModalValues() {
     const color  = document.querySelector('#modalColorPicker .color-swatch.active')?.dataset.color || '#4A90D9';
     const date   = document.getElementById('modalDate')?.value;
     const scope  = document.querySelector('.scope-btn.active')?.dataset.scope || 'all';
+    const active_start_date = document.getElementById('modalActiveStartDate')?.value || null;
+    const active_end_date = document.getElementById('modalActiveEndDate')?.value || null;
 
     // Read repeat and its embedded data attributes
     const sel = document.getElementById('modalRepeat');
@@ -1610,7 +1671,8 @@ function _getModalValues() {
     const layer = parseInt(document.querySelector('#layerToggle .layer-btn.active')?.dataset.layer || '1');
 
     return { name, start, end, color, date, repeat, scope, repeatDays,
-             weeklyDay, monthlyNth, monthlyDow, yearlyMonth, yearlyDom, allDay, layer };
+             weeklyDay, monthlyNth, monthlyDow, yearlyMonth, yearlyDom, allDay, layer,
+             active_start_date, active_end_date };
 }
 
 function _repeatPayload(v) {
@@ -1646,6 +1708,10 @@ async function _saveModal() {
     if (!v.name) { showToast('请输入名称', 'error'); return; }
     if (!v.allDay && (!v.start || !v.end)) { showToast('请设置时间', 'error'); return; }
     if (!v.allDay && v.start && v.end && v.start >= v.end) { showToast('结束时间必须晚于开始时间', 'error'); return; }
+    if ((_modal.type === 'container' || _modal.type === 'event') && v.active_start_date && v.active_end_date && v.active_end_date < v.active_start_date) {
+        showToast('生效结束日期不能早于生效开始日期', 'error');
+        return;
+    }
 
     // Overlap check (skip for all-day events and container 'all' scope edits)
     if (!v.allDay && v.start && v.end) {
@@ -1666,6 +1732,8 @@ async function _saveModal() {
                 name: v.name, color: v.color,
                 time_start: v.start, time_end: v.end,
                 layer: v.layer,
+                active_start_date: v.active_start_date,
+                active_end_date: v.active_end_date,
                 ..._repeatPayload(v)
             });
             showToast('时间容器已创建', 'success');
@@ -1676,6 +1744,8 @@ async function _saveModal() {
                 time_start: v.allDay ? null : v.start,
                 time_end:   v.allDay ? null : v.end,
                 color: v.color, source: 'manual',
+                active_start_date: v.active_start_date,
+                active_end_date: v.active_end_date,
                 ..._repeatPayload(v)
             });
             showToast('日程事件已创建', 'success');
@@ -1695,6 +1765,8 @@ async function _saveModal() {
                     name: v.name, color: v.color,
                     time_start: v.start, time_end: v.end,
                     layer: v.layer,
+                    active_start_date: v.active_start_date,
+                    active_end_date: v.active_end_date,
                     ..._repeatPayload(v)
                 });
                 showToast('时间容器已更新', 'success');
@@ -1705,6 +1777,8 @@ async function _saveModal() {
                 time_start: v.allDay ? null : v.start,
                 time_end:   v.allDay ? null : v.end,
                 color: v.color,
+                active_start_date: v.active_start_date,
+                active_end_date: v.active_end_date,
                 ..._repeatPayload(v)
             });
             showToast('日程事件已更新', 'success');
@@ -1762,6 +1836,7 @@ if (typeof window !== 'undefined') {
         buildCalendarDayProjection,
         buildRepeatOptions,
         buildRepeatControlHTML,
+        addMonthsClampedISO,
         getMonthItemClass,
         _repeatPayload,
         _repeatLabel

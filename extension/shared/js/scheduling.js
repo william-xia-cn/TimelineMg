@@ -69,6 +69,9 @@
      * @param {Boolean} isWeekend 周六日
      */
     function containerAppliesToDate(c, dateObj, dateStr, dayOfWeek, isWeekday, isWeekend) {
+        if (c.active_start_date && dateStr < c.active_start_date) return false;
+        if (c.active_end_date && dateStr > c.active_end_date) return false;
+
         switch (c.repeat) {
             case 'none':    return false;
             case 'daily':   return true;
@@ -118,6 +121,9 @@
         if (event.source === 'container_override' || event.source === 'container_skip') {
             return event.date === dateStr;
         }
+        if (event.active_start_date && dateStr < event.active_start_date) return false;
+        if (event.active_end_date && dateStr > event.active_end_date) return false;
+
         const repeat = event.repeat || 'none';
         if (repeat === 'none') return event.date === dateStr;
         if (repeat === 'once') return (event.once_date || event.date) === dateStr;

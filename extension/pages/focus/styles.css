@@ -171,9 +171,11 @@ body::before {
 }
 
 .board-column {
-    /* 默认保持 4 列完整出现在首屏：40%/40%/10%/10% */
-    flex: 1 1 40%;
-    min-width: 220px;
+    /* 三主列按 vw 比例固定宽度，确保恰好填满首屏 */
+    /* 100vw - sidebar(64) - padding×2(24) - sidebar-board gap(12) - col-gaps×2(24) = 100vw - 124px */
+    /* 比例 2 : 1.5 : 1，总份数 4.5 */
+    flex: 0 0 calc((100vw - 124px) * 2 / 4.5);
+    min-width: 0;
     background: var(--column-bg);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
@@ -185,9 +187,9 @@ body::before {
     box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
 }
 
-/* 日程列：2 份；纵向 padding 压缩，给日历体更多可视高度 */
+/* 日程列：1.5 份；纵向 padding 压缩，给日历体更多可视高度 */
 .board-column.column-calendar {
-    flex: 1 1 40%;
+    flex: 0 0 calc((100vw - 124px) * 1.5 / 4.5);
     padding: 6px 12px;
 }
 .column-calendar .column-header {
@@ -200,10 +202,12 @@ body::before {
     flex-shrink: 0;
 }
 
-.board-column.column-week,
+.board-column.column-week {
+    flex: 0 0 calc((100vw - 124px) * 1 / 4.5);
+}
+
 .board-column.column-feed {
-    flex: 1 1 10%;
-    min-width: 220px;
+    flex: 0 0 280px;
 }
 
 /* 高亮色块 */
@@ -498,33 +502,54 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
     color: var(--text-sub);
 }
 
-.current-task-quick-add {
+.dashboard-footer-actions {
     width: 100%;
-    background: var(--card-bg);
-    border: 1px solid var(--border-stroke);
-    border-radius: var(--radius-md);
-    padding: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
     flex-shrink: 0;
 }
 
-.current-task-quick-add-main {
+.dashboard-footer-action,
+.current-task-quick-add,
+.daily-journal-entry {
+    min-width: 0;
+    height: 44px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-stroke);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    min-width: 0;
+    justify-content: center;
+    gap: 8px;
+    color: var(--text-main);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: var(--transition);
+}
+
+.dashboard-footer-action:hover,
+.current-task-quick-add:hover,
+.daily-journal-entry:hover {
+    border-color: var(--accent);
+    box-shadow: 0 6px 14px rgba(37, 99, 235, 0.12);
+    transform: translateY(-1px);
+}
+
+.current-task-quick-add-main,
+.daily-journal-main {
+    display: contents;
 }
 
 .current-task-quick-add-action {
     flex-shrink: 0;
 }
 
-.current-task-quick-add-icon {
-    width: 34px;
-    height: 34px;
+.current-task-quick-add-icon,
+.daily-journal-icon {
+    width: 28px;
+    height: 28px;
     border-radius: 8px;
     background: #eaf5ff;
     color: var(--accent);
@@ -533,27 +558,42 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
     flex-shrink: 0;
 }
 
-.current-task-quick-add-icon .material-symbols-outlined { font-size: 20px; }
-
-.current-task-quick-add-copy {
-    min-width: 0;
+.daily-journal-status-snapshot .daily-journal-icon {
+    background: #fef3c7;
+    color: #b45309;
 }
 
-.current-task-quick-add-copy h3 {
+.daily-journal-status-draft .daily-journal-icon {
+    background: #ede9fe;
+    color: #7c3aed;
+}
+
+.daily-journal-status-submitted .daily-journal-icon {
+    background: #d1fae5;
+    color: var(--green);
+}
+
+.current-task-quick-add-icon .material-symbols-outlined,
+.daily-journal-icon .material-symbols-outlined {
+    font-size: 18px;
+}
+
+.current-task-quick-add-copy,
+.daily-journal-copy {
+    min-width: 0;
+    display: block;
+}
+
+.dashboard-footer-action-title {
+    display: block;
     color: var(--text-main);
     font-size: 12px;
     font-weight: 700;
-    margin-bottom: 2px;
-}
-
-.current-task-quick-add-copy p {
-    color: var(--text-sub);
-    font-size: 11px;
+    line-height: 1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
-
 .desktop-work-reminder-banner {
     width: 100%;
     background: rgba(255, 255, 255, 0.92);
@@ -2686,6 +2726,18 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
     padding: 0 12px 12px;
 }
 
+.column-feed .desktop-work-reminder-banner {
+    width: auto;
+    margin: 0 12px 10px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.column-feed .desktop-work-reminder-banner .btn-micro {
+    width: 100%;
+    justify-content: center;
+}
+
 .notes-link-preview {
     margin-top: 8px;
 }
@@ -2732,9 +2784,8 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
    Responsive
    ================== */
 @media (max-width: 1400px) {
-    .board-column.column-week,
     .board-column.column-feed {
-        min-width: 260px;
+        flex-basis: 260px;
     }
 }
 
@@ -2742,9 +2793,8 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
     .board-column {
         padding: 12px;
     }
-    .board-column.column-week,
     .board-column.column-feed {
-        min-width: 240px;
+        flex-basis: 240px;
     }
 }
 
