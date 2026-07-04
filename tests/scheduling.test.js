@@ -490,19 +490,6 @@ async function runAsyncChecks() {
     assert("ManageBac 任务默认 start_date 不落到过去",
         S.getDefaultStartDate({ due_date:'2026-05-20', source:'managebac' }, '2026-05-12'),
         '2026-05-12');
-    assert("3 天内升级 important",
-        S.getEscalatedPriority({ due_date:'2026-05-17', priority:'medium' }, '2026-05-14'),
-        'important');
-    assert("1 天内升级 urgent",
-        S.getEscalatedPriority({ due_date:'2026-05-15', priority:'medium' }, '2026-05-14'),
-        'urgent');
-    assert("逾期升级 urgent",
-        S.getEscalatedPriority({ due_date:'2026-05-13', priority:'low' }, '2026-05-14'),
-        'urgent');
-    assert("已有 urgent 不降级",
-        S.getEscalatedPriority({ due_date:'2026-06-01', priority:'urgent' }, '2026-05-14'),
-        'urgent');
-
     const timetable = [
         { id:'e1', source:'timetable', subject_in_matrixview:'English Language Acquisition Phase 5', title:'English Language', date:'2026-05-16' },
         { id:'e2', source:'timetable', title:'Math Analysis', date:'2026-05-17' },
@@ -527,9 +514,9 @@ async function runAsyncChecks() {
     ], timetable, '2026-05-14');
     assert("SubjectInMatrixView 标准化后仍受初始化开始日期下界约束并向后寻找可用课表日", tolerantMatch[0].start_date, '2026-05-26');
     assert("start_date 等于 due_date 也尊重配置开始日期，urgent 不能提前到今天", byId.get('urgent').start_date, '2026-05-15');
-    assert("important/urgent 任务写入 urgent priority", byId.get('urgent').priority, 'urgent');
+    assert("Arrange 不修改 urgent 任务原始 priority", byId.get('urgent').priority, 'medium');
     assert("明确开始日期窗口的 important 任务不能被拉早到今天，且当天同学科课表可原地匹配", byId.get('explicit-important').start_date, '2026-05-16');
-    assert("明确开始日期窗口的 important 任务仍可升级 priority", byId.get('explicit-important').priority, 'important');
+    assert("Arrange 不修改明确开始日期窗口任务 priority", byId.get('explicit-important').priority, 'medium');
     assert("无 subject 任务也使用下一个可用课表日", byId.get('nosubject').start_date, '2026-05-26');
     assert("有 subject 但无课表匹配的任务使用下一个可用课表日", byId.get('unmatched-subject').start_date, '2026-05-26');
     assert("有 subject 且 start_date 等于 due_date 时不重新初始化，不能早于配置开始日期", byId.get('unmatched-subject-due-start').start_date, '2026-06-01');
@@ -573,7 +560,7 @@ async function runAsyncChecks() {
     assert("明确开始日期窗口不能被课表调早；无后续匹配时按后续可用课表日并受 due 约束", explicitById.get('subject-window').start_date, '2026-05-25');
     assert("明确开始日期窗口允许在窗口内向后移动", explicitById.get('clamp-due').start_date, '2026-05-25');
     assert("start_date 晚于 due_date 的异常窗口限制到 due_date", explicitById.get('invalid-window').start_date, '2026-05-15');
-    assert("异常窗口仍可更新 priority", explicitById.get('invalid-window').priority, 'urgent');
+    assert("异常窗口也不修改 priority", explicitById.get('invalid-window').priority, 'medium');
 
     const expiredWindow = S.arrangeTaskStartDates([
         { id:'move-today', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-05-25', start_date:'2026-05-18' },
@@ -650,7 +637,7 @@ async function runAsyncChecks() {
     assertBool("arrangeTasks preview 不写 task", fakeDb.tasks.find(t => t.id === 'a').start_date == null, true);
     assertBool("arrangeTasks preview 不写 last_run_at", !!fakeDb.settings.task_arrange_last_run_at, false);
     assert("arrangeTasks preview 汇总日期调整", previewResult.summary.date_changes, 2);
-    assert("arrangeTasks preview 汇总 priority 升级", previewResult.summary.priority_changes, 1);
+    assert("arrangeTasks preview 不汇总 priority 升级", previewResult.summary.priority_changes, 0);
     assert("arrangeTasks preview 汇总 ManageBac 变更", previewResult.summary.managebac_changes, 1);
 
     const cancelled = await S.maybeRunTaskArrange(fakeDb, {
@@ -668,7 +655,7 @@ async function runAsyncChecks() {
     assert("用户确认后 Arrange 更新两个未完成任务", arrangeResult.arranged, 2);
     assert("arrangeTasks subject 任务先初始化且不被课表拉早，无后续课表时写 arranged_date", fakeDb.tasks.find(t => t.id === 'a').arranged_date, '2026-05-29');
     assert("arrangeTasks ManageBac 异常明确窗口限制到 due_date 并写 arranged_date", fakeDb.tasks.find(t => t.id === 'b').arranged_date, '2026-05-16');
-    assert("arrangeTasks ManageBac 异常明确窗口仍升级 priority", fakeDb.tasks.find(t => t.id === 'b').priority, 'important');
+    assert("arrangeTasks 不修改 ManageBac priority", fakeDb.tasks.find(t => t.id === 'b').priority, 'medium');
     assert("arrangeTasks 不处理 completed", fakeDb.tasks.find(t => t.id === 'c').start_date, '2026-05-20');
     assert("arrangeTasks 不处理停用学科 Plan 下任务", fakeDb.tasks.find(t => t.id === 'inactive').start_date, '2026-05-22');
     assertBool("用户确认后写入 last_run_at", !!fakeDb.settings.task_arrange_last_run_at, true);

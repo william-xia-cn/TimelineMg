@@ -996,7 +996,7 @@ function getRecurrenceLabel(task = {}) {
 }
 
 async function getQuickAddBuckets(planId) {
-    if (TaskApp.currentPlanId === planId) return TaskApp.currentPlanBuckets || [];
+    if (String(TaskApp.currentPlanId) === String(planId)) return TaskApp.currentPlanBuckets || [];
     if (typeof TimeWhereDB.getBucketsByPlan === 'function') {
         return await TimeWhereDB.getBucketsByPlan(planId);
     }

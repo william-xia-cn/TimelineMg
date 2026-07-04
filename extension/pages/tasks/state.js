@@ -31,6 +31,7 @@ window.TaskApp = {
     viewMode: 'plan',              // 'plan' | 'my_day' | 'my_tasks' | 'my_managebac'
     groupBy: 'due_date',           // 'due_date' | 'bucket' | 'priority' | 'progress' | 'labels'
     focusedGroupKey: null,
+    loadRevision: 0,
     selectedTaskId: null,
     searchQuery: '',
     filters: createDefaultTaskFilters(),
@@ -86,23 +87,43 @@ window.TaskApp = {
         await TimeWhereDB.setSetting(TASK_BOARD_PREFS_KEY, this.preferences);
     },
 
+    resolvePlanId(planId) {
+        const plan = (this.plans || []).find(item => String(item.id) === String(planId));
+        return plan ? plan.id : planId;
+    },
+
+    clearTransientSearch() {
+        this.searchQuery = '';
+        const searchInput = typeof document !== 'undefined' ? document.getElementById('searchInput') : null;
+        if (searchInput) searchInput.value = '';
+    },
+
     async loadPlan(planId) {
+        const resolvedPlanId = this.resolvePlanId(planId);
+        const loadRevision = ++this.loadRevision;
         this.focusedGroupKey = null;
-        this.currentPlanId = planId;
+        this.clearTransientSearch();
+        this.currentPlanId = resolvedPlanId;
         this.viewMode = 'plan';
         const [buckets, labels, tasks] = await Promise.all([
-            TimeWhereDB.getBucketsByPlan(planId),
-            TimeWhereDB.getLabelsByPlan(planId),
-            TimeWhereDB.getTasksByPlan(planId)
+            TimeWhereDB.getBucketsByPlan(resolvedPlanId),
+            TimeWhereDB.getLabelsByPlan(resolvedPlanId),
+            TimeWhereDB.getTasksByPlan(resolvedPlanId)
         ]);
+        if (loadRevision !== this.loadRevision || this.viewMode !== 'plan' || String(this.currentPlanId) !== String(resolvedPlanId)) {
+            return false;
+        }
         this.currentPlanBuckets = buckets;
         this.currentPlanLabels = labels;
         this.currentPlanTasks = tasks;
-        this.applySavedViewPreferences('plan', planId);
+        this.applySavedViewPreferences('plan', resolvedPlanId);
+        return true;
     },
 
     async loadMyDay() {
+        const loadRevision = ++this.loadRevision;
         this.focusedGroupKey = null;
+        this.clearTransientSearch();
         this.viewMode = 'my_day';
         this.currentPlanId = null;
 
@@ -117,11 +138,13 @@ window.TaskApp = {
             allBuckets.push(...b);
             allLabels.push(...l);
         }
+        if (loadRevision !== this.loadRevision || this.viewMode !== 'my_day') return false;
         this.currentPlanBuckets = allBuckets;
         this.currentPlanLabels = allLabels;
 
         // Load all tasks, filter to today + overdue
         const allTasks = await TimeWhereDB.getAllTasks();
+        if (loadRevision !== this.loadRevision || this.viewMode !== 'my_day') return false;
         const today = new Date();
         const todayStr = formatDateISO(today);
 
@@ -131,10 +154,13 @@ window.TaskApp = {
             return t.due_date <= todayStr; // Today + overdue
         });
         this.applySavedViewPreferences('my_day');
+        return true;
     },
 
     async loadMyTasks() {
+        const loadRevision = ++this.loadRevision;
         this.focusedGroupKey = null;
+        this.clearTransientSearch();
         this.viewMode = 'my_tasks';
         this.currentPlanId = null;
 
@@ -149,16 +175,22 @@ window.TaskApp = {
             allBuckets.push(...b);
             allLabels.push(...l);
         }
+        if (loadRevision !== this.loadRevision || this.viewMode !== 'my_tasks') return false;
         this.currentPlanBuckets = allBuckets;
         this.currentPlanLabels = allLabels;
 
         // All tasks from all plans
-        this.currentPlanTasks = await TimeWhereDB.getAllTasks();
+        const allTasks = await TimeWhereDB.getAllTasks();
+        if (loadRevision !== this.loadRevision || this.viewMode !== 'my_tasks') return false;
+        this.currentPlanTasks = allTasks;
         this.applySavedViewPreferences('my_tasks');
+        return true;
     },
 
     async loadMyManageBac() {
+        const loadRevision = ++this.loadRevision;
         this.focusedGroupKey = null;
+        this.clearTransientSearch();
         this.viewMode = 'my_managebac';
         this.currentPlanId = null;
 
@@ -172,26 +204,32 @@ window.TaskApp = {
             allBuckets.push(...b);
             allLabels.push(...l);
         }
+        if (loadRevision !== this.loadRevision || this.viewMode !== 'my_managebac') return false;
         this.currentPlanBuckets = allBuckets;
         this.currentPlanLabels = allLabels;
 
         const allTasks = await TimeWhereDB.getAllTasks();
+        if (loadRevision !== this.loadRevision || this.viewMode !== 'my_managebac') return false;
         this.currentPlanTasks = TimeWhereManageBac.filterManageBacTasks(allTasks);
         this.applySavedViewPreferences('my_managebac');
+        return true;
     },
 
     async refresh() {
+        let loaded = true;
         if (this.viewMode === 'my_day') {
-            await this.loadMyDay();
+            loaded = await this.loadMyDay();
         } else if (this.viewMode === 'my_tasks') {
-            await this.loadMyTasks();
+            loaded = await this.loadMyTasks();
         } else if (this.viewMode === 'my_managebac') {
-            await this.loadMyManageBac();
+            loaded = await this.loadMyManageBac();
         } else if (this.currentPlanId) {
-            await this.loadPlan(this.currentPlanId);
+            loaded = await this.loadPlan(this.currentPlanId);
         }
+        if (loaded === false) return false;
         await this.loadPlans();
         this.renderAll();
+        return true;
     },
 
     // --- Filtering ---
@@ -272,7 +310,7 @@ window.TaskApp = {
     },
 
     getCurrentPlan() {
-        return this.plans.find(p => p.id === this.currentPlanId) || null;
+        return this.plans.find(p => String(p.id) === String(this.currentPlanId)) || null;
     },
 
     getViewTitle() {

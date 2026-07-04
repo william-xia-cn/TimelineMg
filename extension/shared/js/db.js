@@ -541,7 +541,14 @@ const TimeWhereDB = {
 
     // ========== Buckets ==========
     async getBucketsByPlan(planId) {
-        return await db.buckets.where('plan_id').equals(planId).sortBy('sort_order');
+        let buckets = await db.buckets.where('plan_id').equals(planId).sortBy('sort_order');
+        if (buckets.length === 0 && planId !== null && planId !== undefined) {
+            const planKey = String(planId);
+            buckets = (await db.buckets.toArray())
+                .filter(bucket => String(bucket.plan_id) === planKey)
+                .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+        }
+        return buckets;
     },
 
     async getBucketById(id) {
@@ -660,7 +667,12 @@ const TimeWhereDB = {
 
     // ========== Labels ==========
     async getLabelsByPlan(planId) {
-        return await db.labels.where('plan_id').equals(planId).toArray();
+        let labels = await db.labels.where('plan_id').equals(planId).toArray();
+        if (labels.length === 0 && planId !== null && planId !== undefined) {
+            const planKey = String(planId);
+            labels = (await db.labels.toArray()).filter(label => String(label.plan_id) === planKey);
+        }
+        return labels;
     },
 
     async getLabelById(id) {
@@ -735,6 +747,10 @@ const TimeWhereDB = {
 
     async getTasksByPlan(planId, filter = {}) {
         let tasks = await db.tasks.where('plan_id').equals(planId).toArray();
+        if (tasks.length === 0 && planId !== null && planId !== undefined) {
+            const planKey = String(planId);
+            tasks = (await db.tasks.toArray()).filter(task => String(task.plan_id) === planKey);
+        }
 
         if (filter.progress) {
             tasks = tasks.filter(t => t.progress === filter.progress);

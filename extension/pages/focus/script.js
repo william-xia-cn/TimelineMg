@@ -618,8 +618,6 @@ async function buildFocusDebugSnapshot() {
                     source: change.task?.source || change.task?.source_type || null,
                     old_start_date: change.task?.start_date || null,
                     new_start_date: change.start_date || null,
-                    old_priority: change.task?.priority || null,
-                    new_priority: change.priority || null,
                     updates: change.updates || {}
                 }))
             };
@@ -1714,7 +1712,6 @@ function renderTaskArrangeReviewRows(records) {
                     <tr>
                         <th>Task</th>
                         <th>开始日期变化</th>
-                        <th>优先级变化</th>
                         <th>来源</th>
                     </tr>
                 </thead>
@@ -1723,9 +1720,6 @@ function renderTaskArrangeReviewRows(records) {
                         const startChange = change.from_start_date === change.to_start_date
                             ? '不变'
                             : `${change.from_start_date || '未设置'} → ${change.to_start_date || '未设置'}`;
-                        const priorityChange = change.from_priority === change.to_priority
-                            ? '不变'
-                            : `${change.from_priority || 'medium'} → ${change.to_priority || 'medium'}`;
                         const statusClass = change.status === 'failed' ? 'failed' : 'applied';
                         const statusText = change.status === 'failed' ? `失败：${change.error || '未知错误'}` : '已自动应用';
                         return `
@@ -1736,7 +1730,6 @@ function renderTaskArrangeReviewRows(records) {
                                     <em>${escapeHTML(statusText)}</em>
                                 </td>
                                 <td>${escapeHTML(startChange)}</td>
-                                <td>${escapeHTML(priorityChange)}</td>
                                 <td>${escapeHTML(change.source === 'managebac' ? 'ManageBac' : change.source || 'TimeWhere')}</td>
                             </tr>`;
                     }).join('')}

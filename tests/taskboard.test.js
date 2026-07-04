@@ -603,9 +603,44 @@ assert('copied task keeps selected same-plan fields by default',
     && copiedPayload.notes === 'Source notes'
     && copiedPayload.labels.join(',') === '7');
 assert('copy task dialog can create a recurring copied task series',
-    dialogsJs.includes('copyTaskRecurrenceFrequency')
+    dialogsJs.includes('copyTaskDueDate')
+    && dialogsJs.includes("const defaultDueDate = task.due_date || task.deadline || '';")
+    && dialogsJs.includes('copyDueDate')
+    && dialogsJs.includes('due_date: copyDueDate')
+    && dialogsJs.includes('copyTaskRecurrenceFrequency')
     && dialogsJs.includes('copyTaskRecurrenceCount')
     && dialogsJs.includes('TimeWhereDB.addRecurringTaskSeries(payload'));
+const copiedCustomDuePayload = context.buildCopiedTaskPayload({
+    title: 'Same day source',
+    plan_id: 'plan-eng',
+    start_date: '2026-05-20',
+    due_date: '2026-05-20',
+    deadline: '2026-05-20'
+}, {
+    title: 'Custom due copy',
+    copyDates: true,
+    due_date: '2026-05-25'
+});
+assert('copied same-day task can override due date and keeps start date aligned',
+    copiedCustomDuePayload.start_date === '2026-05-25'
+    && copiedCustomDuePayload.due_date === '2026-05-25'
+    && copiedCustomDuePayload.deadline === '2026-05-25');
+
+const copiedWindowDuePayload = context.buildCopiedTaskPayload({
+    title: 'Window source',
+    plan_id: 'plan-eng',
+    start_date: '2026-05-18',
+    due_date: '2026-05-20',
+    deadline: '2026-05-20'
+}, {
+    title: 'Window custom due copy',
+    copyDates: true,
+    due_date: '2026-05-25'
+});
+assert('copied date-window task can override due date without changing configured start date',
+    copiedWindowDuePayload.start_date === '2026-05-18'
+    && copiedWindowDuePayload.due_date === '2026-05-25'
+    && copiedWindowDuePayload.deadline === '2026-05-25');
 const copiedNoDatesPayload = context.buildCopiedTaskPayload({
     title: 'No date copy',
     plan_id: 'plan-eng',
@@ -750,6 +785,16 @@ assert('Task detail notes render safe external HTTP link preview',
     && detailPanelJs.includes('openTaskNotesExternalLink(linkButton)')
     && externalLinksJs.includes('data-action="open-external-link"')
     && boardCss.includes('.external-link-item'));
+assert('Task detail due_date keeps same-day start_date in sync only when editing due date',
+    detailPanelJs.includes('const updates = { [field]: value }')
+    && detailPanelJs.includes("if (field === 'due_date')")
+    && detailPanelJs.includes('const currentTask = await TimeWhereDB.getTaskById(taskId)')
+    && detailPanelJs.includes('const currentStartDate = currentTask?.start_date || null')
+    && detailPanelJs.includes('const currentDueDate = currentTask?.due_date || currentTask?.deadline || null')
+    && detailPanelJs.includes('if (currentStartDate === currentDueDate)')
+    && detailPanelJs.includes('updates.start_date = value')
+    && detailPanelJs.includes('await updateTaskFromDetail(updates)')
+    && !detailPanelJs.includes("if (field === 'start_date')"));
 assert('Task detail allows ManageBac local execution fields while protecting source facts',
     detailPanelJs.includes('ManageBac 来源标题、截止日期和来源元数据只读')
     && detailPanelJs.includes('const titleEditable = isManageBacTask ? \'false\' : \'true\'')
@@ -943,11 +988,38 @@ assert('Task Board preferences are scoped by plan or aggregate view', stateJs.in
     && stateJs.includes('`plan:${planId}`')
     && stateJs.includes('return viewMode ==='));
 
-assert('Task Board restores group and filters after each view load', stateJs.includes("this.applySavedViewPreferences('plan', planId)")
+assert('Task Board restores group and filters after each view load', stateJs.includes("this.applySavedViewPreferences('plan', resolvedPlanId)")
     && stateJs.includes("this.applySavedViewPreferences('my_day')")
     && stateJs.includes("this.applySavedViewPreferences('my_tasks')")
     && stateJs.includes("this.applySavedViewPreferences('my_managebac')"));
 
+assert('Task Board view loads ignore stale async results', stateJs.includes('loadRevision: 0')
+    && /async loadPlan\(planId\) \{[\s\S]*?const resolvedPlanId = this\.resolvePlanId\(planId\);[\s\S]*?const loadRevision = \+\+this\.loadRevision;[\s\S]*?String\(this\.currentPlanId\) !== String\(resolvedPlanId\)[\s\S]*?return false;[\s\S]*?return true;/.test(stateJs)
+    && /async loadMyTasks\(\) \{[\s\S]*?const loadRevision = \+\+this\.loadRevision;[\s\S]*?if \(loadRevision !== this\.loadRevision \|\| this\.viewMode !== 'my_tasks'\) return false;[\s\S]*?return true;/.test(stateJs)
+    && /async refresh\(\) \{[\s\S]*?if \(loaded === false\) return false;[\s\S]*?return true;/.test(stateJs));
+
+assert('Task Board navigation skips rendering stale plan loads', sidebarJs.includes('planId = TaskApp.resolvePlanId(planId)')
+    && sidebarJs.includes('const loaded = await TaskApp.loadPlan(planId)')
+    && sidebarJs.includes('if (loaded === false) return false;')
+    && sidebarJs.includes('return true;')
+    && scriptJs.includes('const loaded = await selectPlan(planId)')
+    && scriptJs.includes('if (loaded === false) return;'));
+
+assert('Task Board sidebar active Plan comparison tolerates string and numeric ids', sidebarJs.includes('String(plan.id) === String(TaskApp.currentPlanId)'));
+assert('Task Board Plan navigation clears transient search without clearing saved filters', stateJs.includes('clearTransientSearch()')
+    && stateJs.includes("const searchInput = typeof document !== 'undefined' ? document.getElementById('searchInput') : null")
+    && stateJs.includes("this.searchQuery = ''")
+    && /async loadPlan\(planId\) \{[\s\S]*?this\.focusedGroupKey = null;[\s\S]*?this\.clearTransientSearch\(\);[\s\S]*?this\.applySavedViewPreferences\('plan', resolvedPlanId\)/.test(stateJs)
+    && /async loadMyTasks\(\) \{[\s\S]*?this\.focusedGroupKey = null;[\s\S]*?this\.clearTransientSearch\(\);[\s\S]*?this\.applySavedViewPreferences\('my_tasks'\)/.test(stateJs));
+assert('Task Board Plan id handling preserves string ids and DB lookup tolerates string numeric mismatch', stateJs.includes('resolvePlanId(planId)')
+    && stateJs.includes('TimeWhereDB.getTasksByPlan(resolvedPlanId)')
+    && scriptJs.includes('TaskApp.resolvePlanId(planLink.dataset.planId)')
+    && scriptJs.includes('TaskApp.resolvePlanId(menuBtn.dataset.planId)')
+    && sidebarJs.includes("const sourceId = TaskApp.resolvePlanId(e.dataTransfer.getData('text/plain'))")
+    && !scriptJs.includes('parseInt(planLink.dataset.planId)')
+    && dbJs.includes("String(task.plan_id) === planKey")
+    && dbJs.includes("String(bucket.plan_id) === planKey")
+    && dbJs.includes("String(label.plan_id) === planKey"));
 assert('Task Board saved bucket group is not applied to cross-plan views', stateJs.includes("viewMode !== 'plan' && this.groupBy === 'bucket'")
     && stateJs.includes('this.groupBy = this.getDefaultGroupBy(viewMode)'));
 assert('Task Board group focus is temporary and cleared by navigation and controls',

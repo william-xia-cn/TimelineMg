@@ -371,7 +371,16 @@ function wireDetailPanelEvents(taskId, options = {}) {
             } else {
                 value = value || null;
             }
-            await updateTaskFromDetail({ [field]: value });
+            const updates = { [field]: value };
+            if (field === 'due_date') {
+                const currentTask = await TimeWhereDB.getTaskById(taskId);
+                const currentStartDate = currentTask?.start_date || null;
+                const currentDueDate = currentTask?.due_date || currentTask?.deadline || null;
+                if (currentStartDate === currentDueDate) {
+                    updates.start_date = value;
+                }
+            }
+            await updateTaskFromDetail(updates);
             await TaskApp.refresh();
         });
     });

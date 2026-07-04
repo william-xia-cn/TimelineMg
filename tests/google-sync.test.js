@@ -641,11 +641,11 @@ async function run() {
             last_synced_at: '2026-05-15T00:00:00.000Z'
         }
     };
-    const arrangedTask = { ...baseArrangeTask, arranged_date: '2026-05-29', priority: 'urgent' };
+    const arrangedTask = { ...baseArrangeTask, arranged_date: '2026-05-29' };
     await arrangeOnlyDb.db.tasks.put(arrangedTask);
     const arrangeOnlyMeta = await GoogleSync.markEntityDirty(arrangeOnlyDb, 'tasks', 'task-1', arrangedTask, {
-        changedFields: ['arranged_date', 'priority'],
-        googleSyncDerivedFields: ['arranged_date', 'priority'],
+        changedFields: ['arranged_date'],
+        googleSyncDerivedFields: ['arranged_date'],
         googleSyncDerivedBaseRecord: baseArrangeTask,
         googleSyncDerivedSource: 'task_arrange_auto',
         device_id: 'device-a'
@@ -653,7 +653,7 @@ async function run() {
     const arrangeOnlyDoc = await GoogleSync.buildLocalSyncDocument(arrangeOnlyDb, { device_id: 'device-a' });
     const arrangeOnlyEntity = arrangeOnlyDoc.entities[baseArrangeEntity.key];
     const arrangeOnlyPlan = GoogleSync.planSyncMerge(arrangeOnlyDoc, makeSyncDoc({ [baseArrangeEntity.key]: baseArrangeEntity }));
-    assert('Arrange-only arranged_date and priority changes are recorded as derived but not dirty',
+    assert('Arrange-only arranged_date changes are recorded as derived but not dirty',
         arrangeOnlyMeta.derived_only === true
         && arrangeOnlyMeta.dirty === false
         && arrangeOnlyEntity.dirty === false
@@ -672,7 +672,7 @@ async function run() {
     assert('Applying cloud user changes preserves local Arrange-derived fields',
         afterCloudApply.notes === 'Remote note'
         && afterCloudApply.arranged_date === '2026-05-29'
-        && afterCloudApply.priority === 'urgent');
+        && afterCloudApply.priority === baseArrangeTask.priority);
 
     const manualTask = { ...afterCloudApply, start_date: '2026-06-01' };
     await arrangeOnlyDb.db.tasks.put(manualTask);
@@ -1001,11 +1001,14 @@ async function run() {
         dbScript.includes('skipUserUpdatedAt')
         && dbScript.includes('googleSyncDerivedBaseRecord')
         && dbScript.includes('changedFields: Object.keys(data || {})'));
-    assert('Task Arrange writes arranged_date and priority as local derived sync fields',
+    assert('Task Arrange writes arranged_date as a local derived sync field',
         schedulingScript.includes('googleSyncDerivedFields')
         && schedulingScript.includes('googleSyncDerivedSource')
         && schedulingScript.includes('task_arrange_auto')
-        && schedulingScript.includes('skipUserUpdatedAt'));
+        && schedulingScript.includes('skipUserUpdatedAt')
+        && schedulingScript.includes("field === 'arranged_date'")
+        && !schedulingScript.includes('updates.priority')
+        && !schedulingScript.includes("field === 'priority'"));
     assert('Pending Task Arrange review writes derived fields with the same sync semantics',
         taskArrangeAutoScript.includes('googleSyncDerivedFields')
         && taskArrangeAutoScript.includes('googleSyncDerivedSource')

@@ -97,6 +97,7 @@ async function showCopyTaskDialog(taskId) {
         `)
     ].join('');
     const defaultTitle = `${task.title || 'Untitled task'} - 副本`;
+    const defaultDueDate = task.due_date || task.deadline || '';
 
     showDialog({
         title: '复制任务',
@@ -117,6 +118,10 @@ async function showCopyTaskDialog(taskId) {
                 </label>
                 <div class="copy-task-options" aria-label="复制字段">
                     <label class="copy-task-checkbox"><input type="checkbox" id="copyTaskDates" checked> 复制日期</label>
+                    <label class="copy-task-field" data-copy-dates-field>
+                        <span>结束日期</span>
+                        <input type="date" id="copyTaskDueDate" class="dialog-input" value="${escapeAttribute(defaultDueDate)}">
+                    </label>
                     <label class="copy-task-checkbox"><input type="checkbox" id="copyTaskNotes" checked> 复制说明</label>
                     <label class="copy-task-checkbox"><input type="checkbox" id="copyTaskChecklist" checked> 复制清单</label>
                     <label class="copy-task-checkbox"><input type="checkbox" id="copyTaskLabels" checked> 复制标签</label>
@@ -152,6 +157,7 @@ async function showCopyTaskDialog(taskId) {
 
             const bucketValue = document.getElementById('copyTaskBucket')?.value || '';
             const copyDates = document.getElementById('copyTaskDates')?.checked !== false;
+            const copyDueDate = document.getElementById('copyTaskDueDate')?.value || null;
             const copyNotes = document.getElementById('copyTaskNotes')?.checked !== false;
             const copyChecklist = document.getElementById('copyTaskChecklist')?.checked !== false;
             const copyLabels = document.getElementById('copyTaskLabels')?.checked !== false;
@@ -162,6 +168,7 @@ async function showCopyTaskDialog(taskId) {
                 title,
                 bucket_id: bucketValue ? parseInt(bucketValue, 10) : null,
                 copyDates,
+                due_date: copyDueDate,
                 copyNotes,
                 copyChecklist,
                 copyLabels
@@ -176,6 +183,11 @@ async function showCopyTaskDialog(taskId) {
             if (newTask?.id) openDetailPanel(newTask.id);
             return true;
         }
+    });
+
+    document.getElementById('copyTaskDates')?.addEventListener('change', (event) => {
+        const dueInput = document.getElementById('copyTaskDueDate');
+        if (dueInput) dueInput.disabled = event.target.checked === false;
     });
 
     document.getElementById('copyTaskRecurrenceFrequency')?.addEventListener('change', (event) => {
@@ -210,11 +222,14 @@ function buildCopiedTaskPayload(task, options = {}) {
     };
 
     if (options.copyDates !== false) {
-        payload.start_date = task.start_date || null;
-        payload.due_date = task.due_date || task.deadline || null;
-        if (task.deadline || task.due_date) payload.deadline = task.deadline || task.due_date;
+        const sourceStartDate = task.start_date || null;
+        const sourceDueDate = task.due_date || task.deadline || null;
+        const hasDueDateOverride = Object.prototype.hasOwnProperty.call(options, 'due_date');
+        const dueDate = hasDueDateOverride ? (options.due_date || null) : sourceDueDate;
+        payload.start_date = sourceStartDate === sourceDueDate ? dueDate : sourceStartDate;
+        payload.due_date = dueDate;
+        payload.deadline = dueDate;
     }
-
     return payload;
 }
 

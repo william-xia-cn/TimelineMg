@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (menuBtn) {
                 e.preventDefault();
                 e.stopPropagation();
-                const planId = parseInt(menuBtn.dataset.planId);
+                const planId = TaskApp.resolvePlanId(menuBtn.dataset.planId);
                 showPlanContextMenu(planId, menuBtn);
                 return;
             }
@@ -82,8 +82,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             const planLink = e.target.closest('.plan-link');
             if (planLink) {
                 e.preventDefault();
-                const planId = parseInt(planLink.dataset.planId);
-                await selectPlan(planId);
+                const planId = TaskApp.resolvePlanId(planLink.dataset.planId);
+                const loaded = await selectPlan(planId);
+                if (loaded === false) return;
                 showNoPlanState(false);
                 return;
             }
@@ -91,7 +92,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             // My Day
             if (e.target.closest('#navMyDay')) {
                 e.preventDefault();
-                await TaskApp.loadMyDay();
+                const loaded = await TaskApp.loadMyDay();
+                if (loaded === false) return;
                 updateSidebarActiveState('my_day');
                 showNoPlanState(false);
                 TaskApp.renderAll();
@@ -102,7 +104,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             // My Tasks
             if (e.target.closest('#navMyTasks')) {
                 e.preventDefault();
-                await TaskApp.loadMyTasks();
+                const loaded = await TaskApp.loadMyTasks();
+                if (loaded === false) return;
                 updateSidebarActiveState('my_tasks');
                 showNoPlanState(false);
                 TaskApp.renderAll();
@@ -113,7 +116,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             // MyManageBac
             if (e.target.closest('#navMyManageBac')) {
                 e.preventDefault();
-                await TaskApp.loadMyManageBac();
+                const loaded = await TaskApp.loadMyManageBac();
+                if (loaded === false) return;
                 updateSidebarActiveState('my_managebac');
                 showNoPlanState(false);
                 TaskApp.renderAll();

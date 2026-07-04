@@ -18,7 +18,7 @@ function renderSidebar() {
     let html = '';
 
     for (const plan of plans) {
-        const isActive = plan.id === TaskApp.currentPlanId;
+        const isActive = String(plan.id) === String(TaskApp.currentPlanId);
         const bgColor = plan.color || '#2b56e3';
         const iconChar = plan.icon_char || plan.name.charAt(0);
 
@@ -43,7 +43,9 @@ function renderSidebar() {
 // ========== Plan Selection ==========
 
 async function selectPlan(planId) {
-    await TaskApp.loadPlan(planId);
+    planId = TaskApp.resolvePlanId(planId);
+    const loaded = await TaskApp.loadPlan(planId);
+    if (loaded === false) return false;
     renderSidebar();
     renderBoard();
 
@@ -54,6 +56,7 @@ async function selectPlan(planId) {
 
     // Close detail panel if open
     if (typeof closeDetailPanel === 'function') closeDetailPanel();
+    return true;
 }
 
 // ========== Create Plan Dialog ==========
@@ -117,9 +120,10 @@ function showCreatePlanDialog() {
 // ========== Plan Context Menu ==========
 
 function showPlanContextMenu(planId, anchorEl) {
-    const plan = TaskApp.plans.find(p => p.id === planId);
+    planId = TaskApp.resolvePlanId(planId);
+    const plan = TaskApp.plans.find(p => String(p.id) === String(planId));
     if (!plan) return;
-    const planIndex = TaskApp.plans.findIndex(p => p.id === planId);
+    const planIndex = TaskApp.plans.findIndex(p => String(p.id) === String(planId));
     const isFirst = planIndex <= 0;
     const isLast = planIndex === TaskApp.plans.length - 1;
     const canDeletePlan = !(plan.subject && plan.subject_active !== false);
@@ -231,12 +235,12 @@ function setupPlanReorderHandlers(container) {
 
     container.addEventListener('drop', async (e) => {
         const target = e.target.closest('.plan-link');
-        const sourceId = parseInt(e.dataTransfer.getData('text/plain'), 10);
-        const targetId = target ? parseInt(target.dataset.planId, 10) : null;
+        const sourceId = TaskApp.resolvePlanId(e.dataTransfer.getData('text/plain'));
+        const targetId = target ? TaskApp.resolvePlanId(target.dataset.planId) : null;
         const rect = target ? target.getBoundingClientRect() : null;
         const insertAfter = rect ? e.clientY > rect.top + rect.height / 2 : false;
         clearPlanDragState();
-        if (!sourceId || !targetId || sourceId === targetId) return;
+        if (!sourceId || !targetId || String(sourceId) === String(targetId)) return;
         await reorderPlanNearTarget(sourceId, targetId, insertAfter);
     });
 
@@ -251,19 +255,19 @@ function clearPlanDragState() {
 
 async function reorderPlanNearTarget(sourceId, targetId, insertAfter = false) {
     const plans = [...TaskApp.plans];
-    const sourceIndex = plans.findIndex(plan => plan.id === sourceId);
-    const targetIndex = plans.findIndex(plan => plan.id === targetId);
+    const sourceIndex = plans.findIndex(plan => String(plan.id) === String(sourceId));
+    const targetIndex = plans.findIndex(plan => String(plan.id) === String(targetId));
     if (sourceIndex < 0 || targetIndex < 0) return;
 
     const [moved] = plans.splice(sourceIndex, 1);
-    const adjustedTargetIndex = plans.findIndex(plan => plan.id === targetId);
+    const adjustedTargetIndex = plans.findIndex(plan => String(plan.id) === String(targetId));
     plans.splice(adjustedTargetIndex + (insertAfter ? 1 : 0), 0, moved);
     await persistPlanOrder(plans.map(plan => plan.id));
 }
 
 async function movePlanInSidebar(planId, direction) {
     const plans = [...TaskApp.plans];
-    const index = plans.findIndex(plan => plan.id === planId);
+    const index = plans.findIndex(plan => String(plan.id) === String(planId));
     const targetIndex = index + direction;
     if (index < 0 || targetIndex < 0 || targetIndex >= plans.length) return;
     [plans[index], plans[targetIndex]] = [plans[targetIndex], plans[index]];
@@ -272,7 +276,7 @@ async function movePlanInSidebar(planId, direction) {
 
 async function movePlanToSidebarEdge(planId, edge) {
     const plans = [...TaskApp.plans];
-    const index = plans.findIndex(plan => plan.id === planId);
+    const index = plans.findIndex(plan => String(plan.id) === String(planId));
     if (index < 0) return;
     const [moved] = plans.splice(index, 1);
     if (edge === 'top') {

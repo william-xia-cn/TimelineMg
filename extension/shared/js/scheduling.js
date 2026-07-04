@@ -393,23 +393,6 @@
         return constrained;
     }
 
-    function getEscalatedPriority(task, today) {
-        const todayStr = typeof today === 'string' ? today : formatDateISO(today || new Date());
-        const dueDate = task?.due_date || task?.deadline;
-        const current = task?.priority || 'medium';
-        if (!dueDate) return current;
-        const daysLeft = daysBetweenISO(todayStr, dueDate);
-        if (daysLeft === null) return current;
-
-        let floorPriority = current;
-        if (daysLeft <= 1) {
-            floorPriority = 'urgent';
-        } else if (daysLeft <= 3) {
-            floorPriority = 'important';
-        }
-        return prioritySortValue(floorPriority) < prioritySortValue(current) ? floorPriority : current;
-    }
-
     function taskIsUrgentOrOverdue(task, todayStr) {
         const dueDate = task?.due_date || task?.deadline;
         return task?.priority === 'urgent' || (dueDate && dueDate < todayStr);
@@ -507,13 +490,12 @@
             const dueDate = normalizeTaskDate(task.due_date || task.deadline);
             if (!dueDate || dueDate < todayStr) continue;
 
-            const nextPriority = getEscalatedPriority(task, todayStr);
             const baseStartDate = getArrangeBaseStartDate(task, todayStr);
             let nextStartDate = null;
             const nextClassDate = getTaskSubject(task)
                 ? findNextSubjectTimetableDate(task, timetableEvents, baseStartDate)
                 : null;
-            const isUrgent = nextPriority === 'urgent';
+            const isUrgent = taskIsUrgentOrOverdue(task, todayStr);
 
             if (isUrgent) {
                 nextStartDate = todayStr;
@@ -527,13 +509,12 @@
 
             const updates = {};
             if (nextStartDate && nextStartDate !== normalizeTaskDate(task.arranged_date)) updates.arranged_date = nextStartDate;
-            if (nextPriority && nextPriority !== task.priority) updates.priority = nextPriority;
             arranged.push({
                 task,
                 task_id: task.id,
                 arranged_date: nextStartDate,
                 start_date: nextStartDate,
-                priority: nextPriority,
+                priority: task.priority || 'medium',
                 updates,
                 changed: Object.keys(updates).length > 0
             });
@@ -547,7 +528,7 @@
             total_tasks: (plan || []).length,
             changed_tasks: changes.length,
             date_changes: changes.filter(item => Object.prototype.hasOwnProperty.call(item.updates, 'arranged_date')).length,
-            priority_changes: changes.filter(item => Object.prototype.hasOwnProperty.call(item.updates, 'priority')).length,
+            priority_changes: 0,
             managebac_changes: changes.filter(item => isManageBacTask(item.task)).length
         };
     }
@@ -599,11 +580,10 @@
 
     function formatArrangeConfirmation(summary) {
         return [
-            'Task Date Arrange 检测到任务日期/优先级调整。',
+            'Task Date Arrange 检测到任务日期调整。',
             '',
             `待调整任务：${summary.changed_tasks}`,
             `日期调整：${summary.date_changes}`,
-            `Priority 升级：${summary.priority_changes}`,
             `ManageBac 来源任务：${summary.managebac_changes}`,
             '',
             '确认后才会写入这些本地调度变更。'
@@ -877,7 +857,7 @@
                 await db.updateTask(item.task_id, item.updates, {
                     skipTaskArrangeDirty: true,
                     skipUserUpdatedAt: true,
-                    googleSyncDerivedFields: Object.keys(item.updates || {}).filter(field => field === 'arranged_date' || field === 'priority'),
+                    googleSyncDerivedFields: Object.keys(item.updates || {}).filter(field => field === 'arranged_date'),
                     googleSyncDerivedSource: 'task_arrange_auto'
                 });
                 arranged++;
@@ -948,7 +928,6 @@
         buildCalendarDayProjection,
         getContainerCapacity,
         getDefaultStartDate,
-        getEscalatedPriority,
         arrangeTaskStartDates,
         summarizeArrangePlan,
         formatArrangeConfirmation,
