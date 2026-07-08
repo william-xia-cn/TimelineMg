@@ -212,7 +212,7 @@ assert('Current task action buttons are neutral by default and only busy/pressed
     && focusCss.includes('.task-action-controls .btn-micro:active')
     && popupCss.includes('.task-action-controls .btn-micro[data-busy="true"]')
     && popupCss.includes('.task-action-controls .btn-micro:active')
-    && focusScript.includes('dashboard-footer-action')
+    && focusScript.includes('dashboard-top-action')
     && popupScript.includes('btn-micro primary current-task-quick-add-action')
     && focusScript.includes('data-action="open-today-journal"')
     && popupScript.includes('btn-micro primary" data-action="open-today-journal"'));
@@ -314,24 +314,23 @@ assert('Dashboard detail notes render safe external HTTP link preview',
     && focusScript.includes('openTaskNotesExternalLink(actionEl)')
     && focusCss.includes('.external-link-item')
     && externalLinksScript.includes('extractHttpLinks'));
-assert('Dashboard exposes copyable debug snapshot for current runtime data',
-    focusHtml.includes('data-action="copy-debug-snapshot"')
-    && focusHtml.includes('诊断快照')
-    && focusScript.includes('async function buildFocusDebugSnapshot')
-    && focusScript.includes('daily_settle')
-    && focusScript.includes('arrange_preview')
-    && focusScript.includes('matrixview_subject_mappings')
-    && focusScript.includes('navigator.clipboard.writeText')
-    && focusScript.includes("action === 'copy-debug-snapshot'")
-    && focusCss.includes('.debug-snapshot-btn'));
-assert('Dashboard debug snapshot avoids obvious secret and raw link settings',
-    focusScript.includes("task_arrange_dirty_at")
-    && focusScript.includes("task_arrange_last_checked_at")
-    && focusScript.includes("task_arrange_last_run_at")
-    && !focusScript.includes("safeSettings.google")
-    && !focusScript.includes("safeSettings.token")
-    && !focusScript.includes("safeSettings.managebac_ics_url")
-    && !focusScript.includes("safeSettings.managebac_link"));
+assert('Dashboard header no longer exposes debug snapshot action', !focusHtml.includes('data-action="copy-debug-snapshot"')
+    && !focusHtml.includes('诊断快照')
+    && !focusScript.includes('async function buildFocusDebugSnapshot')
+    && !focusScript.includes("action === 'copy-debug-snapshot'")
+    && !focusCss.includes('.debug-snapshot-btn'));
+assert('Dashboard current task cards keep accordion styling instead of native details display',
+    focusCss.includes('.accordion-task')
+    && focusCss.includes('.accordion-task summary')
+    && focusCss.includes('.accordion-task summary::-webkit-details-marker')
+    && /\.accordion-task summary\s*\{[\s\S]*list-style:\s*none/.test(focusCss)
+    && focusCss.includes('.task-chk')
+    && focusCss.includes('.task-title')
+    && focusCss.includes('.task-title-text')
+    && focusCss.includes('.expand-icon')
+    && focusCss.includes('.task-details')
+    && focusCss.includes('.accordion-task.task-overdue')
+    && focusCss.includes('.accordion-task.task-unassigned'));
 assert('delegated click listener handles Focus actions', focusScript.includes("document.addEventListener('click', handleFocusDelegatedClick)")
     && focusScript.includes('function handleFocusDelegatedClick'));
 assert('Dashboard weekly task list opens local task detail modal instead of toggling or leaving Dashboard', focusScript.includes('data-action="open-task-detail"')
@@ -389,7 +388,11 @@ assert('Dashboard calendar column places Task Arrange Review between title and d
     && focusHtml.includes('data-action="open-task-arrange-review"')
     && focusHtml.includes('taskArrangeReviewBadge')
     && focusHtml.includes('暂无新的自动调整')
-    && focusCss.includes('.column-calendar .task-arrange-review-entry'));
+    && focusCss.includes('.column-calendar .task-arrange-review-entry')
+    && focusCss.includes('.column-calendar .icon-btn')
+    && focusCss.includes('#cal-date-range')
+    && focusCss.includes('height: 24px')
+    && focusCss.includes('font-size: 11px'));
 assert('Dashboard Task Arrange Review modal marks unread records viewed', focusScript.includes('openTaskArrangeReviewModal')
     && focusScript.includes('renderTaskArrangeReviewRows')
     && focusScript.includes('markUnreadTaskArrangeReviewsViewed')
@@ -544,21 +547,28 @@ assert('Dashboard current task column appends today journal entry', focusScript.
     && focusScript.includes('daily-journal-entry')
     && focusScript.includes('data-action="open-today-journal"')
     && focusScript.includes('今日总结'));
-assert('Dashboard current task column renders compact footer actions in one row', focusScript.includes('const quickAddHTML = renderCurrentTaskQuickAdd(todayStr)')
-    && focusScript.includes('const footerActionsHTML = renderDashboardFooterActions(quickAddHTML, journalEntryHTML)')
-    && focusScript.includes('dashboard-footer-actions')
-    && focusScript.includes('current-task-quick-add dashboard-footer-action')
-    && focusScript.includes('daily-journal-entry dashboard-footer-action')
-    && focusScript.includes('dashboard-footer-action-title">临时添加')
-    && focusScript.includes('dashboard-footer-action-title">今日总结')
+assert('Dashboard current task header renders compact actions between title and status', focusScript.includes('const quickAddHTML = renderCurrentTaskQuickAdd(todayStr)')
+    && focusScript.includes('const topActionsHTML = renderDashboardTopActions(quickAddHTML, journalEntryHTML)')
+    && focusScript.includes("querySelector('.column-now .current-task-header-actions')")
+    && focusScript.includes('headerActions.innerHTML = topActionsHTML')
+    && focusHtml.includes('current-task-header-actions')
+    && focusHtml.includes('current-task-header-status')
+    && focusHtml.indexOf('<h2>当前任务</h2>') < focusHtml.indexOf('current-task-header-actions')
+    && focusHtml.indexOf('current-task-header-actions') < focusHtml.indexOf('current-task-header-status')
+    && focusScript.includes('dashboard-top-actions')
+    && focusScript.includes('current-task-quick-add dashboard-top-action')
+    && focusScript.includes('daily-journal-entry dashboard-top-action')
+    && focusScript.includes('dashboard-top-action-title">临时添加')
+    && focusScript.includes('dashboard-top-action-title">今日总结')
     && focusScript.includes('daily-journal-status-${escapeAttribute(status)}')
     && focusScript.includes('title="今日总结：${escapeAttribute(statusLabel)}"')
     && !focusScript.includes('未计划的任务添加')
     && !focusScript.includes('比如课后作业及其他临时任务')
     && !focusScript.includes('current-task-quick-add-action')
     && !focusScript.includes('current-task-quick-add-meta')
-    && /current-task-scroll-body custom-scrollbar[\s\S]*\$\{html\}[\s\S]*<\/div>[\s\S]*\$\{footerActionsHTML\}/.test(focusScript)
-    && /current-task-scroll-body custom-scrollbar[\s\S]*empty-state[\s\S]*<\/div>[\s\S]*\$\{footerActionsHTML\}/.test(focusScript));
+    && !focusScript.includes('current-task-quick-add-icon')
+    && !focusScript.includes('daily-journal-icon')
+    && !/section.innerHTML = `[sS]*${topActionsHTML}[sS]*current-task-scroll-body/.test(focusScript));
 assert('Dashboard exposes lightweight work reminder status in feed column with stop action',
     focusScript.includes('renderDesktopWorkReminderBanner')
     && focusScript.includes('desktop-work-reminder-banner')
@@ -623,9 +633,11 @@ assert('Dashboard quick add supports button open Enter save refresh and toast', 
     && focusScript.includes('closeDashboardQuickAddTaskPanel()')
     && focusScript.includes('await loadDashboardData()')
     && focusScript.includes("showToast('任务已添加到今天', 'success')"));
-assert('Dashboard quick add CSS defines fixed compact card controls', focusCss.includes('.dashboard-footer-actions')
-    && focusCss.includes('.dashboard-footer-action')
-    && focusCss.includes('.dashboard-footer-action-title')
+assert('Dashboard quick add CSS defines compact header action controls', focusCss.includes('.dashboard-top-actions')
+    && focusCss.includes('.dashboard-top-action')
+    && focusCss.includes('.dashboard-top-action-title')
+    && focusCss.includes('.current-task-header-actions')
+    && focusCss.includes('.current-task-header-status')
     && focusCss.includes('.daily-journal-status-submitted')
     && !focusCss.includes('.current-task-quick-add-submit')
     && !focusCss.includes('.current-task-quick-add-meta')
@@ -638,10 +650,12 @@ assert('Dashboard quick add CSS defines fixed compact card controls', focusCss.i
     && focusCss.includes('.dashboard-task-detail-panel .detail-textarea')
     && focusCss.includes('.partial-complete-panel')
     && focusCss.includes('.partial-complete-ratio-grid')
-    && /dashboard-footer-actions\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, 1fr\)/.test(focusCss));
-assert('Dashboard current task body scrolls separately from fixed footer actions', focusScript.includes('current-task-scroll-body custom-scrollbar')
-    && /current-task-scroll-body custom-scrollbar[\s\S]*\$\{html\}[\s\S]*<\/div>[\s\S]*\$\{footerActionsHTML\}/.test(focusScript)
-    && /current-task-scroll-body custom-scrollbar[\s\S]*empty-state[\s\S]*<\/div>[\s\S]*\$\{footerActionsHTML\}/.test(focusScript));
+    && focusCss.includes('grid-template-columns: repeat(2, minmax(0, 1fr))')
+    && focusCss.includes('width: 100%')
+    && focusCss.includes('height: 24px'));
+assert('Dashboard current task body scrolls separately from header actions', focusScript.includes('current-task-scroll-body custom-scrollbar')
+    && focusScript.includes('headerActions.innerHTML = topActionsHTML')
+    && !/section.innerHTML = `[sS]*${topActionsHTML}[sS]*current-task-scroll-body/.test(focusScript));
 assert('Dashboard today journal uses delegated actions and URL parameter', focusScript.includes("action === 'open-today-journal'")
     && focusScript.includes("new URLSearchParams(window.location.search).get('journal_date')")
     && focusScript.includes('openDailyJournalModal(date)'));
@@ -712,7 +726,7 @@ assert('Dashboard weekly journal submitted pending and overdue states exist', fo
     && focusCss.includes('.weekly-journal-day.pending'));
 assert('Dashboard summary entries stay fixed while middle content scrolls', /column-now \.column-content,\s*\.column-week \.column-content[\s\S]*overflow:\s*hidden/.test(focusCss)
     && /current-task-scroll-body,[\s\S]*weekly-progress-scroll-body[\s\S]*overflow-y:\s*auto/.test(focusCss)
-    && /dashboard-footer-actions[\s\S]*flex-shrink:\s*0/.test(focusCss)
+    && /dashboard-top-actions[\s\S]*flex-shrink:\s*0/.test(focusCss)
     && /weekly-journal-section[\s\S]*flex-shrink:\s*0/.test(focusCss));
 assert('Popup expanded task cards do not clip core task content', popupCss.includes('.task-list')
     && /task-list[\s\S]*overflow-y:\s*auto/.test(popupCss)

@@ -225,8 +225,9 @@ async function loadTaskColumn() {
     const settle = dailySettle(taskPool, todayContainers, now);
     const journalEntryHTML = await renderTodayJournalEntry(todayStr, now);
     const quickAddHTML = renderCurrentTaskQuickAdd(todayStr);
-    const footerActionsHTML = renderDashboardFooterActions(quickAddHTML, journalEntryHTML);
-
+    const topActionsHTML = renderDashboardTopActions(quickAddHTML, journalEntryHTML);
+    const headerActions = document.querySelector('.column-now .current-task-header-actions');
+    if (headerActions) headerActions.innerHTML = topActionsHTML;
     // 更新 header badge — 容器状态 or 任务计数
     const badge = document.querySelector('.column-now .badge');
     if (badge) {
@@ -265,7 +266,7 @@ async function loadTaskColumn() {
                     </button>
                 </div>
             </div>
-            ${footerActionsHTML}`;
+            `;
         return;
     }
 
@@ -303,10 +304,10 @@ async function loadTaskColumn() {
         });
     });
     section.innerHTML = `
-        <div class="current-task-scroll-body custom-scrollbar">
+            <div class="current-task-scroll-body custom-scrollbar">
             ${html}
         </div>
-        ${footerActionsHTML}`;
+        `;
     if (targetTaskId) {
         section.querySelector(`[data-task-card-id="${CSS.escape(targetTaskId)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
@@ -367,17 +368,14 @@ async function stopDesktopWorkReminder() {
     showToast(result?.status === 'stopped' ? '本次提醒已停止' : '当前没有进行中的提醒', 'info');
 }
 
-function renderDashboardFooterActions(quickAddHTML, journalEntryHTML) {
-    return `<div class="dashboard-footer-actions">${quickAddHTML}${journalEntryHTML}</div>`;
+function renderDashboardTopActions(quickAddHTML, journalEntryHTML) {
+    return `<div class="dashboard-top-actions">${quickAddHTML}${journalEntryHTML}</div>`;
 }
 
 function renderCurrentTaskQuickAdd(todayStr) {
     return `
-        <button class="current-task-quick-add dashboard-footer-action" type="button" data-action="quick-add-current-task" data-quick-add-date="${escapeAttribute(todayStr)}" aria-label="临时添加任务">
-            <span class="current-task-quick-add-icon"><span class="material-symbols-outlined">playlist_add</span></span>
-            <span class="current-task-quick-add-copy">
-                <span class="dashboard-footer-action-title">临时添加</span>
-            </span>
+        <button class="current-task-quick-add dashboard-top-action" type="button" data-action="quick-add-current-task" data-quick-add-date="${escapeAttribute(todayStr)}" aria-label="临时添加任务">
+            <span class="dashboard-top-action-title">临时添加</span>
         </button>`;
 }
 
@@ -397,11 +395,8 @@ async function renderTodayJournalEntry(todayStr, now = new Date()) {
     };
     const statusLabel = labelMap[status] || labelMap.none;
     return `
-        <button class="daily-journal-entry dashboard-footer-action daily-journal-status-${escapeAttribute(status)}" type="button" data-action="open-today-journal" data-journal-date="${escapeAttribute(todayStr)}" title="今日总结：${escapeAttribute(statusLabel)}" aria-label="今日总结，${escapeAttribute(statusLabel)}">
-            <span class="daily-journal-icon" aria-hidden="true"><span class="material-symbols-outlined">edit</span></span>
-            <span class="daily-journal-copy">
-                <span class="dashboard-footer-action-title">今日总结</span>
-            </span>
+        <button class="daily-journal-entry dashboard-top-action daily-journal-status-${escapeAttribute(status)}" type="button" data-action="open-today-journal" data-journal-date="${escapeAttribute(todayStr)}" title="今日总结：${escapeAttribute(statusLabel)}" aria-label="今日总结，${escapeAttribute(statusLabel)}">
+            <span class="dashboard-top-action-title">今日总结</span>
         </button>`;
 }
 
@@ -512,193 +507,6 @@ function getTaskStatusLabel(progress) {
     if (progress === 'completed') return { text: '已完成', className: 'completed' };
     if (progress === 'in_progress') return { text: '进行中', className: 'in-progress' };
     return { text: '未开始', className: 'not-started' };
-}
-
-function sanitizeDebugTask(task) {
-    if (!task) return null;
-    return {
-        id: task.id,
-        title: task.title || '',
-        progress: task.progress || task.status || 'not_started',
-        priority: task.priority || 'medium',
-        plan_id: task.plan_id || null,
-        bucket_id: task.bucket_id || null,
-        start_date: task.start_date || null,
-        arranged_date: task.arranged_date || null,
-        due_date: task.due_date || task.deadline || null,
-        schedule_time: task.schedule_time || null,
-        duration: task.duration || null,
-        source: task.source || task.source_type || null,
-        subject: task.subject || task.plan_subject || null,
-        subject_in_matrixview: task.subject_in_matrixview || task.plan_subject_in_matrixview || null,
-        checklist: Array.isArray(task.checklist)
-            ? task.checklist.map(item => ({ id: item.id || null, title: item.title || '', checked: !!item.checked }))
-            : [],
-        assignment: task.assignment ? { ...task.assignment } : null
-    };
-}
-
-function sanitizeDebugContainer(container) {
-    if (!container) return null;
-    return {
-        id: container.id,
-        name: container.name || '',
-        type: container.type || null,
-        layer: container.layer ?? null,
-        enabled: container.enabled !== false,
-        date: container.date || null,
-        repeat: container.repeat || null,
-        repeat_days: container.repeat_days || null,
-        time_start: container.time_start || null,
-        time_end: container.time_end || null,
-        color: container.color || null
-    };
-}
-
-function sanitizeDebugEvent(event) {
-    if (!event) return null;
-    return {
-        id: event.id,
-        title: event.title || event.name || '',
-        source: event.source || null,
-        type: event.type || null,
-        date: event.date || null,
-        time_start: event.time_start || null,
-        time_end: event.time_end || null,
-        subject: event.subject || null,
-        subject_in_matrixview: event.subject_in_matrixview || null,
-        repeat: event.repeat || null,
-        repeat_days: event.repeat_days || null
-    };
-}
-
-function serializeSettleResult(settle) {
-    const result = {};
-    for (const [id, info] of settle.result.entries()) {
-        result[id] = {
-            container: sanitizeDebugContainer(info.container),
-            capacity: info.capacity,
-            used: info.used,
-            tasks: (info.tasks || []).map(sanitizeDebugTask)
-        };
-    }
-    return result;
-}
-
-async function buildFocusDebugSnapshot() {
-    const now = new Date();
-    const todayStr = formatDateISO(now);
-    const allTasks = await TimeWhereDB.getAllTasks();
-    const plans = TimeWhereDB.getPlans ? await TimeWhereDB.getPlans() : [];
-    const allContainers = (await TimeWhereDB.getContainers({ enabled: true })) || [];
-    const events = TimeWhereDB.getEvents ? await TimeWhereDB.getEvents() : [];
-    const matrixMappings = TimeWhereDB.getSetting
-        ? (await TimeWhereDB.getSetting('matrixview_subject_mappings') || [])
-        : [];
-    const dateObj = new Date(todayStr + 'T00:00:00');
-    const dow = dateObj.getDay();
-    const isWeekday = dow >= 1 && dow <= 5;
-    const isWeekend = dow === 0 || dow === 6;
-    const todayContainers = allContainers.filter(c =>
-        containerAppliesToDate(c, dateObj, todayStr, dow, isWeekday, isWeekend)
-    );
-    const taskPool = buildDailyTaskPool(allTasks, now);
-    const settle = dailySettle(taskPool, todayContainers, now);
-    let arrangePreview = null;
-    try {
-        if (window.TimeWhereScheduling?.arrangeTasks) {
-            const preview = await window.TimeWhereScheduling.arrangeTasks(TimeWhereDB, now, { apply: false });
-            arrangePreview = {
-                proposed: preview.proposed,
-                summary: preview.summary,
-                changes: (preview.changes || []).map(change => ({
-                    task_id: change.task_id,
-                    title: change.task?.title || '',
-                    source: change.task?.source || change.task?.source_type || null,
-                    old_start_date: change.task?.start_date || null,
-                    new_start_date: change.start_date || null,
-                    updates: change.updates || {}
-                }))
-            };
-        }
-    } catch (error) {
-        arrangePreview = { error: error.message };
-    }
-    const safeSettings = {};
-    for (const key of ['task_arrange_dirty_at', 'task_arrange_last_checked_at', 'task_arrange_last_run_at']) {
-        safeSettings[key] = TimeWhereDB.getSetting ? await TimeWhereDB.getSetting(key) : null;
-    }
-    return {
-        schema: 'timewhere-focus-debug-v1',
-        generated_at: now.toISOString(),
-        page: {
-            url: location.href,
-            title: document.title,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            today: todayStr,
-            now_local: now.toString()
-        },
-        counts: {
-            all_tasks: allTasks.length,
-            task_pool: taskPool.length,
-            all_containers: allContainers.length,
-            today_containers: todayContainers.length,
-            events: events.length,
-            plans: plans.length
-        },
-        plans: plans.map(plan => ({
-            id: plan.id,
-            name: plan.name || '',
-            subject: plan.subject || null,
-            subject_in_matrixview: plan.subject_in_matrixview || null,
-            subject_active: plan.subject_active !== false
-        })),
-        matrixview_subject_mappings: Array.isArray(matrixMappings)
-            ? matrixMappings.map(mapping => ({
-                plan_name: mapping.plan_name || null,
-                subject: mapping.subject || null,
-                subject_in_matrixview: mapping.subject_in_matrixview || null,
-                source: mapping.source || null,
-                updated_at: mapping.updated_at || null
-            }))
-            : [],
-        daily_settle: {
-            input: {
-                task_pool: taskPool.map(sanitizeDebugTask),
-                today_containers: todayContainers.map(sanitizeDebugContainer)
-            },
-            output: {
-                active_container: sanitizeDebugContainer(settle.activeContainer),
-                current_container: sanitizeDebugContainer(settle.currentContainerInfo?.container),
-                current_tasks: (settle.currentTasks || []).map(sanitizeDebugTask),
-                display_tasks: (settle.displayTasks || []).map(sanitizeDebugTask),
-                unassigned: (settle.unassigned || []).map(sanitizeDebugTask),
-                containers: serializeSettleResult(settle)
-            }
-        },
-        arrange_preview: arrangePreview,
-        events: events.map(sanitizeDebugEvent),
-        settings: safeSettings,
-        dom: {
-            current_task_cards: Array.from(document.querySelectorAll('[data-task-card-id]')).map(el => ({
-                task_id: el.getAttribute('data-task-card-id'),
-                class_name: el.className,
-                text: (el.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 500)
-            }))
-        }
-    };
-}
-
-async function copyFocusDebugSnapshot() {
-    try {
-        const snapshot = await buildFocusDebugSnapshot();
-        const text = JSON.stringify(snapshot, null, 2);
-        await navigator.clipboard.writeText(text);
-        showToast('诊断快照已复制，可直接粘贴给我', 'success');
-    } catch (error) {
-        console.error('[Focus] debug snapshot failed:', error);
-        showToast(`复制诊断快照失败：${error.message}`, 'error');
-    }
 }
 
 function renderTaskChecklist(task) {
@@ -1575,12 +1383,7 @@ function handleFocusDelegatedClick(e) {
         e.preventDefault();
         runFocusAction(actionEl, openTaskArrangeReviewModal);
         return;
-    }
-    if (action === 'copy-debug-snapshot') {
-        e.preventDefault();
-        runFocusAction(actionEl, copyFocusDebugSnapshot);
-        return;
-    }
+    }
     if (action === 'close-modal') {
         e.preventDefault();
         closeAddTaskModal();

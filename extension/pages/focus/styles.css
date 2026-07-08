@@ -201,6 +201,230 @@ body::before {
 .column-calendar .column-header h2 {
     flex-shrink: 0;
 }
+.column-now .column-header {
+    gap: 8px;
+}
+
+.column-now .column-header h2 {
+    flex: 0 0 auto;
+}
+
+.current-task-header-actions {
+    flex: 0 1 184px;
+    min-width: 0;
+    margin-left: 6px;
+    margin-right: auto;
+}
+
+.current-task-header-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+.dashboard-top-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.dashboard-top-action,
+.current-task-quick-add,
+.daily-journal-entry {
+    min-width: 0;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(100, 116, 139, 0.18);
+    border-radius: 999px;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-main);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: var(--transition);
+}
+
+.dashboard-top-action:hover,
+.current-task-quick-add:hover,
+.daily-journal-entry:hover {
+    border-color: var(--accent);
+    background: rgba(29, 140, 248, 0.08);
+}
+
+.dashboard-top-action-title {
+    display: block;
+    color: var(--text-main);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* ==================
+   3. 当前任务 Accordion（simple-task-item 风格）
+   ================== */
+.accordion-task {
+    background: var(--card-bg);
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    transition: var(--transition);
+}
+
+.accordion-task:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+
+.accordion-task summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+    font-size: 13px;
+    color: var(--text-main);
+}
+
+.accordion-task summary::-webkit-details-marker { display: none; }
+
+/* 复选框风格指示器 */
+.task-chk {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #cbd5e1;
+    border-radius: 4px;
+    flex-shrink: 0;
+    transition: var(--transition);
+    position: relative;
+}
+
+.task-chk.is-active {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.task-chk.is-active::after {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 5px;
+    height: 9px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+/* 标题区域 */
+.task-title {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.task-title[data-action="open-current-task-detail"] {
+    cursor: pointer;
+}
+
+.task-title-text {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.task-inline-tags {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.task-status-label {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.task-status-label.not-started {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.task-status-label.in-progress {
+    background: #dbeafe;
+    color: var(--accent);
+}
+
+.task-status-label.completed {
+    background: #d1fae5;
+    color: var(--green);
+}
+
+/* 展开箭头 */
+.expand-icon {
+    font-size: 18px;
+    color: var(--text-sub);
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+}
+
+details[open] summary .expand-icon { transform: rotate(180deg); }
+
+/* 展开后内容区 */
+.task-details { padding: 0 12px 12px 40px; }
+
+.task-details p {
+    font-size: 12px;
+    color: var(--text-sub);
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+/* 逾期任务左边框 */
+.accordion-task.task-overdue {
+    border-left: 3px solid var(--red);
+}
+
+.accordion-task.task-unassigned {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    opacity: 0.88;
+}
+
+.accordion-task.task-unassigned .task-title h4,
+.accordion-task.task-unassigned .task-details {
+    color: var(--text-sub);
+}
+.daily-journal-status-snapshot {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.daily-journal-status-draft {
+    background: #ede9fe;
+    color: #6d28d9;
+}
+
+.daily-journal-status-submitted {
+    background: #d1fae5;
+    color: var(--green);
+}
+
 
 .board-column.column-week {
     flex: 0 0 calc((100vw - 124px) * 1 / 4.5);
@@ -226,11 +450,10 @@ body::before {
 }
 
 .column-header h2 {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
     color: var(--text-main);
 }
-
 /* 明日任务列头内的日期显示：水平紧凑布局 */
 .column-header .gcal-day-header {
     flex-direction: row;
@@ -337,199 +560,27 @@ body::before {
     gap: 16px;
 }
 
-.debug-snapshot-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    height: 26px;
-    padding: 0 9px;
-    border: 1px solid rgba(100, 116, 139, 0.22);
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.78);
-    color: #52627a;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
 
-.debug-snapshot-btn:hover {
-    background: rgba(29, 140, 248, 0.1);
-    border-color: rgba(29, 140, 248, 0.3);
-    color: var(--accent);
-}
-
-.debug-snapshot-btn .material-symbols-outlined {
-    font-size: 15px;
-}
-
-.custom-scrollbar::-webkit-scrollbar { width: 6px; }
-.custom-scrollbar::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 3px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 3px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.3);
-}
-
-/* ==================
-   3. 当前任务 Accordion（simple-task-item 风格）
-   ================== */
-.accordion-task {
-    background: var(--card-bg);
-    border-radius: var(--radius-md);
-    border: 1px solid transparent;
-    transition: var(--transition);
-}
-.accordion-task:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
-.accordion-task details { }
-.accordion-task summary {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px;
-    cursor: pointer;
-    list-style: none;
-    user-select: none;
-    font-size: 13px;
-    color: var(--text-main);
-}
-.accordion-task summary::-webkit-details-marker { display: none; }
-
-/* 复选框风格指示器 */
-.task-chk {
-    width: 18px;
-    height: 18px;
-    border: 2px solid #cbd5e1;
-    border-radius: 4px;
-    flex-shrink: 0;
-    transition: var(--transition);
-    position: relative;
-}
-.task-chk.is-active {
-    background: var(--accent);
-    border-color: var(--accent);
-}
-.task-chk.is-active::after {
-    content: '';
-    position: absolute;
-    left: 4px; top: 1px;
-    width: 5px; height: 9px;
-    border: solid white;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg);
-}
-
-/* 标题区域 */
-.task-title {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    min-width: 0;
-    flex-wrap: wrap;
-}
-.task-title[data-action="open-current-task-detail"] {
-    cursor: pointer;
-}
-.task-title-text {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-main);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.task-inline-tags {
-    display: flex;
-    gap: 4px;
-    flex-shrink: 0;
-}
-
-.task-status-label {
-    display: inline-flex;
-    align-items: center;
-    height: 20px;
-    padding: 0 8px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
-    flex-shrink: 0;
-}
-.task-status-label.not-started {
-    background: #fee2e2;
-    color: var(--red);
-}
-.task-status-label.in-progress {
-    background: #eaf5ff;
-    color: var(--accent);
-}
-.task-status-label.completed {
-    background: #dcfce7;
-    color: var(--green);
-}
-
-/* 展开箭头 */
-.expand-icon {
-    font-size: 18px;
-    color: var(--text-sub);
-    flex-shrink: 0;
-    transition: transform 0.2s ease;
-}
-details[open] summary .expand-icon { transform: rotate(180deg); }
-
-/* 展开后内容区 */
-.task-details { padding: 0 12px 12px 40px; }
-.task-details p { font-size: 12px; color: var(--text-sub); line-height: 1.6; margin-bottom: 10px; }
-
-/* 逾期任务左边框 */
-.accordion-task.task-overdue {
-    border-left: 3px solid var(--red);
-}
-
-.accordion-task.task-unassigned {
-    background: #f8fafc;
-    border-color: #e2e8f0;
-    opacity: 0.88;
-}
-
-.accordion-task.task-unassigned .task-title h4,
-.accordion-task.task-unassigned .task-details {
-    color: var(--text-sub);
-}
-
-.dashboard-footer-actions {
-    width: 100%;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 8px;
-    flex-shrink: 0;
-}
-
-.dashboard-footer-action,
+.dashboard-top-action,
 .current-task-quick-add,
 .daily-journal-entry {
     min-width: 0;
-    height: 44px;
+    height: 30px;
     background: var(--card-bg);
     border: 1px solid var(--border-stroke);
-    border-radius: var(--radius-md);
-    padding: 8px 10px;
+    border-radius: 10px;
+    padding: 4px 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 6px;
     color: var(--text-main);
     cursor: pointer;
     flex-shrink: 0;
     transition: var(--transition);
 }
 
-.dashboard-footer-action:hover,
+.dashboard-top-action:hover,
 .current-task-quick-add:hover,
 .daily-journal-entry:hover {
     border-color: var(--accent);
@@ -537,46 +588,6 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
     transform: translateY(-1px);
 }
 
-.current-task-quick-add-main,
-.daily-journal-main {
-    display: contents;
-}
-
-.current-task-quick-add-action {
-    flex-shrink: 0;
-}
-
-.current-task-quick-add-icon,
-.daily-journal-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    background: #eaf5ff;
-    color: var(--accent);
-    display: grid;
-    place-items: center;
-    flex-shrink: 0;
-}
-
-.daily-journal-status-snapshot .daily-journal-icon {
-    background: #fef3c7;
-    color: #b45309;
-}
-
-.daily-journal-status-draft .daily-journal-icon {
-    background: #ede9fe;
-    color: #7c3aed;
-}
-
-.daily-journal-status-submitted .daily-journal-icon {
-    background: #d1fae5;
-    color: var(--green);
-}
-
-.current-task-quick-add-icon .material-symbols-outlined,
-.daily-journal-icon .material-symbols-outlined {
-    font-size: 18px;
-}
 
 .current-task-quick-add-copy,
 .daily-journal-copy {
@@ -584,7 +595,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
     display: block;
 }
 
-.dashboard-footer-action-title {
+.dashboard-top-action-title {
     display: block;
     color: var(--text-main);
     font-size: 12px;
@@ -594,6 +605,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
     overflow: hidden;
     text-overflow: ellipsis;
 }
+
 .desktop-work-reminder-banner {
     width: 100%;
     background: rgba(255, 255, 255, 0.92);
@@ -689,7 +701,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 }
 
 .dashboard-task-detail-panel .detail-header h2 {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 800;
     color: var(--text-main);
 }
@@ -758,7 +770,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 }
 
 .dashboard-task-detail-panel .detail-title {
-    min-height: 34px;
+    min-height: 30px;
     font-size: 18px;
     font-weight: 700;
     line-height: 1.4;
@@ -802,7 +814,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 }
 
 .dashboard-task-detail-panel .progress-option .material-symbols-outlined {
-    font-size: 16px;
+    font-size: 15px;
 }
 
 .dashboard-task-detail-panel .progress-option:hover,
@@ -982,7 +994,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 }
 
 .dashboard-task-detail-panel .checklist-delete .material-symbols-outlined {
-    font-size: 16px;
+    font-size: 15px;
 }
 
 .dashboard-task-detail-panel .checklist-add-input {
@@ -1053,7 +1065,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 
 .daily-journal-icon {
     width: 34px;
-    height: 34px;
+    height: 30px;
     border-radius: 8px;
     background: #eef2ff;
     color: var(--accent);
@@ -1275,10 +1287,25 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 .cal-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 13px;
+    gap: 5px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--text-sub);
+    white-space: nowrap;
+}
+
+.column-calendar .icon-btn {
+    width: 22px;
+    height: 22px;
+    box-shadow: none;
+}
+
+.column-calendar .icon-btn .material-symbols-outlined {
+    font-size: 16px;
+}
+
+#cal-date-range {
+    font-size: 11px;
 }
 
 .gcal-container {
@@ -1444,12 +1471,12 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 }
 
 .column-calendar .task-arrange-review-entry {
-    margin: 0 auto 0 8px;
+    margin: 0 auto 0 6px;
     min-width: 0;
-    height: 34px;
-    padding: 0 10px;
+    height: 24px;
+    padding: 0 8px;
     border-radius: 999px;
-    gap: 7px;
+    gap: 5px;
 }
 
 .task-arrange-review-entry:hover {
@@ -1463,7 +1490,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 }
 
 .column-calendar .task-arrange-review-entry > .material-symbols-outlined {
-    font-size: 18px;
+    font-size: 15px;
 }
 
 .task-arrange-review-copy {
@@ -1475,7 +1502,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 }
 
 .task-arrange-review-copy strong {
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .task-arrange-review-copy small {
@@ -1844,7 +1871,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+    font-size: 15px;
     flex-shrink: 0;
 }
 .feed-item.alert .feed-icon { background: #fee2e2; color: var(--red); }
@@ -1895,7 +1922,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 }
 
 .modal-header h3 {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text-main);
 }
@@ -1994,7 +2021,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 
 .journal-task-status-icon {
     flex: 0 0 auto;
-    font-size: 16px;
+    font-size: 15px;
 }
 
 .journal-task-status.completed,
@@ -2161,7 +2188,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 }
 
 .partial-complete-check-item {
-    min-height: 34px;
+    min-height: 30px;
     padding: 8px 10px;
     border: 1px solid var(--border-stroke);
     border-radius: var(--radius-sm);
@@ -2706,7 +2733,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
     flex-shrink: 0;
 }
 .habit-check .material-symbols-outlined {
-    font-size: 16px;
+    font-size: 15px;
 }
 .habit-check:hover {
     border-color: var(--accent);
@@ -2786,7 +2813,7 @@ details[open] summary .expand-icon { transform: rotate(180deg); }
 }
 
 .external-link-item .material-symbols-outlined {
-    font-size: 16px;
+    font-size: 15px;
     flex: 0 0 auto;
 }
 
