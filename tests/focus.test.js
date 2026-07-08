@@ -427,7 +427,7 @@ assert('Focus calendar render path uses exact date task display instead of Daily
     && focusScript.includes('const projection = buildCalendarDayProjection({')
     && focusScript.includes('const allItems = projection.timedItems')
     && schedulingScript.includes('getCalendarTasksForDate(tasks, normalizedDateStr)')
-    && schedulingScript.includes('assignCalendarTasksToContainers(dateTasks, dayContainers)')
+    && schedulingScript.includes('assignCalendarTasksToContainers(dateTasks, dayContainers, dateObj)')
     && !focusScript.includes('const dayTaskPool = buildDailyTaskPool(allTasks, dayReferenceTime)')
     && !focusScript.includes('const settle = dailySettle(dayTaskPool, dayContainers, dayReferenceTime)'));
 assert('Focus calendar container item carries exact date tasks into render', focusScript.includes('function getDateTasksForDisplay')
@@ -443,6 +443,14 @@ assert('Focus calendar container card renders task list markup', focusScript.inc
     && focusScript.includes("type === 'due' ? '结束' : '开始'")
     && !focusScript.includes('task-priority-dot')
     && !focusScript.includes('task-item-dur'));
+assert('Focus today tomorrow calendar renders display-only capacity assignment markers', focusScript.includes('calendar-assignment-${assignment}')
+    && focusScript.includes('超出容量')
+    && focusScript.includes('未安排')
+    && focusCss.includes('.container-task-item.calendar-assignment-overflow')
+    && focusCss.includes('.container-task-item.calendar-assignment-unassigned')
+    && schedulingScript.includes('calendar_assignment')
+    && schedulingScript.includes('unassignedTasks')
+    && !schedulingScript.slice(schedulingScript.indexOf('function assignCalendarTasksToContainers'), schedulingScript.indexOf('function buildDailyTaskPool')).includes('updateTask('));
 assert('Focus today tomorrow task display matches Calendar start marker style',
     focusCss.includes('.task-item-type')
     && focusCss.includes('.task-item-start')
@@ -491,10 +499,10 @@ assert('Dashboard current task column renders Daily Settle displayTasks list',
     focusScript.includes('const displayTasks = settle.displayTasks || settle.currentTasks || []')
     && focusScript.includes('displayTasks.forEach((task, index)')
     && focusScript.includes("assignment.status !== 'unassigned'"));
-assert('Dashboard current task list expands only one task, preferring requested then in-progress task',
+assert('Dashboard current task list does not default-expand tasks without an explicit requested task',
     focusScript.includes('const requestedExpandedIndex = hasExpandedTask')
-    && focusScript.includes('const inProgressIndex = displayTasks.findIndex')
-    && focusScript.includes('const expandedIndex = requestedExpandedIndex >= 0 ? requestedExpandedIndex : (inProgressIndex >= 0 ? inProgressIndex : 0)')
+    && !focusScript.includes('const inProgressIndex = displayTasks.findIndex')
+    && focusScript.includes('const expandedIndex = requestedExpandedIndex >= 0 ? requestedExpandedIndex : -1')
     && focusScript.includes('expanded: index === expandedIndex')
     && !focusScript.includes('(isFirst || isInProgress)'));
 assert('Dashboard current task column marks unassigned tasks without hiding actions',

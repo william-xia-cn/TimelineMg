@@ -35,6 +35,28 @@
         return map[label] || 'priority-low';
     }
 
+    function sortDailyTaskCandidates(tasks, referenceDate) {
+        const ref = referenceDate instanceof Date ? referenceDate : new Date();
+        const todayStr = formatDateISO(ref);
+        const nowMin = ref.getHours() * 60 + ref.getMinutes();
+        return [...(tasks || [])].sort((a, b) => {
+            const aTimedFuture = !!(a.schedule_time && timeToMinutes(a.schedule_time) >= nowMin);
+            const bTimedFuture = !!(b.schedule_time && timeToMinutes(b.schedule_time) >= nowMin);
+            if (aTimedFuture !== bTimedFuture) return aTimedFuture ? -1 : 1;
+
+            const aDue = a.due_date || a.deadline || '9999-12-31';
+            const bDue = b.due_date || b.deadline || '9999-12-31';
+            const aOD = aDue < todayStr;
+            const bOD = bDue < todayStr;
+            if (aOD !== bOD) return aOD ? -1 : 1;
+
+            const pa = prioritySortValue(a.priority);
+            const pb = prioritySortValue(b.priority);
+            if (pa !== pb) return pa - pb;
+
+            return aDue.localeCompare(bDue);
+        });
+    }
     function escapeHTML(value) {
         const map = {
             '&': '&amp;',
@@ -186,21 +208,93 @@
         return taskMin >= timeToMinutes(container.time_start) && taskMin < timeToMinutes(container.time_end);
     }
 
-    function assignCalendarTasksToContainers(tasks, containers) {
+    function getCalendarTaskDuration(task) {
+        const duration = Number(task?.duration || task?.estimated_duration || 45);
+        return Number.isFinite(duration) && duration > 0 ? duration : 45;
+    }
+
+    function cloneCalendarTaskWithAssignment(task, assignment, duration) {
+        return {
+            ...task,
+            calendar_assignment: assignment,
+            calendar_duration: duration
+        };
+    }
+
+    function assignCalendarTasksToContainers(tasks, containers, referenceDate) {
         const sortedContainers = [...(containers || [])].sort((a, b) =>
-            String(a.time_start || '').localeCompare(String(b.time_start || ''))
+            timeToMinutes(a.time_start) - timeToMinutes(b.time_start)
         );
         const assignments = new Map(sortedContainers.map(container => [container.id, []]));
-        const firstLayerOne = sortedContainers.find(container => getContainerLayer(container) === 1);
-        const fallbackContainer = firstLayerOne || sortedContainers[0] || null;
+        const containerInfo = new Map(sortedContainers.map(container => [container.id, {
+            capacity: Math.max(0, getContainerCapacity(container)),
+            used: 0,
+            overflow_count: 0,
+            overflow_minutes: 0
+        }]));
+        const unassignedTasks = [];
+        const remaining = sortDailyTaskCandidates(tasks || [], referenceDate);
 
-        (tasks || []).forEach(task => {
-            const target = task.schedule_time
-                ? sortedContainers.find(container => taskMatchesCalendarContainer(task, container))
-                : fallbackContainer;
-            if (target && assignments.has(target.id)) assignments.get(target.id).push(task);
-        });
+        const layer1 = sortedContainers.filter(container => getContainerLayer(container) === 1);
+        const layer2 = sortedContainers.filter(container => getContainerLayer(container) !== 1);
+        const l1StartMin = layer1.length ? timeToMinutes(layer1[0].time_start) : 1440;
+        const l1EndMin = layer1.length ? timeToMinutes(layer1[layer1.length - 1].time_end) : 0;
+        const l2Before = layer2.filter(container => timeToMinutes(container.time_end) <= l1StartMin);
+        const l2After = layer2.filter(container => timeToMinutes(container.time_start) >= l1EndMin);
+        const l2Other = layer2.filter(container => !l2Before.includes(container) && !l2After.includes(container));
+        const distributionOrder = [...layer1, ...l2Before, ...l2After, ...l2Other];
 
+        function canTaskUseContainer(task, container) {
+            return task.schedule_time ? taskMatchesCalendarContainer(task, container) : true;
+        }
+
+        function canFit(container, duration) {
+            const info = containerInfo.get(container.id);
+            return info && (info.used + duration <= info.capacity || info.used === 0);
+        }
+
+        function placeTask(container, task, duration, assignment) {
+            const info = containerInfo.get(container.id);
+            if (assignment === 'overflow') {
+                info.overflow_count += 1;
+                info.overflow_minutes += duration;
+            }
+            info.used += duration;
+            assignments.get(container.id).push(cloneCalendarTaskWithAssignment(task, assignment, duration));
+        }
+
+        function fillContainer(container) {
+            const toKeep = [];
+            for (const task of remaining) {
+                const duration = getCalendarTaskDuration(task);
+                if (!canTaskUseContainer(task, container)) {
+                    toKeep.push(task);
+                    continue;
+                }
+                if (canFit(container, duration)) {
+                    placeTask(container, task, duration, 'assigned');
+                } else {
+                    toKeep.push(task);
+                }
+            }
+            remaining.length = 0;
+            remaining.push(...toKeep);
+        }
+
+        distributionOrder.forEach(fillContainer);
+
+        for (const task of remaining) {
+            const duration = getCalendarTaskDuration(task);
+            const eligibleContainers = distributionOrder.filter(container => canTaskUseContainer(task, container));
+            if (eligibleContainers.length === 0) {
+                unassignedTasks.push(cloneCalendarTaskWithAssignment(task, 'unassigned', duration));
+                continue;
+            }
+            placeTask(eligibleContainers[eligibleContainers.length - 1], task, duration, 'overflow');
+        }
+
+        assignments.containerInfo = containerInfo;
+        assignments.unassignedTasks = unassignedTasks;
         return assignments;
     }
 
@@ -223,20 +317,32 @@
         });
 
         const dateTasks = getCalendarTasksForDate(tasks, normalizedDateStr);
-        const taskAssignments = assignCalendarTasksToContainers(dateTasks, dayContainers);
+        const taskAssignments = assignCalendarTasksToContainers(dateTasks, dayContainers, dateObj);
 
-        const containerItems = dayContainers.map(container => ({
-            title: container.name,
-            time_start: container.time_start,
-            time_end: container.time_end,
-            color: container.color || '#4A90D9',
-            type: 'container',
-            source: 'container',
-            id: container.id,
-            layer: getContainerLayer(container),
-            isContainer: true,
-            tasks: taskAssignments.get(container.id) || []
-        }));
+        const containerItems = dayContainers.map(container => {
+            const info = taskAssignments.containerInfo?.get(container.id) || {
+                capacity: Math.max(0, getContainerCapacity(container)),
+                used: 0,
+                overflow_count: 0,
+                overflow_minutes: 0
+            };
+            return {
+                title: container.name,
+                time_start: container.time_start,
+                time_end: container.time_end,
+                color: container.color || '#4A90D9',
+                type: 'container',
+                source: 'container',
+                id: container.id,
+                layer: getContainerLayer(container),
+                isContainer: true,
+                tasks: taskAssignments.get(container.id) || [],
+                capacity: info.capacity,
+                used: info.used,
+                overflow_count: info.overflow_count,
+                overflow_minutes: info.overflow_minutes
+            };
+        });
 
         const eventItems = dayEvents
             .filter(event => event.source !== 'container_skip')
@@ -251,8 +357,29 @@
                 isContainer: false
             }));
 
-        const timedItems = [...containerItems, ...eventItems.filter(event => event.time_start && event.time_end)]
-            .sort((a, b) => timeToMinutes(a.time_start) - timeToMinutes(b.time_start));
+        const unassignedTasks = taskAssignments.unassignedTasks || [];
+        const unassignedItem = unassignedTasks.length > 0 ? {
+            title: '未安排',
+            time_start: '23:00',
+            time_end: '23:59',
+            color: '#64748b',
+            type: 'container',
+            source: 'unassigned',
+            id: `unassigned-${normalizedDateStr}`,
+            layer: 2,
+            isContainer: true,
+            tasks: unassignedTasks,
+            capacity: 0,
+            used: unassignedTasks.reduce((sum, task) => sum + getCalendarTaskDuration(task), 0),
+            overflow_count: unassignedTasks.length,
+            overflow_minutes: unassignedTasks.reduce((sum, task) => sum + getCalendarTaskDuration(task), 0)
+        } : null;
+
+        const timedItems = [
+            ...containerItems,
+            ...eventItems.filter(event => event.time_start && event.time_end),
+            ...(unassignedItem ? [unassignedItem] : [])
+        ].sort((a, b) => timeToMinutes(a.time_start) - timeToMinutes(b.time_start));
 
         return {
             date: dateObj,
@@ -263,6 +390,8 @@
             taskAssignments,
             containerItems,
             eventItems,
+            unassignedTasks,
+            unassignedItem,
             timedItems
         };
     }
@@ -475,10 +604,9 @@
         const dueDate = normalizeTaskDate(task?.due_date || task?.deadline);
         const startDate = normalizeTaskDate(baseStartDate);
         if (!dueDate || !startDate) return startDate;
-        const spanDays = daysBetweenISO(startDate, dueDate);
-        if (spanDays === null) return startDate;
-        const offsetDays = spanDays >= 3 ? -3 : -1;
-        return addDaysISO(dueDate, offsetDays) || startDate;
+        const sevenDaysBeforeDue = addDaysISO(dueDate, -7);
+        if (!sevenDaysBeforeDue) return startDate;
+        return startDate > sevenDaysBeforeDue ? startDate : sevenDaysBeforeDue;
     }
 
     function arrangeTaskStartDates(tasks, timetableEvents, today) {
@@ -605,28 +733,7 @@
         const nowMin = now.getHours() * 60 + now.getMinutes();
 
         // === Step 1: 排序任务池 ===
-        const sorted = [...taskPool].sort((a, b) => {
-            // 1) 定时任务（未过时间）最高
-            const aTimedFuture = !!(a.schedule_time && timeToMinutes(a.schedule_time) >= nowMin);
-            const bTimedFuture = !!(b.schedule_time && timeToMinutes(b.schedule_time) >= nowMin);
-            if (aTimedFuture !== bTimedFuture) return aTimedFuture ? -1 : 1;
-
-            const aDue = a.due_date || a.deadline || '9999-12-31';
-            const bDue = b.due_date || b.deadline || '9999-12-31';
-            const aOD = aDue < todayStr;
-            const bOD = bDue < todayStr;
-
-            // 2) overdue 优先于普通 priority
-            if (aOD !== bOD) return aOD ? -1 : 1;
-
-            // 3) priority: urgent(0) > important(1) > medium(2) > low(3)
-            const pa = prioritySortValue(a.priority);
-            const pb = prioritySortValue(b.priority);
-            if (pa !== pb) return pa - pb;
-
-            // 4) due_date 越近越前
-            return aDue.localeCompare(bDue);
-        });
+        const sorted = sortDailyTaskCandidates(taskPool, now);
 
         // === Step 2: 容器分层 ===
         const allSorted = [...todayContainers].sort((a, b) =>

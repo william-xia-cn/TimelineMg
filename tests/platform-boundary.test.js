@@ -98,7 +98,7 @@ assert('Dual-platform spec covers desktop OAuth, notifications, portable exe, an
     spec.includes('standalone Windows Electron app')
     && spec.includes('configured Google Desktop OAuth client ID')
     && spec.includes('TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID')
-    && spec.includes('TimeWhere-0.3.3-win-portable.exe')
+    && spec.includes('TimeWhere-0.3.4-win-portable.exe')
     && spec.includes('Missing extension, old bridge version, nonce mismatch, or timeout are shown as non-blocking'));
 assert('Platform boundary forbids Chrome extension dependency for Windows app',
     boundary.includes('Chrome extension connection is optional')
@@ -251,14 +251,14 @@ assert('Desktop Electron package builds Windows portable exe',
     && electronPackage.dependencies?.ws
     && electronPackage.devDependencies?.electron === '^42.3.2'
     && electronPackage.devDependencies?.['electron-builder']
-    && electronPackage.build?.win?.artifactName === 'TimeWhere-0.3.3-win-portable.exe'
+    && electronPackage.build?.win?.artifactName === 'TimeWhere-0.3.4-win-portable.exe'
     && electronLock.packages?.['node_modules/electron']?.version === '42.3.2'
     && gitignore.includes('!platforms/desktop-electron/package-lock.json'));
 assert('Desktop Electron package builds macOS Universal zip',
     electronPackage.scripts?.['package:mac'] === 'electron-builder --mac zip --universal'
     && electronPackage.build?.mac?.target?.[0]?.target === 'zip'
     && electronPackage.build?.mac?.target?.[0]?.arch?.includes('universal')
-    && electronPackage.build?.mac?.artifactName === 'TimeWhere-0.3.3-mac-universal.zip');
+    && electronPackage.build?.mac?.artifactName === 'TimeWhere-0.3.4-mac-universal.zip');
 assert('Desktop Electron config carries explicit app and taskbar icons',
     electronMain.includes("app.setAppUserModelId(desktopAppId)")
     && electronMain.includes('function getWindowIcon()')
@@ -286,7 +286,7 @@ assert('Desktop main loads packaged extension resources and exposes navigation r
     && electronMain.includes("managebac: 'pages/settings/managebac-sync.html'")
     && electronMain.includes("const protocolScheme = 'timewhere'")
     && electronMain.includes('app.setAsDefaultProtocolClient(protocolScheme)')
-    && electronMain.includes('TimeWhere-0.3.3-win-portable.exe') === false
+    && electronMain.includes('TimeWhere-0.3.4-win-portable.exe') === false
     && electronMain.includes('Menu.setApplicationMenu')
     && electronMain.includes('TIMEWHERE_ELECTRON_SMOKE'));
 assert('Desktop main exposes auth, reminders, notifications, and Chrome bridge IPC',

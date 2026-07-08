@@ -153,8 +153,9 @@ async function run() {
         { id: 'due-unscheduled', due_date: '2026-05-18', calendar_item_type: 'due' },
         { id: 'timed', start_date: '2026-05-18', schedule_time: '20:15' }
     ], dayContainers);
-    assertEqual('Calendar unscheduled date tasks render once in first study container', assignments.get('study').map(task => task.id), ['unscheduled', 'due-unscheduled']);
+    assertEqual('Calendar unscheduled date tasks render once in first study container using Daily Settle sort order', assignments.get('study').map(task => task.id), ['due-unscheduled', 'unscheduled']);
     assertEqual('Calendar timed start-date tasks render in matching container only', assignments.get('late').map(task => task.id), ['timed']);
+    assertEqual('Calendar task assignment helper marks normal container tasks assigned', assignments.get('study').map(task => task.calendar_assignment), ['assigned', 'assigned']);
 
     const weeklyPayload = helpers._repeatPayload({ repeat: 'weekly', weeklyDay: 4 });
     assertEqual('weekly event repeat payload persists repeat day', weeklyPayload.repeat_days, [4]);
@@ -221,9 +222,14 @@ async function run() {
         ['free', 'event-custom', 'study', 'late']
     );
     assertEqual(
-        'shared day projection assigns exact date tasks to the first study container',
+        'shared day projection fills first study container up to capacity',
         sharedProjection.timedItems.find(item => item.id === 'study').tasks.map(task => task.id),
-        ['same-day', 'today-due', 'today-start']
+        ['same-day', 'today-due']
+    );
+    assertEqual(
+        'shared day projection shifts non-timed overflow to the next available container',
+        sharedProjection.timedItems.find(item => item.id === 'late').tasks.map(task => task.id),
+        ['today-start']
     );
 
     assert('created and existing week containers share old layer-aware createEventCard rendering path', calendarScript.includes('const projection = buildCalendarDayProjection({')
@@ -296,7 +302,15 @@ async function run() {
         && !calendarScript.includes('dailySettle')
         && calendarScript.includes('buildCalendarDayProjection({')
         && schedulingScript.includes('getCalendarTasksForDate(tasks, normalizedDateStr)')
-        && schedulingScript.includes('assignCalendarTasksToContainers(dateTasks, dayContainers)'));
+        && schedulingScript.includes('assignCalendarTasksToContainers(dateTasks, dayContainers, dateObj)'));
+    assert('Calendar week view renders display-only capacity assignment markers', calendarScript.includes('calendar-assignment-${assignment}')
+        && calendarScript.includes('超出容量')
+        && calendarScript.includes('未安排')
+        && calendarStyles.includes('.container-task-item.calendar-assignment-overflow')
+        && calendarStyles.includes('.container-task-item.calendar-assignment-unassigned')
+        && schedulingScript.includes('calendar_assignment')
+        && schedulingScript.includes('unassignedTasks')
+        && !calendarScript.includes('TimeWhereDB.updateTask'));
     assert('Calendar task display uses the same start marker structure as Dashboard today tomorrow',
         calendarScript.includes('task-item-title')
         && calendarScript.includes('task-item-type task-item-${itemType}')

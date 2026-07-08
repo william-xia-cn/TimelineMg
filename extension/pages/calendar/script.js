@@ -645,15 +645,22 @@ function createEventCard(item) {
             tasks.map(t => {
                 const itemType = t.calendar_item_type === 'due' ? 'due' : 'start';
                 const itemLabel = itemType === 'due' ? '结束' : '开始';
-                return `<div class="container-task-item ${itemType}">
+                const assignment = t.calendar_assignment || 'assigned';
+                const assignmentLabel = assignment === 'overflow' ? '超出容量' : (assignment === 'unassigned' ? '未安排' : '');
+                const assignmentHTML = assignmentLabel ? `<span class="task-item-assignment">${assignmentLabel}</span>` : '';
+                return `<div class="container-task-item ${itemType} calendar-assignment-${assignment}">
                     <span class="task-item-title">${escapeHTML(t.title || '无标题')}</span>
                     <span class="task-item-type task-item-${itemType}">${itemLabel}</span>
+                    ${assignmentHTML}
                 </div>`;
             }).join('') +
         `</div>`;
     }
 
-    event.innerHTML = `<h4>${title}</h4><span>${escapeHTML(startTimeStr)} - ${escapeHTML(endTimeStr)}</span>${tasksHTML}`;
+    const capacityText = type === 'container' && Number.isFinite(Number(item.capacity)) && Number(item.capacity) > 0
+        ? ` · ${Number(item.used || 0)}/${Number(item.capacity)}min${item.overflow_count ? ' · 超出容量' : ''}`
+        : (source === 'unassigned' ? ' · 未安排' : '');
+    event.innerHTML = `<h4>${title}</h4><span>${escapeHTML(startTimeStr)} - ${escapeHTML(endTimeStr)}${escapeHTML(capacityText)}</span>${tasksHTML}`;
 
     return event;
 }

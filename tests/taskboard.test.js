@@ -602,6 +602,24 @@ assert('copied task keeps selected same-plan fields by default',
     && copiedPayload.deadline === '2026-05-20'
     && copiedPayload.notes === 'Source notes'
     && copiedPayload.labels.join(',') === '7');
+const copiedCrossPlanPayload = context.buildCopiedTaskPayload({
+    title: 'Cross plan source',
+    plan_id: 'plan-eng',
+    bucket_id: 12,
+    start_date: '2026-05-18',
+    due_date: '2026-05-20',
+    deadline: '2026-05-20'
+}, {
+    title: 'Cross plan copy',
+    plan_id: 'plan-math',
+    bucket_id: null,
+    copyDates: true
+});
+assert('copied task can target a different Plan and clear source bucket',
+    copiedCrossPlanPayload.plan_id === 'plan-math'
+    && copiedCrossPlanPayload.bucket_id === null
+    && copiedCrossPlanPayload.start_date === '2026-05-18'
+    && copiedCrossPlanPayload.due_date === '2026-05-20');
 assert('copy task dialog can create a recurring copied task series',
     dialogsJs.includes('copyTaskDueDate')
     && dialogsJs.includes("const defaultDueDate = task.due_date || task.deadline || '';")
@@ -610,6 +628,12 @@ assert('copy task dialog can create a recurring copied task series',
     && dialogsJs.includes('copyTaskRecurrenceFrequency')
     && dialogsJs.includes('copyTaskRecurrenceCount')
     && dialogsJs.includes('TimeWhereDB.addRecurringTaskSeries(payload'));
+assert('copy task dialog allows choosing target Plan and refreshes Bucket options',
+    dialogsJs.includes('id="copyTaskPlan"')
+    && dialogsJs.includes('renderCopyTaskPlanOptions(plans, planId)')
+    && dialogsJs.includes('plan_id: selectedPlanId')
+    && dialogsJs.includes("document.getElementById('copyTaskPlan')?.addEventListener('change'")
+    && dialogsJs.includes('bucketSelect.innerHTML = renderCopyTaskBucketOptions(nextBuckets, null)'));
 const copiedCustomDuePayload = context.buildCopiedTaskPayload({
     title: 'Same day source',
     plan_id: 'plan-eng',

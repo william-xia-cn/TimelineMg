@@ -527,6 +527,23 @@ body::before {
     color: #b91c1c;
     background: #fee2e2;
 }
+.container-task-item.calendar-assignment-overflow {
+    color: #92400e;
+    background: #fef3c7;
+    border: 1px dashed #f59e0b;
+}
+
+.container-task-item.calendar-assignment-unassigned {
+    color: #475569;
+    background: #e2e8f0;
+    border: 1px dashed #94a3b8;
+}
+
+.task-item-assignment {
+    flex-shrink: 0;
+    font-weight: 700;
+    color: inherit;
+}
 .task-item-title {
     flex: 1;
     min-width: 0;

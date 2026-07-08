@@ -193,6 +193,93 @@ section('TC-S-09B Daily Settle task-pool helpers');
     assert("明天开始且无 arranged_date 的任务今天不进入任务池", S.buildDailyTaskPool(tomorrowStartPool, now).map(t => t.id), ['arranged-today']);
 }
 
+// ─── TC-S-09C Calendar capacity projection ──────────────────────
+section('TC-S-09C Calendar capacity projection');
+{
+    const projection = S.buildCalendarDayProjection({
+        dateStr: '2026-04-15',
+        containers: [
+            { id:'study', name:'Study', time_start:'18:00', time_end:'19:00', layer:1, repeat:'daily' },
+            { id:'later', name:'Later', time_start:'19:00', time_end:'20:00', layer:2, repeat:'daily' }
+        ],
+        tasks: [
+            { id:'fit', title:'Fit', duration:30, progress:'not_started', start_date:'2026-04-15' },
+            { id:'shifted', title:'Shifted', duration:45, progress:'not_started', start_date:'2026-04-15' },
+            { id:'timed-out', title:'Timed out', duration:30, progress:'not_started', start_date:'2026-04-15', schedule_time:'21:00' }
+        ]
+    });
+    const study = projection.containerItems.find(item => item.id === 'study');
+    const later = projection.containerItems.find(item => item.id === 'later');
+    assert('Calendar projection marks capacity-fit task assigned', study.tasks.find(task => task.id === 'fit').calendar_assignment, 'assigned');
+    assert('Calendar projection shifts non-timed overflow into next fitting container', later.tasks.map(task => [task.id, task.calendar_assignment]), [['shifted', 'assigned']]);
+    assert('Calendar projection tracks used/capacity minutes after shifting', { studyUsed: study.used, studyCapacity: study.capacity, laterUsed: later.used, laterCapacity: later.capacity }, { studyUsed: 30, studyCapacity: 60, laterUsed: 45, laterCapacity: 60 });
+    assert('Calendar projection marks timed task without matching container unassigned', projection.unassignedTasks.map(task => task.id), ['timed-out']);
+    assert('Calendar projection exposes a display-only unassigned block in timed items', projection.timedItems.find(item => item.source === 'unassigned').tasks.map(task => task.calendar_assignment), ['unassigned']);
+}
+{
+    const projection = S.buildCalendarDayProjection({
+        dateStr: '2026-04-15',
+        containers: [
+            { id:'early-free', name:'Early Free', time_start:'16:00', time_end:'17:00', layer:2, repeat:'daily' },
+            { id:'study', name:'Study', time_start:'18:00', time_end:'19:00', layer:1, repeat:'daily' }
+        ],
+        tasks: [
+            { id:'low', title:'Low', priority:'low', duration:30, progress:'not_started', due_date:'2026-04-16', start_date:'2026-04-15' },
+            { id:'urgent', title:'Urgent', priority:'urgent', duration:30, progress:'not_started', due_date:'2026-04-16', start_date:'2026-04-15' },
+            { id:'medium', title:'Medium', priority:'medium', duration:30, progress:'not_started', due_date:'2026-04-16', start_date:'2026-04-15' }
+        ]
+    });
+    const earlyFree = projection.containerItems.find(item => item.id === 'early-free');
+    const study = projection.containerItems.find(item => item.id === 'study');
+    assert('Calendar projection sorts tasks by Daily Settle priority before filling containers', study.tasks.map(task => task.id), ['urgent', 'medium']);
+    assert('Calendar projection fills Layer 1 before earlier Layer 2 containers', earlyFree.tasks.map(task => task.id), ['low']);
+}
+{
+    const projection = S.buildCalendarDayProjection({
+        dateStr: '2026-04-15',
+        containers: [
+            { id:'study', name:'Study', time_start:'18:00', time_end:'19:00', layer:1, repeat:'daily' },
+            { id:'later', name:'Later', time_start:'19:00', time_end:'20:00', layer:2, repeat:'daily' }
+        ],
+        tasks: [
+            { id:'fill-study', title:'A Fill Study', duration:60, progress:'not_started', start_date:'2026-04-15' },
+            { id:'fill-later', title:'B Fill Later', duration:60, progress:'not_started', start_date:'2026-04-15' },
+            { id:'overflow', title:'C Overflow', duration:30, progress:'not_started', start_date:'2026-04-15' }
+        ]
+    });
+    const later = projection.containerItems.find(item => item.id === 'later');
+    assert('Calendar projection marks non-timed task overflow only when no later container can fit it', later.tasks.map(task => [task.id, task.calendar_assignment]), [['fill-later', 'assigned'], ['overflow', 'overflow']]);
+}
+{
+    const projection = S.buildCalendarDayProjection({
+        dateStr: '2026-04-15',
+        containers: [
+            { id:'timed', name:'Timed', time_start:'18:00', time_end:'19:00', layer:1, repeat:'daily' },
+            { id:'later', name:'Later', time_start:'19:00', time_end:'20:00', layer:2, repeat:'daily' }
+        ],
+        tasks: [
+            { id:'fill-timed', title:'Fill Timed', duration:60, progress:'not_started', priority:'urgent', start_date:'2026-04-15', schedule_time:'18:15' },
+            { id:'timed-overflow', title:'Timed Overflow', duration:30, progress:'not_started', priority:'low', start_date:'2026-04-15', schedule_time:'18:30' }
+        ]
+    });
+    const timed = projection.containerItems.find(item => item.id === 'timed');
+    const later = projection.containerItems.find(item => item.id === 'later');
+    assert('Calendar projection does not shift timed overflow into a container that does not cover schedule_time', timed.tasks.map(task => [task.id, task.calendar_assignment]), [['fill-timed', 'assigned'], ['timed-overflow', 'overflow']]);
+    assert('Later non-matching container remains empty for timed overflow', later.tasks.map(task => task.id), []);
+}
+{
+    const projection = S.buildCalendarDayProjection({
+        dateStr: '2026-04-15',
+        containers: [
+            { id:'short', name:'Short', time_start:'18:00', time_end:'18:30', layer:1, repeat:'daily' }
+        ],
+        tasks: [
+            { id:'oversized', title:'Oversized', duration:45, progress:'not_started', start_date:'2026-04-15' }
+        ]
+    });
+    const short = projection.containerItems.find(item => item.id === 'short');
+    assert('Single task larger than an empty container remains assigned for display parity with Daily Settle', short.tasks.map(task => task.calendar_assignment), ['assigned']);
+}
 // ─── TC-S-10 dailySettle ─────────────────────────────────────────
 section('TC-S-10 dailySettle — 场景A：无容器');
 {
@@ -577,7 +664,7 @@ async function runAsyncChecks() {
     ], [
         { id:'same-day-math', source:'timetable', subject_in_matrixview:'Mathematics Analysis HL', title:'Math', date:'2026-05-20' }
     ], '2026-05-20');
-    assert("无学科匹配时当天任意课表不能作为原地 fallback", sameDayAnyTimetable[0].start_date, '2026-05-25');
+    assert("无学科匹配时当天任意课表不能作为原地 fallback，改用最多提前 7 天 fallback", sameDayAnyTimetable[0].start_date, '2026-05-21');
 
     const sameDaySubjectTimetable = S.arrangeTaskStartDates([
         { id:'music-same-day-subject', subject:'Music', subject_in_matrixview:'Music', source:'managebac', progress:'not_started', priority:'medium', due_date:'2026-05-28', start_date:'2026-05-20' }
@@ -604,12 +691,16 @@ async function runAsyncChecks() {
     const noTimetable = S.arrangeTaskStartDates([
         { id:'keep', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-06-01', start_date:'2026-05-22' },
         { id:'short-window', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-06-01', start_date:'2026-05-30' },
-        { id:'fallback-urgent', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-05-16', start_date:'2026-05-22' }
-    ], [], '2026-05-14');
+        { id:'same-day', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-06-01', start_date:'2026-06-01' },
+        { id:'today-entered', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-06-01', start_date:'2026-05-20' },
+        { id:'fallback-invalid-window', subject:'Chemistry', progress:'not_started', priority:'medium', due_date:'2026-06-01', start_date:'2026-06-05' }
+    ], [], '2026-05-27');
     const noTableById = new Map(noTimetable.map(row => [row.task_id, row]));
-    assert("无 timetable 且开始到截止大于等于 3 天时调整到截止前 3 天", noTableById.get('keep').start_date, '2026-05-29');
-    assert("无 timetable 且开始到截止小于 3 天时调整到截止前 1 天", noTableById.get('short-window').start_date, '2026-05-31');
-    assert("无 timetable 且异常明确窗口的 urgent 任务限制到 due_date", noTableById.get('fallback-urgent').start_date, '2026-05-16');
+    assert("无 timetable 且 start_date 早于 due_date - 7 时最多提前 7 天", noTableById.get('keep').start_date, '2026-05-27');
+    assert("无 timetable 且 start_date 晚于 due_date - 7 时使用 start_date", noTableById.get('short-window').start_date, '2026-05-30');
+    assert("无 timetable 且 start_date 等于 due_date 时不提前", noTableById.get('same-day').start_date, '2026-06-01');
+    assert("无 timetable 且 today 已进入窗口时最终不早于 today", noTableById.get('today-entered').start_date, '2026-05-27');
+    assert("无 timetable 且异常明确窗口的任务限制到 due_date", noTableById.get('fallback-invalid-window').start_date, '2026-06-01');
 
     section('TC-S-12 arrangeTasks / maybeRunTaskArrange — preview/apply 与无节流自动检查');
     const fakeDb = {
@@ -653,7 +744,7 @@ async function runAsyncChecks() {
         confirmFn: () => true
     });
     assert("用户确认后 Arrange 更新两个未完成任务", arrangeResult.arranged, 2);
-    assert("arrangeTasks subject 任务先初始化且不被课表拉早，无后续课表时写 arranged_date", fakeDb.tasks.find(t => t.id === 'a').arranged_date, '2026-05-29');
+    assert("arrangeTasks subject 任务先初始化且不被课表拉早，无后续课表时写 arranged_date", fakeDb.tasks.find(t => t.id === 'a').arranged_date, '2026-05-25');
     assert("arrangeTasks ManageBac 异常明确窗口限制到 due_date 并写 arranged_date", fakeDb.tasks.find(t => t.id === 'b').arranged_date, '2026-05-16');
     assert("arrangeTasks 不修改 ManageBac priority", fakeDb.tasks.find(t => t.id === 'b').priority, 'medium');
     assert("arrangeTasks 不处理 completed", fakeDb.tasks.find(t => t.id === 'c').start_date, '2026-05-20');

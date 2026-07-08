@@ -26,7 +26,7 @@ Chrome extension connection is an optional enhancement for detection / opening w
 
 ## Current Facts
 
-- Product version: `0.3.3`.
+- Product version: `0.3.4`.
 - DB schema: IndexedDB / Dexie v5.
 - Current Chrome shell: Chrome Extension Side Panel.
 - Desktop shell: `platforms/desktop-electron/`.
@@ -61,7 +61,7 @@ Chrome extension connection is an optional enhancement for detection / opening w
 - Load existing pages from `extension/` in development and from packaged `resources/extension` in portable builds.
 - Provide app menu navigation for Dashboard, Tasks, Calendar, Settings, MatrixView import, and ManageBac sync.
 - Configure `electron-builder` portable target.
-- Package output: `platforms/desktop-electron/dist/TimeWhere-0.3.3-win-portable.exe`.
+- Package output: `platforms/desktop-electron/dist/TimeWhere-0.3.4-win-portable.exe`.
 
 ### Phase 5: Desktop Google Sync
 

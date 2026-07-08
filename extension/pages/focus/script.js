@@ -282,8 +282,7 @@ async function loadTaskColumn() {
     const requestedExpandedIndex = hasExpandedTask
         ? displayTasks.findIndex(task => String(task.id) === String(requestedExpandedTaskId))
         : -1;
-    const inProgressIndex = displayTasks.findIndex(task => task.progress === 'in_progress');
-    const expandedIndex = requestedExpandedIndex >= 0 ? requestedExpandedIndex : (inProgressIndex >= 0 ? inProgressIndex : 0);
+    const expandedIndex = requestedExpandedIndex >= 0 ? requestedExpandedIndex : -1;
     displayTasks.forEach((task, index) => {
         const dueDate = task.due_date || task.deadline || '';
         const isOverdue = dueDate && dueDate < todayStr;
@@ -1140,7 +1139,10 @@ function createFocusCalendarCard(item, top, height) {
 
     const startTime = formatTime(item.time_start);
     const endTime = formatTime(item.time_end);
-    div.innerHTML = `<h4>${escapeHTML(item.title)}</h4><span>${escapeHTML(startTime)} - ${escapeHTML(endTime)}</span>${item.isContainer ? renderContainerTasks(item.tasks) : ''}`;
+    const capacityText = item.isContainer && Number.isFinite(Number(item.capacity)) && Number(item.capacity) > 0
+        ? ` · ${Number(item.used || 0)}/${Number(item.capacity)}min${item.overflow_count ? ' · 超出容量' : ''}`
+        : (item.source === 'unassigned' ? ' · 未安排' : '');
+    div.innerHTML = `<h4>${escapeHTML(item.title)}</h4><span>${escapeHTML(startTime)} - ${escapeHTML(endTime)}${escapeHTML(capacityText)}</span>${item.isContainer ? renderContainerTasks(item.tasks) : ''}`;
     return div;
 }
 
@@ -1261,9 +1263,13 @@ function renderContainerTasks(tasks) {
     return `<div class="container-tasks">` + tasks.map(task => {
         const type = task.calendar_item_type === 'due' ? 'due' : 'start';
         const label = type === 'due' ? '结束' : '开始';
-        return `<div class="container-task-item ${type}">
+        const assignment = task.calendar_assignment || 'assigned';
+        const assignmentLabel = assignment === 'overflow' ? '超出容量' : (assignment === 'unassigned' ? '未安排' : '');
+        const assignmentHTML = assignmentLabel ? `<span class="task-item-assignment">${assignmentLabel}</span>` : '';
+        return `<div class="container-task-item ${type} calendar-assignment-${assignment}">
             <span class="task-item-title">${escapeHTML(task.title || '无标题')}</span>
             <span class="task-item-type task-item-${type}">${label}</span>
+            ${assignmentHTML}
         </div>`;
     }).join('') + `</div>`;
 }

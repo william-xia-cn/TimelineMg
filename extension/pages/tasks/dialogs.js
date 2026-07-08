@@ -84,18 +84,12 @@ async function showCopyTaskDialog(taskId) {
         return;
     }
 
-    const planId = task.plan_id;
-    const plan = (TaskApp.plans || []).find(item => String(item.id) === String(planId));
-    const planName = plan?.name || (planId ? `Plan ${planId}` : 'No plan');
-    const buckets = planId && typeof TimeWhereDB.getBucketsByPlan === 'function'
-        ? await TimeWhereDB.getBucketsByPlan(planId)
-        : [];
-    const bucketOptions = [
-        `<option value="">No bucket</option>`,
-        ...buckets.map(bucket => `
-            <option value="${bucket.id}" ${bucket.id === task.bucket_id ? 'selected' : ''}>${escapeHTML(bucket.name)}</option>
-        `)
-    ].join('');
+    let plans = TaskApp.plans || [];
+    if ((!plans || plans.length === 0) && typeof TimeWhereDB.getPlans === 'function') {
+        plans = await TimeWhereDB.getPlans();
+    }
+    const planId = task.plan_id || null;
+    const buckets = await getCopyTaskBuckets(planId);
     const defaultTitle = `${task.title || 'Untitled task'} - 副本`;
     const defaultDueDate = task.due_date || task.deadline || '';
 
@@ -110,11 +104,11 @@ async function showCopyTaskDialog(taskId) {
                 </label>
                 <label class="copy-task-field">
                     <span>Plan</span>
-                    <input type="text" class="dialog-input" value="${escapeAttribute(planName)}" disabled>
+                    <select id="copyTaskPlan" class="dialog-input">${renderCopyTaskPlanOptions(plans, planId)}</select>
                 </label>
                 <label class="copy-task-field">
                     <span>Bucket</span>
-                    <select id="copyTaskBucket" class="dialog-input">${bucketOptions}</select>
+                    <select id="copyTaskBucket" class="dialog-input">${renderCopyTaskBucketOptions(buckets, task.bucket_id)}</select>
                 </label>
                 <div class="copy-task-options" aria-label="复制字段">
                     <label class="copy-task-checkbox"><input type="checkbox" id="copyTaskDates" checked> 复制日期</label>
@@ -155,7 +149,11 @@ async function showCopyTaskDialog(taskId) {
                 return false;
             }
 
+            const selectedPlanValue = document.getElementById('copyTaskPlan')?.value || '';
+            const selectedPlanId = resolveCopyTaskOptionId(selectedPlanValue, plans);
+            const selectedPlanBuckets = await getCopyTaskBuckets(selectedPlanId);
             const bucketValue = document.getElementById('copyTaskBucket')?.value || '';
+            const selectedBucketId = resolveCopyTaskOptionId(bucketValue, selectedPlanBuckets);
             const copyDates = document.getElementById('copyTaskDates')?.checked !== false;
             const copyDueDate = document.getElementById('copyTaskDueDate')?.value || null;
             const copyNotes = document.getElementById('copyTaskNotes')?.checked !== false;
@@ -166,7 +164,8 @@ async function showCopyTaskDialog(taskId) {
 
             const payload = buildCopiedTaskPayload(task, {
                 title,
-                bucket_id: bucketValue ? parseInt(bucketValue, 10) : null,
+                plan_id: selectedPlanId,
+                bucket_id: selectedBucketId,
                 copyDates,
                 due_date: copyDueDate,
                 copyNotes,
@@ -185,6 +184,16 @@ async function showCopyTaskDialog(taskId) {
         }
     });
 
+    document.getElementById('copyTaskPlan')?.addEventListener('change', async (event) => {
+        const bucketSelect = document.getElementById('copyTaskBucket');
+        if (!bucketSelect) return;
+        const selectedPlanId = resolveCopyTaskOptionId(event.target.value || '', plans);
+        bucketSelect.disabled = true;
+        const nextBuckets = await getCopyTaskBuckets(selectedPlanId);
+        bucketSelect.innerHTML = renderCopyTaskBucketOptions(nextBuckets, null);
+        bucketSelect.disabled = false;
+    });
+
     document.getElementById('copyTaskDates')?.addEventListener('change', (event) => {
         const dueInput = document.getElementById('copyTaskDueDate');
         if (dueInput) dueInput.disabled = event.target.checked === false;
@@ -196,10 +205,41 @@ async function showCopyTaskDialog(taskId) {
     });
 }
 
+async function getCopyTaskBuckets(planId) {
+    if (!planId || typeof TimeWhereDB.getBucketsByPlan !== 'function') return [];
+    return await TimeWhereDB.getBucketsByPlan(planId);
+}
+
+function resolveCopyTaskOptionId(value, items = []) {
+    if (!value) return null;
+    const match = (items || []).find(item => String(item.id) === String(value));
+    return match ? match.id : value;
+}
+
+function renderCopyTaskPlanOptions(plans = [], selectedPlanId = null) {
+    const options = ['<option value="">No plan</option>'];
+    const hasSelected = !selectedPlanId || (plans || []).some(plan => String(plan.id) === String(selectedPlanId));
+    if (selectedPlanId && !hasSelected) {
+        options.push(`<option value="${escapeAttribute(selectedPlanId)}" selected>Plan ${escapeHTML(selectedPlanId)}</option>`);
+    }
+    options.push(...(plans || []).map(plan => `
+        <option value="${escapeAttribute(plan.id)}" ${String(plan.id) === String(selectedPlanId) ? 'selected' : ''}>${escapeHTML(plan.name || `Plan ${plan.id}`)}</option>
+    `));
+    return options.join('');
+}
+
+function renderCopyTaskBucketOptions(buckets = [], selectedBucketId = null) {
+    return [
+        '<option value="">No bucket</option>',
+        ...(buckets || []).map(bucket => `
+            <option value="${escapeAttribute(bucket.id)}" ${String(bucket.id) === String(selectedBucketId) ? 'selected' : ''}>${escapeHTML(bucket.name)}</option>
+        `)
+    ].join('');
+}
 function buildCopiedTaskPayload(task, options = {}) {
     const payload = {
         title: options.title || `${task.title || 'Untitled task'} - 副本`,
-        plan_id: task.plan_id,
+        plan_id: Object.prototype.hasOwnProperty.call(options, 'plan_id') ? options.plan_id : task.plan_id,
         bucket_id: Object.prototype.hasOwnProperty.call(options, 'bucket_id') ? options.bucket_id : (task.bucket_id || null),
         progress: 'not_started',
         status: 'pending',

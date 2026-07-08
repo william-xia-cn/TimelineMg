@@ -1,6 +1,6 @@
 {
   "name": "timewhere",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "IB 学生个人时间管理 Chrome 扩展",
   "directories": {
     "doc": "docs"
