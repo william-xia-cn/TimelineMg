@@ -53,6 +53,13 @@ Use `platforms/desktop-electron/README.md` section `macOS GitHub Actions Packagi
 
 `WebDev` is for deconstruction migration work. The exact migration design must be driven by Product Owner instructions and repository authority docs. Start by reading the authority docs and this handoff, then confirm current branch and clean state before making implementation changes.
 
+Clarification from Product Owner direction:
+
+- The WebDev "migration" label means architecture deconstruction and migration planning, not an already-approved implementation migration plan.
+- D-046 and `docs/ARCHITECTURE_DIRECTION_PROPOSAL_CLOUD_WEB_FIRST.md` define the current Architecture Direction Proposal: Cloud-first, Web-first, Desktop as Runtime, Browser Extension as ecosystem component.
+- Codex should first produce technical design, migration planning, risk assessment, and implementation plan for Product Owner review.
+- Google is in scope only as Google SSO / OIDC account identity for this direction. Google Drive Sync, Google Tasks, and Google Calendar integration are not designed by the direction proposal.
+
 ## Do Not Do Without Explicit Product Owner Approval
 
 - Do not continue feature development on `master`.

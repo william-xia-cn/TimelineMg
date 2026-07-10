@@ -2,6 +2,7 @@
 
 ## Active Target
 
+- WebDev architecture direction planning is now active under D-046. The Product Owner direction is Cloud-first / Web-first: Cloud becomes canonical data authority, Web Application becomes the primary business implementation, Desktop becomes a Runtime, and Browser Extension becomes an ecosystem component. This is not an implementation migration approval.
 - Baseline Stabilized; package / extension version is moving to `0.3.2` for desktop artifact preparation. The historical `0.2.3` CWS Private testing OAuth correction remains submitted to CWS review after Google sync failed with a bad OAuth client ID.
 - D-031/D-032 Windows desktop portable implementation is active for local testing and now uses a bundled Desktop OAuth client ID plus artifact-bundled Desktop client metadata secret generated from ignored packaging input. Current desktop artifact target is `0.3.2` Windows portable exe plus macOS Universal zip using existing unsigned package targets.
 - Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, TimeWhere `0.2.0` CWS Private testing material preparation, the accepted `0.2.1` Purple Potassium Private testing publication, `0.2.2` Side Panel CWS submission, `0.2.3` OAuth correction CWS submission, and D-031 Windows desktop portable implementation are complete. Product Owner approved the `v0.3.0` desktop artifact candidate tag and moving that tag for the macOS Universal artifact correction only. Public listing expansion / CWS bridge submission / desktop signing or installer / deploy remain unapproved.
@@ -45,6 +46,9 @@
 
 ## NEXT
 
+- [x] Codex architecture planning: produced current architecture Gap Analysis against D-046 Cloud-first / Web-first direction in `docs/WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md`.
+- [x] Codex architecture planning: produced Target Architecture, new/old architecture Mapping, Repository and Platform abstraction approach in `docs/WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md`.
+- [x] Codex architecture planning: produced Migration Roadmap, Risk Register, data migration strategy, and release strategy adjustment proposal for Product Owner review in `docs/WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md`.
 - [x] Build&Test ownership of Product&Project Mg's accidental `extension/shared/js/icons.js` hotfix diff is closed. The icon library is in the baseline commit, `icons.js` has no active diff, remote Google Fonts remain removed, and `baseline-safety` verifies static Material icon coverage.
 - [x] Build&Test completed MatrixView correction pass; Product&Project Mg accepted implementation with private sample hygiene required before commit: `docs/handoffs/outbox/REVIEW-MATRIXVIEW-IMPORT-PLAN-001.md`.
 - [x] Build&Test completed MatrixView PDF input correction; Product&Project Mg accepted day reconstruction with private sample hygiene required before commit.
@@ -97,6 +101,8 @@
 - [x] Build&Test implemented Task Board manual task creation and quick-add due-date rules from D-016.
 - [x] Build&Test completed `0.2.1` stabilization changes: Task Arrange same-day subject matching, no-throttle page-open Arrange apply, Calendar/Plan Arrange diagnostic snapshots, MatrixView Subject ID source writes/backfill, Dashboard/Popup current task display, Daily Settle displayTasks behavior, readable Google Sync conflicts, and version/documentation sync.
 
+- [ ] Codex architecture planning: draft Repository / Platform / Auth / API interface contracts after Product Owner reviews the target architecture.
+- [ ] Codex architecture planning: draft entity-by-entity data authority matrix after Product Owner confirms offline and migration posture.
 ## LATER
 
 - [ ] After CWS accepts/publishes `0.2.3`, install/update the CWS Private testing build and run Google data sync v1 real-auth smoke against a test Google account.

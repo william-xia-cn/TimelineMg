@@ -4,9 +4,17 @@
 
 - **Project**: TimeWhere
 - **Version**: package / extension release version `0.3.2`; design-doc version `v2.3`
-- **Stage**: Baseline Stabilized; CWS Private testing `0.2.3` OAuth correction submitted for review; Windows desktop portable implementation completed for local testing; Windows / macOS desktop artifact preparation active for `0.3.2`
+- **Stage**: WebDev architecture direction planning is active on branch `WebDev`; master is frozen for ordinary product feature development. Baseline Stabilized / desktop artifact history remains implementation history, but new product architecture work now follows D-046 Cloud-first / Web-first direction.
 - **Active release/deployment target**: TimeWhere `0.2.3` CWS Private testing OAuth correction after the `0.2.2` Side Panel update exposed a CWS OAuth client mismatch.
 - **Current constraint**: Google data sync v1 is approved as optional local-first cross-device sync. D-021 approves local task reminder notifications with Chrome `notifications` / `alarms`. D-025 approved the `0.2.1` Purple Potassium permission fix; D-026 records current source using Chrome Side Panel as the primary toolbar surface. D-027 approved the `0.2.2` Side Panel CWS update. D-029 approves the `0.2.3` CWS OAuth correction upload / Submit for Review and automatic publish after review. D-031 approves a standalone Windows Electron portable app with optional Chrome extension bridge, and D-032 replaces only its Desktop OAuth secret handling with PKCE plus bundled Desktop client metadata secret for the current internal desktop stage. Product Owner approved the `v0.3.0` desktop artifact candidate tag and moving that tag for the macOS Universal artifact correction only. Public listing expansion, deploy, CWS bridge submission, desktop signing/installer/auto-update, Google Calendar/Tasks integration, and background alarm automation for Arrange / ManageBac remain unapproved.
+
+## Architecture Direction
+
+- D-046 records the Product Owner direction that TimeWhere's target architecture is Cloud-first and Web-first: Cloud is the canonical data authority, Web Application is the primary business implementation, Desktop is a native Runtime, and Browser Extension is an ecosystem component.
+- The direction proposal is recorded in `docs/ARCHITECTURE_DIRECTION_PROPOSAL_CLOUD_WEB_FIRST.md`.
+- For this direction, Google is considered first as Google SSO / OIDC account identity. Google Drive Sync, Google Tasks, and Google Calendar integration are not part of the current direction document and require separate design.
+- WebDev work should first produce Gap Analysis, target architecture, migration roadmap, and risk assessment before any implementation migration.
+- Current WebDev architecture planning artifact: `docs/WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md`.
 
 ## Collaboration Model
 
