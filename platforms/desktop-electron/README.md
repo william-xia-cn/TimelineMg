@@ -23,29 +23,79 @@ platforms/desktop-electron/dist/TimeWhere-0.3.2-win-portable.exe
 Mac package output:
 
 ```text
-platforms/desktop-electron/dist/TimeWhere-0.3.2-mac-universal.zip
+platforms/desktop-electron/dist/TimeWhere-0.3.4-mac-universal.zip
 ```
 
 Note: mac 打包通常需要在 macOS 上执行 `npm run electron:package:mac`。当前 macOS artifact 目标是 Universal zip，覆盖 Intel Mac 和 Apple Silicon。如果在 Windows 上尝试该命令，可能会因平台能力限制而失败。
 
-远程触发打包（推荐在 Windows 上直接执行）：
+## macOS GitHub Actions Packaging SOP
 
-前提：
+Use this SOP when producing an internal macOS Universal zip from Windows. This
+creates a GitHub Actions artifact only; it is not a public release, signing,
+notarization, GitHub Release, auto-update publication, or external distribution
+approval.
 
-- 已安装并登录 `gh` CLI
-- 当前分支有 `build` 权限和 workflow 运行权限
+Prerequisites:
 
-执行：
+- `gh` CLI is installed and logged in.
+- Current account has repository `workflow` permission.
+- The package candidate commit has been committed and pushed to `master`.
+- Product Owner has explicitly approved triggering the workflow with the
+  repository secret `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET`.
+
+1. Verify GitHub CLI login:
 
 ```powershell
-npm run electron:package:mac:remote
+gh auth status
 ```
 
-该命令会触发仓库中的 macOS Workflow。Workflow 成功后在 Actions 页面下载：
-- `TimeWhere-mac-package`
+2. Trigger the macOS workflow:
 
-如果你愿意，我可以下一步再补一条一条命令把 artifact 自动下载并重命名到固定路径。  
+```powershell
+gh workflow run timewhere-desktop-mac.yml --ref master
+```
 
+The command returns a run URL. Record the numeric run id from the URL.
+
+3. Wait for completion:
+
+```powershell
+gh run watch <run_id> --exit-status
+```
+
+4. Download the artifact:
+
+```powershell
+New-Item -ItemType Directory -Force -Path artifacts/mac/<run_id> | Out-Null
+gh run download <run_id> --name TimeWhere-mac-package --dir artifacts/mac/<run_id>
+```
+
+5. Record package evidence:
+
+```powershell
+Get-ChildItem -LiteralPath artifacts/mac/<run_id> -Filter *.zip | Select-Object Name,Length,LastWriteTime
+Get-ChildItem -LiteralPath artifacts/mac/<run_id> -Filter *.zip | Get-FileHash -Algorithm SHA256
+git rev-parse HEAD
+git status --branch --short
+```
+
+Evidence to report:
+
+- commit SHA and branch
+- workflow run id
+- artifact name: `TimeWhere-mac-package`
+- zip file name, local path, byte size, and SHA256
+
+Secret and sharing boundary:
+
+- The workflow generates `desktop-oauth-secrets.js` from
+  `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET` and bundles the generated metadata
+  into the desktop artifact.
+- Do not write the raw secret value in docs, logs, release reports, commits, or
+  user-facing diagnostics.
+- Uploading the macOS zip to a shared Google Drive folder or any external
+  destination requires separate explicit Product Owner approval acknowledging
+  that the artifact contains the internal Desktop OAuth client metadata secret.
 ## Google Sync
 
 Desktop Google Drive `appDataFolder` sync uses an installed-app OAuth flow with PKCE and a localhost callback. The desktop OAuth client ID is tracked in source, and the Desktop client metadata secret is generated into `desktop-oauth-secrets.js` from ignored local/CI packaging input before building internal desktop artifacts. `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` is only an optional override for testing or client rotation.

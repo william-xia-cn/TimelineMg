@@ -22,6 +22,22 @@ Self-signed internal release rules:
 - Prefer the same internal certificate across internal versions. Certificate rotation can change code identity and may affect macOS trust and operator diagnostics.
 
 Public macOS release remains a separate future lane requiring Apple Developer Program, Developer ID Application certificate, hardened runtime, notarization, stapling, and Gatekeeper verification.
+## GitHub Actions Unsigned Package SOP
+
+For the Windows-side workflow that triggers the macOS Universal zip build,
+downloads the GitHub Actions artifact, and records SHA256 evidence, use
+`platforms/desktop-electron/README.md` -> `macOS GitHub Actions Packaging SOP`.
+
+Boundary rules:
+
+- Triggering `timewhere-desktop-mac.yml` requires explicit Product Owner approval
+  because the workflow uses `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET` to generate
+  the internal desktop OAuth metadata module.
+- The generated macOS zip contains artifact-bundled Desktop OAuth client metadata.
+- Uploading that zip to a shared Google Drive folder or any external destination
+  requires separate explicit Product Owner approval for that sharing action.
+- This SOP still does not approve Developer ID signing, notarization, GitHub
+  Release creation, public distribution, or auto-update publication.
 
 ## Usage Agent Boundary
 
