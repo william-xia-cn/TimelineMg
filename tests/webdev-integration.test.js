@@ -204,7 +204,10 @@ async function main() {
     });
     assert.equal(replayAttempt.replay.accepted, false);
     assert.equal(replayAttempt.replay.replay_status, 'disabled_v1');
+    assert.equal(replayAttempt.replay.activation_gate, 'task_only_replay_defined_but_disabled_v1');
     assert.equal(replayAttempt.replay.results[0].reason, 'offline_replay_disabled_v1');
+    assert.equal(replayAttempt.replay.results[0].task_replay_gate.status, 'task_replay_gate_ready_but_disabled');
+    assert.equal(replayAttempt.replay.results[0].task_replay_gate.field_conflict_check.status, 'cloud_values_required');
     const taskAfterReplayAttempt = await request(baseUrl, 'GET', `/tasks/${encodeURIComponent(createdTask.task.id)}`);
     assert.notEqual(taskAfterReplayAttempt.task.title, 'Offline replay must not apply');
     const changesAfterReplayAttempt = await request(baseUrl, 'GET', `/sync/changes?cursor=${encodeURIComponent(eventChanges.next_cursor)}&limit=20`);
@@ -226,7 +229,68 @@ async function main() {
     assert.equal(privateReplayAttempt.payload.error.code, 'offline_mutation_private_data');
     console.log('  PASS mutation replay contract rejects private fields');
 
+    const nonConflictingReplayPreview = await request(baseUrl, 'POST', '/sync/mutations', {
+      mutations: [{
+        mutation_id: `mut-preview-merge-${Date.now()}`,
+        entity_type: 'task',
+        entity_id: createdTask.task.id,
+        operation: 'update',
+        base_values: { title: 'Base title', notes: 'Old notes' },
+        cloud_values: { title: 'Cloud title changed elsewhere', notes: 'Old notes' },
+        patch: { notes: 'Offline note update' }
+      }]
+    });
+    assert.equal(nonConflictingReplayPreview.replay.results[0].task_replay_gate.field_conflict_check.status, 'would_auto_merge');
+    console.log('  PASS task replay gate previews disjoint field auto-merge while disabled');
+
+    const conflictingReplayPreview = await request(baseUrl, 'POST', '/sync/mutations', {
+      mutations: [{
+        mutation_id: `mut-preview-conflict-${Date.now()}`,
+        entity_type: 'task',
+        entity_id: createdTask.task.id,
+        operation: 'update',
+        base_values: { notes: 'Old notes' },
+        cloud_values: { notes: 'Cloud note changed elsewhere' },
+        patch: { notes: 'Offline note update' }
+      }]
+    });
+    assert.equal(conflictingReplayPreview.replay.results[0].task_replay_gate.field_conflict_check.status, 'would_conflict');
+    assert.deepEqual(conflictingReplayPreview.replay.results[0].task_replay_gate.field_conflict_check.conflicting_fields, ['notes']);
+    console.log('  PASS task replay gate previews same-field conflict while disabled');
+
+    const manageBacSourceReplayPreview = await request(baseUrl, 'POST', '/sync/mutations', {
+      mutations: [{
+        mutation_id: `mut-preview-mb-source-${Date.now()}`,
+        entity_type: 'task',
+        entity_id: createdTask.task.id,
+        operation: 'update',
+        base_values: { source_type: 'managebac', title: 'Source title', notes: 'Local notes' },
+        cloud_values: { source_type: 'managebac', title: 'Source title', notes: 'Local notes' },
+        patch: { title: 'Offline title override' }
+      }]
+    });
+    assert.equal(manageBacSourceReplayPreview.replay.results[0].reason, 'task_fields_not_allowed');
+    assert.equal(manageBacSourceReplayPreview.replay.results[0].task_replay_gate.status, 'blocked_by_task_replay_gate');
+    assert.deepEqual(manageBacSourceReplayPreview.replay.results[0].task_replay_gate.source_controlled_fields, ['title']);
+    console.log('  PASS task replay gate blocks ManageBac source facts while disabled');
+
+    const nonTaskReplayPreview = await request(baseUrl, 'POST', '/sync/mutations', {
+      mutations: [{
+        mutation_id: `mut-preview-container-${Date.now()}`,
+        entity_type: 'container',
+        entity_id: 'container-example',
+        operation: 'update',
+        base_values: { name: 'Base' },
+        cloud_values: { name: 'Base' },
+        patch: { name: 'Offline container update' }
+      }]
+    });
+    assert.equal(nonTaskReplayPreview.replay.results[0].reason, 'entity_replay_not_in_task_gate');
+    assert.equal(nonTaskReplayPreview.replay.results[0].task_replay_gate.status, 'not_in_task_only_gate');
+    console.log('  PASS replay activation gate is task-only while disabled');
+
     const syncStatus = await request(baseUrl, 'GET', '/sync/status');
+    assert.equal(syncStatus.task_replay_gate, 'defined_disabled_v1');
     assert.equal(syncStatus.conflict_records, 'scaffolded');
     const syncConflicts = await request(baseUrl, 'GET', '/sync/conflicts?status=open');
     assert.equal(syncConflicts.count, 0);

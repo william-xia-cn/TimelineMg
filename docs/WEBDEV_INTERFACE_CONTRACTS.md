@@ -175,7 +175,7 @@ The follow-up design direction is recorded in `docs/WEBDEV_OFFLINE_MUTATION_CONF
 Current scaffold status:
 
 - `/sync/changes` is available for Cloud-confirmed change cursors.
-- `/sync/mutations` validates mutation replay requests but returns `disabled_v1`.
+- `/sync/mutations` validates mutation replay requests, reports the Task-only activation gate and field-level conflict preview, but returns `disabled_v1`.
 - `/sync/conflicts` can list and read future sync conflict records.
 - No sync conflict resolution UI or offline write replay is enabled in v1.
 

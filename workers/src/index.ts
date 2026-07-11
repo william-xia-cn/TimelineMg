@@ -344,6 +344,7 @@ async function handleSyncStatus(request: Request, env: Env): Promise<Response> {
     cache: 'read_only_when_offline',
     change_feed: 'available',
     mutation_replay: 'disabled_v1',
+    task_replay_gate: 'defined_disabled_v1',
     conflict_records: 'scaffolded'
   });
 }

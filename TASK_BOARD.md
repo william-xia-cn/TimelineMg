@@ -118,7 +118,8 @@
 - [x] Build&Test added local offline mutation queue schema/helper behind a disabled feature flag, without enabling offline writes in user-facing UI.
 - [x] Build&Test added disabled/internal mutation replay contract tests and Worker validation skeleton; `/sync/mutations` validates and rejects replay without applying user offline writes.
 - [x] Build&Test added Cloud conflict record scaffold for future offline mutation conflicts: D1 `sync_conflicts`, Worker `/sync/conflicts` read APIs, status exposure, and tests, without exposing conflict resolution UI or enabling offline writes.
-- [ ] Next recommended Build&Test package: define Task-only offline replay activation gates and field-level conflict checks, but keep actual offline writes disabled until Product Owner approval.
+- [x] Build&Test defined Task-only offline replay activation gates and field-level conflict preview in `/sync/mutations`, including ManageBac source-field blocking, while keeping actual offline writes disabled.
+- [ ] Next recommended Build&Test package: add disabled Task replay outcome persistence design hooks, so future applied/conflict/rejected mutation outcomes can be tracked without enabling offline writes.
 
 ## LATER
 

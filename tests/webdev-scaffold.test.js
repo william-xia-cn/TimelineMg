@@ -134,7 +134,7 @@ for (const [route, pattern] of [
 }
 assert('Worker sync status documents offline blocked v1', workerIndex.includes("offline_writes: 'blocked_v1'"));
 assert('Worker sync status exposes change feed foundation', workerIndex.includes("change_feed: 'available'") && workerIndex.includes('handleListSyncChanges'));
-assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes('handleSyncMutations'));
+assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes("task_replay_gate: 'defined_disabled_v1'") && workerIndex.includes('handleSyncMutations'));
 assert('Worker sync status exposes conflict record scaffold', workerIndex.includes("conflict_records: 'scaffolded'") && workerIndex.includes('handleListSyncConflicts') && workerIndex.includes('handleGetSyncConflict'));
 assert('Worker supports local Cloud session disconnect', workerIndex.includes('handleDeleteSession') && workerIndex.includes('revokeSession'));
 
@@ -171,6 +171,12 @@ assert('Worker offline mutation replay skeleton validates but remains disabled',
   workerOfflineMutations.includes('validateOfflineMutationReplay') && workerOfflineMutations.includes("replay_status: 'disabled_v1'") && workerOfflineMutations.includes("accepted: false") && workerOfflineMutations.includes('offline_replay_disabled_v1'));
 assert('Worker offline mutation replay rejects private fields',
   workerOfflineMutations.includes('offline_mutation_private_data') && workerOfflineMutations.includes('PRIVATE_KEY_PATTERN'));
+assert('Worker offline mutation replay defines task-only activation gate while disabled',
+  workerOfflineMutations.includes("activation_gate: 'task_only_replay_defined_but_disabled_v1'") && workerOfflineMutations.includes('evaluateTaskReplayGate') && workerOfflineMutations.includes("status: 'task_replay_gate_ready_but_disabled'"));
+assert('Worker offline mutation replay includes field-level conflict preview',
+  workerOfflineMutations.includes('evaluateFieldConflict') && workerOfflineMutations.includes("'would_conflict'") && workerOfflineMutations.includes("'would_auto_merge'") && workerOfflineMutations.includes('cloud_values_required'));
+assert('Worker offline mutation replay preserves ManageBac source edit boundary',
+  workerOfflineMutations.includes('MANAGEBAC_LOCAL_EXECUTION_FIELDS') && workerOfflineMutations.includes('MANAGEBAC_SOURCE_CONTROLLED_FIELDS') && workerOfflineMutations.includes('managebac_local_execution_fields'));
 assert('Worker sync conflict scaffold can create and list sanitized records',
   workerSyncConflicts.includes('createSyncConflictRecord') && workerSyncConflicts.includes('listSyncConflicts') && workerSyncConflicts.includes('getSyncConflict') && workerSyncConflicts.includes('sync_conflict_private_data') && workerSyncConflicts.includes('PRIVATE_KEY_PATTERN'));
 assert('Worker sync conflict scaffold does not expose a resolution route yet',
