@@ -29,7 +29,7 @@ Cloudflare 结构参考 TimeOnChrome 的工程模式，但 TimeWhere 不复制 T
 | `/containers/*` | Time container 查询、创建、更新、禁用、排序。 |
 | `/settings/*` | 用户设置和 runtime-independent product settings。 |
 | `/migration/*` | 旧 IndexedDB snapshot 上传、迁移运行状态、冲突诊断。 |
-| `/sync/*` | 增量拉取、客户端 cache cursor、在线写入后的状态协调；v1 提供 Cloud-confirmed change feed，但不提供离线写入重放。 |
+| `/sync/*` | 增量拉取、客户端 cache cursor、在线写入后的状态协调；v1 提供 Cloud-confirmed change feed 和 disabled mutation replay contract skeleton，但不应用离线写入。 |
 
 API 返回应使用统一 envelope：
 

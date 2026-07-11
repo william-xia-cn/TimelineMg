@@ -35,6 +35,7 @@ import {
   updateTask
 } from './repositories';
 import { importSnapshot, listMigrationConflicts, resolveMigrationConflict } from './migration';
+import { validateOfflineMutationReplay } from './offlineMutations';
 import { listSyncChanges } from './sync';
 import type { Env } from './types';
 
@@ -81,6 +82,7 @@ const routes: Array<{ method: string; pattern: RegExp; handler: Handler }> = [
   { method: 'GET', pattern: /^\/migration\/conflicts$/, handler: handleListMigrationConflicts },
   { method: 'PATCH', pattern: /^\/migration\/conflicts\/([^/]+)$/, handler: handleResolveMigrationConflict },
   { method: 'GET', pattern: /^\/sync\/changes$/, handler: handleListSyncChanges },
+  { method: 'POST', pattern: /^\/sync\/mutations$/, handler: handleSyncMutations },
   { method: 'GET', pattern: /^\/sync\/status$/, handler: handleSyncStatus }
 ];
 
@@ -337,7 +339,8 @@ async function handleSyncStatus(request: Request, env: Env): Promise<Response> {
     mode: 'cloud_canonical',
     offline_writes: 'blocked_v1',
     cache: 'read_only_when_offline',
-    change_feed: 'available'
+    change_feed: 'available',
+    mutation_replay: 'disabled_v1'
   });
 }
 
@@ -349,6 +352,14 @@ async function handleListSyncChanges(request: Request, env: Env, url: URL): Prom
     url.searchParams.get('cursor'),
     url.searchParams.get('limit')
   ));
+}
+
+async function handleSyncMutations(request: Request, env: Env): Promise<Response> {
+  await requireSession(env, request);
+  const body = await readJson<unknown>(request);
+  return jsonResponse({
+    replay: validateOfflineMutationReplay(body)
+  });
 }
 
 export default {

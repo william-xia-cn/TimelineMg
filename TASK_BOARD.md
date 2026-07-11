@@ -116,7 +116,8 @@
 - [x] Codex architecture planning: future offline mutation queue and conflict handling design after v1 online-first write path is stable, recorded in `docs/WEBDEV_OFFLINE_MUTATION_CONFLICT_DESIGN.md`.
 - [x] Build&Test added Cloud revision / change cursor foundation while keeping v1 offline writes blocked: D1 `sync_changes`, Worker `/sync/changes`, repository change recording, scaffold tests, and local Worker integration coverage.
 - [x] Build&Test added local offline mutation queue schema/helper behind a disabled feature flag, without enabling offline writes in user-facing UI.
-- [ ] Next recommended Build&Test package: add disabled/internal mutation replay contract tests and Worker validation skeleton, still without replaying user offline writes.
+- [x] Build&Test added disabled/internal mutation replay contract tests and Worker validation skeleton; `/sync/mutations` validates and rejects replay without applying user offline writes.
+- [ ] Next recommended Build&Test package: add Cloud conflict record scaffold for future offline mutation conflicts, without exposing conflict resolution UI beyond current migration conflicts.
 
 ## LATER
 

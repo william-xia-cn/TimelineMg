@@ -45,6 +45,7 @@ const requiredFiles = [
   'workers/src/index.ts',
   'workers/src/auth.ts',
   'workers/src/migration.ts',
+  'workers/src/offlineMutations.ts',
   'workers/src/repositories.ts',
   'workers/src/sync.ts',
   'pages/README.md',
@@ -120,12 +121,14 @@ for (const [route, pattern] of [
   ['/migration/runs', /migration\\\/runs/],
   ['/migration/conflicts', /migration\\\/conflicts/],
   ['/sync/changes', /sync\\\/changes/],
+  ['/sync/mutations', /sync\\\/mutations/],
   ['/sync/status', /sync\\\/status/]
 ]) {
   assert(`Worker route includes ${route}`, pattern.test(workerIndex));
 }
 assert('Worker sync status documents offline blocked v1', workerIndex.includes("offline_writes: 'blocked_v1'"));
 assert('Worker sync status exposes change feed foundation', workerIndex.includes("change_feed: 'available'") && workerIndex.includes('handleListSyncChanges'));
+assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes('handleSyncMutations'));
 assert('Worker supports local Cloud session disconnect', workerIndex.includes('handleDeleteSession') && workerIndex.includes('revokeSession'));
 
 const migration = read('workers/src/migration.ts');
@@ -153,8 +156,13 @@ assert('Workers README documents local D1 prepare command',
 
 const workerRepository = read('workers/src/repositories.ts');
 const workerSync = read('workers/src/sync.ts');
+const workerOfflineMutations = read('workers/src/offlineMutations.ts');
 assert('Worker sync change feed records idempotent cursor rows',
   workerSync.includes('recordSyncChange') && workerSync.includes('listSyncChanges') && workerSync.includes('next_cursor') && workerSync.includes('entity_revision'));
+assert('Worker offline mutation replay skeleton validates but remains disabled',
+  workerOfflineMutations.includes('validateOfflineMutationReplay') && workerOfflineMutations.includes("replay_status: 'disabled_v1'") && workerOfflineMutations.includes("accepted: false") && workerOfflineMutations.includes('offline_replay_disabled_v1'));
+assert('Worker offline mutation replay rejects private fields',
+  workerOfflineMutations.includes('offline_mutation_private_data') && workerOfflineMutations.includes('PRIVATE_KEY_PATTERN'));
 assert('Worker repositories record entity changes for future offline replay',
   workerRepository.includes("recordSyncChange(env, accountId, 'task'") && workerRepository.includes("recordSyncChange(env, accountId, 'calendar_event'") && workerRepository.includes("recordSyncChange(env, accountId, 'container'") && workerRepository.includes("recordSyncChange(env, accountId, 'product_setting'"));
 assert('Worker task API returns DTO arrays',
