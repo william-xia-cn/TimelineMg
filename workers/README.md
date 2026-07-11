@@ -10,7 +10,7 @@
 - `/calendar/events` 已有第一版 Cloud-backed CRUD：返回规范化 Event DTO，支持日期/搜索筛选、创建、更新和软删除。
 - `/plans`、`/labels`、`/buckets` 与 `/containers` 已有第一版 Cloud-backed CRUD：用于 WebDev 结构数据、Daily Settle 后续投影和本地 cache 的 canonical 来源。
 - `/sync/changes` 提供 Cloud-confirmed change cursor，用于未来离线 mutation replay 的安全基础；当前 v1 仍阻止离线写入。
-- `/sync/mutations` 只有 disabled/internal contract skeleton：校验 mutation batch，定义 Task-only replay activation gate、字段级冲突预判、内部 transaction skeleton，记录 metadata-only outcome，并拒绝 replay，不应用任何用户离线写入。
+- `/sync/mutations` 默认仍是 disabled/internal contract skeleton：校验 mutation batch，定义 Task-only replay activation gate、字段级冲突预判、内部 transaction skeleton，记录 metadata-only outcome，并拒绝 replay，不应用任何用户离线写入。Product Owner 已批准 Phase 1 test-only server write contract；只有请求体显式带 `test_only_task_replay_enabled: true` 的内部测试调用才会应用 Task-only replay。
 - `GET /sync/mutations` 与 `GET /sync/mutations/:id` 提供 replay outcome 诊断读取；当前只保存状态、原因、门禁结果和尝试次数，不保存 patch/base/cloud 原始内容。
 - `POST /sync/mutations/dry-run` 提供 internal disabled dry-run：复用 gate / transaction skeleton，并关联已有 outcome / conflict 记录；对 apply candidate 返回不落库的 sanitized apply plan，对 conflict candidate 返回不落库的 sanitized conflict preview；不写入、不创建 conflict、不应用用户离线写入。
 - `/sync/conflicts` 提供未来离线 mutation conflict records 的只读 scaffold：当前可列出/读取记录，但不暴露用户解决流程，也不启用离线写入。
@@ -53,13 +53,13 @@ Authorization: Bearer timewhere-local-dev-session
 
 ## Sync replay diagnostics
 
-当前 `/sync/mutations` 仍然处于 `disabled_v1`，不会应用用户离线写入。辅助诊断接口只用于开发审查：
+当前 `/sync/mutations` 对普通调用仍然处于 `disabled_v1`，不会应用用户离线写入。Product Owner 已批准的 Phase 1 test-only server write contract 仅允许内部测试请求通过 `test_only_task_replay_enabled: true` 验证 Task replay apply / conflict / reject / idempotency；Pages UI 仍不启用离线写入。辅助诊断接口只用于开发审查：
 
 - `POST /sync/mutations/dry-run`：复用 replay gate，预览 apply plan / conflict record shape，不写入 outcome、conflict 或业务数据。
 - `POST /sync/mutations/readiness-summary`：基于 dry-run 聚合 candidate counts、blocked reasons、apply/conflict preview counts，用于评估未来是否具备开启 replay 的条件。
 - `POST /sync/mutations/enablement-simulation`：用 readiness summary 和显式 policy/evidence 输入模拟 Gate A-E 是否满足；结果仍是 `simulation_only`，不会开启写入。
 
-这些接口不启用离线写入，不保存 raw mutation payload，不绕过 Product Owner approval。
+这些接口不启用用户离线写入，不保存 raw mutation payload，不绕过 Product Owner approval。test-only replay 只用于本地/内部 integration evidence，不代表 UX、offline queue 或生产 replay 已获批。
 
 ## 当前边界
 
@@ -68,5 +68,3 @@ Authorization: Bearer timewhere-local-dev-session
 - 不实现公开发布。
 - 不记录 token、cookie、OAuth secret、账号邮箱或本地私密路径。
 - Google 在本阶段只作为 SSO / OIDC 身份提供方，不承载 Google Drive Sync 设计。
-
-

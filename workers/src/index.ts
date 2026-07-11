@@ -41,6 +41,7 @@ import { getSyncConflict, listSyncConflicts } from './syncConflicts';
 import { buildSyncMutationDryRun } from './syncMutationDryRun';
 import { buildSyncReplayEnablementSimulation } from './syncReplayEnablementSimulation';
 import { buildSyncReplayReadinessSummary } from './syncReplayReadiness';
+import { applyTaskReplayTestOnly } from './syncMutationTaskReplay';
 import { getSyncMutationOutcome, listSyncMutationOutcomes, recordSyncMutationOutcomes } from './syncMutationOutcomes';
 import { attachTaskReplayTransactionSkeleton } from './taskReplayTransaction';
 import type { Env } from './types';
@@ -374,10 +375,20 @@ async function handleListSyncChanges(request: Request, env: Env, url: URL): Prom
   ));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isTestOnlyTaskReplayRequest(body: unknown): boolean {
+  return isRecord(body) && body.test_only_task_replay_enabled === true;
+}
+
 async function handleSyncMutations(request: Request, env: Env): Promise<Response> {
   const session = await requireSession(env, request);
   const body = await readJson<unknown>(request);
-  const replay = attachTaskReplayTransactionSkeleton(validateOfflineMutationReplay(body));
+  const replay = isTestOnlyTaskReplayRequest(body)
+    ? await applyTaskReplayTestOnly(env, session.accountId, body)
+    : attachTaskReplayTransactionSkeleton(validateOfflineMutationReplay(body));
   return jsonResponse({
     replay,
     outcome_persistence: await recordSyncMutationOutcomes(env, session.accountId, replay)
@@ -449,5 +460,3 @@ export default {
     }
   }
 };
-
-

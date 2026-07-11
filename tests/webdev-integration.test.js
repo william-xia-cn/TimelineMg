@@ -1,5 +1,6 @@
 const assert = require('assert');
 const { execFileSync, spawn } = require('child_process');
+const fs = require('fs');
 const net = require('net');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -33,6 +34,22 @@ function runPrepare(persistTo) {
   });
 }
 
+function runWorkerSql(persistTo, sql) {
+  const tmpDir = path.join(workersDir, '.tmp');
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const file = path.join(tmpDir, `integration-${process.pid}-${Date.now()}.sql`);
+  fs.writeFileSync(file, sql);
+  try {
+    execFileSync(command('node'), ['scripts/run-local-d1-file.mjs', file], {
+      cwd: workersDir,
+      stdio: 'pipe',
+      shell: process.platform === 'win32',
+      env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0', TIMEWHERE_WRANGLER_PERSIST_TO: persistTo }
+    });
+  } finally {
+    fs.rmSync(file, { force: true });
+  }
+}
 function startWorker(port, persistTo) {
   const child = spawn(command('npx'), [
     'wrangler',
@@ -480,6 +497,187 @@ async function main() {
     assert.equal(missingSyncConflict.response.status, 404);
     assert.equal(missingSyncConflict.payload.error.code, 'sync_conflict_not_found');
     console.log('  PASS sync conflict records are scaffolded without replay side effects');
+    const testReplayMutationId = `mut-test-apply-${Date.now()}`;
+    const testOnlyApply = await request(baseUrl, 'POST', '/sync/mutations', {
+      test_only_task_replay_enabled: true,
+      mutations: [{
+        mutation_id: testReplayMutationId,
+        entity_type: 'task',
+        entity_id: createdTask.task.id,
+        operation: 'update',
+        base_values: { notes: updatedTask.task.notes, priority: updatedTask.task.priority },
+        patch: { notes: 'Applied by test-only replay', priority: 'urgent' }
+      }]
+    });
+    assert.equal(testOnlyApply.replay.replay_status, 'test_only_task_replay_v1');
+    assert.equal(testOnlyApply.replay.accepted, true);
+    assert.equal(testOnlyApply.replay.writes_enabled, true);
+    assert.equal(testOnlyApply.replay.test_only, true);
+    assert.equal(testOnlyApply.replay.summary.applied_count, 1);
+    assert.equal(testOnlyApply.replay.results[0].status, 'applied');
+    assert.equal(testOnlyApply.outcome_persistence.recorded_count, 1);
+    const taskAfterTestReplay = await request(baseUrl, 'GET', `/tasks/${encodeURIComponent(createdTask.task.id)}`);
+    assert.equal(taskAfterTestReplay.task.notes, 'Applied by test-only replay');
+    assert.equal(taskAfterTestReplay.task.priority, 'urgent');
+    const testReplayOutcome = await request(baseUrl, 'GET', `/sync/mutations/${encodeURIComponent(testReplayMutationId)}`);
+    assert.equal(testReplayOutcome.outcome.outcome_status, 'applied');
+    assert.equal(testReplayOutcome.outcome.replay_status, 'test_only_task_replay_v1');
+    const changesAfterTestReplay = await request(baseUrl, 'GET', `/sync/changes?cursor=${encodeURIComponent(eventChanges.next_cursor)}&limit=50`);
+    assert(changesAfterTestReplay.changes.some(change => change.entity_type === 'task' && change.entity_id === createdTask.task.id && change.operation === 'updated'));
+    console.log('  PASS test-only task replay applies a safe update and records metadata');
+
+    const repeatTestOnlyApply = await request(baseUrl, 'POST', '/sync/mutations', {
+      test_only_task_replay_enabled: true,
+      mutations: [{
+        mutation_id: testReplayMutationId,
+        entity_type: 'task',
+        entity_id: createdTask.task.id,
+        operation: 'update',
+        base_values: { notes: updatedTask.task.notes, priority: updatedTask.task.priority },
+        patch: { notes: 'Duplicate replay must not apply', priority: 'low' }
+      }]
+    });
+    assert.equal(repeatTestOnlyApply.replay.summary.idempotent_count, 1);
+    assert.equal(repeatTestOnlyApply.replay.results[0].reason, 'idempotent_replay_already_applied');
+    const taskAfterDuplicateReplay = await request(baseUrl, 'GET', `/tasks/${encodeURIComponent(createdTask.task.id)}`);
+    assert.equal(taskAfterDuplicateReplay.task.notes, 'Applied by test-only replay');
+    assert.equal(taskAfterDuplicateReplay.task.priority, 'urgent');
+    const repeatedTestReplayOutcome = await request(baseUrl, 'GET', `/sync/mutations/${encodeURIComponent(testReplayMutationId)}`);
+    assert.equal(repeatedTestReplayOutcome.outcome.attempt_count, 2);
+    console.log('  PASS test-only task replay is idempotent by mutation_id');
+    const replayCreatedTaskId = `task_replay_create_${Date.now()}`;
+    const testOnlyCreate = await request(baseUrl, 'POST', '/sync/mutations', {
+      test_only_task_replay_enabled: true,
+      mutations: [{
+        mutation_id: `mut-test-create-${Date.now()}`,
+        entity_type: 'task',
+        entity_id: replayCreatedTaskId,
+        operation: 'create',
+        patch: {
+          title: 'Created by test-only replay',
+          due_date: date,
+          notes: 'Replay create note',
+          priority: 'medium'
+        }
+      }]
+    });
+    assert.equal(testOnlyCreate.replay.summary.applied_count, 1);
+    const taskCreatedByReplay = await request(baseUrl, 'GET', `/tasks/${encodeURIComponent(replayCreatedTaskId)}`);
+    assert.equal(taskCreatedByReplay.task.title, 'Created by test-only replay');
+    assert.equal(taskCreatedByReplay.task.notes, 'Replay create note');
+    console.log('  PASS test-only task replay creates a task with client entity_id');
+
+    const testOnlyComplete = await request(baseUrl, 'POST', '/sync/mutations', {
+      test_only_task_replay_enabled: true,
+      mutations: [{
+        mutation_id: `mut-test-complete-${Date.now()}`,
+        entity_type: 'task',
+        entity_id: replayCreatedTaskId,
+        operation: 'complete',
+        base_values: { progress: 'not_started', completed_at: null },
+        patch: {}
+      }]
+    });
+    assert.equal(testOnlyComplete.replay.summary.applied_count, 1);
+    const taskCompletedByReplay = await request(baseUrl, 'GET', `/tasks/${encodeURIComponent(replayCreatedTaskId)}`);
+    assert.equal(taskCompletedByReplay.task.progress, 'completed');
+    assert(taskCompletedByReplay.task.completed_at);
+    console.log('  PASS test-only task replay completes a task');
+
+    const testOnlyReopen = await request(baseUrl, 'POST', '/sync/mutations', {
+      test_only_task_replay_enabled: true,
+      mutations: [{
+        mutation_id: `mut-test-reopen-${Date.now()}`,
+        entity_type: 'task',
+        entity_id: replayCreatedTaskId,
+        operation: 'reopen',
+        base_values: { progress: 'completed', completed_at: taskCompletedByReplay.task.completed_at },
+        patch: {}
+      }]
+    });
+    assert.equal(testOnlyReopen.replay.summary.applied_count, 1);
+    const taskReopenedByReplay = await request(baseUrl, 'GET', `/tasks/${encodeURIComponent(replayCreatedTaskId)}`);
+    assert.equal(taskReopenedByReplay.task.progress, 'not_started');
+    assert.equal(taskReopenedByReplay.task.completed_at, null);
+    console.log('  PASS test-only task replay reopens a task');
+
+    const testOnlyDelete = await request(baseUrl, 'POST', '/sync/mutations', {
+      test_only_task_replay_enabled: true,
+      mutations: [{
+        mutation_id: `mut-test-delete-${Date.now()}`,
+        entity_type: 'task',
+        entity_id: replayCreatedTaskId,
+        operation: 'delete',
+        base_values: { progress: 'not_started' },
+        patch: {}
+      }]
+    });
+    assert.equal(testOnlyDelete.replay.summary.applied_count, 1);
+    const deletedReplayTask = await requestRaw(baseUrl, 'GET', `/tasks/${encodeURIComponent(replayCreatedTaskId)}`);
+    assert.equal(deletedReplayTask.response.status, 404);
+    assert.equal(deletedReplayTask.payload.error.code, 'task_not_found');
+    console.log('  PASS test-only task replay deletes a task');
+
+    const testConflictMutationId = `mut-test-conflict-${Date.now()}`;
+    const testOnlyConflict = await request(baseUrl, 'POST', '/sync/mutations', {
+      test_only_task_replay_enabled: true,
+      mutations: [{
+        mutation_id: testConflictMutationId,
+        entity_type: 'task',
+        entity_id: createdTask.task.id,
+        operation: 'update',
+        base_values: { notes: 'Older local base' },
+        patch: { notes: 'Local conflict value' }
+      }]
+    });
+    assert.equal(testOnlyConflict.replay.summary.conflict_count, 1);
+    assert.equal(testOnlyConflict.replay.results[0].status, 'conflict');
+    assert.equal(testOnlyConflict.replay.results[0].reason, 'field_conflict');
+    const replayConflicts = await request(baseUrl, 'GET', '/sync/conflicts?status=open');
+    const replayConflict = replayConflicts.conflicts.find(conflict => conflict.mutation_id === testConflictMutationId);
+    assert(replayConflict, `Expected replay conflict for ${testConflictMutationId}`);
+    assert.deepEqual(replayConflict.local, { notes: 'Local conflict value' });
+    assert.deepEqual(replayConflict.cloud, { notes: 'Applied by test-only replay' });
+    const taskAfterConflictReplay = await request(baseUrl, 'GET', `/tasks/${encodeURIComponent(createdTask.task.id)}`);
+    assert.equal(taskAfterConflictReplay.task.notes, 'Applied by test-only replay');
+    console.log('  PASS test-only task replay persists same-field conflicts without applying local value');
+
+    const testOnlyNonTask = await request(baseUrl, 'POST', '/sync/mutations', {
+      test_only_task_replay_enabled: true,
+      mutations: [{
+        mutation_id: `mut-test-non-task-${Date.now()}`,
+        entity_type: 'container',
+        entity_id: 'container-example',
+        operation: 'update',
+        patch: { name: 'Must stay disabled' }
+      }]
+    });
+    assert.equal(testOnlyNonTask.replay.summary.rejected_count, 1);
+    assert.equal(testOnlyNonTask.replay.results[0].reason, 'entity_replay_not_in_task_gate');
+    console.log('  PASS test-only replay keeps non-Task entities blocked');
+
+    const manageBacReplayTask = await request(baseUrl, 'POST', '/tasks', {
+      title: 'ManageBac replay source task',
+      due_date: date,
+      notes: 'Source task local notes'
+    });
+    runWorkerSql(persistTo, `UPDATE tasks SET source_type = 'managebac', readonly = 1 WHERE id = '${manageBacReplayTask.task.id.replace(/'/g, "''")}';`);
+    const testOnlyManageBacBlocked = await request(baseUrl, 'POST', '/sync/mutations', {
+      test_only_task_replay_enabled: true,
+      mutations: [{
+        mutation_id: `mut-test-mb-title-${Date.now()}`,
+        entity_type: 'task',
+        entity_id: manageBacReplayTask.task.id,
+        operation: 'update',
+        base_values: { title: manageBacReplayTask.task.title },
+        patch: { title: 'Should not override source title' }
+      }]
+    });
+    assert.equal(testOnlyManageBacBlocked.replay.summary.rejected_count, 1);
+    assert.equal(testOnlyManageBacBlocked.replay.results[0].reason, 'task_fields_not_allowed');
+    const manageBacAfterBlockedReplay = await request(baseUrl, 'GET', `/tasks/${encodeURIComponent(manageBacReplayTask.task.id)}`);
+    assert.equal(manageBacAfterBlockedReplay.task.title, 'ManageBac replay source task');
+    console.log('  PASS test-only task replay preserves ManageBac source-field boundary');
 
     const tasks = await request(baseUrl, 'GET', `/tasks?include_completed=true&search=${encodeURIComponent('Integration Task')}`);
     const events = await request(baseUrl, 'GET', `/calendar/events?date_from=${date}&date_to=${date}`);

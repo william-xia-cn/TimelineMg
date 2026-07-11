@@ -131,7 +131,8 @@
 - [x] Build&Test added a disabled Task replay enablement simulation endpoint: `POST /sync/mutations/enablement-simulation` evaluates readiness samples against Gate A-E inputs while `writes_enabled=false`.
 - [x] Build&Test added a developer-facing Settings preview card for replay enablement simulation results; it runs Gate A-E preview but still cannot enable replay writes.
 - [x] Build&Test drafted the Task-only replay implementation plan for Product Owner review in `docs/WEBDEV_OFFLINE_MUTATION_CONFLICT_DESIGN.md`; it remains plan-only and does not enable offline writes.
-- [ ] Next recommended Product Owner step: review the Task-only replay implementation plan and decide whether Phase 1 test-only server write implementation may begin.
+- [x] Product Owner approved Phase 1 Task-only test replay server write implementation; Build&Test implemented internal test-only apply/conflict/reject/idempotency coverage while keeping user-facing offline writes blocked.
+- [ ] Next recommended Product Owner step: review Phase 1 evidence and decide whether Phase 2 client queue activation planning may begin.
 
 ## LATER
 

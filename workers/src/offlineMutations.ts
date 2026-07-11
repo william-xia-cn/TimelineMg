@@ -85,7 +85,7 @@ const MANAGEBAC_SOURCE_CONTROLLED_FIELDS = new Set([
 ]);
 
 type OfflineMutationInput = Record<string, unknown>;
-type ValidatedMutation = {
+export type ValidatedMutation = {
   mutation_id: string;
   entity_type: string;
   entity_id: string;
@@ -176,7 +176,7 @@ function evaluateFieldConflict(
   };
 }
 
-function evaluateTaskReplayGate(mutation: ValidatedMutation): Record<string, unknown> {
+export function evaluateTaskReplayGate(mutation: ValidatedMutation): Record<string, unknown> {
   if (mutation.entity_type !== 'task') {
     return {
       status: 'not_in_task_only_gate',
@@ -246,7 +246,7 @@ function validateMutation(input: unknown): ValidatedMutation {
   };
 }
 
-export function validateOfflineMutationReplay(body: unknown): Record<string, unknown> {
+export function validateOfflineMutationBatch(body: unknown): ValidatedMutation[] {
   if (!isPlainObject(body) || !Array.isArray(body.mutations)) {
     throw new HttpError(400, 'invalid_offline_mutation_batch', 'Offline mutation replay requires a mutations array');
   }
@@ -256,7 +256,11 @@ export function validateOfflineMutationReplay(body: unknown): Record<string, unk
   if (body.mutations.length > MAX_MUTATION_BATCH_SIZE) {
     throw new HttpError(400, 'offline_mutation_batch_too_large', 'Offline mutation replay batch is too large');
   }
-  const mutations = body.mutations.map(validateMutation);
+  return body.mutations.map(validateMutation);
+}
+
+export function validateOfflineMutationReplay(body: unknown): Record<string, unknown> {
+  const mutations = validateOfflineMutationBatch(body);
   return {
     replay_status: 'disabled_v1',
     activation_gate: 'task_only_replay_defined_but_disabled_v1',

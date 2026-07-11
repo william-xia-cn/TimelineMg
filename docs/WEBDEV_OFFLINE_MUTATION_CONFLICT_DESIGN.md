@@ -252,7 +252,7 @@ This roadmap requires separate Product Owner approval before code work.
 | 12 | Add Task replay apply-plan preview for apply candidates. | Scaffolded on 2026-07-11 with dry-run reporting sanitized patch fields and future D1 write steps while `would_persist=false`. |
 | 13 | Add replay readiness summary endpoint/card. | Scaffolded on 2026-07-11 with `POST /sync/mutations/readiness-summary` and Pages Settings aggregating candidate counts, blocked reasons, and apply/conflict preview counts while replay remains disabled. |
 | 14 | Add disabled Task replay enablement simulation. | Scaffolded on 2026-07-12 with `POST /sync/mutations/enablement-simulation` and a Settings preview card evaluating Gate A-E inputs while `writes_enabled=false`. |
-| 15 | Enable offline queue for Task only. | Offline create/update/complete replay tests and conflict tests pass after Product Owner approval. |
+| 15 | Add Phase 1 Task-only test replay server write contract. | Implemented after Product Owner approval: internal `test_only_task_replay_enabled` requests can apply safe Task mutations, persist same-field conflicts, reject protected/non-Task mutations, and prove idempotency. User-facing offline writes remain blocked. |
 | 16 | Add Calendar and Structure entities. | Entity-specific conflict tests pass. |
 | 17 | Add Settings and cross-entity relationship validation. | Settings/runtime boundary tests pass. |
 | 18 | Promote conflict UI from diagnostics to user workflow. | Manual merge / keep cloud / apply local acceptance tests pass. |
@@ -359,7 +359,7 @@ Approval to enable Task-only replay does not approve:
 
 ## 16. Task-Only Replay Implementation Plan For PO Review
 
-This section is an implementation plan for Product Owner review. It does not approve enabling offline writes, exposing replay UI, or applying queued user mutations.
+This section records the Product Owner-approved Phase 1 direction and the remaining implementation phases. It does not approve enabling user-facing offline writes, exposing replay UI, or replaying queued user mutations.
 
 ### Phase 1: Server Write Contract
 
@@ -388,8 +388,8 @@ Required tests:
 
 Hold point:
 
-- Phase 1 may be implemented only after Product Owner approves a test-only server write package.
-- Phase 1 still must not enable Pages offline writes or user-facing mutation replay.
+- Phase 1 was approved by the Product Owner and implemented as a test-only server write package.
+- Phase 1 still does not enable Pages offline writes or user-facing mutation replay.
 
 ### Phase 2: Client Queue Activation For Task Only
 
@@ -453,9 +453,9 @@ Do not enable offline writes in the next implementation package.
 
 Recommended next Build&Test package:
 
-1. Ask the Product Owner to review the Task-only replay implementation plan above.
-2. If approved, implement Phase 1 only as a test-only server write package.
-3. Keep offline writes blocked in all user-facing UI.
-4. Do not expose new conflict resolution UI beyond the current migration conflict review until Product Owner approves the offline-write user workflow.
+1. Review Phase 1 test-only evidence and decide whether to continue toward Phase 2 client queue activation.
+2. Keep offline writes blocked in all user-facing UI.
+3. Do not expose new conflict resolution UI beyond the current migration conflict review until Product Owner approves the offline-write user workflow.
+
 
 This moves the architecture toward offline-capable WebDev without prematurely creating conflict-heavy user behavior.
