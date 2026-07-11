@@ -357,14 +357,105 @@ Approval to enable Task-only replay does not approve:
 - Desktop Runtime background sync changes;
 - deployment, public release, tag, merge, or production Cloudflare resource changes.
 
-## 16. Current Recommendation
+## 16. Task-Only Replay Implementation Plan For PO Review
+
+This section is an implementation plan for Product Owner review. It does not approve enabling offline writes, exposing replay UI, or applying queued user mutations.
+
+### Phase 1: Server Write Contract
+
+Goal: implement the smallest test-only Worker write path needed to prove the Task replay contract can be safe.
+
+Scope:
+
+- Task mutations only.
+- Allowed operations: `create`, `update`, `complete`, `reopen`, and `delete`.
+- D1 transactions only; no partial batch success without explicit outcome records.
+- Idempotency by `mutation_id`.
+- Field whitelist aligned with the Task repository and source-boundary rules.
+- ManageBac source-fact fields remain protected.
+- Same-field stale updates create conflict records instead of silently overwriting Cloud data.
+- Non-Task entities remain rejected with `entity_not_enabled`.
+
+Required tests:
+
+- duplicate `mutation_id` does not create duplicate records;
+- allowed Task update applies once;
+- stale same-field update creates a conflict record;
+- protected fields are rejected;
+- ManageBac protected source fields are rejected;
+- disabled entity replay remains blocked;
+- failed validation does not write partial data.
+
+Hold point:
+
+- Phase 1 may be implemented only after Product Owner approves a test-only server write package.
+- Phase 1 still must not enable Pages offline writes or user-facing mutation replay.
+
+### Phase 2: Client Queue Activation For Task Only
+
+Goal: connect the existing disabled local queue to Task repositories, but only after the UX semantics are approved.
+
+Scope:
+
+- Queue Task writes only when the user is offline or when Cloud write is unavailable.
+- Mark queued edits as pending in the Web UI.
+- Allow users to retry or discard pending edits.
+- Do not claim Cloud success until Worker replay confirms the mutation.
+- Keep Calendar, Containers, Settings, and migration conflicts out of this phase.
+
+Hold point:
+
+- Requires Product Owner approval for offline edit UX: blocked, queued pending, or draft mode.
+
+### Phase 3: Conflict Surfacing
+
+Goal: make Task replay conflicts diagnosable before offering resolution actions.
+
+Scope:
+
+- List sanitized conflict records from `/sync/conflicts`.
+- Show entity type, operation, conflicting fields, local summary, Cloud summary, and suggested next step.
+- Do not expose raw mutation payloads, account emails, tokens, cookies, OAuth secrets, private local paths, or full snapshots.
+- Do not auto-resolve delete/update conflicts.
+
+Hold point:
+
+- User-facing conflict resolution actions require a separate Product Owner decision.
+
+### Phase 4: Safety And Rollback
+
+Goal: keep Task replay reversible enough for internal testing.
+
+Scope:
+
+- Keep replay feature flags disabled by default.
+- Add a runtime kill switch for replay apply.
+- Keep history records for applied / rejected / conflict outcomes.
+- Keep local queue records until replay outcome is confirmed.
+- Document how to clear internal test queues without deleting canonical Cloud data.
+
+### Phase 5: Explicit Hold Points
+
+The following remain unapproved until Product Owner explicitly approves them:
+
+- enabling offline writes in user-facing Web App flows;
+- Calendar / Container / Settings replay;
+- auto-merge of disjoint stale updates;
+- conflict resolution UI with apply-local / keep-cloud actions;
+- Desktop Runtime background replay;
+- Browser Extension replay;
+- deployment to production Cloudflare resources;
+- public release, tag, merge, or GitHub Release.
+
+## 17. Current Recommendation
 
 Do not enable offline writes in the next implementation package.
 
 Recommended next Build&Test package:
 
-1. Draft the Task-only replay implementation plan for Product Owner review, still without enabling offline writes.
-2. Keep offline writes blocked in all user-facing UI.
-3. Do not expose new conflict resolution UI beyond the current migration conflict review until Product Owner approves the offline-write user workflow.
+1. Ask the Product Owner to review the Task-only replay implementation plan above.
+2. If approved, implement Phase 1 only as a test-only server write package.
+3. Keep offline writes blocked in all user-facing UI.
+4. Do not expose new conflict resolution UI beyond the current migration conflict review until Product Owner approves the offline-write user workflow.
 
 This moves the architecture toward offline-capable WebDev without prematurely creating conflict-heavy user behavior.

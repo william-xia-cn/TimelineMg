@@ -130,7 +130,8 @@
 - [x] Build&Test defined the Product Owner review gate checklist for enabling Task-only replay in `docs/WEBDEV_OFFLINE_MUTATION_CONFLICT_DESIGN.md`, including scope lock, readiness evidence, conflict policy, UX semantics, tests, and explicit non-goals.
 - [x] Build&Test added a disabled Task replay enablement simulation endpoint: `POST /sync/mutations/enablement-simulation` evaluates readiness samples against Gate A-E inputs while `writes_enabled=false`.
 - [x] Build&Test added a developer-facing Settings preview card for replay enablement simulation results; it runs Gate A-E preview but still cannot enable replay writes.
-- [ ] Next recommended Build&Test package: draft the Task-only replay implementation plan for Product Owner review, still without enabling offline writes.
+- [x] Build&Test drafted the Task-only replay implementation plan for Product Owner review in `docs/WEBDEV_OFFLINE_MUTATION_CONFLICT_DESIGN.md`; it remains plan-only and does not enable offline writes.
+- [ ] Next recommended Product Owner step: review the Task-only replay implementation plan and decide whether Phase 1 test-only server write implementation may begin.
 
 ## LATER
 
