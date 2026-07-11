@@ -521,12 +521,8 @@ export function App() {
 
   async function addTask(event) {
     event.preventDefault();
-    if (!online) {
-      setStatus({ phase: 'offline', message: 'offline_write_blocked: reconnect before editing current data.' });
-      return;
-    }
     if (!hasCloudSession()) {
-      setStatus({ phase: 'blocked', message: 'Google SSO session required before creating Cloud tasks.' });
+      setStatus({ phase: 'blocked', message: 'Google SSO session required before creating or queueing tasks.' });
       return;
     }
     if (!draft.title.trim()) return;
@@ -543,25 +539,21 @@ export function App() {
       });
       setTasks(current => [created, ...current.filter(task => task.id !== created.id)]);
       setDraft(emptyTaskDraft);
-      setStatus({ phase: 'ready', message: 'Task saved to Cloud canonical store.' });
+      setStatus(online ? { phase: 'ready', message: 'Task saved to Cloud canonical store.' } : { phase: 'offline', message: 'Task queued locally and marked pending sync.' });
     } catch (error) {
       setStatus({ phase: 'error', message: formatStatus(error) });
     }
   }
 
   async function updateTaskState(task, nextPatch) {
-    if (!online) {
-      setStatus({ phase: 'offline', message: 'offline_write_blocked: reconnect before editing current data.' });
-      return;
-    }
     if (!hasCloudSession()) {
-      setStatus({ phase: 'blocked', message: 'Google SSO session required before editing Cloud tasks.' });
+      setStatus({ phase: 'blocked', message: 'Google SSO session required before editing or queueing tasks.' });
       return;
     }
     try {
       const updated = await taskRepository.updateTask(task.id, nextPatch);
       setTasks(current => current.map(item => item.id === updated.id ? updated : item));
-      setStatus({ phase: 'ready', message: 'Task updated in Cloud canonical store.' });
+      setStatus(online ? { phase: 'ready', message: 'Task updated in Cloud canonical store.' } : { phase: 'offline', message: 'Task update queued locally and marked pending sync.' });
     } catch (error) {
       setStatus({ phase: 'error', message: formatStatus(error) });
     }
@@ -1012,7 +1004,10 @@ export function App() {
   const selectedTask = tasks.find(task => task.id === selectedTaskId) || null;
   const accountName = account?.name || account?.display_name || account?.email || 'Google account';
   const accountPicture = account?.picture || account?.picture_url || null;
-  const canWrite = online && hasCloudSession();
+  const hasSession = hasCloudSession();
+  const canWrite = online && hasSession;
+  const taskCanWrite = hasSession;
+  const taskDeleteAllowed = online && hasSession;
 
   return (
     <div className="app-shell">
@@ -1045,7 +1040,7 @@ export function App() {
         {!online && (
           <section className="notice warning">
             <AlertTriangle size={18} />
-            <span>当前为离线只读模式。WebDev v1 禁止离线修改当前数据，重新连接后恢复写入。</span>
+            <span>当前离线。Task 新建、编辑、完成和重开会进入待同步队列；删除和非 Task 数据仍需重新连接。</span>
           </section>
         )}
 
@@ -1080,7 +1075,7 @@ export function App() {
               <span>Migration</span>
               <strong>{migrationResult?.status || 'Ready after Google SSO'}</strong>
             </div>
-            <TaskList title="Projected current work" tasks={dashboardProjection.currentTasks} canWrite={canWrite} onPatch={updateTaskState} onDelete={deleteTask} onSelect={task => setSelectedTaskId(task.id)} />
+            <TaskList title="Projected current work" tasks={dashboardProjection.currentTasks} canWrite={taskCanWrite} canDelete={taskDeleteAllowed} onPatch={updateTaskState} onDelete={deleteTask} onSelect={task => setSelectedTaskId(task.id)} />
           </section>
         )}
 
@@ -1091,23 +1086,23 @@ export function App() {
               <form className="task-form expanded" onSubmit={addTask}>
                 <label>
                   <span>Title</span>
-                  <input value={draft.title} onChange={event => setDraft(current => ({ ...current, title: event.target.value }))} placeholder="Add a task" disabled={!canWrite} />
+                  <input value={draft.title} onChange={event => setDraft(current => ({ ...current, title: event.target.value }))} placeholder="Add a task" disabled={!taskCanWrite} />
                 </label>
                 <label>
                   <span>Due date</span>
-                  <input type="date" value={draft.due_date} onChange={event => setDraft(current => ({ ...current, due_date: event.target.value }))} disabled={!canWrite} />
+                  <input type="date" value={draft.due_date} onChange={event => setDraft(current => ({ ...current, due_date: event.target.value }))} disabled={!taskCanWrite} />
                 </label>
                 <label>
                   <span>Time</span>
-                  <input type="time" value={draft.schedule_time} onChange={event => setDraft(current => ({ ...current, schedule_time: event.target.value }))} disabled={!canWrite} />
+                  <input type="time" value={draft.schedule_time} onChange={event => setDraft(current => ({ ...current, schedule_time: event.target.value }))} disabled={!taskCanWrite} />
                 </label>
                 <label>
                   <span>Duration</span>
-                  <input type="number" min="5" step="5" value={draft.duration} onChange={event => setDraft(current => ({ ...current, duration: event.target.value }))} disabled={!canWrite} />
+                  <input type="number" min="5" step="5" value={draft.duration} onChange={event => setDraft(current => ({ ...current, duration: event.target.value }))} disabled={!taskCanWrite} />
                 </label>
                 <label>
                   <span>Priority</span>
-                  <select value={draft.priority} onChange={event => setDraft(current => ({ ...current, priority: event.target.value }))} disabled={!canWrite}>
+                  <select value={draft.priority} onChange={event => setDraft(current => ({ ...current, priority: event.target.value }))} disabled={!taskCanWrite}>
                     <option value="urgent">Urgent</option>
                     <option value="important">Important</option>
                     <option value="medium">Medium</option>
@@ -1116,7 +1111,7 @@ export function App() {
                 </label>
                 <label>
                   <span>Recurrence</span>
-                  <select value={draft.recurrence_frequency} onChange={event => setDraft(current => ({ ...current, recurrence_frequency: event.target.value }))} disabled={!canWrite}>
+                  <select value={draft.recurrence_frequency} onChange={event => setDraft(current => ({ ...current, recurrence_frequency: event.target.value }))} disabled={!taskCanWrite}>
                     <option value="none">None</option>
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
@@ -1125,13 +1120,13 @@ export function App() {
                 </label>
                 <label>
                   <span>Repeat count</span>
-                  <input type="number" min="1" max="52" value={draft.recurrence_count} onChange={event => setDraft(current => ({ ...current, recurrence_count: event.target.value }))} disabled={!canWrite || draft.recurrence_frequency === 'none'} />
+                  <input type="number" min="1" max="52" value={draft.recurrence_count} onChange={event => setDraft(current => ({ ...current, recurrence_count: event.target.value }))} disabled={!taskCanWrite || draft.recurrence_frequency === 'none'} />
                 </label>
                 <label className="full-row">
                   <span>Notes</span>
-                  <textarea value={draft.notes} onChange={event => setDraft(current => ({ ...current, notes: event.target.value }))} disabled={!canWrite} />
+                  <textarea value={draft.notes} onChange={event => setDraft(current => ({ ...current, notes: event.target.value }))} disabled={!taskCanWrite} />
                 </label>
-                <button type="submit" disabled={!canWrite}>Save to Cloud</button>
+                <button type="submit" disabled={!taskCanWrite}>{online ? 'Save to Cloud' : 'Queue task locally'}</button>
               </form>
             </div>
 
@@ -1145,8 +1140,8 @@ export function App() {
                 </select>
                 <button type="button" onClick={refreshTasks}>Refresh</button>
               </div>
-              <TaskList tasks={visibleTasks} canWrite={canWrite} onPatch={updateTaskState} onDelete={deleteTask} onSelect={task => setSelectedTaskId(task.id)} />
-              <TaskDetailPanel task={selectedTask} plans={plans} buckets={buckets} labels={labels} canWrite={canWrite} onSave={patch => selectedTask && updateTaskState(selectedTask, patch)} onClose={() => setSelectedTaskId(null)} />
+              <TaskList tasks={visibleTasks} canWrite={taskCanWrite} canDelete={taskDeleteAllowed} onPatch={updateTaskState} onDelete={deleteTask} onSelect={task => setSelectedTaskId(task.id)} />
+              <TaskDetailPanel task={selectedTask} plans={plans} buckets={buckets} labels={labels} canWrite={taskCanWrite} onSave={patch => selectedTask && updateTaskState(selectedTask, patch)} onClose={() => setSelectedTaskId(null)} />
             </div>
           </section>
         )}
@@ -1674,7 +1669,7 @@ function CalendarEventList({ events, canWrite, onDelete }) {
   );
 }
 
-function TaskList({ tasks, canWrite, onPatch, onDelete, onSelect, title = 'Current work' }) {
+function TaskList({ tasks, canWrite, canDelete = canWrite, onPatch, onDelete, onSelect, title = 'Current work' }) {
   return (
     <div className="panel task-list">
       <h2>{title}</h2>
@@ -1687,6 +1682,7 @@ function TaskList({ tasks, canWrite, onPatch, onDelete, onSelect, title = 'Curre
             <div className="task-main" role="button" tabIndex={0} onClick={() => onSelect?.(task)} onKeyDown={event => { if (event.key === 'Enter') onSelect?.(task); }}>
               <strong>{task.title}</strong>
               <span>{formatTaskMeta(task)}</span>
+              {task.__sync_status === 'pending' && <em className="pending-sync-badge">Pending sync</em>}
               {(task.notes || task.description) && <p>{task.notes || task.description}</p>}
             </div>
             <div className="task-actions">
@@ -1695,7 +1691,7 @@ function TaskList({ tasks, canWrite, onPatch, onDelete, onSelect, title = 'Curre
               ) : (
                 <button type="button" disabled={!canWrite} title="Complete task" onClick={() => onPatch(task, { progress: 'completed' })}><CheckCircle2 size={16} /></button>
               )}
-              <button type="button" disabled={!canWrite} title="Delete task" onClick={() => onDelete(task)}><Trash2 size={16} /></button>
+              <button type="button" disabled={!canDelete} title={canDelete ? 'Delete task' : 'Delete requires reconnect'} onClick={() => onDelete(task)}><Trash2 size={16} /></button>
             </div>
           </article>
         );
@@ -1703,13 +1699,3 @@ function TaskList({ tasks, canWrite, onPatch, onDelete, onSelect, title = 'Curre
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-

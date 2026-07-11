@@ -72,7 +72,12 @@ async function main() {
   console.log('  PASS queue rejects private fields');
 
   const repositoryStorage = new MemoryStorage();
-  const repositoryQueue = queueModule.createOfflineMutationQueue({ storage: repositoryStorage, enabled: false });
+  const repositoryQueue = queueModule.createOfflineMutationQueue({
+    storage: repositoryStorage,
+    enabled: true,
+    now: () => '2026-07-11T01:00:00.000Z',
+    createId: () => `mut_repo_${repositoryQueue.getState().queued_count + 1}`
+  });
   const taskRepository = taskRepositoryModule.createTaskRepository({
     request: async () => {
       throw new Error('API must not be called while offline');
@@ -82,10 +87,30 @@ async function main() {
     isOnline: () => false,
     offlineQueue: repositoryQueue
   });
-  assert.equal(taskRepository.getOfflineMutationQueueState().enabled, false);
-  await assert.rejects(() => taskRepository.createTask({ title: 'Offline blocked' }), error => error.code === 'offline_write_blocked');
-  assert.equal(repositoryQueue.getState().queued_count, 0);
-  console.log('  PASS task repository still blocks offline writes without queueing');
+  assert.equal(taskRepository.getOfflineMutationQueueState().enabled, true);
+  const createdOffline = await taskRepository.createTask({ title: 'Offline queued', priority: 'important' });
+  assert.equal(createdOffline.__sync_status, 'pending');
+  assert.equal(createdOffline.__pending_operation, 'create');
+  assert.equal(repositoryQueue.getState().queued_count, 1);
+  assert.equal(repositoryQueue.listQueuedMutations()[0].operation, 'create');
+  assert.equal(taskRepository.getCachedTasks()[0].title, 'Offline queued');
+  const updatedOffline = await taskRepository.updateTask(createdOffline.id, { notes: 'Offline note', priority: 'urgent' });
+  assert.equal(updatedOffline.__sync_status, 'pending');
+  assert.equal(updatedOffline.__pending_operation, 'update');
+  assert.equal(updatedOffline.notes, 'Offline note');
+  assert.equal(repositoryQueue.getState().queued_count, 2);
+  const completedOffline = await taskRepository.completeTask(createdOffline.id);
+  assert.equal(completedOffline.__pending_operation, 'complete');
+  assert.equal(completedOffline.progress, 'completed');
+  assert(completedOffline.completed_at);
+  const reopenedOffline = await taskRepository.reopenTask(createdOffline.id);
+  assert.equal(reopenedOffline.__pending_operation, 'reopen');
+  assert.equal(reopenedOffline.progress, 'not_started');
+  assert.equal(reopenedOffline.completed_at, null);
+  assert.equal(repositoryQueue.getState().queued_count, 4);
+  await assert.rejects(() => taskRepository.deleteTask(createdOffline.id), error => error.code === 'offline_write_blocked');
+  assert.equal(repositoryQueue.getState().queued_count, 4);
+  console.log('  PASS task repository queues Task-only pending writes while offline and still blocks delete');
 
   console.log('=====================================');
   console.log('All WebDev offline mutation queue checks passed.');

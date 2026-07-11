@@ -2,9 +2,9 @@
 
 **状态**: Draft for Product Owner review
 **日期**: 2026-07-11
-**依据**: D-046, D-047, D-048, `docs/WEBDEV_INTERFACE_CONTRACTS.md`, `docs/WEBDEV_DATA_AUTHORITY_MATRIX.md`
+**依据**: D-046, D-047, D-048, D-049, `docs/WEBDEV_INTERFACE_CONTRACTS.md`, `docs/WEBDEV_DATA_AUTHORITY_MATRIX.md`
 
-> 本文定义 WebDev 后续离线写入队列和冲突处理方向。它不是当前 v1 实施批准，不改变 D-047 / D-048 已确认的 v1 行为：WebDev v1 离线时仍阻止编辑当前数据。
+> 本文定义 WebDev 后续离线写入队列和冲突处理方向。D-049 已批准 Task-only queued pending 的窄路径；当前仍不批准 prod replay、Calendar/Container/Settings replay、Browser Extension replay、本地覆盖云端、批量冲突处理或全实体 offline-first。
 
 ## 1. Purpose
 

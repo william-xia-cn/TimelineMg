@@ -256,10 +256,10 @@ assert('Offline mutation queue rejects private fields',
   offlineQueue.includes('offline_mutation_private_data') && offlineQueue.includes('refresh_token') && offlineQueue.includes('access_token'));
 assert('Task repository persists local read cache',
   taskRepository.includes('timewhere.web.tasks.cache.v1') && taskRepository.includes('writeCachedTasks') && taskRepository.includes('getCachedTasks'));
-assert('Task repository blocks offline writes',
-  taskRepository.includes('OfflineWriteBlockedError') && taskRepository.includes('offline_write_blocked'));
-assert('Task repository exposes disabled offline queue state without enabling writes',
-  taskRepository.includes('createOfflineMutationQueue') && taskRepository.includes('getOfflineMutationQueueState'));
+assert('Task repository queues Task-only offline writes and still blocks offline delete',
+  taskRepository.includes('createPendingOfflineTask') && taskRepository.includes('updatePendingOfflineTask') && taskRepository.includes('offline_write_blocked'));
+assert('Task repository exposes queued pending offline queue state for Task writes',
+  taskRepository.includes('createOfflineMutationQueue({ storage, enabled: true })') && taskRepository.includes('getOfflineMutationQueueState') && taskRepository.includes('__sync_status'));
 assert('Task repository supports complete reopen and delete',
   taskRepository.includes('completeTask') && taskRepository.includes('reopenTask') && taskRepository.includes('deleteTask'));
 
@@ -306,10 +306,11 @@ const apiClient = read('pages/src/api/client.js');
 for (const label of ['Dashboard', 'Tasks', 'Calendar', 'Settings']) {
   assert(`Web App exposes ${label}`, app.includes(label));
 }
-assert('Web App blocks offline writes', app.includes('offline_write_blocked'));
+assert('Web App exposes Task-only queued pending while non-Task writes remain blocked',
+  app.includes('Queue task locally') && app.includes('Pending sync') && app.includes('offline_write_blocked'));
 assert('Web App includes migration preview', app.includes('Run migration preview'));
 assert('Web App exposes Task CRUD controls',
-  app.includes('Save to Cloud') && app.includes('Complete task') && app.includes('Reopen task') && app.includes('Delete task'));
+  app.includes('Save to Cloud') && app.includes('Queue task locally') && app.includes('Complete task') && app.includes('Reopen task') && app.includes('Delete task'));
 assert('Dashboard uses Daily Settle projection helper',
   app.includes('computeDashboardProjection') && app.includes('Today projection') && app.includes('Projected current work') && app.includes('Current container'));
 assert('Web App exposes Task detail first version',
@@ -344,22 +345,22 @@ assert('Web App exposes Structure management controls',
   app.includes('Add plan') && app.includes('Add bucket') && app.includes('Add label') && app.includes('Add container') && app.includes('Search buckets and containers') && app.includes('Google SSO session required before creating Cloud plans') && app.includes('Google SSO session required before creating Cloud buckets') && app.includes('Google SSO session required before creating Cloud labels'));
 assert('Web App exposes Cloud settings controls',
   app.includes('Default duration') && app.includes('Default priority') && app.includes('Enable reminders') && app.includes('Save settings'));
-assert('Web App requires Google SSO session for writes',
-  app.includes('Google SSO session required before creating Cloud tasks') && app.includes('Google SSO session required before editing Cloud tasks') && app.includes('Google SSO session required before creating Cloud calendar events'));
+assert('Web App requires Google SSO session for writes and Task queueing',
+  app.includes('Google SSO session required before creating or queueing tasks') && app.includes('Google SSO session required before editing or queueing tasks') && app.includes('Google SSO session required before creating Cloud calendar events'));
 assert('Web App renders real Google SSO account entry',
   app.includes('renderGoogleSsoButton') && app.includes('googleButtonRef') && app.includes('Disconnect session') && !app.includes('<button disabled>Connect Google SSO</button>'));
 assert('Web App Settings can refresh real Cloud account and sync status',
   app.includes('refreshCloudSessionStatus') && app.includes('Refresh account status') && app.includes('apiClient.getSyncStatus') && apiClient.includes('/sync/status'));
 
 const pagesReadme = read('pages/README.md');
-assert('Pages README documents offline write block',
-  pagesReadme.includes('离线时禁止修改当前数据') && pagesReadme.includes('offline_write_blocked'));
+assert('Pages README documents Task-only queued pending and non-Task offline write block',
+  pagesReadme.includes('Task-only queued pending') && pagesReadme.includes('Pending sync') && pagesReadme.includes('offline_write_blocked'));
 assert('Pages README documents Worker proxy',
   pagesReadme.includes('127.0.0.1:4173') && pagesReadme.includes('127.0.0.1:8787'));
 assert('Pages README documents Google SSO client id configuration',
   pagesReadme.includes('VITE_GOOGLE_OIDC_CLIENT_ID') && pagesReadme.includes('GOOGLE_OIDC_CLIENT_ID') && pagesReadme.includes('不需要也不能配置 client secret'));
 assert('Pages README documents Tasks and Calendar migration v1',
-  pagesReadme.includes('Tasks 已进入第一版 WebDev 迁移实现') && pagesReadme.includes('Calendar Events 已进入第一版 WebDev 迁移实现'));
+  pagesReadme.includes('Tasks 已进入 WebDev Task-only queued pending 阶段') && pagesReadme.includes('Calendar Events 已进入第一版 WebDev 迁移实现'));
 assert('Pages README documents Structure migration v1',
   pagesReadme.includes('Buckets / Containers 已进入第一版 WebDev 迁移实现'));
 assert('Pages README documents Settings migration v1',
@@ -395,7 +396,3 @@ if (failed > 0) {
 }
 
 console.log(`\nAll ${passed} WebDev scaffold checks passed.`);
-
-
-
-

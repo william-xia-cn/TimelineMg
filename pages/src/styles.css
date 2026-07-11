@@ -248,6 +248,22 @@ textarea:disabled {
   color: #657386;
   text-decoration: line-through;
 }
+.task-row.pending-sync {
+  background: #fff8e6;
+}
+
+.pending-sync-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #7a4b00;
+  background: #ffe8a3;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}
 
 .task-actions {
   display: flex;

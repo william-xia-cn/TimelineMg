@@ -36,6 +36,51 @@ function assertOnline(isOnline) {
   if (!isOnline()) throw new OfflineWriteBlockedError('offline_write_blocked: reconnect before editing current data.');
 }
 
+function defaultTaskId() {
+  if (globalThis.crypto?.randomUUID) return `task_${globalThis.crypto.randomUUID().replace(/-/g, '')}`;
+  return `task_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+}
+
+function nowISO() {
+  return new Date().toISOString();
+}
+
+function normalizeTaskPatchForOffline(task, patch) {
+  const nextPatch = { ...(patch || {}) };
+  if (nextPatch.progress === 'completed' && !Object.prototype.hasOwnProperty.call(nextPatch, 'completed_at')) {
+    nextPatch.completed_at = nowISO();
+  }
+  if (nextPatch.progress && nextPatch.progress !== 'completed' && !Object.prototype.hasOwnProperty.call(nextPatch, 'completed_at')) {
+    nextPatch.completed_at = null;
+  }
+  if (Object.prototype.hasOwnProperty.call(nextPatch, 'duration')) {
+    const duration = Number(nextPatch.duration || 45);
+    nextPatch.duration = Number.isFinite(duration) && duration > 0 ? Math.min(24 * 60, Math.round(duration)) : 45;
+  }
+  return nextPatch;
+}
+
+function operationForPatch(patch) {
+  if (patch?.progress === 'completed') return 'complete';
+  if (patch?.progress === 'not_started' && patch?.completed_at === null) return 'reopen';
+  return 'update';
+}
+
+function pickBaseValues(task, fields) {
+  const source = task && typeof task === 'object' ? task : {};
+  return Object.fromEntries(fields.map(field => [field, source[field] ?? null]));
+}
+
+function markPending(task, mutation, operation) {
+  return {
+    ...task,
+    __sync_status: 'pending',
+    __pending_mutation_id: mutation.mutation_id,
+    __pending_operation: operation,
+    __pending_at: mutation.created_at || nowISO()
+  };
+}
+
 function mergeTaskIntoCache(storage, task) {
   if (!task?.id) return;
   const tasks = readCachedTasks(storage);
@@ -49,7 +94,65 @@ function removeTaskFromCache(storage, id) {
   writeCachedTasks(storage, readCachedTasks(storage).filter(task => task.id !== id));
 }
 
-export function createTaskRepository(apiClient, { storage = window.localStorage, isOnline = () => navigator.onLine, offlineQueue = createOfflineMutationQueue({ storage }) } = {}) {
+function cachedTaskById(storage, id) {
+  return readCachedTasks(storage).find(task => task.id === id) || null;
+}
+
+function createPendingOfflineTask(storage, offlineQueue, input) {
+  const id = input.id || defaultTaskId();
+  const createdAt = nowISO();
+  const task = markPending({
+    id,
+    ...input,
+    title: input.title || 'Untitled Task',
+    progress: input.progress || 'not_started',
+    priority: input.priority || 'medium',
+    duration: Number(input.duration || 45),
+    checklist: Array.isArray(input.checklist) ? input.checklist : [],
+    labels: Array.isArray(input.labels) ? input.labels : [],
+    created_at: createdAt,
+    updated_at: createdAt,
+    revision: input.revision || null
+  }, offlineQueue.enqueueMutation({
+    entity_type: 'task',
+    entity_id: id,
+    operation: 'create',
+    base_revision: null,
+    base_values: {},
+    patch: input,
+    field_paths: Object.keys(input || {})
+  }), 'create');
+  mergeTaskIntoCache(storage, task);
+  return task;
+}
+
+function updatePendingOfflineTask(storage, offlineQueue, id, patch) {
+  const existing = cachedTaskById(storage, id);
+  if (!existing) {
+    throw new OfflineWriteBlockedError('offline_write_blocked: task is not in local cache; reconnect before editing it.');
+  }
+  const normalizedPatch = normalizeTaskPatchForOffline(existing, patch);
+  const operation = operationForPatch(normalizedPatch);
+  const fields = Object.keys(normalizedPatch).sort();
+  const mutation = offlineQueue.enqueueMutation({
+    entity_type: 'task',
+    entity_id: id,
+    operation,
+    base_revision: existing.revision ?? null,
+    base_values: pickBaseValues(existing, fields),
+    patch: normalizedPatch,
+    field_paths: fields
+  });
+  const task = markPending({
+    ...existing,
+    ...normalizedPatch,
+    updated_at: mutation.created_at || nowISO()
+  }, mutation, operation);
+  mergeTaskIntoCache(storage, task);
+  return task;
+}
+
+export function createTaskRepository(apiClient, { storage = window.localStorage, isOnline = () => navigator.onLine, offlineQueue = createOfflineMutationQueue({ storage, enabled: true }) } = {}) {
   return {
     getOfflineMutationQueueState() {
       return offlineQueue.getState();
@@ -69,13 +172,13 @@ export function createTaskRepository(apiClient, { storage = window.localStorage,
       return tasks;
     },
     async createTask(input) {
-      assertOnline(isOnline);
+      if (!isOnline()) return createPendingOfflineTask(storage, offlineQueue, input || {});
       const data = await apiClient.request('/tasks', { method: 'POST', body: input });
       mergeTaskIntoCache(storage, data.task);
       return data.task;
     },
     async updateTask(id, patch) {
-      assertOnline(isOnline);
+      if (!isOnline()) return updatePendingOfflineTask(storage, offlineQueue, id, patch || {});
       const data = await apiClient.request(`/tasks/${encodeURIComponent(id)}`, { method: 'PATCH', body: patch });
       mergeTaskIntoCache(storage, data.task);
       return data.task;

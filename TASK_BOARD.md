@@ -132,7 +132,9 @@
 - [x] Build&Test added a developer-facing Settings preview card for replay enablement simulation results; it runs Gate A-E preview but still cannot enable replay writes.
 - [x] Build&Test drafted the Task-only replay implementation plan for Product Owner review in `docs/WEBDEV_OFFLINE_MUTATION_CONFLICT_DESIGN.md`; it remains plan-only and does not enable offline writes.
 - [x] Product Owner approved Phase 1 Task-only test replay server write implementation; Build&Test implemented internal test-only apply/conflict/reject/idempotency coverage while keeping user-facing offline writes blocked.
-- [ ] Next recommended Product Owner step: review Phase 1 evidence and decide whether Phase 2 client queue activation planning may begin.
+- [x] Product Owner approved WebDev offline/replay Phase 2-9 recommended boundary in D-049; separate approval remains required for prod release, Calendar/Container/Settings replay implementation, Browser Extension replay, local-over-cloud overwrite, batch conflict handling, and full-entity offline-first.
+- [x] Build&Test implemented Phase 2 Task-only queued pending for create/update/complete/reopen while keeping Task delete and non-Task offline writes blocked.
+- [ ] Next Build&Test package: implement Phase 3 Settings-based single Task conflict review UI with keep-cloud / discard-local / later actions only.
 
 ## LATER
 
