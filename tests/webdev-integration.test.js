@@ -207,16 +207,21 @@ async function main() {
     assert.equal(replayAttempt.replay.accepted, false);
     assert.equal(replayAttempt.replay.replay_status, 'disabled_v1');
     assert.equal(replayAttempt.replay.activation_gate, 'task_only_replay_defined_but_disabled_v1');
+    assert.equal(replayAttempt.replay.transaction_skeleton, 'internal_disabled_v1');
     assert.equal(replayAttempt.outcome_persistence.mode, 'disabled_v1_metadata_only');
     assert.equal(replayAttempt.outcome_persistence.recorded_count, 1);
     assert.equal(replayAttempt.replay.results[0].reason, 'offline_replay_disabled_v1');
     assert.equal(replayAttempt.replay.results[0].task_replay_gate.status, 'task_replay_gate_ready_but_disabled');
     assert.equal(replayAttempt.replay.results[0].task_replay_gate.field_conflict_check.status, 'cloud_values_required');
+    assert.equal(replayAttempt.replay.results[0].transaction_skeleton.branch, 'requires_cloud_values');
+    assert.equal(replayAttempt.replay.results[0].transaction_skeleton.writes_enabled, false);
+    assert.equal(replayAttempt.replay.results[0].transaction_skeleton.applies_user_data, false);
     const storedReplayOutcome = await request(baseUrl, 'GET', `/sync/mutations/${encodeURIComponent(replayMutationId)}`);
     assert.equal(storedReplayOutcome.outcome.mutation_id, replayMutationId);
     assert.equal(storedReplayOutcome.outcome.outcome_status, 'rejected');
     assert.equal(storedReplayOutcome.outcome.reason, 'offline_replay_disabled_v1');
     assert.equal(storedReplayOutcome.outcome.task_replay_gate.status, 'task_replay_gate_ready_but_disabled');
+    assert.equal(Object.prototype.hasOwnProperty.call(storedReplayOutcome.outcome, 'transaction_skeleton'), false);
     assert.equal(Object.prototype.hasOwnProperty.call(storedReplayOutcome.outcome, 'patch'), false);
     const repeatedReplayAttempt = await request(baseUrl, 'POST', '/sync/mutations', replayBody);
     assert.equal(repeatedReplayAttempt.outcome_persistence.recorded_count, 1);
@@ -259,6 +264,9 @@ async function main() {
       }]
     });
     assert.equal(nonConflictingReplayPreview.replay.results[0].task_replay_gate.field_conflict_check.status, 'would_auto_merge');
+    assert.equal(nonConflictingReplayPreview.replay.results[0].transaction_skeleton.branch, 'apply_candidate');
+    assert(nonConflictingReplayPreview.replay.results[0].transaction_skeleton.d1_transaction_steps.includes('apply_task_patch'));
+    assert.equal(nonConflictingReplayPreview.replay.results[0].transaction_skeleton.writes_enabled, false);
     console.log('  PASS task replay gate previews disjoint field auto-merge while disabled');
 
     const conflictingReplayPreview = await request(baseUrl, 'POST', '/sync/mutations', {
@@ -274,6 +282,9 @@ async function main() {
     });
     assert.equal(conflictingReplayPreview.replay.results[0].task_replay_gate.field_conflict_check.status, 'would_conflict');
     assert.deepEqual(conflictingReplayPreview.replay.results[0].task_replay_gate.field_conflict_check.conflicting_fields, ['notes']);
+    assert.equal(conflictingReplayPreview.replay.results[0].transaction_skeleton.branch, 'conflict_candidate');
+    assert(conflictingReplayPreview.replay.results[0].transaction_skeleton.d1_transaction_steps.includes('create_sync_conflict_record'));
+    assert.equal(conflictingReplayPreview.replay.results[0].transaction_skeleton.writes_enabled, false);
     console.log('  PASS task replay gate previews same-field conflict while disabled');
 
     const manageBacSourceReplayPreview = await request(baseUrl, 'POST', '/sync/mutations', {
@@ -290,6 +301,7 @@ async function main() {
     assert.equal(manageBacSourceReplayPreview.replay.results[0].reason, 'task_fields_not_allowed');
     assert.equal(manageBacSourceReplayPreview.replay.results[0].task_replay_gate.status, 'blocked_by_task_replay_gate');
     assert.deepEqual(manageBacSourceReplayPreview.replay.results[0].task_replay_gate.source_controlled_fields, ['title']);
+    assert.equal(manageBacSourceReplayPreview.replay.results[0].transaction_skeleton.branch, 'reject_candidate');
     console.log('  PASS task replay gate blocks ManageBac source facts while disabled');
 
     const nonTaskReplayPreview = await request(baseUrl, 'POST', '/sync/mutations', {
@@ -305,10 +317,12 @@ async function main() {
     });
     assert.equal(nonTaskReplayPreview.replay.results[0].reason, 'entity_replay_not_in_task_gate');
     assert.equal(nonTaskReplayPreview.replay.results[0].task_replay_gate.status, 'not_in_task_only_gate');
+    assert.equal(nonTaskReplayPreview.replay.results[0].transaction_skeleton.branch, 'not_in_task_gate');
     console.log('  PASS replay activation gate is task-only while disabled');
 
     const syncStatus = await request(baseUrl, 'GET', '/sync/status');
     assert.equal(syncStatus.task_replay_gate, 'defined_disabled_v1');
+    assert.equal(syncStatus.task_replay_transaction, 'internal_disabled_v1');
     assert.equal(syncStatus.mutation_outcomes, 'metadata_only_disabled_v1');
     assert.equal(syncStatus.conflict_records, 'scaffolded');
     const mutationOutcomes = await request(baseUrl, 'GET', '/sync/mutations?status=rejected&limit=20');

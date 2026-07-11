@@ -39,6 +39,7 @@ import { validateOfflineMutationReplay } from './offlineMutations';
 import { listSyncChanges } from './sync';
 import { getSyncConflict, listSyncConflicts } from './syncConflicts';
 import { getSyncMutationOutcome, listSyncMutationOutcomes, recordSyncMutationOutcomes } from './syncMutationOutcomes';
+import { attachTaskReplayTransactionSkeleton } from './taskReplayTransaction';
 import type { Env } from './types';
 
 type Handler = (request: Request, env: Env, url: URL) => Promise<Response>;
@@ -348,6 +349,7 @@ async function handleSyncStatus(request: Request, env: Env): Promise<Response> {
     change_feed: 'available',
     mutation_replay: 'disabled_v1',
     task_replay_gate: 'defined_disabled_v1',
+    task_replay_transaction: 'internal_disabled_v1',
     mutation_outcomes: 'metadata_only_disabled_v1',
     conflict_records: 'scaffolded'
   });
@@ -366,7 +368,7 @@ async function handleListSyncChanges(request: Request, env: Env, url: URL): Prom
 async function handleSyncMutations(request: Request, env: Env): Promise<Response> {
   const session = await requireSession(env, request);
   const body = await readJson<unknown>(request);
-  const replay = validateOfflineMutationReplay(body);
+  const replay = attachTaskReplayTransactionSkeleton(validateOfflineMutationReplay(body));
   return jsonResponse({
     replay,
     outcome_persistence: await recordSyncMutationOutcomes(env, session.accountId, replay)
