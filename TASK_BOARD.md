@@ -135,7 +135,8 @@
 - [x] Product Owner approved WebDev offline/replay Phase 2-9 recommended boundary in D-049; separate approval remains required for prod release, Calendar/Container/Settings replay implementation, Browser Extension replay, local-over-cloud overwrite, batch conflict handling, and full-entity offline-first.
 - [x] Build&Test implemented Phase 2 Task-only queued pending for create/update/complete/reopen while keeping Task delete and non-Task offline writes blocked.
 - [x] Build&Test implemented Phase 3 Settings-based single Task conflict review UI with keep-cloud / discard-local / later actions only, without local-over-cloud writes.
-- [ ] Next Build&Test package: implement Phase 4 local/dev replay production-gate preparation with kill switch and safety evidence; keep prod replay disabled.
+- [x] Build&Test implemented Phase 4 local/dev replay production-gate preparation with kill switch and safety evidence; prod replay remains disabled.
+- [ ] Next Build&Test package: implement Phase 5 Task-only queued pending UX hardening for retry/discard visibility while keeping Task delete and non-Task replay blocked.
 
 ## LATER
 

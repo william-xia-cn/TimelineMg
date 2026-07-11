@@ -4,6 +4,8 @@ export interface Env {
   APP_CACHE: KVNamespace;
   TIMEWHERE_ENV: string;
   GOOGLE_OIDC_CLIENT_ID: string;
+  TIMEWHERE_TASK_REPLAY_KILL_SWITCH?: string;
+  TIMEWHERE_TASK_REPLAY_LOCAL_DEV_ENABLED?: string;
 }
 
 export interface ApiError {

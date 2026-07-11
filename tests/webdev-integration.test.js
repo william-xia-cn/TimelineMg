@@ -343,6 +343,15 @@ async function main() {
     assert.equal(syncStatus.mutation_dry_run, 'internal_disabled_v1');
     assert.equal(syncStatus.mutation_outcomes, 'metadata_only_disabled_v1');
     assert.equal(syncStatus.conflict_records, 'scaffolded');
+    assert.equal(syncStatus.replay_safety_gate.mode, 'phase4_replay_safety_gate_v1');
+    assert.equal(syncStatus.replay_safety_gate.kill_switch_active, true);
+    assert.equal(syncStatus.replay_safety_gate.writes_enabled, false);
+    assert.equal(syncStatus.replay_safety_gate.can_run_replay, false);
+    const replaySafety = await request(baseUrl, 'GET', '/sync/replay-safety');
+    assert.equal(replaySafety.safety.prod_replay_allowed, false);
+    assert.equal(replaySafety.safety.applies_user_data, false);
+    assert(replaySafety.safety.blockers.includes('task_replay_kill_switch_active'));
+    console.log('  PASS replay safety gate keeps local/dev and prod replay writes disabled by default');
     const mutationOutcomes = await request(baseUrl, 'GET', '/sync/mutations?status=rejected&limit=20');
     assert(mutationOutcomes.outcomes.some(outcome => outcome.mutation_id === replayMutationId));
     assert(mutationOutcomes.outcomes.every(outcome => outcome.outcome_status === 'rejected'));

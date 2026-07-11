@@ -41,6 +41,7 @@ import { getSyncConflict, listSyncConflicts, resolveSyncConflict } from './syncC
 import { buildSyncMutationDryRun } from './syncMutationDryRun';
 import { buildSyncReplayEnablementSimulation } from './syncReplayEnablementSimulation';
 import { buildSyncReplayReadinessSummary } from './syncReplayReadiness';
+import { buildSyncReplaySafetyGate } from './syncReplaySafety';
 import { applyTaskReplayTestOnly } from './syncMutationTaskReplay';
 import { getSyncMutationOutcome, listSyncMutationOutcomes, recordSyncMutationOutcomes } from './syncMutationOutcomes';
 import { attachTaskReplayTransactionSkeleton } from './taskReplayTransaction';
@@ -94,6 +95,7 @@ const routes: Array<{ method: string; pattern: RegExp; handler: Handler }> = [
   { method: 'POST', pattern: /^\/sync\/mutations\/dry-run$/, handler: handleSyncMutationDryRun },
   { method: 'POST', pattern: /^\/sync\/mutations\/enablement-simulation$/, handler: handleSyncReplayEnablementSimulation },
   { method: 'POST', pattern: /^\/sync\/mutations\/readiness-summary$/, handler: handleSyncReplayReadinessSummary },
+  { method: 'GET', pattern: /^\/sync\/replay-safety$/, handler: handleSyncReplaySafety },
   { method: 'GET', pattern: /^\/sync\/mutations\/([^/]+)$/, handler: handleGetSyncMutationOutcome },
   { method: 'GET', pattern: /^\/sync\/conflicts$/, handler: handleListSyncConflicts },
   { method: 'POST', pattern: /^\/sync\/conflicts\/([^/]+)\/resolve$/, handler: handleResolveSyncConflict },
@@ -350,6 +352,7 @@ async function handleResolveMigrationConflict(request: Request, env: Env, url: U
 
 async function handleSyncStatus(request: Request, env: Env): Promise<Response> {
   await requireSession(env, request);
+  const replaySafety = buildSyncReplaySafetyGate(env);
   return jsonResponse({
     mode: 'cloud_canonical',
     offline_writes: 'blocked_v1',
@@ -361,6 +364,7 @@ async function handleSyncStatus(request: Request, env: Env): Promise<Response> {
     mutation_dry_run: 'internal_disabled_v1',
     replay_enablement_simulation: 'internal_disabled_v1',
     replay_readiness_summary: 'internal_disabled_v1',
+    replay_safety_gate: replaySafety,
     mutation_outcomes: 'metadata_only_disabled_v1',
     conflict_records: 'scaffolded'
   });
@@ -412,6 +416,11 @@ async function handleSyncReplayReadinessSummary(request: Request, env: Env): Pro
   const session = await requireSession(env, request);
   const body = await readJson<unknown>(request);
   return jsonResponse(await buildSyncReplayReadinessSummary(env, session.accountId, body));
+}
+
+async function handleSyncReplaySafety(request: Request, env: Env): Promise<Response> {
+  await requireSession(env, request);
+  return jsonResponse({ safety: buildSyncReplaySafetyGate(env) });
 }
 
 async function handleListSyncMutationOutcomes(request: Request, env: Env, url: URL): Promise<Response> {

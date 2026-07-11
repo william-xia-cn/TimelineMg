@@ -22,6 +22,8 @@ id = "REPLACE_WITH_DEV_KV_ID"
 [vars]
 TIMEWHERE_ENV = "dev"
 GOOGLE_OIDC_CLIENT_ID = ""
+TIMEWHERE_TASK_REPLAY_KILL_SWITCH = "on"
+TIMEWHERE_TASK_REPLAY_LOCAL_DEV_ENABLED = "false"
 
 [env.preview]
 name = "timewhere-preview-api"
@@ -42,6 +44,8 @@ id = "REPLACE_WITH_PREVIEW_KV_ID"
 [env.preview.vars]
 TIMEWHERE_ENV = "preview"
 GOOGLE_OIDC_CLIENT_ID = ""
+TIMEWHERE_TASK_REPLAY_KILL_SWITCH = "on"
+TIMEWHERE_TASK_REPLAY_LOCAL_DEV_ENABLED = "false"
 
 [env.prod]
 name = "timewhere-api"
@@ -62,3 +66,5 @@ id = "REPLACE_WITH_PROD_KV_ID"
 [env.prod.vars]
 TIMEWHERE_ENV = "prod"
 GOOGLE_OIDC_CLIENT_ID = ""
+TIMEWHERE_TASK_REPLAY_KILL_SWITCH = "on"
+TIMEWHERE_TASK_REPLAY_LOCAL_DEV_ENABLED = "false"

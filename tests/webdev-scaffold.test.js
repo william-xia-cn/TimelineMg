@@ -55,6 +55,7 @@ const requiredFiles = [
   'workers/src/syncMutationDryRun.ts',
   'workers/src/syncReplayEnablementSimulation.ts',
   'workers/src/syncReplayReadiness.ts',
+  'workers/src/syncReplaySafety.ts',
   'workers/src/taskReplayTransaction.ts',
   'pages/README.md',
   'pages/package.json',
@@ -89,6 +90,8 @@ assert('wrangler uses DB binding', wrangler.includes('binding = "DB"'));
 assert('wrangler uses SNAPSHOTS binding', wrangler.includes('binding = "SNAPSHOTS"'));
 assert('wrangler uses APP_CACHE binding', wrangler.includes('binding = "APP_CACHE"'));
 assert('wrangler does not contain real Cloudflare UUIDs', !/database_id\s*=\s*"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"/i.test(wrangler));
+assert('wrangler defaults replay kill switch on and local dev replay disabled',
+  wrangler.includes('TIMEWHERE_TASK_REPLAY_KILL_SWITCH = "on"') && wrangler.includes('TIMEWHERE_TASK_REPLAY_LOCAL_DEV_ENABLED = "false"'));
 
 const sql = read('workers/migrations/0001_initial.sql');
 const taskParityMigration = read('workers/migrations/0002_task_parity_fields.sql');
@@ -139,6 +142,7 @@ for (const [route, pattern] of [
   ['/sync/mutations/dry-run', /sync\\\/mutations\\\/dry-run/],
   ['/sync/mutations/enablement-simulation', /sync\\\/mutations\\\/enablement-simulation/],
   ['/sync/mutations/readiness-summary', /sync\\\/mutations\\\/readiness-summary/],
+  ['/sync/replay-safety', /sync\\\/replay-safety/],
   ['/sync/mutations/:id', /sync\\\/mutations\\\/\(\[\^\/\]\+\)/],
   ['/sync/conflicts', /sync\\\/conflicts/],
   ['/sync/conflicts/:id/resolve', /sync\\\/conflicts\\\/\(\[\^\/\]\+\)\\\/resolve/],
@@ -148,7 +152,7 @@ for (const [route, pattern] of [
 }
 assert('Worker sync status documents offline blocked v1', workerIndex.includes("offline_writes: 'blocked_v1'"));
 assert('Worker sync status exposes change feed foundation', workerIndex.includes("change_feed: 'available'") && workerIndex.includes('handleListSyncChanges'));
-assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes("task_replay_gate: 'defined_disabled_v1'") && workerIndex.includes("task_replay_transaction: 'internal_disabled_v1'") && workerIndex.includes("mutation_dry_run: 'internal_disabled_v1'") && workerIndex.includes("replay_enablement_simulation: 'internal_disabled_v1'") && workerIndex.includes("replay_readiness_summary: 'internal_disabled_v1'") && workerIndex.includes("mutation_outcomes: 'metadata_only_disabled_v1'") && workerIndex.includes('handleSyncMutations'));
+assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes("task_replay_gate: 'defined_disabled_v1'") && workerIndex.includes("task_replay_transaction: 'internal_disabled_v1'") && workerIndex.includes("mutation_dry_run: 'internal_disabled_v1'") && workerIndex.includes("replay_enablement_simulation: 'internal_disabled_v1'") && workerIndex.includes("replay_readiness_summary: 'internal_disabled_v1'") && workerIndex.includes('replay_safety_gate') && workerIndex.includes("mutation_outcomes: 'metadata_only_disabled_v1'") && workerIndex.includes('handleSyncMutations'));
 assert('Worker sync status exposes conflict record scaffold', workerIndex.includes("conflict_records: 'scaffolded'") && workerIndex.includes('handleListSyncConflicts') && workerIndex.includes('handleGetSyncConflict'));
 assert('Worker supports local Cloud session disconnect', workerIndex.includes('handleDeleteSession') && workerIndex.includes('revokeSession'));
 
@@ -183,6 +187,7 @@ const workerSyncMutationDryRun = read('workers/src/syncMutationDryRun.ts');
 const workerSyncMutationOutcomes = read('workers/src/syncMutationOutcomes.ts');
 const workerSyncReplayEnablementSimulation = read('workers/src/syncReplayEnablementSimulation.ts');
 const workerSyncReplayReadiness = read('workers/src/syncReplayReadiness.ts');
+const workerSyncReplaySafety = read('workers/src/syncReplaySafety.ts');
 const workerTaskReplayTransaction = read('workers/src/taskReplayTransaction.ts');
 assert('Worker sync change feed records idempotent cursor rows',
   workerSync.includes('recordSyncChange') && workerSync.includes('listSyncChanges') && workerSync.includes('next_cursor') && workerSync.includes('entity_revision'));
@@ -228,6 +233,14 @@ assert('Worker sync replay readiness aggregates dry-run counts without enabling 
   workerSyncReplayReadiness.includes('buildSyncReplayReadinessSummary') && workerSyncReplayReadiness.includes('buildSyncMutationDryRun') && workerSyncReplayReadiness.includes("replay_enablement: 'not_approved'") && workerSyncReplayReadiness.includes('blocked_reasons') && workerSyncReplayReadiness.includes('sample_results'));
 assert('Worker sync replay enablement simulation evaluates gates without enabling writes',
   workerSyncReplayEnablementSimulation.includes('buildSyncReplayEnablementSimulation') && workerSyncReplayEnablementSimulation.includes('buildSyncReplayReadinessSummary') && workerSyncReplayEnablementSimulation.includes("replay_enablement: 'simulation_only'") && workerSyncReplayEnablementSimulation.includes('simulated_gate_pass') && workerSyncReplayEnablementSimulation.includes('can_enable_replay: false'));
+assert('Worker sync replay safety gate exposes kill switch and blocks prod writes',
+  workerSyncReplaySafety.includes('buildSyncReplaySafetyGate')
+    && workerSyncReplaySafety.includes('TIMEWHERE_TASK_REPLAY_KILL_SWITCH')
+    && workerSyncReplaySafety.includes('TIMEWHERE_TASK_REPLAY_LOCAL_DEV_ENABLED')
+    && workerSyncReplaySafety.includes('prod_replay_allowed: false')
+    && workerSyncReplaySafety.includes('writes_enabled: false')
+    && workerSyncReplaySafety.includes('applies_user_data: false')
+    && workerSyncReplaySafety.includes('can_run_replay: false'));
 assert('Worker repositories record entity changes for future offline replay',
   workerRepository.includes("recordSyncChange(env, accountId, 'task'") && workerRepository.includes("recordSyncChange(env, accountId, 'calendar_event'") && workerRepository.includes("recordSyncChange(env, accountId, 'container'") && workerRepository.includes("recordSyncChange(env, accountId, 'product_setting'"));
 assert('Worker task API returns DTO arrays',
@@ -340,8 +353,10 @@ assert('Web App exposes disabled replay readiness summary in Settings',
   app.includes('SyncReplayReadinessPanel') && app.includes('Replay readiness summary') && app.includes('Preview readiness') && app.includes('blocked reasons') && app.includes('buildReplayReadinessPreviewBody'));
 assert('Web App exposes disabled replay enablement simulation in Settings',
   app.includes('SyncReplayEnablementSimulationPanel') && app.includes('Replay enablement simulation') && app.includes('Run simulation') && app.includes('buildReplayEnablementSimulationPreviewBody'));
+assert('Web App exposes Phase 4 replay safety gate in Settings',
+  app.includes('SyncReplaySafetyPanel') && app.includes('Replay safety gate') && app.includes('Refresh safety') && app.includes('kill switch') && app.includes('cannot enable production replay'));
 assert('Pages API client can read sync replay outcome diagnostics',
-  apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('getSyncReplayReadinessSummary') && apiClient.includes('getSyncReplayEnablementSimulation') && apiClient.includes('/sync/mutations/readiness-summary') && apiClient.includes('/sync/mutations/enablement-simulation') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
+  apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('getSyncReplayReadinessSummary') && apiClient.includes('getSyncReplayEnablementSimulation') && apiClient.includes('getSyncReplaySafety') && apiClient.includes('/sync/mutations/readiness-summary') && apiClient.includes('/sync/mutations/enablement-simulation') && apiClient.includes('/sync/replay-safety') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
 assert('Web App exposes Phase 3 Task sync conflict review in Settings',
   app.includes('SyncConflictDiagnosticsPanel') && app.includes('Task sync conflicts') && app.includes('Refresh conflicts') && app.includes('Inspect') && app.includes('Keep cloud') && app.includes('Discard local') && app.includes('Later'));
 assert('Web App exposes Phase 3 Task sync conflict actions without apply-local overwrite',

@@ -472,6 +472,7 @@ textarea:disabled {
 
 .sync-readiness-diagnostics,
 .sync-enable-simulation-diagnostics,
+.sync-replay-safety-diagnostics,
 .sync-replay-diagnostics,
 .sync-conflict-diagnostics {
   grid-column: span 2;

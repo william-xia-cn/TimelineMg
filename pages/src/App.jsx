@@ -289,6 +289,8 @@ export function App() {
   const [syncReadinessStatus, setSyncReadinessStatus] = useState('Not loaded');
   const [syncEnablementSimulation, setSyncEnablementSimulation] = useState(null);
   const [syncEnablementStatus, setSyncEnablementStatus] = useState('Not loaded');
+  const [syncReplaySafety, setSyncReplaySafety] = useState(null);
+  const [syncReplaySafetyStatus, setSyncReplaySafetyStatus] = useState('Not loaded');
   const [syncConflictRecords, setSyncConflictRecords] = useState([]);
   const [syncConflictDetail, setSyncConflictDetail] = useState(null);
   const [syncConflictStatus, setSyncConflictStatus] = useState('Not loaded');
@@ -909,6 +911,23 @@ export function App() {
     }
   }
 
+  async function refreshSyncReplaySafety() {
+    if (!apiClient.getSession()?.token) {
+      setSyncReplaySafety(null);
+      setSyncReplaySafetyStatus('Google SSO session required before loading replay safety gate.');
+      return;
+    }
+    try {
+      const data = await apiClient.getSyncReplaySafety();
+      setSyncReplaySafety(data.safety || null);
+      const blockers = Array.isArray(data.safety?.blockers) ? data.safety.blockers.length : 0;
+      setSyncReplaySafetyStatus(`Replay safety loaded: ${blockers} blocker${blockers === 1 ? '' : 's'}; writes remain disabled.`);
+    } catch (error) {
+      setSyncReplaySafetyStatus(formatStatus(error));
+      setStatus({ phase: 'error', message: formatStatus(error) });
+    }
+  }
+
   async function inspectSyncReplayOutcome(outcome) {
     if (!outcome?.mutation_id) return;
     try {
@@ -1247,6 +1266,7 @@ export function App() {
             </div>
             <SyncReplayReadinessPanel summary={syncReadinessSummary} status={syncReadinessStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayReadiness} />
             <SyncReplayEnablementSimulationPanel simulation={syncEnablementSimulation} status={syncEnablementStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayEnablementSimulation} />
+            <SyncReplaySafetyPanel safety={syncReplaySafety} status={syncReplaySafetyStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplaySafety} />
             <SyncReplayDiagnosticsPanel outcomes={syncReplayOutcomes} detail={syncReplayDetail} status={syncReplayStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayDiagnostics} onInspect={inspectSyncReplayOutcome} />
             <SyncConflictDiagnosticsPanel conflicts={syncConflictRecords} detail={syncConflictDetail} status={syncConflictStatus} canRead={hasCloudSession()} canResolve={online && hasCloudSession()} onRefresh={refreshSyncConflictDiagnostics} onInspect={inspectSyncConflict} onResolve={resolveSyncConflictAction} />
             <div className="panel preferences-panel">
@@ -1581,6 +1601,37 @@ function SyncReplayEnablementSimulationPanel({ simulation, status, canRead, onRe
               missing: gate.missing
             })),
             recommendation: simulation.recommendation
+          }, null, 2)}</pre>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SyncReplaySafetyPanel({ safety, status, canRead, onRefresh }) {
+  const blockers = Array.isArray(safety?.blockers) ? safety.blockers : [];
+  return (
+    <div className="panel sync-replay-safety-diagnostics">
+      <div className="panel-heading-row">
+        <h2>Replay safety gate</h2>
+        <button type="button" disabled={!canRead} onClick={onRefresh}>Refresh safety</button>
+      </div>
+      <p>{status}</p>
+      <p>Phase 4 safety gate only reports kill switch, environment, and blocker status. It cannot enable production replay or apply queued local changes.</p>
+      {safety && (
+        <>
+          <div className="readiness-grid">
+            <span>Environment <strong>{safety.environment}</strong></span>
+            <span>Kill switch <strong>{safety.kill_switch_active ? 'active' : 'off'}</strong></span>
+            <span>Local/dev allowed <strong>{safety.local_dev_replay_allowed ? 'yes' : 'no'}</strong></span>
+            <span>Prod allowed <strong>{safety.prod_replay_allowed ? 'yes' : 'no'}</strong></span>
+            <span>Writes enabled <strong>{safety.writes_enabled ? 'yes' : 'no'}</strong></span>
+          </div>
+          <pre>{JSON.stringify({
+            can_run_replay: safety.can_run_replay,
+            applies_user_data: safety.applies_user_data,
+            blockers,
+            recommendation: safety.recommendation
           }, null, 2)}</pre>
         </>
       )}

@@ -436,6 +436,14 @@ Scope:
 - Keep local queue records until replay outcome is confirmed.
 - Document how to clear internal test queues without deleting canonical Cloud data.
 
+Implemented status:
+
+- Phase 4 safety gate exists at `/sync/replay-safety`.
+- `TIMEWHERE_TASK_REPLAY_KILL_SWITCH` defaults to `on`.
+- `TIMEWHERE_TASK_REPLAY_LOCAL_DEV_ENABLED` defaults to `false`.
+- Safety output is visible in Pages Settings and `/sync/status`.
+- `writes_enabled`, `applies_user_data`, and `can_run_replay` remain `false`; prod replay remains blocked.
+
 ### Phase 5: Explicit Hold Points
 
 The following remain unapproved until Product Owner explicitly approves them:
@@ -451,11 +459,11 @@ The following remain unapproved until Product Owner explicitly approves them:
 
 ## 17. Current Recommendation
 
-Continue from the completed Phase 2 queued pending and Phase 3 single Task conflict review work.
+Continue from the completed Phase 2 queued pending, Phase 3 single Task conflict review, and Phase 4 replay safety gate work.
 
 Recommended next Build&Test package:
 
-1. Start Phase 4 local/dev replay production-gate preparation with a kill switch and replay safety evidence.
+1. Start Phase 5 Task-only queued pending UX hardening for retry/discard visibility while keeping replay writes gated.
 2. Keep prod replay disabled and avoid any Cloudflare prod deployment or public release.
 3. Keep Calendar / Container / Settings replay, Browser Extension replay, batch conflict handling, and local-over-cloud actions out of scope until separately approved.
 

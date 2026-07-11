@@ -13,7 +13,8 @@
 - `/sync/mutations` 默认仍是 disabled/internal contract skeleton：校验 mutation batch，定义 Task-only replay activation gate、字段级冲突预判、内部 transaction skeleton，记录 metadata-only outcome，并拒绝 replay，不应用任何用户离线写入。Product Owner 已批准 Phase 1 test-only server write contract；只有请求体显式带 `test_only_task_replay_enabled: true` 的内部测试调用才会应用 Task-only replay。
 - `GET /sync/mutations` 与 `GET /sync/mutations/:id` 提供 replay outcome 诊断读取；当前只保存状态、原因、门禁结果和尝试次数，不保存 patch/base/cloud 原始内容。
 - `POST /sync/mutations/dry-run` 提供 internal disabled dry-run：复用 gate / transaction skeleton，并关联已有 outcome / conflict 记录；对 apply candidate 返回不落库的 sanitized apply plan，对 conflict candidate 返回不落库的 sanitized conflict preview；不写入、不创建 conflict、不应用用户离线写入。
-- `/sync/conflicts` 提供未来离线 mutation conflict records 的只读 scaffold：当前可列出/读取记录，但不暴露用户解决流程，也不启用离线写入。
+- `/sync/conflicts` 提供未来离线 mutation conflict records：当前可列出/读取记录，并支持单条 Task conflict 的 `keep_cloud` / `discard_local` / `later` metadata action；不会用本地值覆盖 Cloud。
+- `/sync/replay-safety` 提供 Phase 4 replay safety gate：读取环境、kill switch 和 blocker 状态；默认 kill switch 打开、local/dev replay flag 关闭、prod replay 永远不允许。
 - `workers/migrations/0001_initial.sql` 定义第一版 D1 canonical schema。
 - `workers/migrations/` 按 Wrangler D1 migrations 顺序管理 schema 变化。`0001_initial.sql` 是基线，后续字段或表变更必须新增 `0002+` 迁移文件，不直接改写历史迁移。
 - `wrangler.toml` 只保留资源命名、binding 和环境结构，不提交真实 Cloudflare resource id、API token、Google secret 或账号信息。
@@ -58,6 +59,7 @@ Authorization: Bearer timewhere-local-dev-session
 - `POST /sync/mutations/dry-run`：复用 replay gate，预览 apply plan / conflict record shape，不写入 outcome、conflict 或业务数据。
 - `POST /sync/mutations/readiness-summary`：基于 dry-run 聚合 candidate counts、blocked reasons、apply/conflict preview counts，用于评估未来是否具备开启 replay 的条件。
 - `POST /sync/mutations/enablement-simulation`：用 readiness summary 和显式 policy/evidence 输入模拟 Gate A-E 是否满足；结果仍是 `simulation_only`，不会开启写入。
+- `GET /sync/replay-safety`：输出 Phase 4 safety gate，证明 kill switch、环境门禁和 prod 禁止状态；结果始终 `writes_enabled=false`。
 
 这些接口不启用用户离线写入，不保存 raw mutation payload，不绕过 Product Owner approval。test-only replay 只用于本地/内部 integration evidence，不代表 UX、offline queue 或生产 replay 已获批。
 
