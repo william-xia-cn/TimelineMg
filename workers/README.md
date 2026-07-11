@@ -12,6 +12,7 @@
 - `/sync/changes` 提供 Cloud-confirmed change cursor，用于未来离线 mutation replay 的安全基础；当前 v1 仍阻止离线写入。
 - `/sync/mutations` 只有 disabled/internal contract skeleton：校验 mutation batch，定义 Task-only replay activation gate、字段级冲突预判、内部 transaction skeleton，记录 metadata-only outcome，并拒绝 replay，不应用任何用户离线写入。
 - `GET /sync/mutations` 与 `GET /sync/mutations/:id` 提供 replay outcome 诊断读取；当前只保存状态、原因、门禁结果和尝试次数，不保存 patch/base/cloud 原始内容。
+- `POST /sync/mutations/dry-run` 提供 internal disabled dry-run：复用 gate / transaction skeleton，并关联已有 outcome / conflict 记录；不写入、不创建 conflict、不应用用户离线写入。
 - `/sync/conflicts` 提供未来离线 mutation conflict records 的只读 scaffold：当前可列出/读取记录，但不暴露用户解决流程，也不启用离线写入。
 - `workers/migrations/0001_initial.sql` 定义第一版 D1 canonical schema。
 - `workers/migrations/` 按 Wrangler D1 migrations 顺序管理 schema 变化。`0001_initial.sql` 是基线，后续字段或表变更必须新增 `0002+` 迁移文件，不直接改写历史迁移。

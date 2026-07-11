@@ -52,6 +52,7 @@ const requiredFiles = [
   'workers/src/sync.ts',
   'workers/src/syncConflicts.ts',
   'workers/src/syncMutationOutcomes.ts',
+  'workers/src/syncMutationDryRun.ts',
   'workers/src/taskReplayTransaction.ts',
   'pages/README.md',
   'pages/package.json',
@@ -133,6 +134,7 @@ for (const [route, pattern] of [
   ['/migration/conflicts', /migration\\\/conflicts/],
   ['/sync/changes', /sync\\\/changes/],
   ['/sync/mutations', /sync\\\/mutations/],
+  ['/sync/mutations/dry-run', /sync\\\/mutations\\\/dry-run/],
   ['/sync/mutations/:id', /sync\\\/mutations\\\/\(\[\^\/\]\+\)/],
   ['/sync/conflicts', /sync\\\/conflicts/],
   ['/sync/status', /sync\\\/status/]
@@ -141,7 +143,7 @@ for (const [route, pattern] of [
 }
 assert('Worker sync status documents offline blocked v1', workerIndex.includes("offline_writes: 'blocked_v1'"));
 assert('Worker sync status exposes change feed foundation', workerIndex.includes("change_feed: 'available'") && workerIndex.includes('handleListSyncChanges'));
-assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes("task_replay_gate: 'defined_disabled_v1'") && workerIndex.includes("task_replay_transaction: 'internal_disabled_v1'") && workerIndex.includes("mutation_outcomes: 'metadata_only_disabled_v1'") && workerIndex.includes('handleSyncMutations'));
+assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes("task_replay_gate: 'defined_disabled_v1'") && workerIndex.includes("task_replay_transaction: 'internal_disabled_v1'") && workerIndex.includes("mutation_dry_run: 'internal_disabled_v1'") && workerIndex.includes("mutation_outcomes: 'metadata_only_disabled_v1'") && workerIndex.includes('handleSyncMutations'));
 assert('Worker sync status exposes conflict record scaffold', workerIndex.includes("conflict_records: 'scaffolded'") && workerIndex.includes('handleListSyncConflicts') && workerIndex.includes('handleGetSyncConflict'));
 assert('Worker supports local Cloud session disconnect', workerIndex.includes('handleDeleteSession') && workerIndex.includes('revokeSession'));
 
@@ -172,6 +174,7 @@ const workerRepository = read('workers/src/repositories.ts');
 const workerSync = read('workers/src/sync.ts');
 const workerOfflineMutations = read('workers/src/offlineMutations.ts');
 const workerSyncConflicts = read('workers/src/syncConflicts.ts');
+const workerSyncMutationDryRun = read('workers/src/syncMutationDryRun.ts');
 const workerSyncMutationOutcomes = read('workers/src/syncMutationOutcomes.ts');
 const workerTaskReplayTransaction = read('workers/src/taskReplayTransaction.ts');
 assert('Worker sync change feed records idempotent cursor rows',
@@ -198,6 +201,10 @@ assert('Worker task replay transaction skeleton stays internally disabled',
   workerTaskReplayTransaction.includes('attachTaskReplayTransactionSkeleton') && workerTaskReplayTransaction.includes("mode: 'internal_disabled_v1'") && workerTaskReplayTransaction.includes('writes_enabled: false') && workerTaskReplayTransaction.includes('applies_user_data: false'));
 assert('Worker task replay transaction skeleton defines future branches',
   workerTaskReplayTransaction.includes("'apply_candidate'") && workerTaskReplayTransaction.includes("'conflict_candidate'") && workerTaskReplayTransaction.includes("'reject_candidate'") && workerTaskReplayTransaction.includes('begin_d1_transaction') && workerIndex.includes('attachTaskReplayTransactionSkeleton'));
+assert('Worker sync mutation dry-run remains internally disabled and read-only',
+  workerSyncMutationDryRun.includes('buildSyncMutationDryRun') && workerSyncMutationDryRun.includes("mode: 'internal_disabled_v1'") && workerSyncMutationDryRun.includes('writes_enabled: false') && workerSyncMutationDryRun.includes('applies_user_data: false') && !workerSyncMutationDryRun.includes('createSyncConflictRecord') && !workerSyncMutationDryRun.includes('recordSyncMutationOutcomes'));
+assert('Worker sync mutation dry-run joins existing outcomes and conflict records',
+  workerSyncMutationDryRun.includes('findSyncMutationOutcome') && workerSyncMutationDryRun.includes('findSyncConflictByMutation') && workerSyncMutationOutcomes.includes('findSyncMutationOutcome') && workerSyncConflicts.includes('findSyncConflictByMutation'));
 assert('Worker repositories record entity changes for future offline replay',
   workerRepository.includes("recordSyncChange(env, accountId, 'task'") && workerRepository.includes("recordSyncChange(env, accountId, 'calendar_event'") && workerRepository.includes("recordSyncChange(env, accountId, 'container'") && workerRepository.includes("recordSyncChange(env, accountId, 'product_setting'"));
 assert('Worker task API returns DTO arrays',

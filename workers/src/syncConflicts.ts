@@ -182,3 +182,16 @@ export async function getSyncConflict(
   if (!row) throw new HttpError(404, 'sync_conflict_not_found', 'Sync conflict not found');
   return conflictDto(row);
 }
+
+export async function findSyncConflictByMutation(
+  env: Env,
+  accountId: string,
+  mutationId: string
+): Promise<Record<string, unknown> | null> {
+  const row = await env.DB.prepare(
+    `SELECT id, mutation_id, entity_type, entity_id, reason, local_json, cloud_json, status, created_at, resolved_at
+     FROM sync_conflicts
+     WHERE account_id = ? AND mutation_id = ?`
+  ).bind(accountId, mutationId).first<SyncConflictRow>();
+  return row ? conflictDto(row) : null;
+}

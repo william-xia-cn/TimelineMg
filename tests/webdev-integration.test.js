@@ -323,12 +323,25 @@ async function main() {
     const syncStatus = await request(baseUrl, 'GET', '/sync/status');
     assert.equal(syncStatus.task_replay_gate, 'defined_disabled_v1');
     assert.equal(syncStatus.task_replay_transaction, 'internal_disabled_v1');
+    assert.equal(syncStatus.mutation_dry_run, 'internal_disabled_v1');
     assert.equal(syncStatus.mutation_outcomes, 'metadata_only_disabled_v1');
     assert.equal(syncStatus.conflict_records, 'scaffolded');
     const mutationOutcomes = await request(baseUrl, 'GET', '/sync/mutations?status=rejected&limit=20');
     assert(mutationOutcomes.outcomes.some(outcome => outcome.mutation_id === replayMutationId));
     assert(mutationOutcomes.outcomes.every(outcome => outcome.outcome_status === 'rejected'));
     console.log('  PASS mutation outcome diagnostics can be listed by status');
+
+    const dryRun = await request(baseUrl, 'POST', '/sync/mutations/dry-run', replayBody);
+    assert.equal(dryRun.mode, 'internal_disabled_v1');
+    assert.equal(dryRun.writes_enabled, false);
+    assert.equal(dryRun.applies_user_data, false);
+    assert.equal(dryRun.summary.stored_outcome_count, 1);
+    assert.equal(dryRun.summary.stored_conflict_count, 0);
+    assert.equal(dryRun.replay.results[0].stored_outcome.mutation_id, replayMutationId);
+    assert.equal(dryRun.replay.results[0].stored_conflict, null);
+    assert.equal(dryRun.replay.results[0].dry_run.would_apply, false);
+    assert.equal(Object.prototype.hasOwnProperty.call(dryRun, 'outcome_persistence'), false);
+    console.log('  PASS internal mutation dry-run joins outcomes without applying writes');
 
     const syncConflicts = await request(baseUrl, 'GET', '/sync/conflicts?status=open');
     assert.equal(syncConflicts.count, 0);

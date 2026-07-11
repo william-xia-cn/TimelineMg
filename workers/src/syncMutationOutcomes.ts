@@ -164,3 +164,16 @@ export async function getSyncMutationOutcome(
   if (!row) throw new HttpError(404, 'sync_mutation_outcome_not_found', 'Sync mutation outcome not found');
   return outcomeDto(row);
 }
+
+export async function findSyncMutationOutcome(
+  env: Env,
+  accountId: string,
+  mutationId: string
+): Promise<Record<string, unknown> | null> {
+  const row = await env.DB.prepare(
+    `SELECT id, mutation_id, entity_type, entity_id, operation, replay_status, outcome_status, reason, task_gate_json, conflict_id, attempt_count, first_seen_at, last_seen_at
+     FROM sync_mutation_outcomes
+     WHERE account_id = ? AND mutation_id = ?`
+  ).bind(accountId, mutationId).first<MutationOutcomeRow>();
+  return row ? outcomeDto(row) : null;
+}
