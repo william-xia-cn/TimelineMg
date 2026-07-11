@@ -189,6 +189,62 @@ function buildReplayReadinessPreviewBody(tasks) {
   };
 }
 
+function buildReplayEnablementSimulationPreviewBody(tasks) {
+  const task = tasks.find(item => item && !isCompleted(item)) || tasks[0];
+  if (!task) {
+    return { mutations: [] };
+  }
+  const baseNotes = task.notes || task.description || null;
+  return {
+    policy: {
+      task_only_scope_locked: true,
+      managebac_source_fields_blocked: true,
+      same_field_conflicts_create_records: true,
+      delete_update_conflicts_blocked: true,
+      rejected_mutations_stop_retrying: true,
+      private_data_excluded_from_conflicts: true,
+      offline_write_mode: 'queued_pending',
+      cloud_success_after_worker_confirm: true,
+      pending_edits_visible: true,
+      failed_replay_has_user_path: true
+    },
+    evidence: {
+      required_tests: ['npm run webdev:verify', 'npm test', 'sensitive scan']
+    },
+    mutations: [{
+      mutation_id: `enablement-preview-${task.id || 'task'}`,
+      entity_type: 'task',
+      entity_id: task.id,
+      operation: 'update',
+      base_values: {
+        notes: baseNotes,
+        priority: task.priority || 'medium'
+      },
+      cloud_values: {
+        notes: baseNotes,
+        priority: task.priority || 'medium'
+      },
+      patch: {
+        notes: baseNotes || 'Enablement simulation note'
+      }
+    }, {
+      mutation_id: `enablement-preview-conflict-${task.id || 'task'}`,
+      entity_type: 'task',
+      entity_id: task.id,
+      operation: 'update',
+      base_values: {
+        notes: baseNotes || 'Base conflict note'
+      },
+      cloud_values: {
+        notes: 'Cloud simulation conflict note'
+      },
+      patch: {
+        notes: 'Local simulation conflict note'
+      }
+    }]
+  };
+}
+
 export function App() {
   const platform = useMemo(() => createBrowserPlatform(), []);
   const googleButtonRef = useRef(null);
@@ -231,6 +287,8 @@ export function App() {
   const [syncReplayStatus, setSyncReplayStatus] = useState('Not loaded');
   const [syncReadinessSummary, setSyncReadinessSummary] = useState(null);
   const [syncReadinessStatus, setSyncReadinessStatus] = useState('Not loaded');
+  const [syncEnablementSimulation, setSyncEnablementSimulation] = useState(null);
+  const [syncEnablementStatus, setSyncEnablementStatus] = useState('Not loaded');
   const [syncConflictRecords, setSyncConflictRecords] = useState([]);
   const [syncConflictDetail, setSyncConflictDetail] = useState(null);
   const [syncConflictStatus, setSyncConflictStatus] = useState('Not loaded');
@@ -835,6 +893,30 @@ export function App() {
     }
   }
 
+  async function refreshSyncReplayEnablementSimulation() {
+    if (!apiClient.getSession()?.token) {
+      setSyncEnablementSimulation(null);
+      setSyncEnablementStatus('Google SSO session required before loading replay enablement simulation.');
+      return;
+    }
+    try {
+      const body = buildReplayEnablementSimulationPreviewBody(tasks);
+      if (!body.mutations.length) {
+        setSyncEnablementSimulation(null);
+        setSyncEnablementStatus('Create or migrate at least one task before previewing replay enablement.');
+        return;
+      }
+      const data = await apiClient.getSyncReplayEnablementSimulation(body);
+      setSyncEnablementSimulation(data);
+      const passed = Array.isArray(data.gates) ? data.gates.filter(gate => gate.passed).length : 0;
+      const total = Array.isArray(data.gates) ? data.gates.length : 0;
+      setSyncEnablementStatus(`Simulation loaded: ${passed}/${total} gates pass; replay remains disabled.`);
+    } catch (error) {
+      setSyncEnablementStatus(formatStatus(error));
+      setStatus({ phase: 'error', message: formatStatus(error) });
+    }
+  }
+
   async function inspectSyncReplayOutcome(outcome) {
     if (!outcome?.mutation_id) return;
     try {
@@ -1144,6 +1226,7 @@ export function App() {
               <MigrationConflictReviewPanel conflicts={migrationConflicts} status={migrationConflictStatus} canWrite={canWrite} onRefresh={refreshMigrationConflicts} onResolve={resolveMigrationConflict} />
             </div>
             <SyncReplayReadinessPanel summary={syncReadinessSummary} status={syncReadinessStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayReadiness} />
+            <SyncReplayEnablementSimulationPanel simulation={syncEnablementSimulation} status={syncEnablementStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayEnablementSimulation} />
             <SyncReplayDiagnosticsPanel outcomes={syncReplayOutcomes} detail={syncReplayDetail} status={syncReplayStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayDiagnostics} onInspect={inspectSyncReplayOutcome} />
             <SyncConflictDiagnosticsPanel conflicts={syncConflictRecords} detail={syncConflictDetail} status={syncConflictStatus} canRead={hasCloudSession()} onRefresh={refreshSyncConflictDiagnostics} onInspect={inspectSyncConflict} />
             <div className="panel preferences-panel">
@@ -1444,6 +1527,40 @@ function SyncReplayReadinessPanel({ summary, status, canRead, onRefresh }) {
             blocked_reasons: readiness.blocked_reasons,
             sample_results: readiness.sample_results,
             recommendations: summary.recommendations
+          }, null, 2)}</pre>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SyncReplayEnablementSimulationPanel({ simulation, status, canRead, onRefresh }) {
+  const gates = Array.isArray(simulation?.gates) ? simulation.gates : [];
+  return (
+    <div className="panel sync-enable-simulation-diagnostics">
+      <div className="panel-heading-row">
+        <h2>Replay enablement simulation</h2>
+        <button type="button" disabled={!canRead} onClick={onRefresh}>Run simulation</button>
+      </div>
+      <p>{status}</p>
+      <p>This simulation evaluates Gate A-E inputs only. It cannot enable replay, persist user data, or change Cloud tasks.</p>
+      {simulation && (
+        <>
+          <div className="readiness-grid">
+            <span>Gate pass <strong>{gates.filter(gate => gate.passed).length}/{gates.length}</strong></span>
+            <span>Writes enabled <strong>{simulation.writes_enabled ? 'yes' : 'no'}</strong></span>
+            <span>Can enable <strong>{simulation.can_enable_replay ? 'yes' : 'no'}</strong></span>
+            <span>Mode <strong>{simulation.replay_enablement}</strong></span>
+          </div>
+          <pre>{JSON.stringify({
+            simulated_gate_pass: simulation.simulated_gate_pass,
+            gates: gates.map(gate => ({
+              id: gate.id,
+              label: gate.label,
+              passed: gate.passed,
+              missing: gate.missing
+            })),
+            recommendation: simulation.recommendation
           }, null, 2)}</pre>
         </>
       )}

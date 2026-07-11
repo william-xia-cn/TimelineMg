@@ -328,8 +328,10 @@ assert('Web App exposes disabled sync replay diagnostics in Settings',
   app.includes('SyncReplayDiagnosticsPanel') && app.includes('Sync replay diagnostics') && app.includes('Refresh outcomes') && app.includes('Inspect gate') && app.includes('Offline mutation replay is still disabled'));
 assert('Web App exposes disabled replay readiness summary in Settings',
   app.includes('SyncReplayReadinessPanel') && app.includes('Replay readiness summary') && app.includes('Preview readiness') && app.includes('blocked reasons') && app.includes('buildReplayReadinessPreviewBody'));
+assert('Web App exposes disabled replay enablement simulation in Settings',
+  app.includes('SyncReplayEnablementSimulationPanel') && app.includes('Replay enablement simulation') && app.includes('Run simulation') && app.includes('buildReplayEnablementSimulationPreviewBody'));
 assert('Pages API client can read sync replay outcome diagnostics',
-  apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('getSyncReplayReadinessSummary') && apiClient.includes('/sync/mutations/readiness-summary') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
+  apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('getSyncReplayReadinessSummary') && apiClient.includes('getSyncReplayEnablementSimulation') && apiClient.includes('/sync/mutations/readiness-summary') && apiClient.includes('/sync/mutations/enablement-simulation') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
 assert('Web App exposes disabled sync conflict diagnostics in Settings',
   app.includes('SyncConflictDiagnosticsPanel') && app.includes('Sync conflict diagnostics') && app.includes('Refresh conflicts') && app.includes('Inspect conflict') && app.includes('Sync conflict resolution is not approved yet'));
 assert('Pages API client can read sync conflict diagnostics',

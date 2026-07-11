@@ -80,6 +80,9 @@ export function createApiClient({ baseUrl = '', storage = window.localStorage } 
     async getSyncReplayReadinessSummary(body) {
       return request('/sync/mutations/readiness-summary', { method: 'POST', body });
     },
+    async getSyncReplayEnablementSimulation(body) {
+      return request('/sync/mutations/enablement-simulation', { method: 'POST', body });
+    },
     async listSyncConflicts({ status = 'open', limit = 20 } = {}) {
       const params = new URLSearchParams();
       if (status) params.set('status', status);

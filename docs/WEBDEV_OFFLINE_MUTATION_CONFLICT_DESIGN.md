@@ -251,7 +251,7 @@ This roadmap requires separate Product Owner approval before code work.
 | 11 | Add dry-run conflict creation preview. | Scaffolded on 2026-07-11 with conflict candidates reporting exact sanitized conflict record shape while `would_persist=false`. |
 | 12 | Add Task replay apply-plan preview for apply candidates. | Scaffolded on 2026-07-11 with dry-run reporting sanitized patch fields and future D1 write steps while `would_persist=false`. |
 | 13 | Add replay readiness summary endpoint/card. | Scaffolded on 2026-07-11 with `POST /sync/mutations/readiness-summary` and Pages Settings aggregating candidate counts, blocked reasons, and apply/conflict preview counts while replay remains disabled. |
-| 14 | Add disabled Task replay enablement simulation. | Scaffolded on 2026-07-12 with `POST /sync/mutations/enablement-simulation` evaluating Gate A-E inputs while `writes_enabled=false`. |
+| 14 | Add disabled Task replay enablement simulation. | Scaffolded on 2026-07-12 with `POST /sync/mutations/enablement-simulation` and a Settings preview card evaluating Gate A-E inputs while `writes_enabled=false`. |
 | 15 | Enable offline queue for Task only. | Offline create/update/complete replay tests and conflict tests pass after Product Owner approval. |
 | 16 | Add Calendar and Structure entities. | Entity-specific conflict tests pass. |
 | 17 | Add Settings and cross-entity relationship validation. | Settings/runtime boundary tests pass. |
@@ -363,7 +363,7 @@ Do not enable offline writes in the next implementation package.
 
 Recommended next Build&Test package:
 
-1. Add a developer-facing Settings preview for the enablement simulation result, or keep it Worker-only until Product Owner asks for UI.
+1. Draft the Task-only replay implementation plan for Product Owner review, still without enabling offline writes.
 2. Keep offline writes blocked in all user-facing UI.
 3. Do not expose new conflict resolution UI beyond the current migration conflict review until Product Owner approves the offline-write user workflow.
 

@@ -455,6 +455,7 @@ textarea:disabled {
 }
 
 .sync-readiness-diagnostics,
+.sync-enable-simulation-diagnostics,
 .sync-replay-diagnostics,
 .sync-conflict-diagnostics {
   grid-column: span 2;
@@ -557,6 +558,7 @@ textarea:disabled {
   }
 
   .sync-readiness-diagnostics,
+  .sync-enable-simulation-diagnostics,
   .sync-replay-diagnostics,
   .sync-conflict-diagnostics {
     grid-column: auto;
