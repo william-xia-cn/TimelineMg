@@ -37,3 +37,98 @@ export function computeReminderState({ tasks = [], now = new Date(), remindersEn
     generated_at: now.toISOString()
   };
 }
+
+function minutesLater(date, minutes) {
+  return new Date(date.getTime() + minutes * 60 * 1000).toISOString();
+}
+
+function sameTaskSet(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  const left = [...a].map(String).sort();
+  const right = [...b].map(String).sort();
+  return left.every((value, index) => value === right[index]);
+}
+
+function baseSession(reminderState, now) {
+  const taskIds = (reminderState.items || []).map(item => item.id).filter(Boolean);
+  return {
+    session_id: `work-reminder-${now.getTime()}`,
+    status: 'notification_due',
+    created_at: now.toISOString(),
+    last_notified_at: null,
+    notification_closed_at: null,
+    handled_at: null,
+    execution_check_at: null,
+    task_ids: taskIds,
+    items: reminderState.items || [],
+    total_count: reminderState.total || 0,
+    cooldown_until: null
+  };
+}
+
+export function advanceReminderSession({ previousSession = null, reminderState, now = new Date(), event = null } = {}) {
+  if (!reminderState || reminderState.status !== 'due') {
+    return {
+      ...(previousSession || {}),
+      status: reminderState?.status === 'disabled' ? 'disabled' : 'idle',
+      task_ids: [],
+      items: [],
+      total_count: 0,
+      ended_at: now.toISOString()
+    };
+  }
+
+  const taskIds = (reminderState.items || []).map(item => item.id).filter(Boolean);
+  const workChanged = !previousSession || !sameTaskSet(previousSession.task_ids || [], taskIds);
+  let session = workChanged || previousSession.status === 'stopped'
+    ? baseSession(reminderState, now)
+    : { ...previousSession, task_ids: taskIds, items: reminderState.items || [], total_count: reminderState.total || 0 };
+
+  if (event?.type === 'notification_sent') {
+    return {
+      ...session,
+      status: 'notification_visible',
+      last_notified_at: event.at || now.toISOString(),
+      notification_closed_at: null,
+      cooldown_until: null
+    };
+  }
+
+  if (event?.type === 'notification_closed') {
+    return {
+      ...session,
+      status: 'notification_closed',
+      notification_closed_at: event.at || now.toISOString(),
+      cooldown_until: minutesLater(now, 1)
+    };
+  }
+
+  if (event?.type === 'notification_clicked') {
+    return {
+      ...session,
+      status: 'execution_check_scheduled',
+      handled_at: event.at || now.toISOString(),
+      execution_check_at: minutesLater(now, 30),
+      cooldown_until: null
+    };
+  }
+
+  if (event?.type === 'stop_session') {
+    return {
+      ...session,
+      status: 'stopped',
+      handled_at: event.at || now.toISOString(),
+      cooldown_until: null
+    };
+  }
+
+  if (session.status === 'notification_closed' && session.cooldown_until && new Date(session.cooldown_until).getTime() <= now.getTime()) {
+    return { ...session, status: 'notification_due', cooldown_until: null };
+  }
+
+  if (session.status === 'execution_check_scheduled' && session.execution_check_at && new Date(session.execution_check_at).getTime() <= now.getTime()) {
+    return { ...session, status: 'execution_check_due', cooldown_until: null };
+  }
+
+  return session;
+}

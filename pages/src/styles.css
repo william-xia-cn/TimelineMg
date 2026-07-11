@@ -734,6 +734,36 @@ textarea:disabled {
   background: #f8fbff;
 }
 
+.source-boundary-note {
+  margin: 10px 0 0;
+  color: #744210;
+  background: #fffaf0;
+  border: 1px solid #f6ad55;
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+.cloud-session-status {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid #d8e3ef;
+  border-radius: 7px;
+  background: #f8fbff;
+}
+
+.cloud-session-status span {
+  color: #425267;
+  font-size: 13px;
+}
+
+.cloud-session-status button {
+  justify-self: start;
+  min-height: 32px;
+}
+
 .task-detail-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -786,6 +816,22 @@ textarea:disabled {
   margin: 8px 0 0;
   color: #425267;
   font-size: 13px;
+}
+
+.reminder-session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.reminder-session-actions button {
+  min-height: 32px;
+  border: 1px solid #cbd7e4;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #1d252f;
+  padding: 0 10px;
 }
 
 .calendar-projection {

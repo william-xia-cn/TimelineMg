@@ -23,7 +23,7 @@ import { createMigrationRepository } from './repositories/migrationRepository.js
 import { createBrowserPlatform } from './platform/browserPlatform.js';
 import { computeDashboardProjection } from './domain/dailySettleProjection.js';
 import { computeCalendarDateProjection } from './domain/calendarDateProjection.js';
-import { computeReminderState } from './domain/reminderState.js';
+import { advanceReminderSession, computeReminderState } from './domain/reminderState.js';
 import { buildLegacyIndexedDbSnapshot } from './migration/legacyIndexedDbSnapshotAdapter.js';
 import { disableGoogleAutoSelect, GOOGLE_SSO_CLIENT_ID, renderGoogleSsoButton } from './auth/googleSso.js';
 
@@ -64,6 +64,8 @@ const emptyTaskDraft = {
   schedule_time: '',
   duration: 45,
   priority: 'medium',
+  recurrence_frequency: 'none',
+  recurrence_count: 1,
   notes: ''
 };
 
@@ -124,6 +126,10 @@ function isCompleted(task) {
   return task.progress === 'completed' || task.status === 'completed';
 }
 
+function isManageBacSourceTask(task) {
+  return Boolean(task && (task.source === 'managebac' || task.source_type === 'managebac_ics' || task.readonly === true && task.managebac_subject));
+}
+
 function formatTaskMeta(task) {
   const parts = [];
   if (task.due_date) parts.push(`Due ${task.due_date}`);
@@ -163,6 +169,7 @@ export function App() {
   const [session, setSession] = useState(() => apiClient.getSession());
   const [account, setAccount] = useState(() => apiClient.getSession()?.account || null);
   const [ssoState, setSsoState] = useState({ phase: GOOGLE_SSO_CLIENT_ID ? 'idle' : 'not_configured', message: GOOGLE_SSO_CLIENT_ID ? 'Google SSO ready.' : 'Set VITE_GOOGLE_OIDC_CLIENT_ID to enable Google SSO.' });
+  const [cloudSessionStatus, setCloudSessionStatus] = useState('Cloud session not checked.');
   const taskRepository = useMemo(() => createTaskRepository(apiClient, { isOnline: () => navigator.onLine }), []);
   const calendarRepository = useMemo(() => createCalendarRepository(apiClient, { isOnline: () => navigator.onLine }), []);
   const structureRepository = useMemo(() => createStructureRepository(apiClient, { isOnline: () => navigator.onLine }), []);
@@ -192,6 +199,7 @@ export function App() {
   const [migrationResult, setMigrationResult] = useState(null);
   const [migrationConflicts, setMigrationConflicts] = useState([]);
   const [migrationConflictStatus, setMigrationConflictStatus] = useState('Not loaded');
+  const [reminderSession, setReminderSession] = useState(null);
 
   useEffect(() => platform.onNetworkChange(setOnline), [platform]);
 
@@ -210,6 +218,7 @@ export function App() {
         } : session.account || null;
         setAccount(nextAccount);
         apiClient.setSession({ ...apiClient.getSession(), account: nextAccount });
+        setCloudSessionStatus(`Cloud account active: ${nextAccount?.name || nextAccount?.email || 'Google account'}`);
       } catch (error) {
         if (disposed) return;
         if (error instanceof ApiError && [401, 403].includes(error.status)) {
@@ -217,6 +226,7 @@ export function App() {
           setSession(null);
           setAccount(null);
           setStatus({ phase: 'blocked', message: 'Google SSO session expired. Sign in again to edit Cloud data.' });
+          setCloudSessionStatus('Cloud session expired or invalid.');
         }
       }
     }
@@ -355,6 +365,25 @@ export function App() {
     await Promise.all([refreshTasks(), refreshEvents(), refreshStructure(), refreshSettings()]);
   }
 
+  async function refreshCloudSessionStatus() {
+    if (!online) {
+      setCloudSessionStatus('Offline: cached data is readable, Cloud session cannot be checked.');
+      return;
+    }
+    if (!apiClient.getSession()?.token) {
+      setCloudSessionStatus('No active TimeWhere Cloud session. Connect with Google SSO.');
+      return;
+    }
+    try {
+      const [accountData, syncData] = await Promise.all([apiClient.getAccount(), apiClient.getSyncStatus()]);
+      const displayName = accountData.account?.display_name || accountData.account?.email || 'Google account';
+      setCloudSessionStatus(`${displayName} · ${syncData.mode} · offline writes ${syncData.offline_writes}`);
+    } catch (error) {
+      setCloudSessionStatus(formatStatus(error));
+      setStatus({ phase: 'error', message: formatStatus(error) });
+    }
+  }
+
   async function handleGoogleCredential(idToken) {
     setSsoState({ phase: 'signing_in', message: 'Creating TimeWhere Cloud session...' });
     try {
@@ -364,6 +393,7 @@ export function App() {
       setAccount(data.account || nextSession?.account || null);
       setStatus({ phase: 'ready', message: 'Google SSO connected. Cloud writes are enabled.' });
       setSsoState({ phase: 'connected', message: 'Google SSO connected.' });
+      await refreshCloudSessionStatus();
       await refreshWorkspace();
     } catch (error) {
       setSsoState({ phase: 'error', message: formatStatus(error) });
@@ -379,6 +409,7 @@ export function App() {
       setSession(null);
       setAccount(null);
       setStatus({ phase: 'preview', message: 'Google SSO disconnected. Preview/cache remains available.' });
+      setCloudSessionStatus('No active TimeWhere Cloud session. Connect with Google SSO.');
       setSsoState({ phase: GOOGLE_SSO_CLIENT_ID ? 'idle' : 'not_configured', message: GOOGLE_SSO_CLIENT_ID ? 'Google SSO ready.' : 'Set VITE_GOOGLE_OIDC_CLIENT_ID to enable Google SSO.' });
       await refreshWorkspace();
     } catch (error) {
@@ -412,6 +443,8 @@ export function App() {
         due_date: draft.due_date || null,
         schedule_time: draft.schedule_time || null,
         duration: Number(draft.duration || 45),
+        recurrence_frequency: draft.recurrence_frequency === 'none' ? null : draft.recurrence_frequency,
+        recurrence_count: draft.recurrence_frequency === 'none' ? null : Number(draft.recurrence_count || 1),
         priority: draft.priority,
         notes: draft.notes || null
       });
@@ -768,6 +801,14 @@ export function App() {
   const dashboardProjection = useMemo(() => computeDashboardProjection({ tasks, containers }), [tasks, containers]);
   const calendarProjection = useMemo(() => computeCalendarDateProjection({ date: selectedDate, tasks, events, containers }), [selectedDate, tasks, events, containers]);
   const reminderState = useMemo(() => computeReminderState({ tasks, remindersEnabled: settingsDraft.reminders_enabled }), [tasks, settingsDraft.reminders_enabled]);
+
+  useEffect(() => {
+    setReminderSession(current => advanceReminderSession({ previousSession: current, reminderState }));
+  }, [reminderState.status, reminderState.total, reminderState.items?.map(item => item.id).join('|')]);
+
+  function updateReminderSession(event) {
+    setReminderSession(current => advanceReminderSession({ previousSession: current, reminderState, event }));
+  }
   const pendingCount = tasks.filter(task => !isCompleted(task)).length;
   const completedCount = tasks.filter(isCompleted).length;
   const selectedTask = tasks.find(task => task.id === selectedTaskId) || null;
@@ -835,7 +876,7 @@ export function App() {
               <span>Current container</span>
               <strong>{dashboardProjection.activeContainer?.name || 'No active container'}</strong>
             </div>
-            <ReminderStatePanel state={reminderState} />
+            <ReminderStatePanel state={reminderState} session={reminderSession} onSessionEvent={updateReminderSession} />
             <CalendarProjectionPanel projection={calendarProjection} compact />
             <div className="metric wide">
               <span>Migration</span>
@@ -874,6 +915,19 @@ export function App() {
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
                   </select>
+                </label>
+                <label>
+                  <span>Recurrence</span>
+                  <select value={draft.recurrence_frequency} onChange={event => setDraft(current => ({ ...current, recurrence_frequency: event.target.value }))} disabled={!canWrite}>
+                    <option value="none">None</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Repeat count</span>
+                  <input type="number" min="1" max="52" value={draft.recurrence_count} onChange={event => setDraft(current => ({ ...current, recurrence_count: event.target.value }))} disabled={!canWrite || draft.recurrence_frequency === 'none'} />
                 </label>
                 <label className="full-row">
                   <span>Notes</span>
@@ -960,6 +1014,11 @@ export function App() {
                 </>
               )}
               <p className={`sso-state ${ssoState.phase}`}>{ssoState.message}</p>
+              <div className="cloud-session-status">
+                <strong>Cloud session</strong>
+                <span>{cloudSessionStatus}</span>
+                <button type="button" onClick={refreshCloudSessionStatus}>Refresh account status</button>
+              </div>
             </div>
             <div className="panel">
               <h2>Automatic migration</h2>
@@ -1085,6 +1144,7 @@ export function App() {
 
 function TaskDetailPanel({ task, plans, buckets, labels, canWrite, onSave, onClose }) {
   const [form, setForm] = useState(null);
+  const isManageBac = isManageBacSourceTask(task);
 
   useEffect(() => {
     if (!task) {
@@ -1101,6 +1161,8 @@ function TaskDetailPanel({ task, plans, buckets, labels, canWrite, onSave, onClo
       progress: task.progress || task.status || 'not_started',
       plan_id: task.plan_id || '',
       bucket_id: task.bucket_id || '',
+      recurrence_frequency: task.recurrence_frequency || 'none',
+      recurrence_count: task.recurrence_count || 1,
       notes: task.notes || task.description || '',
       labels_text: Array.isArray(task.labels) ? task.labels.join(', ') : '',
       checklist_text: Array.isArray(task.checklist) ? task.checklist.map(item => typeof item === 'string' ? item : item.text || item.title || '').filter(Boolean).join('\n') : ''
@@ -1119,20 +1181,25 @@ function TaskDetailPanel({ task, plans, buckets, labels, canWrite, onSave, onClo
     event.preventDefault();
     const checklist = form.checklist_text.split('\n').map(text => text.trim()).filter(Boolean).map((text, index) => ({ id: `${task.id || 'task'}-check-${index}`, text, completed: false }));
     const nextLabels = form.labels_text.split(',').map(text => text.trim()).filter(Boolean);
-    onSave({
-      title: form.title.trim() || task.title,
+    const patch = {
       start_date: form.start_date || null,
-      due_date: form.due_date || null,
       schedule_time: form.schedule_time || null,
       duration: Number(form.duration || 45),
       priority: form.priority,
       progress: form.progress,
-      plan_id: form.plan_id || null,
       bucket_id: form.bucket_id || null,
+      recurrence_frequency: form.recurrence_frequency === 'none' ? null : form.recurrence_frequency,
+      recurrence_count: form.recurrence_frequency === 'none' ? null : Number(form.recurrence_count || 1),
       notes: form.notes || null,
       labels: nextLabels,
       checklist
-    });
+    };
+    if (!isManageBac) {
+      patch.title = form.title.trim() || task.title;
+      patch.due_date = form.due_date || null;
+      patch.plan_id = form.plan_id || null;
+    }
+    onSave(patch);
   }
 
   return (
@@ -1141,16 +1208,19 @@ function TaskDetailPanel({ task, plans, buckets, labels, canWrite, onSave, onClo
         <h2>Task detail</h2>
         <button type="button" onClick={onClose}>Close</button>
       </div>
+      {isManageBac && <p className="source-boundary-note">ManageBac source task: title, due date, Plan and source metadata are read-only. Local execution fields remain editable.</p>}
       <form className="task-detail-form" onSubmit={submit}>
-        <label><span>Title</span><input value={form.title} onChange={event => updateField('title', event.target.value)} disabled={!canWrite} /></label>
+        <label><span>Title</span><input value={form.title} onChange={event => updateField('title', event.target.value)} disabled={!canWrite || isManageBac} /></label>
         <label><span>Start</span><input type="date" value={form.start_date} onChange={event => updateField('start_date', event.target.value)} disabled={!canWrite} /></label>
-        <label><span>Due</span><input type="date" value={form.due_date} onChange={event => updateField('due_date', event.target.value)} disabled={!canWrite} /></label>
+        <label><span>Due</span><input type="date" value={form.due_date} onChange={event => updateField('due_date', event.target.value)} disabled={!canWrite || isManageBac} /></label>
         <label><span>Schedule</span><input type="time" value={form.schedule_time} onChange={event => updateField('schedule_time', event.target.value)} disabled={!canWrite} /></label>
         <label><span>Duration</span><input type="number" min="5" step="5" value={form.duration} onChange={event => updateField('duration', event.target.value)} disabled={!canWrite} /></label>
         <label><span>Priority</span><select value={form.priority} onChange={event => updateField('priority', event.target.value)} disabled={!canWrite}><option value="urgent">Urgent</option><option value="important">Important</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
         <label><span>Status</span><select value={form.progress} onChange={event => updateField('progress', event.target.value)} disabled={!canWrite}><option value="not_started">Not started</option><option value="in_progress">In progress</option><option value="completed">Completed</option></select></label>
-        <label><span>Plan</span><select value={form.plan_id} onChange={event => updateField('plan_id', event.target.value)} disabled={!canWrite}><option value="">No plan</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
+        <label><span>Plan</span><select value={form.plan_id} onChange={event => updateField('plan_id', event.target.value)} disabled={!canWrite || isManageBac}><option value="">No plan</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>
         <label><span>Bucket</span><select value={form.bucket_id} onChange={event => updateField('bucket_id', event.target.value)} disabled={!canWrite}><option value="">No bucket</option>{buckets.map(bucket => <option key={bucket.id} value={bucket.id}>{bucket.name}</option>)}</select></label>
+        <label><span>Recurrence</span><select value={form.recurrence_frequency} onChange={event => updateField('recurrence_frequency', event.target.value)} disabled={!canWrite || isManageBac}><option value="none">None</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
+        <label><span>Repeat count</span><input type="number" min="1" max="52" value={form.recurrence_count} onChange={event => updateField('recurrence_count', event.target.value)} disabled={!canWrite || isManageBac || form.recurrence_frequency === 'none'} /></label>
         <label className="full-row"><span>Labels</span><input value={form.labels_text} onChange={event => updateField('labels_text', event.target.value)} placeholder={labels.map(label => label.name).join(', ')} disabled={!canWrite} /></label>
         <label className="full-row"><span>Checklist</span><textarea value={form.checklist_text} onChange={event => updateField('checklist_text', event.target.value)} disabled={!canWrite} /></label>
         <label className="full-row"><span>Notes</span><textarea value={form.notes} onChange={event => updateField('notes', event.target.value)} disabled={!canWrite} /></label>
@@ -1160,12 +1230,21 @@ function TaskDetailPanel({ task, plans, buckets, labels, canWrite, onSave, onClo
   );
 }
 
-function ReminderStatePanel({ state }) {
+function ReminderStatePanel({ state, session, onSessionEvent }) {
   return (
     <div className={`metric wide reminder-state ${state.status}`}>
       <span>Reminder state</span>
       <strong>{state.label}</strong>
+      {session?.status && <p>Session: {session.status}{session.execution_check_at ? ` · check ${new Date(session.execution_check_at).toLocaleTimeString()}` : ''}</p>}
       {state.items?.length > 0 && <p>{state.items.map(item => `${item.title}${item.schedule_time ? ` ${item.schedule_time}` : ''}`).join('；')}{state.overflow ? ` · +${state.overflow}` : ''}</p>}
+      {state.status === 'due' && (
+        <div className="reminder-session-actions">
+          <button type="button" onClick={() => onSessionEvent?.({ type: 'notification_sent' })}>Mark sent</button>
+          <button type="button" onClick={() => onSessionEvent?.({ type: 'notification_closed' })}>Mark closed</button>
+          <button type="button" onClick={() => onSessionEvent?.({ type: 'notification_clicked' })}>Mark clicked</button>
+          <button type="button" onClick={() => onSessionEvent?.({ type: 'stop_session' })}>Stop session</button>
+        </div>
+      )}
     </div>
   );
 }

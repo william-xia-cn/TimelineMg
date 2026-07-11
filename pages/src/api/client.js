@@ -64,6 +64,9 @@ export function createApiClient({ baseUrl = '', storage = window.localStorage } 
     async getAccount() {
       return request('/account/me', { method: 'GET' });
     },
+    async getSyncStatus() {
+      return request('/sync/status', { method: 'GET' });
+    },
     async logout() {
       try {
         if (getSession()?.token) await request('/auth/session', { method: 'DELETE' });

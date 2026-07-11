@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "db:local:migrate": "node scripts/run-local-d1-file.mjs migrations/0001_initial.sql",
+    "db:local:migrate": "node scripts/run-local-d1-migrations.mjs",
     "db:local:seed": "node scripts/create-local-seed-sql.mjs && node scripts/run-local-d1-file.mjs .tmp/local-seed.sql",
     "db:local:prepare": "npm run db:local:migrate && npm run db:local:seed",
     "db:local:reset": "node scripts/clear-local-d1-state.mjs && npm run db:local:prepare",

@@ -10,6 +10,7 @@
 - `/calendar/events` 已有第一版 Cloud-backed CRUD：返回规范化 Event DTO，支持日期/搜索筛选、创建、更新和软删除。
 - `/plans`、`/labels`、`/buckets` 与 `/containers` 已有第一版 Cloud-backed CRUD：用于 WebDev 结构数据、Daily Settle 后续投影和本地 cache 的 canonical 来源。
 - `workers/migrations/0001_initial.sql` 定义第一版 D1 canonical schema。
+- `workers/migrations/` 按 Wrangler D1 migrations 顺序管理 schema 变化。`0001_initial.sql` 是基线，后续字段或表变更必须新增 `0002+` 迁移文件，不直接改写历史迁移。
 - `wrangler.toml` 只保留资源命名、binding 和环境结构，不提交真实 Cloudflare resource id、API token、Google secret 或账号信息。
 
 ## 环境
@@ -33,13 +34,15 @@ npm --prefix workers run deploy:preview
 npm --prefix workers run deploy:prod
 ```
 
-`webdev:local:prepare` 会在本机 Wrangler D1 state 中执行 `0001_initial.sql` 并写入一组本地假数据。默认本地请求可使用：
+`webdev:local:prepare` 会在本机 Wrangler D1 state 中按顺序应用未执行过的 `workers/migrations/*.sql`，并写入一组本地假数据。默认本地请求可使用：
 
 ```text
 Authorization: Bearer timewhere-local-dev-session
 ```
 
 该值只用于本地 smoke / integration test，不是生产凭据，不应部署到远端环境。
+
+新增 D1 schema 时使用新迁移文件，例如 `workers/migrations/0002_*.sql`。本地迁移通过 Wrangler 的 migration ledger 只应用未执行过的文件；integration test 使用隔离的 `--persist-to` state，避免旧本地数据库锁定或 schema 残留影响结果。
 
 部署命令需要先在 Cloudflare 中创建对应资源，并在本地或 CI 的私有配置中填写 resource id。本仓库不保存这些 id。
 

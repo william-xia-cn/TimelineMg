@@ -36,9 +36,11 @@ const requiredFiles = [
   'workers/package-lock.json',
   'workers/tsconfig.json',
   'workers/migrations/0001_initial.sql',
+  'workers/migrations/0002_task_parity_fields.sql',
   'workers/scripts/clear-local-d1-state.mjs',
   'workers/scripts/create-local-seed-sql.mjs',
   'workers/scripts/run-local-d1-file.mjs',
+  'workers/scripts/run-local-d1-migrations.mjs',
   'workers/src/index.ts',
   'workers/src/auth.ts',
   'workers/src/migration.ts',
@@ -77,6 +79,7 @@ assert('wrangler uses APP_CACHE binding', wrangler.includes('binding = "APP_CACH
 assert('wrangler does not contain real Cloudflare UUIDs', !/database_id\s*=\s*"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"/i.test(wrangler));
 
 const sql = read('workers/migrations/0001_initial.sql');
+const taskParityMigration = read('workers/migrations/0002_task_parity_fields.sql');
 for (const table of [
   'accounts',
   'account_sessions',
@@ -93,8 +96,8 @@ for (const table of [
   assert(`D1 schema creates ${table}`, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}\\b`).test(sql));
 }
 assert('D1 account table stores Google SSO display fields', sql.includes('email TEXT') && sql.includes('display_name TEXT') && sql.includes('picture_url TEXT'));
-assert('D1 task schema preserves recurrence and ManageBac source fields',
-  sql.includes('recurrence_series_id') && sql.includes('recurrence_frequency') && sql.includes('managebac_subject') && sql.includes('readonly INTEGER'));
+assert('D1 task parity fields live in versioned migration after 0001',
+  !sql.includes('recurrence_series_id') && taskParityMigration.includes('ALTER TABLE tasks ADD COLUMN recurrence_series_id') && taskParityMigration.includes('managebac_subject') && taskParityMigration.includes('readonly INTEGER'));
 
 const workerIndex = read('workers/src/index.ts');
 for (const [route, pattern] of [
@@ -202,15 +205,17 @@ assert('Settings repository supports get and update settings',
 
 const projection = read('pages/src/domain/dailySettleProjection.js');
 assert('Dashboard projection helper computes active container and sorted current tasks',
-  projection.includes('computeDashboardProjection') && projection.includes('containerAppliesNow') && projection.includes('compareTasks') && projection.includes('currentTasks'));
+  projection.includes('computeDashboardProjection') && projection.includes('assignTasksToContainers') && projection.includes('displayTasks') && projection.includes('assignedContainers'));
 assert('Dashboard projection helper is read-only and does not persist mutations',
   !projection.includes('localStorage') && !projection.includes('apiClient.request') && !projection.includes('fetch('));
 const calendarProjection = read('pages/src/domain/calendarDateProjection.js');
 assert('Calendar date projection helper combines containers events and tasks',
-  calendarProjection.includes('computeCalendarDateProjection') && calendarProjection.includes('timedItems') && calendarProjection.includes('containerAppliesToDate') && calendarProjection.includes('taskAppliesToDate'));
+  calendarProjection.includes('computeCalendarDateProjection') && calendarProjection.includes('timedItems') && calendarProjection.includes('containerItems') && calendarProjection.includes('unassignedTasks'));
 const reminderState = read('pages/src/domain/reminderState.js');
 assert('Reminder state helper exposes due idle and disabled states',
   reminderState.includes('computeReminderState') && reminderState.includes("status: 'due'") && reminderState.includes("status: 'idle'") && reminderState.includes("status: 'disabled'"));
+assert('Reminder state helper exposes work reminder session state machine',
+  reminderState.includes('advanceReminderSession') && reminderState.includes('notification_closed') && reminderState.includes('execution_check_scheduled') && reminderState.includes('execution_check_due'));
 
 const app = read('pages/src/App.jsx');
 for (const label of ['Dashboard', 'Tasks', 'Calendar', 'Settings']) {
@@ -224,10 +229,14 @@ assert('Dashboard uses Daily Settle projection helper',
   app.includes('computeDashboardProjection') && app.includes('Today projection') && app.includes('Projected current work') && app.includes('Current container'));
 assert('Web App exposes Task detail first version',
   app.includes('TaskDetailPanel') && app.includes('Save task detail') && app.includes('Checklist') && app.includes('Plan') && app.includes('Bucket'));
+assert('Web App exposes task recurrence fields in create and detail flows',
+  app.includes('recurrence_frequency') && app.includes('Repeat count') && app.includes('Weekly') && app.includes('Monthly'));
+assert('Web App enforces ManageBac source task edit boundary in task detail',
+  app.includes('isManageBacSourceTask') && app.includes('ManageBac source task') && app.includes('!isManageBac') && app.includes('disabled={!canWrite || isManageBac}'));
 assert('Web App exposes Calendar date projection first version',
   app.includes('CalendarProjectionPanel') && app.includes('Date projection') && app.includes('computeCalendarDateProjection'));
 assert('Web App exposes Reminder state UI first version',
-  app.includes('ReminderStatePanel') && app.includes('computeReminderState') && app.includes('Reminder state'));
+  app.includes('ReminderStatePanel') && app.includes('computeReminderState') && app.includes('advanceReminderSession') && app.includes('Mark clicked'));
 assert('Web App exposes Migration conflict review first version',
   app.includes('MigrationConflictReviewPanel') && app.includes('refreshMigrationConflicts') && app.includes('resolveMigrationConflict'));
 assert('Web App uses legacy IndexedDB snapshot adapter for migration preview',
@@ -242,6 +251,8 @@ assert('Web App requires Google SSO session for writes',
   app.includes('Google SSO session required before creating Cloud tasks') && app.includes('Google SSO session required before editing Cloud tasks') && app.includes('Google SSO session required before creating Cloud calendar events'));
 assert('Web App renders real Google SSO account entry',
   app.includes('renderGoogleSsoButton') && app.includes('googleButtonRef') && app.includes('Disconnect session') && !app.includes('<button disabled>Connect Google SSO</button>'));
+assert('Web App Settings can refresh real Cloud account and sync status',
+  app.includes('refreshCloudSessionStatus') && app.includes('Refresh account status') && app.includes('apiClient.getSyncStatus') && read('pages/src/api/client.js').includes('/sync/status'));
 
 const pagesReadme = read('pages/README.md');
 assert('Pages README documents offline write block',
@@ -270,9 +281,10 @@ assert('root package webdev verify runs business parity tests', rootPackage.scri
 assert('root package exposes local WebDev prepare script', rootPackage.scripts['webdev:local:prepare']?.includes('db:local:prepare'));
 assert('root package exposes local WebDev reset script', rootPackage.scripts['webdev:local:reset']?.includes('db:local:reset'));
 assert('root package has workers:typecheck script', rootPackage.scripts['workers:typecheck'] === 'npm --prefix workers run typecheck');
-assert('worker package exposes local D1 migrate script', workerPackage.scripts['db:local:migrate']?.includes('run-local-d1-file.mjs'));
+assert('worker package exposes local D1 migrate script', workerPackage.scripts['db:local:migrate']?.includes('run-local-d1-migrations.mjs'));
 assert('worker package exposes local D1 seed script', workerPackage.scripts['db:local:seed']?.includes('create-local-seed-sql.mjs'));
 assert('worker package local D1 runner supports isolated persist state', read('workers/scripts/run-local-d1-file.mjs').includes('TIMEWHERE_WRANGLER_PERSIST_TO'));
+assert('worker package local D1 migrations runner supports isolated persist state', read('workers/scripts/run-local-d1-migrations.mjs').includes('TIMEWHERE_WRANGLER_PERSIST_TO'));
 assert('worker package exposes local D1 reset script', workerPackage.scripts['db:local:reset']?.includes('clear-local-d1-state.mjs'));
 assert('root test includes webdev scaffold test', rootPackage.scripts.test.includes('tests/webdev-scaffold.test.js'));
 assert('root test includes webdev migration adapter test', rootPackage.scripts.test.includes('tests/webdev-migration-adapter.test.js'));

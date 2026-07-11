@@ -52,6 +52,11 @@ function priorityRank(priority) {
   return 3;
 }
 
+function durationMinutes(task) {
+  const value = Number(task?.duration || 45);
+  return Number.isFinite(value) && value > 0 ? Math.round(value) : 45;
+}
+
 function compareTimeThenPriority(a, b) {
   const at = minutesFromTime(a.schedule_time || a.time_start);
   const bt = minutesFromTime(b.schedule_time || b.time_start);
@@ -97,6 +102,41 @@ function taskAppliesToDate(task, dateKey) {
   return !task.due_date && !task.start_date;
 }
 
+function taskFitsContainer(task, container) {
+  const scheduled = minutesFromTime(task.schedule_time);
+  if (scheduled === null) return true;
+  const start = minutesFromTime(container.time_start);
+  const end = minutesFromTime(container.time_end);
+  if (start === null || end === null) return true;
+  return scheduled >= start && scheduled < end;
+}
+
+function assignTasksToContainers(dayTasks, dayContainers) {
+  const containerItems = dayContainers.map(container => ({
+    kind: 'container',
+    id: container.id,
+    title: container.name,
+    time_start: container.time_start,
+    time_end: container.time_end,
+    source: container,
+    capacity: Math.max(0, (minutesFromTime(container.time_end) ?? 0) - (minutesFromTime(container.time_start) ?? 0)),
+    used: 0,
+    tasks: []
+  }));
+  const unassignedTasks = [];
+  for (const task of dayTasks) {
+    const duration = durationMinutes(task);
+    const target = containerItems.find(item => taskFitsContainer(task, item.source) && (item.capacity === 0 || item.used + duration <= item.capacity || item.tasks.length === 0));
+    if (!target) {
+      unassignedTasks.push({ ...task, calendar_assignment: 'unassigned' });
+      continue;
+    }
+    target.tasks.push({ ...task, calendar_assignment: 'assigned', assignment_container_id: target.id });
+    target.used += duration;
+  }
+  return { containerItems, unassignedTasks };
+}
+
 export function computeCalendarDateProjection({ date, tasks = [], events = [], containers = [] } = {}) {
   const dateKey = date || new Date().toISOString().slice(0, 10);
   const dayContainers = containers
@@ -108,16 +148,19 @@ export function computeCalendarDateProjection({ date, tasks = [], events = [], c
   const dayTasks = tasks
     .filter(task => taskAppliesToDate(task, dateKey))
     .sort(compareTimeThenPriority);
+  const { containerItems, unassignedTasks } = assignTasksToContainers(dayTasks, dayContainers);
   const timedItems = [
-    ...dayContainers.map(container => ({ kind: 'container', id: container.id, title: container.name, time_start: container.time_start, time_end: container.time_end, source: container })),
+    ...containerItems,
     ...dayEvents.map(event => ({ kind: 'event', id: event.id, title: event.title, time_start: event.time_start, time_end: event.time_end, source: event })),
     ...dayTasks.filter(task => task.schedule_time).map(task => ({ kind: 'task', id: task.id, title: task.title, time_start: task.schedule_time, duration: task.duration, source: task }))
   ].sort((a, b) => (minutesFromTime(a.time_start) ?? 9999) - (minutesFromTime(b.time_start) ?? 9999));
   return {
     date: dateKey,
     containers: dayContainers,
+    containerItems,
     events: dayEvents,
     tasks: dayTasks,
+    unassignedTasks,
     timedItems,
     counts: {
       containers: dayContainers.length,
