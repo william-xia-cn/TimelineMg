@@ -138,7 +138,8 @@
 - [x] Build&Test implemented Phase 4 local/dev replay production-gate preparation with kill switch and safety evidence; prod replay remains disabled.
 - [x] Build&Test implemented Phase 5 Task-only queued pending UX hardening for retry preview and discard local pending visibility while keeping Task delete and non-Task replay blocked.
 - [x] Build&Test documented Phase 6 Calendar/Container/Settings replay design only, preserving non-Task replay block and requiring separate approval before implementation.
-- [ ] Next Build&Test package: document Phase 7 cross-entity dependency design / internal-test plan; do not enable user-facing replay.
+- [x] Build&Test implemented Phase 7 read-only cross-entity dependency analysis inside replay readiness, detecting same-batch satisfied dependencies and ordering blockers without enabling replay writes.
+- [ ] Next Build&Test package: Phase 8 Task-scope offline UX improvements without full-entity offline-first.
 
 ## LATER
 

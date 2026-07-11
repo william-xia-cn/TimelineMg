@@ -428,6 +428,57 @@ async function main() {
     assert.notEqual(readinessUnchangedTask.notes, 'Local readiness note');
     console.log('  PASS replay readiness summary aggregates dry-run counts without applying writes');
 
+    const dependencyLabelId = `dep-label-${Date.now()}`;
+    const dependencyBucketId = `dep-bucket-${Date.now()}`;
+    const dependencySummary = await request(baseUrl, 'POST', '/sync/mutations/readiness-summary', {
+      mutations: [{
+        mutation_id: `mut-dep-label-create-${Date.now()}`,
+        entity_type: 'label',
+        entity_id: dependencyLabelId,
+        operation: 'create',
+        patch: { name: 'Dependency Label' }
+      }, {
+        mutation_id: `mut-dep-task-label-${Date.now()}`,
+        entity_type: 'task',
+        entity_id: createdTask.task.id,
+        operation: 'update',
+        base_values: { labels: [] },
+        cloud_values: { labels: [] },
+        patch: { labels: [dependencyLabelId] }
+      }, {
+        mutation_id: `mut-dep-task-bucket-${Date.now()}`,
+        entity_type: 'task',
+        entity_id: createdTask.task.id,
+        operation: 'update',
+        base_values: { bucket_id: null },
+        cloud_values: { bucket_id: null },
+        patch: { bucket_id: dependencyBucketId }
+      }, {
+        mutation_id: `mut-dep-bucket-create-${Date.now()}`,
+        entity_type: 'bucket',
+        entity_id: dependencyBucketId,
+        operation: 'create',
+        patch: { name: 'Late Bucket' }
+      }]
+    });
+    const dependencyAnalysis = dependencySummary.readiness.dependency_analysis;
+    assert.equal(dependencyAnalysis.mode, 'phase7_dependency_analysis_v1');
+    assert.equal(dependencyAnalysis.writes_enabled, false);
+    assert.equal(dependencyAnalysis.applies_user_data, false);
+    assert(dependencyAnalysis.summary.blocked_count >= 1);
+    const labelTaskRow = dependencyAnalysis.rows.find(row => row.mutation_id.startsWith('mut-dep-task-label-'));
+    const labelDependency = labelTaskRow.dependencies.find(dependency => dependency.field === 'labels');
+    assert.equal(labelDependency.status, 'satisfied');
+    assert.equal(labelDependency.reason, 'same_batch_create');
+    const bucketTaskRow = dependencyAnalysis.rows.find(row => row.mutation_id.startsWith('mut-dep-task-bucket-'));
+    const bucketDependency = bucketTaskRow.dependencies.find(dependency => dependency.field === 'bucket_id');
+    assert.equal(bucketDependency.status, 'blocked');
+    assert.equal(bucketDependency.reason, 'same_batch_create_after_reference');
+    const unchangedAfterDependencyAnalysis = await request(baseUrl, 'GET', `/tasks/${encodeURIComponent(createdTask.task.id)}`);
+    assert.notDeepEqual(unchangedAfterDependencyAnalysis.task.labels, [dependencyLabelId]);
+    assert.notEqual(unchangedAfterDependencyAnalysis.task.bucket_id, dependencyBucketId);
+    console.log('  PASS replay readiness dependency analysis stays read-only and detects ordering blockers');
+
     const enablementSimulation = await request(baseUrl, 'POST', '/sync/mutations/enablement-simulation', {
       policy: {
         task_only_scope_locked: true,

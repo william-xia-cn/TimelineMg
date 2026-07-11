@@ -364,6 +364,7 @@ async function handleSyncStatus(request: Request, env: Env): Promise<Response> {
     mutation_dry_run: 'internal_disabled_v1',
     replay_enablement_simulation: 'internal_disabled_v1',
     replay_readiness_summary: 'internal_disabled_v1',
+    replay_dependency_analysis: 'phase7_internal_readiness_only',
     replay_safety_gate: replaySafety,
     mutation_outcomes: 'metadata_only_disabled_v1',
     conflict_records: 'scaffolded'

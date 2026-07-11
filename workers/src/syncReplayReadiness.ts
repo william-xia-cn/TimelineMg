@@ -1,4 +1,5 @@
 import { buildSyncMutationDryRun } from './syncMutationDryRun';
+import { buildSyncReplayDependencyAnalysis } from './syncReplayDependencies';
 import type { Env } from './types';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -46,6 +47,7 @@ export async function buildSyncReplayReadinessSummary(
   const results = Array.isArray(replay.results) ? replay.results.filter(isRecord) : [];
   const summary = isRecord(dryRun.summary) ? dryRun.summary : {};
   const blockedReasons = countReasons(results);
+  const dependencyAnalysis = buildSyncReplayDependencyAnalysis(body);
 
   return {
     mode: 'internal_disabled_v1',
@@ -71,6 +73,7 @@ export async function buildSyncReplayReadinessSummary(
         stored_conflict: summary.stored_conflict_count || 0
       },
       blocked_reasons: blockedReasons,
+      dependency_analysis: dependencyAnalysis,
       sample_results: previewRows(results)
     },
     recommendations: [

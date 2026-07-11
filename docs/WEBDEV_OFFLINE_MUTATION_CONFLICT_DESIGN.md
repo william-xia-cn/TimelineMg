@@ -545,6 +545,39 @@ Before any Calendar / Container / Settings replay implementation:
 5. UI must expose pending / retry / discard state only for enabled entity types.
 6. `npm run webdev:verify`, `npm test`, `git diff --check`, and a sensitive-info scan must pass.
 
+### Phase 7: Cross-Entity Dependency Analysis
+
+Goal: make replay readiness aware of relationship ordering before enabling any user-facing replay.
+
+Implemented status:
+
+- Worker readiness summary includes `dependency_analysis` with `mode: phase7_dependency_analysis_v1`.
+- The analysis is read-only: `writes_enabled=false`, `applies_user_data=false`, and `user_enablement=false`.
+- Same-batch dependencies can be classified as satisfied when a referenced entity is created earlier in the queued batch.
+- Ordering blockers are visible when a mutation references an entity created later in the same batch.
+- Relationship references that cannot be proven from the batch remain `requires_cloud_validation`.
+- No Calendar / Container / Settings replay implementation is enabled by this phase.
+
+Initial dependency scope:
+
+| Source entity | Relationship fields checked |
+|---|---|
+| Task | `plan_id`, `bucket_id`, `container_id`, `labels[]` |
+| CalendarEvent | `container_id` |
+| Container | `plan_id` |
+| Bucket | `plan_id` |
+| Label | `plan_id` |
+
+Dependency result meanings:
+
+| Status | Meaning |
+|---|---|
+| `satisfied` | The dependency is satisfied by an earlier same-batch create. |
+| `requires_cloud_validation` | The dependency must be checked against Cloud before replay can write. |
+| `blocked` | The batch ordering is unsafe, for example a Task references a Bucket created later in the batch. |
+
+This phase is evidence only. It does not approve topological batch replay, entity remapping, local-over-cloud resolution, or non-Task replay.
+
 ### Explicit Hold Points
 
 The following remain unapproved until Product Owner explicitly approves them:
@@ -560,11 +593,11 @@ The following remain unapproved until Product Owner explicitly approves them:
 
 ## 17. Current Recommendation
 
-Continue from the completed Phase 2 queued pending, Phase 3 single Task conflict review, Phase 4 replay safety gate, Phase 5 pending queue UX work, and Phase 6 non-Task replay design boundary.
+Continue from the completed Phase 2 queued pending, Phase 3 single Task conflict review, Phase 4 replay safety gate, Phase 5 pending queue UX work, Phase 6 non-Task replay design boundary, and Phase 7 dependency analysis.
 
 Recommended next Build&Test package:
 
-1. Start Phase 7 cross-entity dependency design / internal-test planning without user enablement.
+1. Start Phase 8 Task-scope offline UX improvements without expanding to full-entity offline-first.
 2. Keep prod replay disabled and avoid any Cloudflare prod deployment or public release.
 3. Do not implement Calendar / Container / Settings replay, Browser Extension replay, batch conflict handling, or local-over-cloud actions until separately approved.
 

@@ -188,6 +188,7 @@ const workerSyncMutationOutcomes = read('workers/src/syncMutationOutcomes.ts');
 const workerSyncReplayEnablementSimulation = read('workers/src/syncReplayEnablementSimulation.ts');
 const workerSyncReplayReadiness = read('workers/src/syncReplayReadiness.ts');
 const workerSyncReplaySafety = read('workers/src/syncReplaySafety.ts');
+const workerSyncReplayDependencies = read('workers/src/syncReplayDependencies.ts');
 const workerTaskReplayTransaction = read('workers/src/taskReplayTransaction.ts');
 assert('Worker sync change feed records idempotent cursor rows',
   workerSync.includes('recordSyncChange') && workerSync.includes('listSyncChanges') && workerSync.includes('next_cursor') && workerSync.includes('entity_revision'));
@@ -231,6 +232,15 @@ assert('Worker sync mutation dry-run previews apply plan without persisting it',
   workerSyncMutationDryRun.includes('apply_plan') && workerSyncMutationDryRun.includes('buildApplyPlanPreview') && workerSyncMutationDryRun.includes('patch_fields') && workerSyncMutationDryRun.includes('patch: pickFields') && workerSyncMutationDryRun.includes('d1_transaction_steps'));
 assert('Worker sync replay readiness aggregates dry-run counts without enabling writes',
   workerSyncReplayReadiness.includes('buildSyncReplayReadinessSummary') && workerSyncReplayReadiness.includes('buildSyncMutationDryRun') && workerSyncReplayReadiness.includes("replay_enablement: 'not_approved'") && workerSyncReplayReadiness.includes('blocked_reasons') && workerSyncReplayReadiness.includes('sample_results'));
+assert('Worker sync replay dependency analysis stays read-only for Phase 7',
+  workerSyncReplayDependencies.includes('buildSyncReplayDependencyAnalysis')
+    && workerSyncReplayDependencies.includes("mode: 'phase7_dependency_analysis_v1'")
+    && workerSyncReplayDependencies.includes('requires_cloud_relationship_validation')
+    && workerSyncReplayDependencies.includes('same_batch_create_after_reference')
+    && workerSyncReplayDependencies.includes('writes_enabled: false')
+    && workerSyncReplayDependencies.includes('applies_user_data: false')
+    && workerSyncReplayReadiness.includes('dependency_analysis')
+    && workerIndex.includes("replay_dependency_analysis: 'phase7_internal_readiness_only'"));
 assert('Worker sync replay enablement simulation evaluates gates without enabling writes',
   workerSyncReplayEnablementSimulation.includes('buildSyncReplayEnablementSimulation') && workerSyncReplayEnablementSimulation.includes('buildSyncReplayReadinessSummary') && workerSyncReplayEnablementSimulation.includes("replay_enablement: 'simulation_only'") && workerSyncReplayEnablementSimulation.includes('simulated_gate_pass') && workerSyncReplayEnablementSimulation.includes('can_enable_replay: false'));
 assert('Worker sync replay safety gate exposes kill switch and blocks prod writes',
