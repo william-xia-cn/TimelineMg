@@ -178,7 +178,7 @@ Current scaffold status:
 - `/sync/mutations` validates mutation replay requests, reports the Task-only activation gate, field-level conflict preview, and internal disabled transaction skeleton, persists metadata-only outcomes, but returns `disabled_v1`.
 - `GET /sync/mutations` and `GET /sync/mutations/:id` expose replay outcome diagnostics without storing raw mutation payloads.
 - Pages Settings can read these sanitized replay outcomes and inspect Task replay gates for developer diagnostics.
-- `POST /sync/mutations/dry-run` is an internal disabled dry-run endpoint that joins replay gates with existing outcomes/conflicts without writing data.
+- `POST /sync/mutations/dry-run` is an internal disabled dry-run endpoint that joins replay gates with existing outcomes/conflicts and previews sanitized conflict record shape without writing data.
 - `/sync/conflicts` can list and read future sync conflict records.
 - Pages Settings can read these sanitized sync conflict records for developer diagnostics.
 - No sync conflict resolution UI or offline write replay is enabled in v1.

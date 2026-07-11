@@ -343,6 +343,32 @@ async function main() {
     assert.equal(Object.prototype.hasOwnProperty.call(dryRun, 'outcome_persistence'), false);
     console.log('  PASS internal mutation dry-run joins outcomes without applying writes');
 
+    const dryRunConflictMutationId = `mut-dry-run-conflict-${Date.now()}`;
+    const dryRunConflict = await request(baseUrl, 'POST', '/sync/mutations/dry-run', {
+      mutations: [{
+        mutation_id: dryRunConflictMutationId,
+        entity_type: 'task',
+        entity_id: createdTask.task.id,
+        operation: 'update',
+        base_values: { notes: 'Base note', priority: 'medium' },
+        cloud_values: { notes: 'Cloud changed note', priority: 'medium' },
+        patch: { notes: 'Local changed note' }
+      }]
+    });
+    assert.equal(dryRunConflict.summary.conflict_candidate_count, 1);
+    assert.equal(dryRunConflict.summary.conflict_preview_count, 1);
+    assert.equal(dryRunConflict.summary.stored_conflict_count, 0);
+    assert.equal(dryRunConflict.replay.results[0].dry_run.would_create_conflict, true);
+    assert.equal(dryRunConflict.replay.results[0].conflict_preview.would_persist, false);
+    assert.equal(dryRunConflict.replay.results[0].conflict_preview.record.mutation_id, dryRunConflictMutationId);
+    assert.equal(dryRunConflict.replay.results[0].conflict_preview.record.reason, 'field_conflict');
+    assert.deepEqual(dryRunConflict.replay.results[0].conflict_preview.record.local, { notes: 'Local changed note' });
+    assert.deepEqual(dryRunConflict.replay.results[0].conflict_preview.record.cloud, { notes: 'Cloud changed note' });
+    const missingDryRunConflict = await requestRaw(baseUrl, 'GET', `/sync/conflicts/${encodeURIComponent(dryRunConflictMutationId)}`);
+    assert.equal(missingDryRunConflict.response.status, 404);
+    assert.equal(missingDryRunConflict.payload.error.code, 'sync_conflict_not_found');
+    console.log('  PASS internal mutation dry-run previews conflict record shape without persisting it');
+
     const syncConflicts = await request(baseUrl, 'GET', '/sync/conflicts?status=open');
     assert.equal(syncConflicts.count, 0);
     assert.deepEqual(syncConflicts.conflicts, []);
