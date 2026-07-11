@@ -16,6 +16,7 @@
 - Reminder state UI 已进入第一版 WebDev 迁移实现：基于当前任务与提醒设置显示 due / idle / disabled 状态，不发送系统通知。
 - Migration conflict review 已进入第一版 WebDev 迁移实现：自动迁移发现同 legacy_id 的云端记录已变化时写入 open conflict，跳过本次覆盖；Settings 中可读取 open conflicts 并标记 use_cloud / use_local / skip。
 - Sync replay diagnostics 已进入 disabled/internal 第一版：Settings 可读取 `/sync/mutations` 中 sanitized replay outcomes 和 Task gate 详情，用于开发排查；不启用离线写入，也不显示原始 patch/base/cloud payload。
+- Sync conflict diagnostics 已进入 disabled/internal 第一版：Settings 可读取 `/sync/conflicts` 中 sanitized conflict records，用于开发排查；不提供 conflict resolution 或离线写入 replay。
 - 旧 Extension/Desktop 业务逻辑尚未迁移到这里；后续迁移必须按 Repository / Platform contracts 分阶段执行。
 
 ## 本地命令

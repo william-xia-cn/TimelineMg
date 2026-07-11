@@ -202,6 +202,9 @@ export function App() {
   const [syncReplayOutcomes, setSyncReplayOutcomes] = useState([]);
   const [syncReplayDetail, setSyncReplayDetail] = useState(null);
   const [syncReplayStatus, setSyncReplayStatus] = useState('Not loaded');
+  const [syncConflictRecords, setSyncConflictRecords] = useState([]);
+  const [syncConflictDetail, setSyncConflictDetail] = useState(null);
+  const [syncConflictStatus, setSyncConflictStatus] = useState('Not loaded');
   const [reminderSession, setReminderSession] = useState(null);
 
   useEffect(() => platform.onNetworkChange(setOnline), [platform]);
@@ -791,6 +794,35 @@ export function App() {
     }
   }
 
+  async function refreshSyncConflictDiagnostics() {
+    if (!apiClient.getSession()?.token) {
+      setSyncConflictRecords([]);
+      setSyncConflictDetail(null);
+      setSyncConflictStatus('Google SSO session required before loading sync conflict diagnostics.');
+      return;
+    }
+    try {
+      const data = await apiClient.listSyncConflicts({ status: 'open', limit: 20 });
+      setSyncConflictRecords(data.conflicts || []);
+      setSyncConflictDetail(null);
+      setSyncConflictStatus(data.count ? `${data.count} sync conflicts loaded.` : 'No open sync conflicts recorded.');
+    } catch (error) {
+      setSyncConflictStatus(formatStatus(error));
+      setStatus({ phase: 'error', message: formatStatus(error) });
+    }
+  }
+
+  async function inspectSyncConflict(conflict) {
+    if (!conflict?.id) return;
+    try {
+      const data = await apiClient.getSyncConflict(conflict.id);
+      setSyncConflictDetail(data.conflict || null);
+    } catch (error) {
+      setSyncConflictStatus(formatStatus(error));
+      setStatus({ phase: 'error', message: formatStatus(error) });
+    }
+  }
+
   async function runPreviewMigration() {
     if (!online) {
       setStatus({ phase: 'offline', message: 'Migration requires a network connection.' });
@@ -1060,6 +1092,7 @@ export function App() {
               <MigrationConflictReviewPanel conflicts={migrationConflicts} status={migrationConflictStatus} canWrite={canWrite} onRefresh={refreshMigrationConflicts} onResolve={resolveMigrationConflict} />
             </div>
             <SyncReplayDiagnosticsPanel outcomes={syncReplayOutcomes} detail={syncReplayDetail} status={syncReplayStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayDiagnostics} onInspect={inspectSyncReplayOutcome} />
+            <SyncConflictDiagnosticsPanel conflicts={syncConflictRecords} detail={syncConflictDetail} status={syncConflictStatus} canRead={hasCloudSession()} onRefresh={refreshSyncConflictDiagnostics} onInspect={inspectSyncConflict} />
             <div className="panel preferences-panel">
               <h2>Preferences</h2>
               <form className="settings-form" onSubmit={saveSettings}>
@@ -1370,6 +1403,49 @@ function SyncReplayDiagnosticsPanel({ outcomes, detail, status, canRead, onRefre
             attempt_count: detail.attempt_count,
             first_seen_at: detail.first_seen_at,
             last_seen_at: detail.last_seen_at
+          }, null, 2)}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SyncConflictDiagnosticsPanel({ conflicts, detail, status, canRead, onRefresh, onInspect }) {
+  return (
+    <div className="panel sync-conflict-diagnostics">
+      <div className="panel-heading-row">
+        <h2>Sync conflict diagnostics</h2>
+        <button type="button" disabled={!canRead} onClick={onRefresh}>Refresh conflicts</button>
+      </div>
+      <p>{status}</p>
+      <p>Sync conflict resolution is not approved yet. This panel only reads sanitized conflict records.</p>
+      {conflicts.length === 0 && <p>No sync conflict records to inspect.</p>}
+      <div className="sync-conflict-list">
+        {conflicts.map(conflict => (
+          <article className="sync-conflict-row" key={conflict.id}>
+            <div>
+              <strong>{conflict.entity_type} · {conflict.reason}</strong>
+              <span>{conflict.entity_id || conflict.mutation_id || conflict.id}</span>
+              <span>{conflict.created_at ? new Date(conflict.created_at).toLocaleString() : conflict.status}</span>
+            </div>
+            <button type="button" onClick={() => onInspect(conflict)}>Inspect conflict</button>
+          </article>
+        ))}
+      </div>
+      {detail && (
+        <div className="sync-conflict-detail">
+          <h3>Conflict detail</h3>
+          <pre>{JSON.stringify({
+            id: detail.id,
+            mutation_id: detail.mutation_id,
+            entity_type: detail.entity_type,
+            entity_id: detail.entity_id,
+            reason: detail.reason,
+            status: detail.status,
+            local: detail.local,
+            cloud: detail.cloud,
+            created_at: detail.created_at,
+            resolved_at: detail.resolved_at
           }, null, 2)}</pre>
         </div>
       )}

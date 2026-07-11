@@ -246,11 +246,12 @@ This roadmap requires separate Product Owner approval before code work.
 | 6 | Add disabled Task replay outcome persistence hooks. | Scaffolded on 2026-07-11 with D1 `sync_mutation_outcomes`, metadata-only outcome recording, `GET /sync/mutations` diagnostics, and tests proving raw mutation payloads are not persisted. |
 | 7 | Add Task replay transaction skeleton behind an internal disabled gate. | Scaffolded on 2026-07-11 with `/sync/mutations` returning apply/conflict/reject branch steps while `writes_enabled=false`, and tests proving no user offline write is applied. |
 | 8 | Add disabled client-side replay diagnostics in Pages Settings. | Scaffolded on 2026-07-11 with Settings reading sanitized `/sync/mutations` outcomes and Task replay gates while offline writes remain blocked. |
-| 9 | Add disabled sync conflict diagnostics in Pages Settings. | `/sync/conflicts` records can be inspected before any conflict resolution UI is approved. |
-| 10 | Enable offline queue for Task only. | Offline create/update/complete replay tests and conflict tests pass after Product Owner approval. |
-| 11 | Add Calendar and Structure entities. | Entity-specific conflict tests pass. |
-| 12 | Add Settings and cross-entity relationship validation. | Settings/runtime boundary tests pass. |
-| 13 | Promote conflict UI from diagnostics to user workflow. | Manual merge / keep cloud / apply local acceptance tests pass. |
+| 9 | Add disabled sync conflict diagnostics in Pages Settings. | Scaffolded on 2026-07-11 with Settings reading sanitized `/sync/conflicts` records before any conflict resolution UI is approved. |
+| 10 | Add an internal disabled Task replay dry-run endpoint or command. | Dry-run joins mutation outcomes with potential conflict records without applying writes. |
+| 11 | Enable offline queue for Task only. | Offline create/update/complete replay tests and conflict tests pass after Product Owner approval. |
+| 12 | Add Calendar and Structure entities. | Entity-specific conflict tests pass. |
+| 13 | Add Settings and cross-entity relationship validation. | Settings/runtime boundary tests pass. |
+| 14 | Promote conflict UI from diagnostics to user workflow. | Manual merge / keep cloud / apply local acceptance tests pass. |
 
 ## 13. Test Requirements For Future Build&Test
 
@@ -283,7 +284,7 @@ Do not enable offline writes in the next implementation package.
 
 Recommended next Build&Test package:
 
-1. Add disabled sync conflict diagnostics in Pages Settings.
+1. Add an internal disabled Task replay dry-run endpoint or command that joins mutation outcomes with potential conflict records.
 2. Keep offline writes blocked in all user-facing UI.
 3. Do not expose new conflict resolution UI beyond the current migration conflict review until Product Owner approves the offline-write user workflow.
 

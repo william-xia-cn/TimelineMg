@@ -179,6 +179,7 @@ Current scaffold status:
 - `GET /sync/mutations` and `GET /sync/mutations/:id` expose replay outcome diagnostics without storing raw mutation payloads.
 - Pages Settings can read these sanitized replay outcomes and inspect Task replay gates for developer diagnostics.
 - `/sync/conflicts` can list and read future sync conflict records.
+- Pages Settings can read these sanitized sync conflict records for developer diagnostics.
 - No sync conflict resolution UI or offline write replay is enabled in v1.
 
 ## 7. Cloudflare Environment And Resource Strategy

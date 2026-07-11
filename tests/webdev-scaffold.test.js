@@ -307,6 +307,10 @@ assert('Web App exposes disabled sync replay diagnostics in Settings',
   app.includes('SyncReplayDiagnosticsPanel') && app.includes('Sync replay diagnostics') && app.includes('Refresh outcomes') && app.includes('Inspect gate') && app.includes('Offline mutation replay is still disabled'));
 assert('Pages API client can read sync replay outcome diagnostics',
   apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
+assert('Web App exposes disabled sync conflict diagnostics in Settings',
+  app.includes('SyncConflictDiagnosticsPanel') && app.includes('Sync conflict diagnostics') && app.includes('Refresh conflicts') && app.includes('Inspect conflict') && app.includes('Sync conflict resolution is not approved yet'));
+assert('Pages API client can read sync conflict diagnostics',
+  apiClient.includes('listSyncConflicts') && apiClient.includes('getSyncConflict') && apiClient.includes('/sync/conflicts') && apiClient.includes('encodeURIComponent(conflictId)'));
 assert('Web App uses legacy IndexedDB snapshot adapter for migration preview',
   app.includes('buildLegacyIndexedDbSnapshot') && app.includes("deviceId: 'web-preview'"));
 assert('Web App exposes Calendar event CRUD controls',

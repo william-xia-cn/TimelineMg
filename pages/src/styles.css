@@ -454,17 +454,20 @@ textarea:disabled {
   border-radius: 7px;
 }
 
-.sync-replay-diagnostics {
+.sync-replay-diagnostics,
+.sync-conflict-diagnostics {
   grid-column: span 2;
 }
 
-.sync-outcome-list {
+.sync-outcome-list,
+.sync-conflict-list {
   display: grid;
   gap: 8px;
   margin-top: 12px;
 }
 
-.sync-outcome-row {
+.sync-outcome-row,
+.sync-conflict-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 118px;
   gap: 10px;
@@ -473,22 +476,27 @@ textarea:disabled {
   border-top: 1px solid #edf2f7;
 }
 
-.sync-outcome-row:first-child {
+.sync-outcome-row:first-child,
+.sync-conflict-row:first-child {
   border-top: 0;
 }
 
 .sync-outcome-row strong,
-.sync-outcome-row span {
+.sync-outcome-row span,
+.sync-conflict-row strong,
+.sync-conflict-row span {
   display: block;
 }
 
-.sync-outcome-row span {
+.sync-outcome-row span,
+.sync-conflict-row span {
   margin-top: 3px;
   color: #657386;
   font-size: 12px;
 }
 
-.sync-outcome-detail {
+.sync-outcome-detail,
+.sync-conflict-detail {
   margin-top: 12px;
 }
 
@@ -524,7 +532,8 @@ textarea:disabled {
     grid-column: auto;
   }
 
-  .sync-replay-diagnostics {
+  .sync-replay-diagnostics,
+  .sync-conflict-diagnostics {
     grid-column: auto;
   }
 }
