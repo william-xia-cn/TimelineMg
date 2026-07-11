@@ -137,7 +137,8 @@
 - [x] Build&Test implemented Phase 3 Settings-based single Task conflict review UI with keep-cloud / discard-local / later actions only, without local-over-cloud writes.
 - [x] Build&Test implemented Phase 4 local/dev replay production-gate preparation with kill switch and safety evidence; prod replay remains disabled.
 - [x] Build&Test implemented Phase 5 Task-only queued pending UX hardening for retry preview and discard local pending visibility while keeping Task delete and non-Task replay blocked.
-- [ ] Next Build&Test package: document Phase 6 Calendar/Container/Settings replay design only; do not implement non-Task replay.
+- [x] Build&Test documented Phase 6 Calendar/Container/Settings replay design only, preserving non-Task replay block and requiring separate approval before implementation.
+- [ ] Next Build&Test package: document Phase 7 cross-entity dependency design / internal-test plan; do not enable user-facing replay.
 
 ## LATER
 

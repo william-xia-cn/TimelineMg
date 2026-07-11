@@ -455,6 +455,96 @@ Implemented status:
 - `Discard local pending` removes local queued Task mutations and clears local pending state without changing Cloud data.
 - Task delete, non-Task replay, batch conflict handling, and local-over-cloud actions remain blocked.
 
+### Phase 6: Calendar / Container / Settings Replay Design Only
+
+Goal: define the future replay contract for non-Task entities without enabling non-Task offline writes or adding replay endpoints.
+
+Boundary:
+
+- This phase is design-only.
+- Calendar / Container / Settings repositories must continue returning `offline_write_blocked` while offline.
+- Worker replay gates must continue rejecting non-Task entities with `entity_not_enabled`.
+- Pages must not show retry / discard controls for non-Task pending mutations because those mutations cannot be created yet.
+- No Cloud row may be changed by this phase.
+
+#### Calendar Event Replay Direction
+
+Future `calendar_event` replay should support `create`, `update`, and `delete` only after separate Product Owner approval.
+
+Required mutation fields:
+
+- `entity_id`, `operation`, `base_revision`, `base_values`, `patch`, and `field_paths`;
+- event identity fields: `title`, `date`, `start_time`, `end_time`, `all_day`, `location`, `notes`;
+- recurrence fields, if present: `repeat_type`, `repeat_days`, `repeat_until`, `series_id`, `exception_date`.
+
+Conflict rules:
+
+- same-field stale changes conflict;
+- recurrence rule changes conflict when another device changed the same series or an exception in the same series;
+- delete conflicts if Cloud changed the event after the base revision;
+- overlapping time blocks are validation warnings, not replay conflicts, unless a future product rule makes overlap impossible;
+- external/imported source facts, if any are later added, must use the same source-fact protection pattern as ManageBac Tasks.
+
+First approved implementation should start with single event CRUD. Recurrence series and exception replay should remain behind a narrower follow-up gate unless Product Owner approves them together.
+
+#### Container Replay Direction
+
+Future `container` replay should support `create`, `update`, `disable`, and `reorder` only after separate Product Owner approval.
+
+Required mutation fields:
+
+- stable container identity and `plan_id`;
+- schedule fields: `start_time`, `end_time`, `repeat_type`, `repeat_days`, `active_from`, `active_until`;
+- display/ordering fields: `name`, `layer`, `sort_order`, `color`, `enabled`;
+- `base_revision`, `base_values`, `patch`, and `field_paths`.
+
+Conflict rules:
+
+- same-field stale changes conflict;
+- `plan_id` changes conflict if the target plan no longer exists or belongs to a different account;
+- disable/delete conflicts when active Tasks still reference the container and Cloud changed those relationships after the base revision;
+- reorder conflicts should use an ordering token or server-normalized `sort_order`, not array-position last-write-wins;
+- schedule overlap remains validation unless the product later forbids overlapping containers.
+
+Container replay must not enqueue or persist Daily Settle projection results. Daily Settle remains a derived read model over confirmed Cloud containers and tasks.
+
+#### Settings Replay Direction
+
+Future `settings` replay should support only approved product settings. Runtime, account, auth, sync, migration, and local device settings remain local-only and must not enter replay.
+
+Allowed future categories should be explicit allowlists, for example:
+
+- appearance preferences;
+- default task duration;
+- default reminder preference;
+- non-private planning preferences.
+
+Blocked categories:
+
+- Google account display fields;
+- OAuth / session / token / cookie data;
+- local device id and private paths;
+- migration run state;
+- desktop runtime settings such as tray behavior or secure storage;
+- local sync cursor, queue, conflict cache, and reminder session state.
+
+Conflict rules:
+
+- same setting key changed on two devices creates a conflict unless the key is explicitly declared commutative;
+- settings writes should be key-scoped so one conflicted key does not block unrelated setting keys;
+- conflicts must display safe labels, not raw private values.
+
+#### Shared Non-Task Approval Gate
+
+Before any Calendar / Container / Settings replay implementation:
+
+1. Product Owner must approve the exact entity scope and operations.
+2. Worker tests must prove non-approved entities still return `entity_not_enabled`.
+3. Repository tests must prove offline writes remain blocked until that entity is explicitly enabled.
+4. Conflict tests must cover same-field stale update, delete/update, missing relationship target, private-field rejection, and idempotency.
+5. UI must expose pending / retry / discard state only for enabled entity types.
+6. `npm run webdev:verify`, `npm test`, `git diff --check`, and a sensitive-info scan must pass.
+
 ### Explicit Hold Points
 
 The following remain unapproved until Product Owner explicitly approves them:
@@ -470,11 +560,11 @@ The following remain unapproved until Product Owner explicitly approves them:
 
 ## 17. Current Recommendation
 
-Continue from the completed Phase 2 queued pending, Phase 3 single Task conflict review, Phase 4 replay safety gate, and Phase 5 pending queue UX work.
+Continue from the completed Phase 2 queued pending, Phase 3 single Task conflict review, Phase 4 replay safety gate, Phase 5 pending queue UX work, and Phase 6 non-Task replay design boundary.
 
 Recommended next Build&Test package:
 
-1. Start Phase 6 Calendar / Container / Settings replay design only.
+1. Start Phase 7 cross-entity dependency design / internal-test planning without user enablement.
 2. Keep prod replay disabled and avoid any Cloudflare prod deployment or public release.
 3. Do not implement Calendar / Container / Settings replay, Browser Extension replay, batch conflict handling, or local-over-cloud actions until separately approved.
 
