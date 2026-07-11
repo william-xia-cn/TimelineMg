@@ -156,22 +156,39 @@ Phase 1-5 are design/planning phases. Phase 6 and later require separate Product
 | Release confusion | Medium | Keep D-046 separate from release approval; define Web deploy and Runtime release runbooks before public rollout. |
 | Privacy boundary expansion | High | Require privacy review before cloud persistence, AI, usage data, or external connectors. |
 
-## 8. Product Owner Decisions Needed
+## 8. Product Owner Decisions
 
-1. Cloud stack direction: managed backend platform, custom backend, or staged prototype service.
-2. Offline posture: full offline-first, offline cache with queue, or online-first with limited cache.
-3. Web framework and hosting preference.
-4. Whether Desktop continues as Electron Runtime for v1 target architecture.
-5. Browser Extension v1 ecosystem scope: quick capture only, quick capture + glance, or additional browser context features.
-6. Migration policy: automatic migration, user-confirmed import, or fresh Cloud workspace with manual import.
-7. Release model: internal WebDev preview environment before public or private deployment.
+D-047 resolves the first architecture defaults:
+
+1. Cloud stack: Cloudflare Workers + D1 + R2 + KV + Pages.
+2. Offline posture: retain offline read cache where possible; v1 blocks edits to current data while offline, and full offline mutation queue/conflict handling is deferred.
+3. Web App scope: full implementation of existing TimeWhere product capabilities, not a reduced MVP subset.
+4. Desktop runtime: continue Electron by default for v1; alternate runtime requires separate decision.
+5. Browser Extension: first-phase scope deferred.
+6. Migration policy: automatic migration after Google SSO, without requiring manual export/import.
+7. Google role: Google SSO / OIDC account identity only for this stage.
+
+Still needs future Product Owner review before next implementation or deployment step:
+
+- final approval before creating Cloudflare resources; naming/environment strategy is documented in `WEBDEV_INTERFACE_CONTRACTS.md`;
+- final Web App framework/build acceptance if deviating from Vite + React;
+- production release model and preview environment policy;
+- conflict-resolution UX for automatic migration.
+- future offline mutation queue and conflict handling beyond v1 read-only offline mode.
 
 ## 9. Immediate Next Work
 
-Before implementation, Codex should prepare:
+Current follow-up design artifacts:
 
 - `WEBDEV_INTERFACE_CONTRACTS.md`: Repository, Platform, Auth, and API contract draft.
 - `WEBDEV_DATA_AUTHORITY_MATRIX.md`: entity-by-entity authority and migration policy.
-- `WEBDEV_MIGRATION_RISK_REGISTER.md`: detailed risk owner, mitigation, and acceptance evidence.
+- `WEBDEV_AUTOMATIC_MIGRATION_PLAN.md`: automatic migration flow, idempotency, failure handling, and acceptance criteria.
 
-These documents should remain design artifacts until Product Owner approves an implementation package.
+Current first implementation package:
+
+- D-048 approves the initial Cloudflare Worker scaffold, D1 schema, migration entry, Pages/Vite/React Web App shell, Repository/API clients, and static scaffold tests under `workers/` and `pages/`.
+- Cloudflare resources, real resource ids, deployment, production data migration, Chrome Extension changes, and Desktop Runtime business changes remain unapproved.
+
+Next implementation item:
+
+- Expand the Web App from shell to real migrated product modules by extracting domain services and Repository-backed UI one module at a time, starting only after the next Product Owner-approved work package.

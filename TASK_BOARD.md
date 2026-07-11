@@ -3,6 +3,7 @@
 ## Active Target
 
 - WebDev architecture direction planning is now active under D-046. The Product Owner direction is Cloud-first / Web-first: Cloud becomes canonical data authority, Web Application becomes the primary business implementation, Desktop becomes a Runtime, and Browser Extension becomes an ecosystem component. This is not an implementation migration approval.
+- D-047 records WebDev v1 architecture defaults: Cloudflare Workers / D1 / R2 / KV / Pages, Google SSO account identity, full Web App implementation, retained offline read cache with offline edits blocked in v1, automatic migration after Google SSO, deferred Browser Extension scope, and Electron as default Desktop Runtime.
 - Baseline Stabilized; package / extension version is moving to `0.3.2` for desktop artifact preparation. The historical `0.2.3` CWS Private testing OAuth correction remains submitted to CWS review after Google sync failed with a bad OAuth client ID.
 - D-031/D-032 Windows desktop portable implementation is active for local testing and now uses a bundled Desktop OAuth client ID plus artifact-bundled Desktop client metadata secret generated from ignored packaging input. Current desktop artifact target is `0.3.2` Windows portable exe plus macOS Universal zip using existing unsigned package targets.
 - Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, TimeWhere `0.2.0` CWS Private testing material preparation, the accepted `0.2.1` Purple Potassium Private testing publication, `0.2.2` Side Panel CWS submission, `0.2.3` OAuth correction CWS submission, and D-031 Windows desktop portable implementation are complete. Product Owner approved the `v0.3.0` desktop artifact candidate tag and moving that tag for the macOS Universal artifact correction only. Public listing expansion / CWS bridge submission / desktop signing or installer / deploy remain unapproved.
@@ -101,8 +102,19 @@
 - [x] Build&Test implemented Task Board manual task creation and quick-add due-date rules from D-016.
 - [x] Build&Test completed `0.2.1` stabilization changes: Task Arrange same-day subject matching, no-throttle page-open Arrange apply, Calendar/Plan Arrange diagnostic snapshots, MatrixView Subject ID source writes/backfill, Dashboard/Popup current task display, Daily Settle displayTasks behavior, readable Google Sync conflicts, and version/documentation sync.
 
-- [ ] Codex architecture planning: draft Repository / Platform / Auth / API interface contracts after Product Owner reviews the target architecture.
-- [ ] Codex architecture planning: draft entity-by-entity data authority matrix after Product Owner confirms offline and migration posture.
+- [x] Codex architecture planning: drafted Repository / Platform / Auth / API interface contracts in `docs/WEBDEV_INTERFACE_CONTRACTS.md`.
+- [x] Codex architecture planning: drafted entity-by-entity data authority matrix in `docs/WEBDEV_DATA_AUTHORITY_MATRIX.md`.
+- [x] Codex architecture planning: drafted automatic migration plan in `docs/WEBDEV_AUTOMATIC_MIGRATION_PLAN.md`.
+- [x] Codex architecture planning: drafted Cloudflare repo layout and environment/resource naming plan in `docs/WEBDEV_INTERFACE_CONTRACTS.md`.
+- [x] Build&Test initialized WebDev implementation scaffold under `workers/` and `pages/` per D-048, including Cloudflare Worker API routes, D1 schema, migration entry, Pages/Vite/React shell, Repository/API clients, README handoff notes, and static scaffold tests.
+- [x] Build&Test advanced WebDev Tasks migration v1: Worker `/tasks` returns normalized DTOs and supports query filters/create/update/complete/reopen/delete; Pages Tasks UI now uses Repository-backed Cloud CRUD with local read cache and blocks writes while offline or before Google SSO session.
+- [x] Build&Test advanced WebDev Calendar Events migration v1: Worker `/calendar/events` returns normalized DTOs and supports date/search filters/create/update/delete; Pages Calendar UI now uses Repository-backed Cloud CRUD with local read cache and blocks writes while offline or before Google SSO session.
+- [x] Build&Test advanced WebDev Structure migration v1: Worker `/plans`, `/labels`, `/buckets`, and `/containers` support CRUD; Pages Settings provides Repository-backed plan/label/bucket/container management with local read cache and blocks writes while offline or before Google SSO session.
+- [x] Build&Test advanced WebDev Settings migration v1: Pages Settings uses Repository-backed `/settings` reads/writes for basic preferences with local read cache and blocks writes while offline or before Google SSO session.
+- [x] Build&Test advanced WebDev Dashboard projection v1: Pages Dashboard uses a read-only Daily Settle projection helper over Cloud-backed Tasks and Containers to show current container and projected current work without local derived writes.
+- [x] Build&Test verified WebDev scaffold with `node tests/webdev-scaffold.test.js`, `node tests/platform-boundary.test.js`, `git diff --check`, sensitive-info scan, and full `npm test`.
+- [ ] Codex architecture planning: future offline mutation queue and conflict handling design after v1 online-first write path is stable.
+
 ## LATER
 
 - [ ] After CWS accepts/publishes `0.2.3`, install/update the CWS Private testing build and run Google data sync v1 real-auth smoke against a test Google account.

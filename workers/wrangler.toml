@@ -1,0 +1,64 @@
+name = "timewhere-dev-api"
+main = "src/index.ts"
+compatibility_date = "2026-07-10"
+
+# Resource ids are intentionally omitted from the repository. Create the
+# matching Cloudflare resources, then fill ids in a local or CI environment
+# configuration that is not committed.
+
+[[d1_databases]]
+binding = "DB"
+database_name = "timewhere-dev-db"
+database_id = "REPLACE_WITH_DEV_D1_ID"
+
+[[r2_buckets]]
+binding = "SNAPSHOTS"
+bucket_name = "timewhere-dev-snapshots"
+
+[[kv_namespaces]]
+binding = "APP_CACHE"
+id = "REPLACE_WITH_DEV_KV_ID"
+
+[vars]
+TIMEWHERE_ENV = "dev"
+GOOGLE_OIDC_CLIENT_ID = ""
+
+[env.preview]
+name = "timewhere-preview-api"
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "timewhere-preview-db"
+database_id = "REPLACE_WITH_PREVIEW_D1_ID"
+
+[[env.preview.r2_buckets]]
+binding = "SNAPSHOTS"
+bucket_name = "timewhere-preview-snapshots"
+
+[[env.preview.kv_namespaces]]
+binding = "APP_CACHE"
+id = "REPLACE_WITH_PREVIEW_KV_ID"
+
+[env.preview.vars]
+TIMEWHERE_ENV = "preview"
+GOOGLE_OIDC_CLIENT_ID = ""
+
+[env.prod]
+name = "timewhere-api"
+
+[[env.prod.d1_databases]]
+binding = "DB"
+database_name = "timewhere-db"
+database_id = "REPLACE_WITH_PROD_D1_ID"
+
+[[env.prod.r2_buckets]]
+binding = "SNAPSHOTS"
+bucket_name = "timewhere-snapshots"
+
+[[env.prod.kv_namespaces]]
+binding = "APP_CACHE"
+id = "REPLACE_WITH_PROD_KV_ID"
+
+[env.prod.vars]
+TIMEWHERE_ENV = "prod"
+GOOGLE_OIDC_CLIENT_ID = ""

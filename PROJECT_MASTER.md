@@ -15,6 +15,9 @@
 - For this direction, Google is considered first as Google SSO / OIDC account identity. Google Drive Sync, Google Tasks, and Google Calendar integration are not part of the current direction document and require separate design.
 - WebDev work should first produce Gap Analysis, target architecture, migration roadmap, and risk assessment before any implementation migration.
 - Current WebDev architecture planning artifact: `docs/WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md`.
+- D-047 records WebDev v1 architecture defaults: Cloudflare Workers / D1 / R2 / KV / Pages, Google SSO only for account identity, full Web App coverage, retained offline read cache with offline edits blocked in v1, automatic migration after Google SSO, Browser Extension scope deferred, and Electron retained as the default Desktop Runtime.
+- Current WebDev interface and migration planning artifacts: `docs/WEBDEV_INTERFACE_CONTRACTS.md`, `docs/WEBDEV_DATA_AUTHORITY_MATRIX.md`, and `docs/WEBDEV_AUTOMATIC_MIGRATION_PLAN.md`.
+- Cloudflare dev / preview / prod environments now have an initial scaffold under `workers/` and `pages/`; Cloudflare resources remain uncreated/unconfigured in repo, and deploy/release remains unapproved.
 
 ## Collaboration Model
 
@@ -83,7 +86,7 @@ Escalate to external advisor for:
 - Manual MVP validation checklist.
 - Google data sync v1 per D-019 / D-020: optional account configuration for cloud persistence and cross-device bidirectional sync; TimeWhere remains fully usable without Google.
 - System task reminders per D-021: local Chrome notifications for explicit `schedule_time` tasks and current Daily Settle container tasks.
-- Standalone Windows desktop app per D-031/D-032: Electron desktop shell, Windows portable package target, desktop Google Drive `appDataFolder` sync path with bundled Desktop OAuth client ID and artifact-bundled Desktop client metadata secret, app-running desktop notifications, and optional Chrome extension bridge.
+- Windows desktop portable implementation per D-031/D-032: Electron desktop shell, Windows portable package target, desktop Google Drive `appDataFolder` sync path with bundled Desktop OAuth client ID and artifact-bundled Desktop client metadata secret, app-running desktop notifications, and optional Chrome extension bridge.
 
 ### Out Of Scope
 

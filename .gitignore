@@ -2,6 +2,8 @@
 node_modules/
 package-lock.json
 !platforms/desktop-electron/package-lock.json
+!workers/package-lock.json
+!pages/package-lock.json
 
 # Local editor/tool configs
 .claude/
@@ -17,6 +19,10 @@ Thumbs.db
 .tmp/
 dist/
 build/
+.wrangler/
+workers/.wrangler/
+pages/.wrangler/
+pages/dist/
 !platforms/desktop-electron/build/
 !platforms/desktop-electron/build/icon.ico
 !platforms/desktop-electron/build/icon.png
