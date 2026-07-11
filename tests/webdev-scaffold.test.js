@@ -207,6 +207,8 @@ assert('Worker sync mutation dry-run joins existing outcomes and conflict record
   workerSyncMutationDryRun.includes('findSyncMutationOutcome') && workerSyncMutationDryRun.includes('findSyncConflictByMutation') && workerSyncMutationOutcomes.includes('findSyncMutationOutcome') && workerSyncConflicts.includes('findSyncConflictByMutation'));
 assert('Worker sync mutation dry-run previews conflict record shape without persisting it',
   workerSyncMutationDryRun.includes('conflict_preview') && workerSyncMutationDryRun.includes('would_persist: false') && workerSyncMutationDryRun.includes("reason: 'field_conflict'") && workerSyncMutationDryRun.includes('local: pickFields') && workerSyncMutationDryRun.includes('cloud: pickFields'));
+assert('Worker sync mutation dry-run previews apply plan without persisting it',
+  workerSyncMutationDryRun.includes('apply_plan') && workerSyncMutationDryRun.includes('buildApplyPlanPreview') && workerSyncMutationDryRun.includes('patch_fields') && workerSyncMutationDryRun.includes('patch: pickFields') && workerSyncMutationDryRun.includes('d1_transaction_steps'));
 assert('Worker repositories record entity changes for future offline replay',
   workerRepository.includes("recordSyncChange(env, accountId, 'task'") && workerRepository.includes("recordSyncChange(env, accountId, 'calendar_event'") && workerRepository.includes("recordSyncChange(env, accountId, 'container'") && workerRepository.includes("recordSyncChange(env, accountId, 'product_setting'"));
 assert('Worker task API returns DTO arrays',

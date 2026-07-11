@@ -249,11 +249,12 @@ This roadmap requires separate Product Owner approval before code work.
 | 9 | Add disabled sync conflict diagnostics in Pages Settings. | Scaffolded on 2026-07-11 with Settings reading sanitized `/sync/conflicts` records before any conflict resolution UI is approved. |
 | 10 | Add an internal disabled Task replay dry-run endpoint or command. | Scaffolded on 2026-07-11 with `POST /sync/mutations/dry-run` joining replay gates with existing outcomes/conflicts without applying writes or persisting diagnostics. |
 | 11 | Add dry-run conflict creation preview. | Scaffolded on 2026-07-11 with conflict candidates reporting exact sanitized conflict record shape while `would_persist=false`. |
-| 12 | Add Task replay apply-plan preview for apply candidates. | Dry-run reports sanitized patch fields and future D1 write steps without applying writes. |
-| 13 | Enable offline queue for Task only. | Offline create/update/complete replay tests and conflict tests pass after Product Owner approval. |
-| 14 | Add Calendar and Structure entities. | Entity-specific conflict tests pass. |
-| 15 | Add Settings and cross-entity relationship validation. | Settings/runtime boundary tests pass. |
-| 16 | Promote conflict UI from diagnostics to user workflow. | Manual merge / keep cloud / apply local acceptance tests pass. |
+| 12 | Add Task replay apply-plan preview for apply candidates. | Scaffolded on 2026-07-11 with dry-run reporting sanitized patch fields and future D1 write steps while `would_persist=false`. |
+| 13 | Add replay readiness summary endpoint/card. | Developer review can see candidate counts, blocked reasons, and conflict preview counts before any replay enablement. |
+| 14 | Enable offline queue for Task only. | Offline create/update/complete replay tests and conflict tests pass after Product Owner approval. |
+| 15 | Add Calendar and Structure entities. | Entity-specific conflict tests pass. |
+| 16 | Add Settings and cross-entity relationship validation. | Settings/runtime boundary tests pass. |
+| 17 | Promote conflict UI from diagnostics to user workflow. | Manual merge / keep cloud / apply local acceptance tests pass. |
 
 ## 13. Test Requirements For Future Build&Test
 
@@ -286,7 +287,7 @@ Do not enable offline writes in the next implementation package.
 
 Recommended next Build&Test package:
 
-1. Add Task replay apply-plan preview for apply candidates, showing sanitized patch fields and future D1 write steps without applying writes.
+1. Add a replay readiness summary endpoint/card that aggregates dry-run candidate counts, blocked reasons, and conflict preview counts for developer review before any replay enablement.
 2. Keep offline writes blocked in all user-facing UI.
 3. Do not expose new conflict resolution UI beyond the current migration conflict review until Product Owner approves the offline-write user workflow.
 

@@ -343,6 +343,31 @@ async function main() {
     assert.equal(Object.prototype.hasOwnProperty.call(dryRun, 'outcome_persistence'), false);
     console.log('  PASS internal mutation dry-run joins outcomes without applying writes');
 
+    const dryRunApplyMutationId = `mut-dry-run-apply-${Date.now()}`;
+    const dryRunApply = await request(baseUrl, 'POST', '/sync/mutations/dry-run', {
+      mutations: [{
+        mutation_id: dryRunApplyMutationId,
+        entity_type: 'task',
+        entity_id: createdTask.task.id,
+        operation: 'update',
+        base_values: { notes: 'Base apply note', priority: 'medium' },
+        cloud_values: { notes: 'Base apply note', priority: 'medium' },
+        patch: { notes: 'Local apply note', priority: 'urgent' }
+      }]
+    });
+    assert.equal(dryRunApply.summary.apply_candidate_count, 1);
+    assert.equal(dryRunApply.summary.apply_plan_preview_count, 1);
+    assert.equal(dryRunApply.replay.results[0].dry_run.would_apply, true);
+    assert.equal(dryRunApply.replay.results[0].apply_plan.would_persist, false);
+    assert.deepEqual(dryRunApply.replay.results[0].apply_plan.patch_fields, ['notes', 'priority']);
+    assert.deepEqual(dryRunApply.replay.results[0].apply_plan.patch, { notes: 'Local apply note', priority: 'urgent' });
+    assert(dryRunApply.replay.results[0].apply_plan.d1_transaction_steps.includes('apply_task_patch'));
+    const unchangedAfterApplyDryRun = await request(baseUrl, 'GET', `/tasks?include_completed=true&search=${encodeURIComponent(createdTask.task.title)}`);
+    const unchangedTask = unchangedAfterApplyDryRun.tasks.find(task => task.id === createdTask.task.id);
+    assert.notEqual(unchangedTask.notes, 'Local apply note');
+    assert.notEqual(unchangedTask.priority, 'urgent');
+    console.log('  PASS internal mutation dry-run previews apply plan without applying writes');
+
     const dryRunConflictMutationId = `mut-dry-run-conflict-${Date.now()}`;
     const dryRunConflict = await request(baseUrl, 'POST', '/sync/mutations/dry-run', {
       mutations: [{

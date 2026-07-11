@@ -125,7 +125,8 @@
 - [x] Build&Test added disabled sync conflict diagnostics in Pages Settings: Web App can read sanitized `/sync/conflicts` records before any conflict resolution UI is approved.
 - [x] Build&Test added internal disabled Task replay dry-run endpoint: `POST /sync/mutations/dry-run` joins replay gates with existing outcomes/conflicts without applying writes, recording outcomes, or creating conflicts.
 - [x] Build&Test added dry-run conflict creation preview: conflict candidates report the exact sanitized conflict record shape while `would_persist=false` and no `/sync/conflicts` row is created.
-- [ ] Next recommended Build&Test package: add Task replay apply-plan preview for apply candidates, showing the sanitized patch fields and future D1 write steps without applying writes.
+- [x] Build&Test added Task replay apply-plan preview for apply candidates: dry-run reports sanitized patch fields and future D1 write steps while `would_persist=false` and no Task row is changed.
+- [ ] Next recommended Build&Test package: add a replay readiness summary endpoint/card that aggregates dry-run candidate counts, blocked reasons, and conflict preview counts for developer review before any replay enablement.
 
 ## LATER
 

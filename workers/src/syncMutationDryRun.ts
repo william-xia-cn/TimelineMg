@@ -41,6 +41,41 @@ function conflictFields(result: Record<string, unknown>): string[] {
     : [];
 }
 
+function d1TransactionSteps(result: Record<string, unknown>): string[] {
+  const skeleton = isRecord(result.transaction_skeleton) ? result.transaction_skeleton : {};
+  return Array.isArray(skeleton.d1_transaction_steps)
+    ? skeleton.d1_transaction_steps.filter(step => typeof step === 'string' && step.trim()).map(String)
+    : [];
+}
+
+function patchFields(mutation: Record<string, unknown> | undefined): string[] {
+  if (!mutation) return [];
+  if (Array.isArray(mutation.field_paths)) {
+    return mutation.field_paths.filter(field => typeof field === 'string' && field.trim()).map(String);
+  }
+  if (isRecord(mutation.patch)) return Object.keys(mutation.patch).sort();
+  return [];
+}
+
+function buildApplyPlanPreview(
+  result: Record<string, unknown>,
+  mutation: Record<string, unknown> | undefined,
+  branch: string
+): Record<string, unknown> | null {
+  if (branch !== 'apply_candidate' || !mutation) return null;
+  const fields = patchFields(mutation);
+  return {
+    mode: 'internal_disabled_v1',
+    would_persist: false,
+    entity_type: result.entity_type,
+    entity_id: result.entity_id,
+    operation: result.operation,
+    patch_fields: fields,
+    patch: pickFields(mutation.patch, fields),
+    d1_transaction_steps: d1TransactionSteps(result)
+  };
+}
+
 function buildConflictPreview(
   result: Record<string, unknown>,
   mutation: Record<string, unknown> | undefined,
@@ -77,6 +112,7 @@ export async function buildSyncMutationDryRun(
   let storedOutcomeCount = 0;
   let storedConflictCount = 0;
   let conflictPreviewCount = 0;
+  let applyPlanPreviewCount = 0;
   let applyCandidateCount = 0;
   let conflictCandidateCount = 0;
   let rejectCandidateCount = 0;
@@ -90,20 +126,23 @@ export async function buildSyncMutationDryRun(
     if (branch === 'reject_candidate' || branch === 'not_in_task_gate') rejectCandidateCount++;
     const storedOutcome = mutationId ? await findSyncMutationOutcome(env, accountId, mutationId) : null;
     const storedConflict = mutationId ? await findSyncConflictByMutation(env, accountId, mutationId) : null;
+    const applyPlan = buildApplyPlanPreview(result, mutationInputs.get(mutationId), branch);
     const conflictPreview = buildConflictPreview(result, mutationInputs.get(mutationId), branch);
     if (storedOutcome) storedOutcomeCount++;
     if (storedConflict) storedConflictCount++;
+    if (applyPlan) applyPlanPreviewCount++;
     if (conflictPreview) conflictPreviewCount++;
     joinedResults.push({
       ...result,
       stored_outcome: storedOutcome,
       stored_conflict: storedConflict,
+      apply_plan: applyPlan,
       conflict_preview: conflictPreview,
       dry_run: {
         mode: 'internal_disabled_v1',
         writes_enabled: false,
         applies_user_data: false,
-        would_apply: false,
+        would_apply: Boolean(applyPlan),
         would_create_conflict: Boolean(conflictPreview),
         branch
       }
@@ -126,7 +165,8 @@ export async function buildSyncMutationDryRun(
       reject_candidate_count: rejectCandidateCount,
       stored_outcome_count: storedOutcomeCount,
       stored_conflict_count: storedConflictCount,
-      conflict_preview_count: conflictPreviewCount
+      conflict_preview_count: conflictPreviewCount,
+      apply_plan_preview_count: applyPlanPreviewCount
     }
   };
 }
