@@ -39,6 +39,7 @@ const requiredFiles = [
   'workers/migrations/0002_task_parity_fields.sql',
   'workers/migrations/0003_sync_changes.sql',
   'workers/migrations/0004_sync_conflicts.sql',
+  'workers/migrations/0005_sync_mutation_outcomes.sql',
   'workers/scripts/clear-local-d1-state.mjs',
   'workers/scripts/create-local-seed-sql.mjs',
   'workers/scripts/run-local-d1-file.mjs',
@@ -50,6 +51,7 @@ const requiredFiles = [
   'workers/src/repositories.ts',
   'workers/src/sync.ts',
   'workers/src/syncConflicts.ts',
+  'workers/src/syncMutationOutcomes.ts',
   'pages/README.md',
   'pages/package.json',
   'pages/package-lock.json',
@@ -88,6 +90,7 @@ const sql = read('workers/migrations/0001_initial.sql');
 const taskParityMigration = read('workers/migrations/0002_task_parity_fields.sql');
 const syncChangesMigration = read('workers/migrations/0003_sync_changes.sql');
 const syncConflictsMigration = read('workers/migrations/0004_sync_conflicts.sql');
+const syncMutationOutcomesMigration = read('workers/migrations/0005_sync_mutation_outcomes.sql');
 for (const table of [
   'accounts',
   'account_sessions',
@@ -110,6 +113,8 @@ assert('D1 sync changes live in versioned migration after 0002',
   syncChangesMigration.includes('CREATE TABLE IF NOT EXISTS sync_changes') && syncChangesMigration.includes('sequence INTEGER PRIMARY KEY AUTOINCREMENT') && syncChangesMigration.includes('idx_sync_changes_account_sequence') && !sql.includes('sync_changes'));
 assert('D1 sync conflicts live in versioned migration after 0003',
   syncConflictsMigration.includes('CREATE TABLE IF NOT EXISTS sync_conflicts') && syncConflictsMigration.includes('mutation_id TEXT') && syncConflictsMigration.includes('idx_sync_conflicts_account_status_created') && !sql.includes('sync_conflicts'));
+assert('D1 sync mutation outcomes live in versioned migration after 0004',
+  syncMutationOutcomesMigration.includes('CREATE TABLE IF NOT EXISTS sync_mutation_outcomes') && syncMutationOutcomesMigration.includes('task_gate_json TEXT') && syncMutationOutcomesMigration.includes('idx_sync_mutation_outcomes_account_mutation') && !sql.includes('sync_mutation_outcomes'));
 
 const workerIndex = read('workers/src/index.ts');
 for (const [route, pattern] of [
@@ -127,6 +132,7 @@ for (const [route, pattern] of [
   ['/migration/conflicts', /migration\\\/conflicts/],
   ['/sync/changes', /sync\\\/changes/],
   ['/sync/mutations', /sync\\\/mutations/],
+  ['/sync/mutations/:id', /sync\\\/mutations\\\/\(\[\^\/\]\+\)/],
   ['/sync/conflicts', /sync\\\/conflicts/],
   ['/sync/status', /sync\\\/status/]
 ]) {
@@ -134,7 +140,7 @@ for (const [route, pattern] of [
 }
 assert('Worker sync status documents offline blocked v1', workerIndex.includes("offline_writes: 'blocked_v1'"));
 assert('Worker sync status exposes change feed foundation', workerIndex.includes("change_feed: 'available'") && workerIndex.includes('handleListSyncChanges'));
-assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes("task_replay_gate: 'defined_disabled_v1'") && workerIndex.includes('handleSyncMutations'));
+assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes("task_replay_gate: 'defined_disabled_v1'") && workerIndex.includes("mutation_outcomes: 'metadata_only_disabled_v1'") && workerIndex.includes('handleSyncMutations'));
 assert('Worker sync status exposes conflict record scaffold', workerIndex.includes("conflict_records: 'scaffolded'") && workerIndex.includes('handleListSyncConflicts') && workerIndex.includes('handleGetSyncConflict'));
 assert('Worker supports local Cloud session disconnect', workerIndex.includes('handleDeleteSession') && workerIndex.includes('revokeSession'));
 
@@ -165,6 +171,7 @@ const workerRepository = read('workers/src/repositories.ts');
 const workerSync = read('workers/src/sync.ts');
 const workerOfflineMutations = read('workers/src/offlineMutations.ts');
 const workerSyncConflicts = read('workers/src/syncConflicts.ts');
+const workerSyncMutationOutcomes = read('workers/src/syncMutationOutcomes.ts');
 assert('Worker sync change feed records idempotent cursor rows',
   workerSync.includes('recordSyncChange') && workerSync.includes('listSyncChanges') && workerSync.includes('next_cursor') && workerSync.includes('entity_revision'));
 assert('Worker offline mutation replay skeleton validates but remains disabled',
@@ -181,6 +188,10 @@ assert('Worker sync conflict scaffold can create and list sanitized records',
   workerSyncConflicts.includes('createSyncConflictRecord') && workerSyncConflicts.includes('listSyncConflicts') && workerSyncConflicts.includes('getSyncConflict') && workerSyncConflicts.includes('sync_conflict_private_data') && workerSyncConflicts.includes('PRIVATE_KEY_PATTERN'));
 assert('Worker sync conflict scaffold does not expose a resolution route yet',
   !workerIndex.includes('handleResolveSyncConflict') && !workerIndex.includes('/sync\\/conflicts\\/([^/]+)\\/resolve'));
+assert('Worker sync mutation outcome scaffold persists metadata only',
+  workerSyncMutationOutcomes.includes('recordSyncMutationOutcomes') && workerSyncMutationOutcomes.includes('listSyncMutationOutcomes') && workerSyncMutationOutcomes.includes('getSyncMutationOutcome') && workerSyncMutationOutcomes.includes("mode: 'disabled_v1_metadata_only'") && workerSyncMutationOutcomes.includes('task_gate_json'));
+assert('Worker sync mutation outcome scaffold does not persist raw mutation payloads',
+  !workerSyncMutationOutcomes.includes('patch_json') && !workerSyncMutationOutcomes.includes('base_values_json') && !workerSyncMutationOutcomes.includes('cloud_values_json'));
 assert('Worker repositories record entity changes for future offline replay',
   workerRepository.includes("recordSyncChange(env, accountId, 'task'") && workerRepository.includes("recordSyncChange(env, accountId, 'calendar_event'") && workerRepository.includes("recordSyncChange(env, accountId, 'container'") && workerRepository.includes("recordSyncChange(env, accountId, 'product_setting'"));
 assert('Worker task API returns DTO arrays',

@@ -38,6 +38,7 @@ import { importSnapshot, listMigrationConflicts, resolveMigrationConflict } from
 import { validateOfflineMutationReplay } from './offlineMutations';
 import { listSyncChanges } from './sync';
 import { getSyncConflict, listSyncConflicts } from './syncConflicts';
+import { getSyncMutationOutcome, listSyncMutationOutcomes, recordSyncMutationOutcomes } from './syncMutationOutcomes';
 import type { Env } from './types';
 
 type Handler = (request: Request, env: Env, url: URL) => Promise<Response>;
@@ -83,7 +84,9 @@ const routes: Array<{ method: string; pattern: RegExp; handler: Handler }> = [
   { method: 'GET', pattern: /^\/migration\/conflicts$/, handler: handleListMigrationConflicts },
   { method: 'PATCH', pattern: /^\/migration\/conflicts\/([^/]+)$/, handler: handleResolveMigrationConflict },
   { method: 'GET', pattern: /^\/sync\/changes$/, handler: handleListSyncChanges },
+  { method: 'GET', pattern: /^\/sync\/mutations$/, handler: handleListSyncMutationOutcomes },
   { method: 'POST', pattern: /^\/sync\/mutations$/, handler: handleSyncMutations },
+  { method: 'GET', pattern: /^\/sync\/mutations\/([^/]+)$/, handler: handleGetSyncMutationOutcome },
   { method: 'GET', pattern: /^\/sync\/conflicts$/, handler: handleListSyncConflicts },
   { method: 'GET', pattern: /^\/sync\/conflicts\/([^/]+)$/, handler: handleGetSyncConflict },
   { method: 'GET', pattern: /^\/sync\/status$/, handler: handleSyncStatus }
@@ -345,6 +348,7 @@ async function handleSyncStatus(request: Request, env: Env): Promise<Response> {
     change_feed: 'available',
     mutation_replay: 'disabled_v1',
     task_replay_gate: 'defined_disabled_v1',
+    mutation_outcomes: 'metadata_only_disabled_v1',
     conflict_records: 'scaffolded'
   });
 }
@@ -360,11 +364,29 @@ async function handleListSyncChanges(request: Request, env: Env, url: URL): Prom
 }
 
 async function handleSyncMutations(request: Request, env: Env): Promise<Response> {
-  await requireSession(env, request);
+  const session = await requireSession(env, request);
   const body = await readJson<unknown>(request);
+  const replay = validateOfflineMutationReplay(body);
   return jsonResponse({
-    replay: validateOfflineMutationReplay(body)
+    replay,
+    outcome_persistence: await recordSyncMutationOutcomes(env, session.accountId, replay)
   });
+}
+
+async function handleListSyncMutationOutcomes(request: Request, env: Env, url: URL): Promise<Response> {
+  const session = await requireSession(env, request);
+  return jsonResponse(await listSyncMutationOutcomes(
+    env,
+    session.accountId,
+    url.searchParams.get('status'),
+    url.searchParams.get('limit')
+  ));
+}
+
+async function handleGetSyncMutationOutcome(request: Request, env: Env, url: URL): Promise<Response> {
+  const session = await requireSession(env, request);
+  const id = url.pathname.split('/').pop() || '';
+  return jsonResponse({ outcome: await getSyncMutationOutcome(env, session.accountId, id) });
 }
 
 async function handleListSyncConflicts(request: Request, env: Env, url: URL): Promise<Response> {

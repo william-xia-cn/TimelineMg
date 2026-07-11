@@ -191,9 +191,10 @@ async function main() {
     assert(Number(eventChanges.next_cursor) > Number(taskChanges.next_cursor));
     console.log('  PASS sync change feed advances cursor for later entity changes');
 
-    const replayAttempt = await request(baseUrl, 'POST', '/sync/mutations', {
+    const replayMutationId = `mut-integration-${Date.now()}`;
+    const replayBody = {
       mutations: [{
-        mutation_id: `mut-integration-${Date.now()}`,
+        mutation_id: replayMutationId,
         entity_type: 'task',
         entity_id: createdTask.task.id,
         operation: 'update',
@@ -201,24 +202,38 @@ async function main() {
         base_values: { title: createdTask.task.title },
         patch: { title: 'Offline replay must not apply' }
       }]
-    });
+    };
+    const replayAttempt = await request(baseUrl, 'POST', '/sync/mutations', replayBody);
     assert.equal(replayAttempt.replay.accepted, false);
     assert.equal(replayAttempt.replay.replay_status, 'disabled_v1');
     assert.equal(replayAttempt.replay.activation_gate, 'task_only_replay_defined_but_disabled_v1');
+    assert.equal(replayAttempt.outcome_persistence.mode, 'disabled_v1_metadata_only');
+    assert.equal(replayAttempt.outcome_persistence.recorded_count, 1);
     assert.equal(replayAttempt.replay.results[0].reason, 'offline_replay_disabled_v1');
     assert.equal(replayAttempt.replay.results[0].task_replay_gate.status, 'task_replay_gate_ready_but_disabled');
     assert.equal(replayAttempt.replay.results[0].task_replay_gate.field_conflict_check.status, 'cloud_values_required');
+    const storedReplayOutcome = await request(baseUrl, 'GET', `/sync/mutations/${encodeURIComponent(replayMutationId)}`);
+    assert.equal(storedReplayOutcome.outcome.mutation_id, replayMutationId);
+    assert.equal(storedReplayOutcome.outcome.outcome_status, 'rejected');
+    assert.equal(storedReplayOutcome.outcome.reason, 'offline_replay_disabled_v1');
+    assert.equal(storedReplayOutcome.outcome.task_replay_gate.status, 'task_replay_gate_ready_but_disabled');
+    assert.equal(Object.prototype.hasOwnProperty.call(storedReplayOutcome.outcome, 'patch'), false);
+    const repeatedReplayAttempt = await request(baseUrl, 'POST', '/sync/mutations', replayBody);
+    assert.equal(repeatedReplayAttempt.outcome_persistence.recorded_count, 1);
+    const repeatedReplayOutcome = await request(baseUrl, 'GET', `/sync/mutations/${encodeURIComponent(replayMutationId)}`);
+    assert.equal(repeatedReplayOutcome.outcome.attempt_count, 2);
     const taskAfterReplayAttempt = await request(baseUrl, 'GET', `/tasks/${encodeURIComponent(createdTask.task.id)}`);
     assert.notEqual(taskAfterReplayAttempt.task.title, 'Offline replay must not apply');
     const changesAfterReplayAttempt = await request(baseUrl, 'GET', `/sync/changes?cursor=${encodeURIComponent(eventChanges.next_cursor)}&limit=20`);
     assert.equal(changesAfterReplayAttempt.changes.length, 0);
-    console.log('  PASS disabled mutation replay validates but does not apply changes');
+    console.log('  PASS disabled mutation replay records outcome metadata without applying changes');
 
     const privatePatch = {};
     privatePatch['refresh' + '_token'] = 'do-not-store';
+    const privateMutationId = `mut-private-${Date.now()}`;
     const privateReplayAttempt = await requestRaw(baseUrl, 'POST', '/sync/mutations', {
       mutations: [{
-        mutation_id: `mut-private-${Date.now()}`,
+        mutation_id: privateMutationId,
         entity_type: 'task',
         entity_id: createdTask.task.id,
         operation: 'update',
@@ -227,6 +242,9 @@ async function main() {
     });
     assert.equal(privateReplayAttempt.response.status, 400);
     assert.equal(privateReplayAttempt.payload.error.code, 'offline_mutation_private_data');
+    const missingPrivateOutcome = await requestRaw(baseUrl, 'GET', `/sync/mutations/${encodeURIComponent(privateMutationId)}`);
+    assert.equal(missingPrivateOutcome.response.status, 404);
+    assert.equal(missingPrivateOutcome.payload.error.code, 'sync_mutation_outcome_not_found');
     console.log('  PASS mutation replay contract rejects private fields');
 
     const nonConflictingReplayPreview = await request(baseUrl, 'POST', '/sync/mutations', {
@@ -291,7 +309,13 @@ async function main() {
 
     const syncStatus = await request(baseUrl, 'GET', '/sync/status');
     assert.equal(syncStatus.task_replay_gate, 'defined_disabled_v1');
+    assert.equal(syncStatus.mutation_outcomes, 'metadata_only_disabled_v1');
     assert.equal(syncStatus.conflict_records, 'scaffolded');
+    const mutationOutcomes = await request(baseUrl, 'GET', '/sync/mutations?status=rejected&limit=20');
+    assert(mutationOutcomes.outcomes.some(outcome => outcome.mutation_id === replayMutationId));
+    assert(mutationOutcomes.outcomes.every(outcome => outcome.outcome_status === 'rejected'));
+    console.log('  PASS mutation outcome diagnostics can be listed by status');
+
     const syncConflicts = await request(baseUrl, 'GET', '/sync/conflicts?status=open');
     assert.equal(syncConflicts.count, 0);
     assert.deepEqual(syncConflicts.conflicts, []);
