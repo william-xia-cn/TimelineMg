@@ -10,6 +10,10 @@ function stringValue(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
+function numberValue(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
 function countReasons(results: Record<string, unknown>[]): Array<{ reason: string; count: number }> {
   const counts = new Map<string, number>();
   for (const result of results) {
@@ -37,6 +41,55 @@ function previewRows(results: Record<string, unknown>[]): Record<string, unknown
   });
 }
 
+function buildPreviewHardening(
+  summary: Record<string, unknown>,
+  dependencyAnalysis: Record<string, unknown>
+): Record<string, unknown> {
+  const dependencySummary = isRecord(dependencyAnalysis.summary) ? dependencyAnalysis.summary : {};
+  const evidenceGaps = [];
+  const approvalBlockers = [
+    'product_owner_replay_enablement_approval_required',
+    'prod_replay_release_not_approved'
+  ];
+  const applyCandidates = numberValue(summary.apply_candidate_count);
+  const conflictCandidates = numberValue(summary.conflict_candidate_count);
+  const applyPlanPreviews = numberValue(summary.apply_plan_preview_count);
+  const conflictPreviews = numberValue(summary.conflict_preview_count);
+  const dependencyBlocked = numberValue(dependencySummary.blocked_count);
+  const dependencyCloudValidation = numberValue(dependencySummary.requires_cloud_validation_count);
+  if (!applyCandidates) evidenceGaps.push('missing_apply_candidates');
+  if (!conflictCandidates) evidenceGaps.push('missing_conflict_candidates');
+  if (!applyPlanPreviews) evidenceGaps.push('missing_apply_plan_previews');
+  if (!conflictPreviews) evidenceGaps.push('missing_conflict_record_previews');
+  if (dependencyBlocked) evidenceGaps.push('dependency_ordering_blockers');
+  if (dependencyCloudValidation) evidenceGaps.push('cloud_relationship_validation_required');
+
+  return {
+    mode: 'phase9_preview_readiness_hardening_v1',
+    status: evidenceGaps.length ? 'blocked_for_enablement' : 'reviewable_but_not_approved',
+    writes_enabled: false,
+    applies_user_data: false,
+    can_enable_replay: false,
+    evidence_gaps: evidenceGaps,
+    approval_blockers: approvalBlockers,
+    required_evidence: [
+      'apply_candidate_sample',
+      'conflict_candidate_sample',
+      'apply_plan_preview',
+      'conflict_record_preview',
+      'dependency_analysis_without_blocked_ordering',
+      'sensitive_info_scan',
+      'npm_run_webdev_verify',
+      'npm_test'
+    ],
+    dependency_summary: {
+      blocked_count: dependencyBlocked,
+      requires_cloud_validation_count: dependencyCloudValidation,
+      satisfied_count: numberValue(dependencySummary.satisfied_count)
+    }
+  };
+}
+
 export async function buildSyncReplayReadinessSummary(
   env: Env,
   accountId: string,
@@ -48,6 +101,7 @@ export async function buildSyncReplayReadinessSummary(
   const summary = isRecord(dryRun.summary) ? dryRun.summary : {};
   const blockedReasons = countReasons(results);
   const dependencyAnalysis = buildSyncReplayDependencyAnalysis(body);
+  const previewHardening = buildPreviewHardening(summary, dependencyAnalysis);
 
   return {
     mode: 'internal_disabled_v1',
@@ -74,11 +128,13 @@ export async function buildSyncReplayReadinessSummary(
       },
       blocked_reasons: blockedReasons,
       dependency_analysis: dependencyAnalysis,
+      preview_hardening: previewHardening,
       sample_results: previewRows(results)
     },
     recommendations: [
       'Keep offline replay disabled until Product Owner approval.',
       'Review apply candidates, conflict previews, and rejected reasons before enabling any write path.',
+      'Clear Phase 9 preview hardening evidence gaps before requesting replay enablement.',
       'Resolve blocked reasons and conflict handling policy before turning on Task replay.'
     ]
   };

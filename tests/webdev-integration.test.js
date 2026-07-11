@@ -422,6 +422,11 @@ async function main() {
     assert.equal(readinessSummary.readiness.preview_counts.apply_plan, 1);
     assert.equal(readinessSummary.readiness.preview_counts.conflict_record, 1);
     assert(readinessSummary.readiness.blocked_reasons.some(reason => reason.reason === 'offline_replay_disabled_v1'));
+    assert.equal(readinessSummary.readiness.preview_hardening.mode, 'phase9_preview_readiness_hardening_v1');
+    assert.equal(readinessSummary.readiness.preview_hardening.writes_enabled, false);
+    assert.equal(readinessSummary.readiness.preview_hardening.applies_user_data, false);
+    assert(readinessSummary.readiness.preview_hardening.approval_blockers.includes('product_owner_replay_enablement_approval_required'));
+    assert(readinessSummary.readiness.preview_hardening.required_evidence.includes('npm_test'));
     assert.equal(readinessSummary.readiness.sample_results.length, 2);
     const unchangedAfterReadiness = await request(baseUrl, 'GET', `/tasks?include_completed=true&search=${encodeURIComponent(createdTask.task.title)}`);
     const readinessUnchangedTask = unchangedAfterReadiness.tasks.find(task => task.id === createdTask.task.id);
@@ -474,6 +479,8 @@ async function main() {
     const bucketDependency = bucketTaskRow.dependencies.find(dependency => dependency.field === 'bucket_id');
     assert.equal(bucketDependency.status, 'blocked');
     assert.equal(bucketDependency.reason, 'same_batch_create_after_reference');
+    assert(dependencySummary.readiness.preview_hardening.evidence_gaps.includes('dependency_ordering_blockers'));
+    assert.equal(dependencySummary.readiness.preview_hardening.dependency_summary.blocked_count, dependencyAnalysis.summary.blocked_count);
     const unchangedAfterDependencyAnalysis = await request(baseUrl, 'GET', `/tasks/${encodeURIComponent(createdTask.task.id)}`);
     assert.notDeepEqual(unchangedAfterDependencyAnalysis.task.labels, [dependencyLabelId]);
     assert.notEqual(unchangedAfterDependencyAnalysis.task.bucket_id, dependencyBucketId);

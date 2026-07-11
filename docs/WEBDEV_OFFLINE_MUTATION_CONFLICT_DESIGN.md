@@ -593,6 +593,20 @@ Implemented status:
 
 This phase does not enable Worker replay writes, background replay, automatic conflict resolution, local-over-cloud resolution, or full offline-first behavior.
 
+### Phase 9: Preview Readiness Hardening
+
+Goal: make replay readiness evidence explicit enough for future Product Owner review without enabling prod release or replay writes.
+
+Implemented status:
+
+- Worker readiness summary includes `preview_hardening` with `mode: phase9_preview_readiness_hardening_v1`.
+- The hardening output lists `evidence_gaps`, `approval_blockers`, `required_evidence`, and dependency summary counts.
+- Settings readiness card shows evidence gaps, dependency blockers, and Cloud relationship validation counts.
+- Recommendations explicitly require clearing evidence gaps before requesting replay enablement.
+- `writes_enabled`, `applies_user_data`, and `can_enable_replay` remain false.
+
+This phase completes the D-049 Phase 2-9 approved boundary. It does not approve production replay, Cloudflare prod deployment, Calendar / Container / Settings replay implementation, Browser Extension replay, local-over-cloud overwrite, batch conflict handling, or full-entity offline-first.
+
 ### Explicit Hold Points
 
 The following remain unapproved until Product Owner explicitly approves them:
@@ -608,11 +622,11 @@ The following remain unapproved until Product Owner explicitly approves them:
 
 ## 17. Current Recommendation
 
-Continue from the completed Phase 2 queued pending, Phase 3 single Task conflict review, Phase 4 replay safety gate, Phase 5 pending queue UX work, Phase 6 non-Task replay design boundary, Phase 7 dependency analysis, and Phase 8 Task-scope offline UX hardening.
+Continue from the completed Phase 2 queued pending, Phase 3 single Task conflict review, Phase 4 replay safety gate, Phase 5 pending queue UX work, Phase 6 non-Task replay design boundary, Phase 7 dependency analysis, Phase 8 Task-scope offline UX hardening, and Phase 9 preview readiness hardening.
 
 Recommended next Build&Test package:
 
-1. Start Phase 9 preview readiness hardening without prod release or replay enablement.
+1. Stop here for the D-049 Phase 2-9 batch unless Product Owner separately approves one of the explicit hold points.
 2. Keep prod replay disabled and avoid any Cloudflare prod deployment or public release.
 3. Do not implement Calendar / Container / Settings replay, Browser Extension replay, batch conflict handling, or local-over-cloud actions until separately approved.
 

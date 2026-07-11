@@ -152,7 +152,7 @@ for (const [route, pattern] of [
 }
 assert('Worker sync status documents offline blocked v1', workerIndex.includes("offline_writes: 'blocked_v1'"));
 assert('Worker sync status exposes change feed foundation', workerIndex.includes("change_feed: 'available'") && workerIndex.includes('handleListSyncChanges'));
-assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes("task_replay_gate: 'defined_disabled_v1'") && workerIndex.includes("task_replay_transaction: 'internal_disabled_v1'") && workerIndex.includes("mutation_dry_run: 'internal_disabled_v1'") && workerIndex.includes("replay_enablement_simulation: 'internal_disabled_v1'") && workerIndex.includes("replay_readiness_summary: 'internal_disabled_v1'") && workerIndex.includes('replay_safety_gate') && workerIndex.includes("mutation_outcomes: 'metadata_only_disabled_v1'") && workerIndex.includes('handleSyncMutations'));
+assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes("task_replay_gate: 'defined_disabled_v1'") && workerIndex.includes("task_replay_transaction: 'internal_disabled_v1'") && workerIndex.includes("mutation_dry_run: 'internal_disabled_v1'") && workerIndex.includes("replay_enablement_simulation: 'internal_disabled_v1'") && workerIndex.includes("replay_readiness_summary: 'internal_disabled_v1'") && workerIndex.includes("replay_preview_hardening: 'phase9_internal_readiness_only'") && workerIndex.includes('replay_safety_gate') && workerIndex.includes("mutation_outcomes: 'metadata_only_disabled_v1'") && workerIndex.includes('handleSyncMutations'));
 assert('Worker sync status exposes conflict record scaffold', workerIndex.includes("conflict_records: 'scaffolded'") && workerIndex.includes('handleListSyncConflicts') && workerIndex.includes('handleGetSyncConflict'));
 assert('Worker supports local Cloud session disconnect', workerIndex.includes('handleDeleteSession') && workerIndex.includes('revokeSession'));
 
@@ -232,6 +232,14 @@ assert('Worker sync mutation dry-run previews apply plan without persisting it',
   workerSyncMutationDryRun.includes('apply_plan') && workerSyncMutationDryRun.includes('buildApplyPlanPreview') && workerSyncMutationDryRun.includes('patch_fields') && workerSyncMutationDryRun.includes('patch: pickFields') && workerSyncMutationDryRun.includes('d1_transaction_steps'));
 assert('Worker sync replay readiness aggregates dry-run counts without enabling writes',
   workerSyncReplayReadiness.includes('buildSyncReplayReadinessSummary') && workerSyncReplayReadiness.includes('buildSyncMutationDryRun') && workerSyncReplayReadiness.includes("replay_enablement: 'not_approved'") && workerSyncReplayReadiness.includes('blocked_reasons') && workerSyncReplayReadiness.includes('sample_results'));
+assert('Worker sync replay readiness exposes Phase 9 preview hardening evidence',
+  workerSyncReplayReadiness.includes('buildPreviewHardening')
+    && workerSyncReplayReadiness.includes("mode: 'phase9_preview_readiness_hardening_v1'")
+    && workerSyncReplayReadiness.includes('evidence_gaps')
+    && workerSyncReplayReadiness.includes('approval_blockers')
+    && workerSyncReplayReadiness.includes('required_evidence')
+    && workerSyncReplayReadiness.includes('writes_enabled: false')
+    && workerSyncReplayReadiness.includes('applies_user_data: false'));
 assert('Worker sync replay dependency analysis stays read-only for Phase 7',
   workerSyncReplayDependencies.includes('buildSyncReplayDependencyAnalysis')
     && workerSyncReplayDependencies.includes("mode: 'phase7_dependency_analysis_v1'")
@@ -364,6 +372,8 @@ assert('Web App exposes disabled sync replay diagnostics in Settings',
   app.includes('SyncReplayDiagnosticsPanel') && app.includes('Sync replay diagnostics') && app.includes('Refresh outcomes') && app.includes('Inspect gate') && app.includes('Offline mutation replay is still disabled'));
 assert('Web App exposes disabled replay readiness summary in Settings',
   app.includes('SyncReplayReadinessPanel') && app.includes('Replay readiness summary') && app.includes('Preview readiness') && app.includes('blocked reasons') && app.includes('buildReplayReadinessPreviewBody'));
+assert('Web App exposes Phase 9 preview readiness hardening in Settings',
+  app.includes('Evidence gaps') && app.includes('Dependency blockers') && app.includes('Cloud validation') && app.includes('preview_hardening'));
 assert('Web App exposes disabled replay enablement simulation in Settings',
   app.includes('SyncReplayEnablementSimulationPanel') && app.includes('Replay enablement simulation') && app.includes('Run simulation') && app.includes('buildReplayEnablementSimulationPreviewBody'));
 assert('Web App exposes Phase 4 replay safety gate in Settings',

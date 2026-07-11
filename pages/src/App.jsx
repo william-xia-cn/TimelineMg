@@ -1609,6 +1609,7 @@ function MigrationConflictReviewPanel({ conflicts, status, canWrite, onRefresh, 
 
 function SyncReplayReadinessPanel({ summary, status, canRead, onRefresh }) {
   const readiness = summary?.readiness || null;
+  const previewHardening = readiness?.preview_hardening || null;
   return (
     <div className="panel sync-readiness-diagnostics">
       <div className="panel-heading-row">
@@ -1625,11 +1626,16 @@ function SyncReplayReadinessPanel({ summary, status, canRead, onRefresh }) {
             <span>Rejected <strong>{readiness.candidate_counts?.reject || 0}</strong></span>
             <span>Apply plans <strong>{readiness.preview_counts?.apply_plan || 0}</strong></span>
             <span>Conflict previews <strong>{readiness.preview_counts?.conflict_record || 0}</strong></span>
+            {previewHardening && <span>Evidence gaps <strong>{previewHardening.evidence_gaps?.length || 0}</strong></span>}
+            {previewHardening && <span>Dependency blockers <strong>{previewHardening.dependency_summary?.blocked_count || 0}</strong></span>}
+            {previewHardening && <span>Cloud validation <strong>{previewHardening.dependency_summary?.requires_cloud_validation_count || 0}</strong></span>}
           </div>
           <pre>{JSON.stringify({
             state: readiness.state,
             can_enable_replay: readiness.can_enable_replay,
             blocked_reasons: readiness.blocked_reasons,
+            dependency_analysis: readiness.dependency_analysis,
+            preview_hardening: readiness.preview_hardening,
             sample_results: readiness.sample_results,
             recommendations: summary.recommendations
           }, null, 2)}</pre>

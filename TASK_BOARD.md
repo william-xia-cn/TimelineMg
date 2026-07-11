@@ -140,7 +140,8 @@
 - [x] Build&Test documented Phase 6 Calendar/Container/Settings replay design only, preserving non-Task replay block and requiring separate approval before implementation.
 - [x] Build&Test implemented Phase 7 read-only cross-entity dependency analysis inside replay readiness, detecting same-batch satisfied dependencies and ordering blockers without enabling replay writes.
 - [x] Build&Test implemented Phase 8 Task-scope offline UX hardening: Tasks page pending banner, pending row operation/timestamp display, and direct Cloud edit/delete blocking for pending Tasks.
-- [ ] Next Build&Test package: Phase 9 preview readiness hardening without prod release or replay enablement.
+- [x] Build&Test implemented Phase 9 preview readiness hardening: readiness summary now exposes evidence gaps, approval blockers, required evidence, and dependency blocker counts without enabling replay writes.
+- [ ] D-049 Phase 2-9 batch is complete. Await separate Product Owner approval before prod release, Calendar/Container/Settings replay implementation, Browser Extension replay, local-over-cloud overwrite, batch conflict handling, or full-entity offline-first.
 
 ## LATER
 
