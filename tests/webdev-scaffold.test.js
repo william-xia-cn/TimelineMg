@@ -53,6 +53,7 @@ const requiredFiles = [
   'workers/src/syncConflicts.ts',
   'workers/src/syncMutationOutcomes.ts',
   'workers/src/syncMutationDryRun.ts',
+  'workers/src/syncReplayReadiness.ts',
   'workers/src/taskReplayTransaction.ts',
   'pages/README.md',
   'pages/package.json',
@@ -135,6 +136,7 @@ for (const [route, pattern] of [
   ['/sync/changes', /sync\\\/changes/],
   ['/sync/mutations', /sync\\\/mutations/],
   ['/sync/mutations/dry-run', /sync\\\/mutations\\\/dry-run/],
+  ['/sync/mutations/readiness-summary', /sync\\\/mutations\\\/readiness-summary/],
   ['/sync/mutations/:id', /sync\\\/mutations\\\/\(\[\^\/\]\+\)/],
   ['/sync/conflicts', /sync\\\/conflicts/],
   ['/sync/status', /sync\\\/status/]
@@ -143,7 +145,7 @@ for (const [route, pattern] of [
 }
 assert('Worker sync status documents offline blocked v1', workerIndex.includes("offline_writes: 'blocked_v1'"));
 assert('Worker sync status exposes change feed foundation', workerIndex.includes("change_feed: 'available'") && workerIndex.includes('handleListSyncChanges'));
-assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes("task_replay_gate: 'defined_disabled_v1'") && workerIndex.includes("task_replay_transaction: 'internal_disabled_v1'") && workerIndex.includes("mutation_dry_run: 'internal_disabled_v1'") && workerIndex.includes("mutation_outcomes: 'metadata_only_disabled_v1'") && workerIndex.includes('handleSyncMutations'));
+assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes("task_replay_gate: 'defined_disabled_v1'") && workerIndex.includes("task_replay_transaction: 'internal_disabled_v1'") && workerIndex.includes("mutation_dry_run: 'internal_disabled_v1'") && workerIndex.includes("replay_readiness_summary: 'internal_disabled_v1'") && workerIndex.includes("mutation_outcomes: 'metadata_only_disabled_v1'") && workerIndex.includes('handleSyncMutations'));
 assert('Worker sync status exposes conflict record scaffold', workerIndex.includes("conflict_records: 'scaffolded'") && workerIndex.includes('handleListSyncConflicts') && workerIndex.includes('handleGetSyncConflict'));
 assert('Worker supports local Cloud session disconnect', workerIndex.includes('handleDeleteSession') && workerIndex.includes('revokeSession'));
 
@@ -176,6 +178,7 @@ const workerOfflineMutations = read('workers/src/offlineMutations.ts');
 const workerSyncConflicts = read('workers/src/syncConflicts.ts');
 const workerSyncMutationDryRun = read('workers/src/syncMutationDryRun.ts');
 const workerSyncMutationOutcomes = read('workers/src/syncMutationOutcomes.ts');
+const workerSyncReplayReadiness = read('workers/src/syncReplayReadiness.ts');
 const workerTaskReplayTransaction = read('workers/src/taskReplayTransaction.ts');
 assert('Worker sync change feed records idempotent cursor rows',
   workerSync.includes('recordSyncChange') && workerSync.includes('listSyncChanges') && workerSync.includes('next_cursor') && workerSync.includes('entity_revision'));
@@ -209,6 +212,8 @@ assert('Worker sync mutation dry-run previews conflict record shape without pers
   workerSyncMutationDryRun.includes('conflict_preview') && workerSyncMutationDryRun.includes('would_persist: false') && workerSyncMutationDryRun.includes("reason: 'field_conflict'") && workerSyncMutationDryRun.includes('local: pickFields') && workerSyncMutationDryRun.includes('cloud: pickFields'));
 assert('Worker sync mutation dry-run previews apply plan without persisting it',
   workerSyncMutationDryRun.includes('apply_plan') && workerSyncMutationDryRun.includes('buildApplyPlanPreview') && workerSyncMutationDryRun.includes('patch_fields') && workerSyncMutationDryRun.includes('patch: pickFields') && workerSyncMutationDryRun.includes('d1_transaction_steps'));
+assert('Worker sync replay readiness aggregates dry-run counts without enabling writes',
+  workerSyncReplayReadiness.includes('buildSyncReplayReadinessSummary') && workerSyncReplayReadiness.includes('buildSyncMutationDryRun') && workerSyncReplayReadiness.includes("replay_enablement: 'not_approved'") && workerSyncReplayReadiness.includes('blocked_reasons') && workerSyncReplayReadiness.includes('sample_results'));
 assert('Worker repositories record entity changes for future offline replay',
   workerRepository.includes("recordSyncChange(env, accountId, 'task'") && workerRepository.includes("recordSyncChange(env, accountId, 'calendar_event'") && workerRepository.includes("recordSyncChange(env, accountId, 'container'") && workerRepository.includes("recordSyncChange(env, accountId, 'product_setting'"));
 assert('Worker task API returns DTO arrays',
@@ -316,8 +321,10 @@ assert('Web App exposes Migration conflict review first version',
   app.includes('MigrationConflictReviewPanel') && app.includes('refreshMigrationConflicts') && app.includes('resolveMigrationConflict'));
 assert('Web App exposes disabled sync replay diagnostics in Settings',
   app.includes('SyncReplayDiagnosticsPanel') && app.includes('Sync replay diagnostics') && app.includes('Refresh outcomes') && app.includes('Inspect gate') && app.includes('Offline mutation replay is still disabled'));
+assert('Web App exposes disabled replay readiness summary in Settings',
+  app.includes('SyncReplayReadinessPanel') && app.includes('Replay readiness summary') && app.includes('Preview readiness') && app.includes('blocked reasons') && app.includes('buildReplayReadinessPreviewBody'));
 assert('Pages API client can read sync replay outcome diagnostics',
-  apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
+  apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('getSyncReplayReadinessSummary') && apiClient.includes('/sync/mutations/readiness-summary') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
 assert('Web App exposes disabled sync conflict diagnostics in Settings',
   app.includes('SyncConflictDiagnosticsPanel') && app.includes('Sync conflict diagnostics') && app.includes('Refresh conflicts') && app.includes('Inspect conflict') && app.includes('Sync conflict resolution is not approved yet'));
 assert('Pages API client can read sync conflict diagnostics',

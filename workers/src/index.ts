@@ -39,6 +39,7 @@ import { validateOfflineMutationReplay } from './offlineMutations';
 import { listSyncChanges } from './sync';
 import { getSyncConflict, listSyncConflicts } from './syncConflicts';
 import { buildSyncMutationDryRun } from './syncMutationDryRun';
+import { buildSyncReplayReadinessSummary } from './syncReplayReadiness';
 import { getSyncMutationOutcome, listSyncMutationOutcomes, recordSyncMutationOutcomes } from './syncMutationOutcomes';
 import { attachTaskReplayTransactionSkeleton } from './taskReplayTransaction';
 import type { Env } from './types';
@@ -89,6 +90,7 @@ const routes: Array<{ method: string; pattern: RegExp; handler: Handler }> = [
   { method: 'GET', pattern: /^\/sync\/mutations$/, handler: handleListSyncMutationOutcomes },
   { method: 'POST', pattern: /^\/sync\/mutations$/, handler: handleSyncMutations },
   { method: 'POST', pattern: /^\/sync\/mutations\/dry-run$/, handler: handleSyncMutationDryRun },
+  { method: 'POST', pattern: /^\/sync\/mutations\/readiness-summary$/, handler: handleSyncReplayReadinessSummary },
   { method: 'GET', pattern: /^\/sync\/mutations\/([^/]+)$/, handler: handleGetSyncMutationOutcome },
   { method: 'GET', pattern: /^\/sync\/conflicts$/, handler: handleListSyncConflicts },
   { method: 'GET', pattern: /^\/sync\/conflicts\/([^/]+)$/, handler: handleGetSyncConflict },
@@ -353,6 +355,7 @@ async function handleSyncStatus(request: Request, env: Env): Promise<Response> {
     task_replay_gate: 'defined_disabled_v1',
     task_replay_transaction: 'internal_disabled_v1',
     mutation_dry_run: 'internal_disabled_v1',
+    replay_readiness_summary: 'internal_disabled_v1',
     mutation_outcomes: 'metadata_only_disabled_v1',
     conflict_records: 'scaffolded'
   });
@@ -382,6 +385,12 @@ async function handleSyncMutationDryRun(request: Request, env: Env): Promise<Res
   const session = await requireSession(env, request);
   const body = await readJson<unknown>(request);
   return jsonResponse(await buildSyncMutationDryRun(env, session.accountId, body));
+}
+
+async function handleSyncReplayReadinessSummary(request: Request, env: Env): Promise<Response> {
+  const session = await requireSession(env, request);
+  const body = await readJson<unknown>(request);
+  return jsonResponse(await buildSyncReplayReadinessSummary(env, session.accountId, body));
 }
 
 async function handleListSyncMutationOutcomes(request: Request, env: Env, url: URL): Promise<Response> {

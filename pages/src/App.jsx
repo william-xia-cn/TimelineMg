@@ -162,6 +162,33 @@ function localDateKey(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function buildReplayReadinessPreviewBody(tasks) {
+  const task = tasks.find(item => item && !isCompleted(item)) || tasks[0];
+  if (!task) {
+    return { mutations: [] };
+  }
+  const baseNotes = task.notes || task.description || null;
+  return {
+    mutations: [{
+      mutation_id: `readiness-preview-${task.id || 'task'}`,
+      entity_type: 'task',
+      entity_id: task.id,
+      operation: 'update',
+      base_values: {
+        notes: baseNotes,
+        priority: task.priority || 'medium'
+      },
+      cloud_values: {
+        notes: baseNotes,
+        priority: task.priority || 'medium'
+      },
+      patch: {
+        notes: baseNotes || 'Readiness preview note'
+      }
+    }]
+  };
+}
+
 export function App() {
   const platform = useMemo(() => createBrowserPlatform(), []);
   const googleButtonRef = useRef(null);
@@ -202,6 +229,8 @@ export function App() {
   const [syncReplayOutcomes, setSyncReplayOutcomes] = useState([]);
   const [syncReplayDetail, setSyncReplayDetail] = useState(null);
   const [syncReplayStatus, setSyncReplayStatus] = useState('Not loaded');
+  const [syncReadinessSummary, setSyncReadinessSummary] = useState(null);
+  const [syncReadinessStatus, setSyncReadinessStatus] = useState('Not loaded');
   const [syncConflictRecords, setSyncConflictRecords] = useState([]);
   const [syncConflictDetail, setSyncConflictDetail] = useState(null);
   const [syncConflictStatus, setSyncConflictStatus] = useState('Not loaded');
@@ -783,6 +812,29 @@ export function App() {
     }
   }
 
+  async function refreshSyncReplayReadiness() {
+    if (!apiClient.getSession()?.token) {
+      setSyncReadinessSummary(null);
+      setSyncReadinessStatus('Google SSO session required before loading replay readiness.');
+      return;
+    }
+    try {
+      const body = buildReplayReadinessPreviewBody(tasks);
+      if (!body.mutations.length) {
+        setSyncReadinessSummary(null);
+        setSyncReadinessStatus('Create or migrate at least one task before previewing replay readiness.');
+        return;
+      }
+      const data = await apiClient.getSyncReplayReadinessSummary(body);
+      setSyncReadinessSummary(data);
+      const counts = data.readiness?.candidate_counts || {};
+      setSyncReadinessStatus(`Readiness preview loaded: apply ${counts.apply || 0}, conflict ${counts.conflict || 0}, rejected ${counts.reject || 0}.`);
+    } catch (error) {
+      setSyncReadinessStatus(formatStatus(error));
+      setStatus({ phase: 'error', message: formatStatus(error) });
+    }
+  }
+
   async function inspectSyncReplayOutcome(outcome) {
     if (!outcome?.mutation_id) return;
     try {
@@ -1091,6 +1143,7 @@ export function App() {
               {migrationResult && <pre>{JSON.stringify(migrationResult, null, 2)}</pre>}
               <MigrationConflictReviewPanel conflicts={migrationConflicts} status={migrationConflictStatus} canWrite={canWrite} onRefresh={refreshMigrationConflicts} onResolve={resolveMigrationConflict} />
             </div>
+            <SyncReplayReadinessPanel summary={syncReadinessSummary} status={syncReadinessStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayReadiness} />
             <SyncReplayDiagnosticsPanel outcomes={syncReplayOutcomes} detail={syncReplayDetail} status={syncReplayStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayDiagnostics} onInspect={inspectSyncReplayOutcome} />
             <SyncConflictDiagnosticsPanel conflicts={syncConflictRecords} detail={syncConflictDetail} status={syncConflictStatus} canRead={hasCloudSession()} onRefresh={refreshSyncConflictDiagnostics} onInspect={inspectSyncConflict} />
             <div className="panel preferences-panel">
@@ -1362,6 +1415,38 @@ function MigrationConflictReviewPanel({ conflicts, status, canWrite, onRefresh, 
           </div>
         </article>
       ))}
+    </div>
+  );
+}
+
+function SyncReplayReadinessPanel({ summary, status, canRead, onRefresh }) {
+  const readiness = summary?.readiness || null;
+  return (
+    <div className="panel sync-readiness-diagnostics">
+      <div className="panel-heading-row">
+        <h2>Replay readiness summary</h2>
+        <button type="button" disabled={!canRead} onClick={onRefresh}>Preview readiness</button>
+      </div>
+      <p>{status}</p>
+      <p>Offline replay is still disabled. This card aggregates dry-run candidate counts, blocked reasons, and preview counts for developer review.</p>
+      {readiness && (
+        <>
+          <div className="readiness-grid">
+            <span>Apply candidates <strong>{readiness.candidate_counts?.apply || 0}</strong></span>
+            <span>Conflict candidates <strong>{readiness.candidate_counts?.conflict || 0}</strong></span>
+            <span>Rejected <strong>{readiness.candidate_counts?.reject || 0}</strong></span>
+            <span>Apply plans <strong>{readiness.preview_counts?.apply_plan || 0}</strong></span>
+            <span>Conflict previews <strong>{readiness.preview_counts?.conflict_record || 0}</strong></span>
+          </div>
+          <pre>{JSON.stringify({
+            state: readiness.state,
+            can_enable_replay: readiness.can_enable_replay,
+            blocked_reasons: readiness.blocked_reasons,
+            sample_results: readiness.sample_results,
+            recommendations: summary.recommendations
+          }, null, 2)}</pre>
+        </>
+      )}
     </div>
   );
 }

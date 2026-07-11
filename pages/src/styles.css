@@ -454,9 +454,33 @@ textarea:disabled {
   border-radius: 7px;
 }
 
+.sync-readiness-diagnostics,
 .sync-replay-diagnostics,
 .sync-conflict-diagnostics {
   grid-column: span 2;
+}
+
+.readiness-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.readiness-grid span {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid #d8e3ee;
+  border-radius: 7px;
+  background: #f8fbfe;
+  color: #657386;
+  font-size: 12px;
+}
+
+.readiness-grid strong {
+  color: #1d252f;
+  font-size: 18px;
 }
 
 .sync-outcome-list,
@@ -532,9 +556,14 @@ textarea:disabled {
     grid-column: auto;
   }
 
+  .sync-readiness-diagnostics,
   .sync-replay-diagnostics,
   .sync-conflict-diagnostics {
     grid-column: auto;
+  }
+
+  .readiness-grid {
+    grid-template-columns: 1fr;
   }
 }
 .compact-form {

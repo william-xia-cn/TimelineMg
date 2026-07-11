@@ -51,6 +51,15 @@ Authorization: Bearer timewhere-local-dev-session
 
 部署命令需要先在 Cloudflare 中创建对应资源，并在本地或 CI 的私有配置中填写 resource id。本仓库不保存这些 id。
 
+## Sync replay diagnostics
+
+当前 `/sync/mutations` 仍然处于 `disabled_v1`，不会应用用户离线写入。辅助诊断接口只用于开发审查：
+
+- `POST /sync/mutations/dry-run`：复用 replay gate，预览 apply plan / conflict record shape，不写入 outcome、conflict 或业务数据。
+- `POST /sync/mutations/readiness-summary`：基于 dry-run 聚合 candidate counts、blocked reasons、apply/conflict preview counts，用于评估未来是否具备开启 replay 的条件。
+
+这些接口不启用离线写入，不保存 raw mutation payload，不绕过 Product Owner approval。
+
 ## 当前边界
 
 - 不创建 Cloudflare 资源。

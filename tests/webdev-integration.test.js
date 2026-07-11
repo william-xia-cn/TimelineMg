@@ -368,6 +368,40 @@ async function main() {
     assert.notEqual(unchangedTask.priority, 'urgent');
     console.log('  PASS internal mutation dry-run previews apply plan without applying writes');
 
+    const readinessSummary = await request(baseUrl, 'POST', '/sync/mutations/readiness-summary', {
+      mutations: [{
+        mutation_id: `mut-readiness-${Date.now()}`,
+        entity_type: 'task',
+        entity_id: createdTask.task.id,
+        operation: 'update',
+        base_values: { notes: 'Base readiness note', priority: 'medium' },
+        cloud_values: { notes: 'Base readiness note', priority: 'medium' },
+        patch: { notes: 'Local readiness note' }
+      }, {
+        mutation_id: `mut-readiness-conflict-${Date.now()}`,
+        entity_type: 'task',
+        entity_id: createdTask.task.id,
+        operation: 'update',
+        base_values: { notes: 'Base readiness conflict note' },
+        cloud_values: { notes: 'Cloud readiness conflict note' },
+        patch: { notes: 'Local readiness conflict note' }
+      }]
+    });
+    assert.equal(readinessSummary.replay_enablement, 'not_approved');
+    assert.equal(readinessSummary.writes_enabled, false);
+    assert.equal(readinessSummary.applies_user_data, false);
+    assert.equal(readinessSummary.readiness.can_enable_replay, false);
+    assert.equal(readinessSummary.readiness.candidate_counts.apply, 1);
+    assert.equal(readinessSummary.readiness.candidate_counts.conflict, 1);
+    assert.equal(readinessSummary.readiness.preview_counts.apply_plan, 1);
+    assert.equal(readinessSummary.readiness.preview_counts.conflict_record, 1);
+    assert(readinessSummary.readiness.blocked_reasons.some(reason => reason.reason === 'offline_replay_disabled_v1'));
+    assert.equal(readinessSummary.readiness.sample_results.length, 2);
+    const unchangedAfterReadiness = await request(baseUrl, 'GET', `/tasks?include_completed=true&search=${encodeURIComponent(createdTask.task.title)}`);
+    const readinessUnchangedTask = unchangedAfterReadiness.tasks.find(task => task.id === createdTask.task.id);
+    assert.notEqual(readinessUnchangedTask.notes, 'Local readiness note');
+    console.log('  PASS replay readiness summary aggregates dry-run counts without applying writes');
+
     const dryRunConflictMutationId = `mut-dry-run-conflict-${Date.now()}`;
     const dryRunConflict = await request(baseUrl, 'POST', '/sync/mutations/dry-run', {
       mutations: [{
