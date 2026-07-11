@@ -21,6 +21,12 @@ const TASK_UPDATE_FIELDS: Record<string, string> = {
   due_date: 'due_date',
   schedule_time: 'schedule_time',
   duration: 'duration',
+  recurrence_series_id: 'recurrence_series_id',
+  recurrence_index: 'recurrence_index',
+  recurrence_count: 'recurrence_count',
+  recurrence_frequency: 'recurrence_frequency',
+  recurrence_anchor_start_date: 'recurrence_anchor_start_date',
+  recurrence_anchor_due_date: 'recurrence_anchor_due_date',
   priority: 'priority',
   progress: 'progress',
   completed_at: 'completed_at'
@@ -80,6 +86,7 @@ function bindValueForPatch(key: string, value: unknown): unknown {
     return title;
   }
   if (key === 'duration') return normalizeDuration(value);
+  if (key === 'recurrence_index' || key === 'recurrence_count') return value === null || value === undefined || value === '' ? null : Math.max(1, Math.round(Number(value) || 1));
   if (key === 'progress') return normalizeProgress(value);
   if (key === 'priority') return normalizePriority(value);
   return value === undefined ? null : value;
@@ -113,8 +120,10 @@ export async function createTask(env: Env, accountId: string, input: Record<stri
   await env.DB.prepare(
     `INSERT INTO tasks (
       id, account_id, plan_id, bucket_id, legacy_id, title, notes, description, checklist_json, labels_json,
-      start_date, due_date, schedule_time, duration, priority, progress, completed_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      start_date, due_date, schedule_time, duration, recurrence_series_id, recurrence_index, recurrence_count,
+      recurrence_frequency, recurrence_anchor_start_date, recurrence_anchor_due_date, priority, progress, completed_at,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     id,
     accountId,
@@ -130,6 +139,12 @@ export async function createTask(env: Env, accountId: string, input: Record<stri
     optionalString(input.due_date),
     optionalString(input.schedule_time),
     normalizeDuration(input.duration),
+    optionalString(input.recurrence_series_id),
+    input.recurrence_index ? Math.max(1, Math.round(Number(input.recurrence_index) || 1)) : null,
+    input.recurrence_count ? Math.max(1, Math.round(Number(input.recurrence_count) || 1)) : null,
+    optionalString(input.recurrence_frequency),
+    optionalString(input.recurrence_anchor_start_date),
+    optionalString(input.recurrence_anchor_due_date),
     normalizePriority(input.priority),
     progress,
     progress === 'completed' ? optionalString(input.completed_at) || now : optionalString(input.completed_at),

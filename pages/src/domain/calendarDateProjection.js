@@ -19,6 +19,27 @@ function weekdayKind(date) {
   return day === 0 || day === 6 ? 'weekend' : 'weekday';
 }
 
+function repeatDays(source) {
+  if (Array.isArray(source?.repeat_days)) return source.repeat_days;
+  if (Array.isArray(source?.days)) return source.days;
+  if (typeof source?.repeat_days === 'string') {
+    try {
+      const parsed = JSON.parse(source.repeat_days);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function isInsideActiveRange(source, dateKey) {
+  const start = source.active_start_date || (source.repeat && source.repeat !== 'none' ? source.date : null);
+  if (start && start > dateKey) return false;
+  if (source.active_end_date && source.active_end_date < dateKey) return false;
+  return true;
+}
+
 function isCompleted(task) {
   return task?.progress === 'completed' || task?.status === 'completed';
 }
@@ -42,15 +63,29 @@ function compareTimeThenPriority(a, b) {
 
 function containerAppliesToDate(container, dateKey) {
   if (!container || container.enabled === false) return false;
-  if (container.active_start_date && container.active_start_date > dateKey) return false;
-  if (container.active_end_date && container.active_end_date < dateKey) return false;
+  if (!isInsideActiveRange(container, dateKey)) return false;
   const repeat = container.repeat || 'daily';
   const date = dateFromKey(dateKey);
+  if (repeat === 'none') return false;
   if (repeat === 'weekday') return weekdayKind(date) === 'weekday';
   if (repeat === 'weekend') return weekdayKind(date) === 'weekend';
-  if (repeat === 'once') return container.date === dateKey || container.active_start_date === dateKey;
-  if (repeat === 'weekly' && Array.isArray(container.days)) return container.days.includes(date.getDay());
+  if (repeat === 'once') return (container.once_date || container.date || container.active_start_date) === dateKey;
+  if (repeat === 'weekly' || repeat === 'custom') return repeatDays(container).includes(date.getDay());
   return true;
+}
+
+function eventAppliesToDate(event, dateKey) {
+  if (!event) return false;
+  const repeat = event.repeat || 'none';
+  const date = dateFromKey(dateKey);
+  if (repeat === 'none') return event.date === dateKey;
+  if (repeat === 'once') return (event.once_date || event.date) === dateKey;
+  if (!isInsideActiveRange(event, dateKey)) return false;
+  if (repeat === 'daily') return true;
+  if (repeat === 'weekday') return weekdayKind(date) === 'weekday';
+  if (repeat === 'weekend') return weekdayKind(date) === 'weekend';
+  if (repeat === 'weekly' || repeat === 'custom') return repeatDays(event).includes(date.getDay());
+  return event.date === dateKey;
 }
 
 function taskAppliesToDate(task, dateKey) {
@@ -68,7 +103,7 @@ export function computeCalendarDateProjection({ date, tasks = [], events = [], c
     .filter(container => containerAppliesToDate(container, dateKey))
     .sort((a, b) => (minutesFromTime(a.time_start) ?? 9999) - (minutesFromTime(b.time_start) ?? 9999));
   const dayEvents = events
-    .filter(event => event.date === dateKey || (event.active_start_date && event.active_start_date <= dateKey && (!event.active_end_date || event.active_end_date >= dateKey)))
+    .filter(event => eventAppliesToDate(event, dateKey))
     .sort(compareTimeThenPriority);
   const dayTasks = tasks
     .filter(task => taskAppliesToDate(task, dateKey))

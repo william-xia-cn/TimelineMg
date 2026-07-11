@@ -35,6 +35,12 @@ function asText(value: unknown): string | null {
   return String(value);
 }
 
+function referenceId(prefix: string, value: unknown): string | null {
+  const text = asText(value);
+  if (!text) return null;
+  return text.startsWith(`${prefix}_`) ? text : stableId(prefix, { id: text }, text);
+}
+
 function asNumber(value: unknown, fallback = 0): number {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -135,7 +141,7 @@ async function upsertSimpleOwnedTable(env: Env, accountId: string, table: 'bucke
            sort_order = excluded.sort_order,
            updated_at = excluded.updated_at,
            revision = revision + 1`
-      ).bind(id, accountId, row.plan_id ? stableId('plan', { id: row.plan_id }, String(row.plan_id)) : null, legacyId, asText(row.name) || 'Bucket', asText(row.color), asNumber(row.sort_order), asText(row.created_at) || now, rowUpdatedAt(row, now)).run();
+      ).bind(id, accountId, referenceId('plan', row.plan_id), legacyId, asText(row.name) || 'Bucket', asText(row.color), asNumber(row.sort_order), asText(row.created_at) || now, rowUpdatedAt(row, now)).run();
     } else {
       await env.DB.prepare(
         `INSERT INTO labels (id, account_id, plan_id, legacy_id, name, color, created_at, updated_at)
@@ -145,7 +151,7 @@ async function upsertSimpleOwnedTable(env: Env, accountId: string, table: 'bucke
            color = excluded.color,
            updated_at = excluded.updated_at,
            revision = revision + 1`
-      ).bind(id, accountId, row.plan_id ? stableId('plan', { id: row.plan_id }, String(row.plan_id)) : null, legacyId, asText(row.name) || 'Label', asText(row.color), asText(row.created_at) || now, rowUpdatedAt(row, now)).run();
+      ).bind(id, accountId, referenceId('plan', row.plan_id), legacyId, asText(row.name) || 'Label', asText(row.color), asText(row.created_at) || now, rowUpdatedAt(row, now)).run();
     }
     count++;
   }
@@ -161,9 +167,11 @@ async function upsertTasks(env: Env, accountId: string, tasks: Record<string, un
     await env.DB.prepare(
       `INSERT INTO tasks (
         id, account_id, plan_id, bucket_id, legacy_id, title, notes, description, checklist_json, labels_json,
-        start_date, arranged_date, due_date, schedule_time, duration, subject, priority, progress, completed_at,
-        source, source_type, source_uid, source_url, source_updated_at, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        start_date, arranged_date, due_date, schedule_time, duration, subject,
+        recurrence_series_id, recurrence_index, recurrence_count, recurrence_frequency, recurrence_anchor_start_date, recurrence_anchor_due_date,
+        priority, progress, completed_at, source, source_type, source_uid, source_url, source_updated_at, managebac_subject, readonly,
+        created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(account_id, legacy_id) DO UPDATE SET
          title = excluded.title,
          notes = excluded.notes,
@@ -176,16 +184,29 @@ async function upsertTasks(env: Env, accountId: string, tasks: Record<string, un
          schedule_time = excluded.schedule_time,
          duration = excluded.duration,
          subject = excluded.subject,
+         recurrence_series_id = excluded.recurrence_series_id,
+         recurrence_index = excluded.recurrence_index,
+         recurrence_count = excluded.recurrence_count,
+         recurrence_frequency = excluded.recurrence_frequency,
+         recurrence_anchor_start_date = excluded.recurrence_anchor_start_date,
+         recurrence_anchor_due_date = excluded.recurrence_anchor_due_date,
          priority = excluded.priority,
          progress = excluded.progress,
          completed_at = excluded.completed_at,
+         source = excluded.source,
+         source_type = excluded.source_type,
+         source_uid = excluded.source_uid,
+         source_url = excluded.source_url,
+         source_updated_at = excluded.source_updated_at,
+         managebac_subject = excluded.managebac_subject,
+         readonly = excluded.readonly,
          updated_at = excluded.updated_at,
          revision = revision + 1`
     ).bind(
       id,
       accountId,
-      task.plan_id ? stableId('plan', { id: task.plan_id }, String(task.plan_id)) : null,
-      task.bucket_id ? stableId('bucket', { id: task.bucket_id }, String(task.bucket_id)) : null,
+      referenceId('plan', task.plan_id),
+      referenceId('bucket', task.bucket_id),
       legacyId,
       asText(task.title) || 'Untitled Task',
       asText(task.notes),
@@ -198,6 +219,12 @@ async function upsertTasks(env: Env, accountId: string, tasks: Record<string, un
       asText(task.schedule_time),
       asNumber(task.duration, 45),
       asText(task.subject),
+      asText(task.recurrence_series_id),
+      task.recurrence_index === null || task.recurrence_index === undefined ? null : asNumber(task.recurrence_index, 1),
+      task.recurrence_count === null || task.recurrence_count === undefined ? null : asNumber(task.recurrence_count, 1),
+      asText(task.recurrence_frequency),
+      asText(task.recurrence_anchor_start_date),
+      asText(task.recurrence_anchor_due_date),
       asText(task.priority) || 'medium',
       asText(task.progress || task.status) || 'not_started',
       asText(task.completed_at),
@@ -206,6 +233,8 @@ async function upsertTasks(env: Env, accountId: string, tasks: Record<string, un
       asText(task.source_uid),
       asText(task.source_url),
       asText(task.source_updated_at),
+      asText(task.managebac_subject),
+      task.readonly === true || task.readonly === 1 ? 1 : 0,
       asText(task.created_at || task.createdAt) || now,
       rowUpdatedAt(task, now)
     ).run();
@@ -262,7 +291,7 @@ async function upsertEvents(env: Env, accountId: string, events: Record<string, 
          payload_json = excluded.payload_json,
          updated_at = excluded.updated_at,
          revision = revision + 1`
-    ).bind(id, accountId, event.container_id ? stableId('container', { id: event.container_id }, String(event.container_id)) : null, legacyId, asText(event.title) || 'Untitled Event', asText(event.date), asText(event.time_start), asText(event.time_end), asText(event.source), asText(event.source_uid), asText(event.subject_in_matrixview), asText(event.active_start_date), asText(event.active_end_date), sanitizeJsonValue(event), asText(event.created_at) || now, rowUpdatedAt(event, now)).run();
+    ).bind(id, accountId, referenceId('container', event.container_id), legacyId, asText(event.title) || 'Untitled Event', asText(event.date), asText(event.time_start), asText(event.time_end), asText(event.source), asText(event.source_uid), asText(event.subject_in_matrixview), asText(event.active_start_date), asText(event.active_end_date), sanitizeJsonValue(event), asText(event.created_at) || now, rowUpdatedAt(event, now)).run();
     count++;
   }
   return count;

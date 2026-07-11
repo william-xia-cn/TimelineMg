@@ -25,12 +25,21 @@
 ## 本地命令
 
 ```powershell
+npm run webdev:local:prepare
 npm --prefix workers run dev
 npm --prefix workers run typecheck
 npm --prefix workers run deploy:dev
 npm --prefix workers run deploy:preview
 npm --prefix workers run deploy:prod
 ```
+
+`webdev:local:prepare` 会在本机 Wrangler D1 state 中执行 `0001_initial.sql` 并写入一组本地假数据。默认本地请求可使用：
+
+```text
+Authorization: Bearer timewhere-local-dev-session
+```
+
+该值只用于本地 smoke / integration test，不是生产凭据，不应部署到远端环境。
 
 部署命令需要先在 Cloudflare 中创建对应资源，并在本地或 CI 的私有配置中填写 resource id。本仓库不保存这些 id。
 

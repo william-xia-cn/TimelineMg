@@ -7,6 +7,7 @@ export default defineConfig({
     port: 4173,
     strictPort: true,
     proxy: {
+      '/health': 'http://127.0.0.1:8787',
       '/auth': 'http://127.0.0.1:8787',
       '/account': 'http://127.0.0.1:8787',
       '/tasks': 'http://127.0.0.1:8787',

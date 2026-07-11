@@ -36,6 +36,9 @@ const requiredFiles = [
   'workers/package-lock.json',
   'workers/tsconfig.json',
   'workers/migrations/0001_initial.sql',
+  'workers/scripts/clear-local-d1-state.mjs',
+  'workers/scripts/create-local-seed-sql.mjs',
+  'workers/scripts/run-local-d1-file.mjs',
   'workers/src/index.ts',
   'workers/src/auth.ts',
   'workers/src/migration.ts',
@@ -51,6 +54,7 @@ const requiredFiles = [
   'pages/src/domain/dailySettleProjection.js',
   'pages/src/domain/calendarDateProjection.js',
   'pages/src/domain/reminderState.js',
+  'pages/src/migration/legacyIndexedDbSnapshotAdapter.js',
   'pages/src/repositories/taskRepository.js',
   'pages/src/repositories/calendarRepository.js',
   'pages/src/repositories/structureRepository.js',
@@ -89,6 +93,8 @@ for (const table of [
   assert(`D1 schema creates ${table}`, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}\\b`).test(sql));
 }
 assert('D1 account table stores Google SSO display fields', sql.includes('email TEXT') && sql.includes('display_name TEXT') && sql.includes('picture_url TEXT'));
+assert('D1 task schema preserves recurrence and ManageBac source fields',
+  sql.includes('recurrence_series_id') && sql.includes('recurrence_frequency') && sql.includes('managebac_subject') && sql.includes('readonly INTEGER'));
 
 const workerIndex = read('workers/src/index.ts');
 for (const [route, pattern] of [
@@ -121,12 +127,18 @@ assert('migration detects changed cloud records and skips overwrite',
   migration.includes('detectMigrationConflicts') && migration.includes('cloud_record_changed_since_snapshot') && migration.includes('skipLegacyIds.has') && migration.includes("counts.conflicts") && migration.includes("finalStatus = counts.conflicts > 0 ? 'conflict' : 'completed'"));
 assert('migration conflict use_local applies local row before closing conflict',
   migration.includes('applyLocalConflict') && migration.includes("resolution === 'use_local'") && migration.includes('applied_local'));
+assert('migration preserves canonical foreign key references',
+  migration.includes('function referenceId') && migration.includes("text.startsWith(`${prefix}_`)") && migration.includes("referenceId('plan', task.plan_id)") && migration.includes("referenceId('container', event.container_id)"));
+assert('migration imports recurrence and ManageBac source task fields',
+  migration.includes('recurrence_series_id') && migration.includes('recurrence_anchor_due_date') && migration.includes('managebac_subject') && migration.includes('readonly = excluded.readonly'));
 
 const workersReadme = read('workers/README.md');
 assert('Workers README documents dev preview prod environments',
   workersReadme.includes('dev') && workersReadme.includes('preview') && workersReadme.includes('prod'));
 assert('Workers README forbids committed Cloudflare secrets',
   workersReadme.includes('不提交真实 Cloudflare resource id') && workersReadme.includes('不记录 token'));
+assert('Workers README documents local D1 prepare command',
+  workersReadme.includes('webdev:local:prepare') && workersReadme.includes('timewhere-local-dev-session'));
 
 const workerRepository = read('workers/src/repositories.ts');
 assert('Worker task API returns DTO arrays',
@@ -152,6 +164,9 @@ const pagesPackage = JSON.parse(read('pages/package.json'));
 assert('Pages package depends on React', Boolean(pagesPackage.dependencies.react));
 assert('Pages package depends on Vite', Boolean(pagesPackage.dependencies.vite));
 assert('Pages package depends on lucide-react', Boolean(pagesPackage.dependencies['lucide-react']));
+const viteConfig = read('pages/vite.config.js');
+assert('Pages dev proxy forwards Worker health checks',
+  viteConfig.includes("'/health': 'http://127.0.0.1:8787'"));
 
 const taskRepository = read('pages/src/repositories/taskRepository.js');
 assert('Task repository persists local read cache',
@@ -215,6 +230,8 @@ assert('Web App exposes Reminder state UI first version',
   app.includes('ReminderStatePanel') && app.includes('computeReminderState') && app.includes('Reminder state'));
 assert('Web App exposes Migration conflict review first version',
   app.includes('MigrationConflictReviewPanel') && app.includes('refreshMigrationConflicts') && app.includes('resolveMigrationConflict'));
+assert('Web App uses legacy IndexedDB snapshot adapter for migration preview',
+  app.includes('buildLegacyIndexedDbSnapshot') && app.includes("deviceId: 'web-preview'"));
 assert('Web App exposes Calendar event CRUD controls',
   app.includes('Create calendar event') && app.includes('Save event to Cloud') && app.includes('Search calendar events') && app.includes('Delete event'));
 assert('Web App exposes Structure management controls',
@@ -243,10 +260,23 @@ assert('Pages README documents core business migration first versions',
   pagesReadme.includes('Task detail') && pagesReadme.includes('Calendar date projection') && pagesReadme.includes('Reminder state UI') && pagesReadme.includes('Migration conflict review'));
 
 const rootPackage = JSON.parse(read('package.json'));
+const workerPackage = JSON.parse(read('workers/package.json'));
 assert('root package has webdev:check script', rootPackage.scripts['webdev:check'] === 'node tests/webdev-scaffold.test.js');
 assert('root package has webdev:verify script', rootPackage.scripts['webdev:verify']?.includes('npm --prefix pages run build') && rootPackage.scripts['webdev:verify']?.includes('npm --prefix workers run typecheck'));
+assert('root package has webdev integration script', rootPackage.scripts['webdev:integration'] === 'node tests/webdev-integration.test.js');
+assert('root package webdev verify runs local integration', rootPackage.scripts['webdev:verify']?.includes('node tests/webdev-integration.test.js'));
+assert('root package webdev verify runs migration adapter tests', rootPackage.scripts['webdev:verify']?.includes('node tests/webdev-migration-adapter.test.js'));
+assert('root package webdev verify runs business parity tests', rootPackage.scripts['webdev:verify']?.includes('node tests/webdev-business-parity.test.js'));
+assert('root package exposes local WebDev prepare script', rootPackage.scripts['webdev:local:prepare']?.includes('db:local:prepare'));
+assert('root package exposes local WebDev reset script', rootPackage.scripts['webdev:local:reset']?.includes('db:local:reset'));
 assert('root package has workers:typecheck script', rootPackage.scripts['workers:typecheck'] === 'npm --prefix workers run typecheck');
+assert('worker package exposes local D1 migrate script', workerPackage.scripts['db:local:migrate']?.includes('run-local-d1-file.mjs'));
+assert('worker package exposes local D1 seed script', workerPackage.scripts['db:local:seed']?.includes('create-local-seed-sql.mjs'));
+assert('worker package local D1 runner supports isolated persist state', read('workers/scripts/run-local-d1-file.mjs').includes('TIMEWHERE_WRANGLER_PERSIST_TO'));
+assert('worker package exposes local D1 reset script', workerPackage.scripts['db:local:reset']?.includes('clear-local-d1-state.mjs'));
 assert('root test includes webdev scaffold test', rootPackage.scripts.test.includes('tests/webdev-scaffold.test.js'));
+assert('root test includes webdev migration adapter test', rootPackage.scripts.test.includes('tests/webdev-migration-adapter.test.js'));
+assert('root test includes webdev business parity test', rootPackage.scripts.test.includes('tests/webdev-business-parity.test.js'));
 
 if (failed > 0) {
   console.error(`\n${failed} WebDev scaffold checks failed; ${passed} passed.`);

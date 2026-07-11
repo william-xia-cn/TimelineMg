@@ -24,6 +24,7 @@ import { createBrowserPlatform } from './platform/browserPlatform.js';
 import { computeDashboardProjection } from './domain/dailySettleProjection.js';
 import { computeCalendarDateProjection } from './domain/calendarDateProjection.js';
 import { computeReminderState } from './domain/reminderState.js';
+import { buildLegacyIndexedDbSnapshot } from './migration/legacyIndexedDbSnapshotAdapter.js';
 import { disableGoogleAutoSelect, GOOGLE_SSO_CLIENT_ID, renderGoogleSsoButton } from './auth/googleSso.js';
 
 const seedTasks = [
@@ -736,19 +737,15 @@ export function App() {
       return;
     }
     try {
-      const snapshot = {
-        schema: 'timewhere-snapshot-v1',
-        exported_at: new Date().toISOString(),
-        data: {
-          tasks,
-          plans,
-          buckets,
-          labels,
-          containers,
-          events,
-          settings: settingsDraft
-        }
-      };
+      const snapshot = await buildLegacyIndexedDbSnapshot({
+        tasks,
+        plans,
+        buckets,
+        labels,
+        containers,
+        events,
+        settings: settingsDraft
+      }, { deviceId: 'web-preview' });
       setMigrationResult(await migrationRepository.createMigrationRun(snapshot, 'web_preview'));
       await refreshMigrationConflicts();
     } catch (error) {
