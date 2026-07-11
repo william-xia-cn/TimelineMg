@@ -157,6 +157,12 @@ async function main() {
     assert.equal(updatedTask.task.checklist[0].done, true);
     console.log('  PASS updated task detail through Worker API');
 
+    const taskChanges = await request(baseUrl, 'GET', '/sync/changes?cursor=0&limit=20');
+    assert(taskChanges.changes.some(change => change.entity_type === 'task' && change.entity_id === createdTask.task.id && change.operation === 'created'));
+    assert(taskChanges.changes.some(change => change.entity_type === 'task' && change.entity_id === createdTask.task.id && change.operation === 'updated' && change.entity_revision === updatedTask.task.revision));
+    assert(Number(taskChanges.next_cursor) > 0);
+    console.log('  PASS sync change feed exposes task create and update cursors');
+
     const createdEvent = await request(baseUrl, 'POST', '/calendar/events', {
       title: 'Integration Planning Block',
       date,
@@ -166,6 +172,11 @@ async function main() {
     });
     assert.equal(createdEvent.event.date, date);
     console.log('  PASS created calendar event through Worker API');
+
+    const eventChanges = await request(baseUrl, 'GET', `/sync/changes?cursor=${encodeURIComponent(taskChanges.next_cursor)}&limit=20`);
+    assert(eventChanges.changes.some(change => change.entity_type === 'calendar_event' && change.entity_id === createdEvent.event.id && change.operation === 'created'));
+    assert(Number(eventChanges.next_cursor) > Number(taskChanges.next_cursor));
+    console.log('  PASS sync change feed advances cursor for later entity changes');
 
     const tasks = await request(baseUrl, 'GET', `/tasks?include_completed=true&search=${encodeURIComponent('Integration Task')}`);
     const events = await request(baseUrl, 'GET', `/calendar/events?date_from=${date}&date_to=${date}`);

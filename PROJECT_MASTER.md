@@ -17,6 +17,8 @@
 - Current WebDev architecture planning artifact: `docs/WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md`.
 - D-047 records WebDev v1 architecture defaults: Cloudflare Workers / D1 / R2 / KV / Pages, Google SSO only for account identity, full Web App coverage, retained offline read cache with offline edits blocked in v1, automatic migration after Google SSO, Browser Extension scope deferred, and Electron retained as the default Desktop Runtime.
 - Current WebDev interface and migration planning artifacts: `docs/WEBDEV_INTERFACE_CONTRACTS.md`, `docs/WEBDEV_DATA_AUTHORITY_MATRIX.md`, and `docs/WEBDEV_AUTOMATIC_MIGRATION_PLAN.md`.
+- Current WebDev future offline planning artifact: `docs/WEBDEV_OFFLINE_MUTATION_CONFLICT_DESIGN.md`. It keeps v1 offline writes blocked and defines the later queue / replay / conflict model required before offline writes can be enabled.
+- Current WebDev sync foundation: D1 `sync_changes`, Worker `/sync/changes`, and repository change recording are scaffolded for future offline mutation replay; user-facing offline writes remain blocked in v1.
 - Cloudflare dev / preview / prod environments now have an initial scaffold under `workers/` and `pages/`; Cloudflare resources remain uncreated/unconfigured in repo, and deploy/release remains unapproved.
 
 ## Collaboration Model

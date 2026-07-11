@@ -29,7 +29,7 @@ Cloudflare 结构参考 TimeOnChrome 的工程模式，但 TimeWhere 不复制 T
 | `/containers/*` | Time container 查询、创建、更新、禁用、排序。 |
 | `/settings/*` | 用户设置和 runtime-independent product settings。 |
 | `/migration/*` | 旧 IndexedDB snapshot 上传、迁移运行状态、冲突诊断。 |
-| `/sync/*` | 增量拉取、客户端 cache cursor、在线写入后的状态协调；v1 不提供离线写入重放。 |
+| `/sync/*` | 增量拉取、客户端 cache cursor、在线写入后的状态协调；v1 提供 Cloud-confirmed change feed，但不提供离线写入重放。 |
 
 API 返回应使用统一 envelope：
 
@@ -170,6 +170,8 @@ Rules:
 - local cache can support reading and migration safety;
 - full offline mutation queue and conflict handling require a later Product Owner-approved design.
 
+The follow-up design direction is recorded in `docs/WEBDEV_OFFLINE_MUTATION_CONFLICT_DESIGN.md`. That document does not activate offline writes; it defines the future queue, replay, revision, and conflict model needed before Product Owner can approve implementation.
+
 ## 7. Cloudflare Environment And Resource Strategy
 
 Cloudflare strategy follows the TimeOnChrome-style structure, adapted to TimeWhere:
@@ -220,4 +222,3 @@ docs/
 ```
 
 Initial implementation scaffold now exists under `workers/` and `pages/` per D-048. The scaffold still uses placeholder Cloudflare resource ids only; creating resources, filling real ids, deployment, and production data migration remain separate Product Owner approvals.
-

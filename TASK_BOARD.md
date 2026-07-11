@@ -113,7 +113,9 @@
 - [x] Build&Test advanced WebDev Settings migration v1: Pages Settings uses Repository-backed `/settings` reads/writes for basic preferences with local read cache and blocks writes while offline or before Google SSO session.
 - [x] Build&Test advanced WebDev Dashboard projection v1: Pages Dashboard uses a read-only Daily Settle projection helper over Cloud-backed Tasks and Containers to show current container and projected current work without local derived writes.
 - [x] Build&Test verified WebDev scaffold with `node tests/webdev-scaffold.test.js`, `node tests/platform-boundary.test.js`, `git diff --check`, sensitive-info scan, and full `npm test`.
-- [ ] Codex architecture planning: future offline mutation queue and conflict handling design after v1 online-first write path is stable.
+- [x] Codex architecture planning: future offline mutation queue and conflict handling design after v1 online-first write path is stable, recorded in `docs/WEBDEV_OFFLINE_MUTATION_CONFLICT_DESIGN.md`.
+- [x] Build&Test added Cloud revision / change cursor foundation while keeping v1 offline writes blocked: D1 `sync_changes`, Worker `/sync/changes`, repository change recording, scaffold tests, and local Worker integration coverage.
+- [ ] Next recommended Build&Test package: add local offline mutation queue schema behind a disabled feature flag, without enabling offline writes in user-facing UI.
 
 ## LATER
 

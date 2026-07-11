@@ -35,6 +35,7 @@ import {
   updateTask
 } from './repositories';
 import { importSnapshot, listMigrationConflicts, resolveMigrationConflict } from './migration';
+import { listSyncChanges } from './sync';
 import type { Env } from './types';
 
 type Handler = (request: Request, env: Env, url: URL) => Promise<Response>;
@@ -79,6 +80,7 @@ const routes: Array<{ method: string; pattern: RegExp; handler: Handler }> = [
   { method: 'POST', pattern: /^\/migration\/runs$/, handler: handleCreateMigrationRun },
   { method: 'GET', pattern: /^\/migration\/conflicts$/, handler: handleListMigrationConflicts },
   { method: 'PATCH', pattern: /^\/migration\/conflicts\/([^/]+)$/, handler: handleResolveMigrationConflict },
+  { method: 'GET', pattern: /^\/sync\/changes$/, handler: handleListSyncChanges },
   { method: 'GET', pattern: /^\/sync\/status$/, handler: handleSyncStatus }
 ];
 
@@ -334,8 +336,19 @@ async function handleSyncStatus(request: Request, env: Env): Promise<Response> {
   return jsonResponse({
     mode: 'cloud_canonical',
     offline_writes: 'blocked_v1',
-    cache: 'read_only_when_offline'
+    cache: 'read_only_when_offline',
+    change_feed: 'available'
   });
+}
+
+async function handleListSyncChanges(request: Request, env: Env, url: URL): Promise<Response> {
+  const session = await requireSession(env, request);
+  return jsonResponse(await listSyncChanges(
+    env,
+    session.accountId,
+    url.searchParams.get('cursor'),
+    url.searchParams.get('limit')
+  ));
 }
 
 export default {

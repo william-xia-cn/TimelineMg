@@ -37,6 +37,7 @@ const requiredFiles = [
   'workers/tsconfig.json',
   'workers/migrations/0001_initial.sql',
   'workers/migrations/0002_task_parity_fields.sql',
+  'workers/migrations/0003_sync_changes.sql',
   'workers/scripts/clear-local-d1-state.mjs',
   'workers/scripts/create-local-seed-sql.mjs',
   'workers/scripts/run-local-d1-file.mjs',
@@ -45,6 +46,7 @@ const requiredFiles = [
   'workers/src/auth.ts',
   'workers/src/migration.ts',
   'workers/src/repositories.ts',
+  'workers/src/sync.ts',
   'pages/README.md',
   'pages/package.json',
   'pages/package-lock.json',
@@ -80,6 +82,7 @@ assert('wrangler does not contain real Cloudflare UUIDs', !/database_id\s*=\s*"[
 
 const sql = read('workers/migrations/0001_initial.sql');
 const taskParityMigration = read('workers/migrations/0002_task_parity_fields.sql');
+const syncChangesMigration = read('workers/migrations/0003_sync_changes.sql');
 for (const table of [
   'accounts',
   'account_sessions',
@@ -98,6 +101,8 @@ for (const table of [
 assert('D1 account table stores Google SSO display fields', sql.includes('email TEXT') && sql.includes('display_name TEXT') && sql.includes('picture_url TEXT'));
 assert('D1 task parity fields live in versioned migration after 0001',
   !sql.includes('recurrence_series_id') && taskParityMigration.includes('ALTER TABLE tasks ADD COLUMN recurrence_series_id') && taskParityMigration.includes('managebac_subject') && taskParityMigration.includes('readonly INTEGER'));
+assert('D1 sync changes live in versioned migration after 0002',
+  syncChangesMigration.includes('CREATE TABLE IF NOT EXISTS sync_changes') && syncChangesMigration.includes('sequence INTEGER PRIMARY KEY AUTOINCREMENT') && syncChangesMigration.includes('idx_sync_changes_account_sequence') && !sql.includes('sync_changes'));
 
 const workerIndex = read('workers/src/index.ts');
 for (const [route, pattern] of [
@@ -113,11 +118,13 @@ for (const [route, pattern] of [
   ['/settings', /\/settings/],
   ['/migration/runs', /migration\\\/runs/],
   ['/migration/conflicts', /migration\\\/conflicts/],
+  ['/sync/changes', /sync\\\/changes/],
   ['/sync/status', /sync\\\/status/]
 ]) {
   assert(`Worker route includes ${route}`, pattern.test(workerIndex));
 }
 assert('Worker sync status documents offline blocked v1', workerIndex.includes("offline_writes: 'blocked_v1'"));
+assert('Worker sync status exposes change feed foundation', workerIndex.includes("change_feed: 'available'") && workerIndex.includes('handleListSyncChanges'));
 assert('Worker supports local Cloud session disconnect', workerIndex.includes('handleDeleteSession') && workerIndex.includes('revokeSession'));
 
 const migration = read('workers/src/migration.ts');
@@ -144,6 +151,11 @@ assert('Workers README documents local D1 prepare command',
   workersReadme.includes('webdev:local:prepare') && workersReadme.includes('timewhere-local-dev-session'));
 
 const workerRepository = read('workers/src/repositories.ts');
+const workerSync = read('workers/src/sync.ts');
+assert('Worker sync change feed records idempotent cursor rows',
+  workerSync.includes('recordSyncChange') && workerSync.includes('listSyncChanges') && workerSync.includes('next_cursor') && workerSync.includes('entity_revision'));
+assert('Worker repositories record entity changes for future offline replay',
+  workerRepository.includes("recordSyncChange(env, accountId, 'task'") && workerRepository.includes("recordSyncChange(env, accountId, 'calendar_event'") && workerRepository.includes("recordSyncChange(env, accountId, 'container'") && workerRepository.includes("recordSyncChange(env, accountId, 'product_setting'"));
 assert('Worker task API returns DTO arrays',
   workerRepository.includes('function taskDto') && workerRepository.includes('checklist: parseJsonArray') && workerRepository.includes('labels: parseJsonArray'));
 assert('Worker task API supports query filters',

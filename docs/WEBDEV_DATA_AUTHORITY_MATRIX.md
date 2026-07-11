@@ -32,7 +32,7 @@
 | ReminderState | Local runtime first | local only unless later approved | Do not migrate as canonical product data in v1. |
 | MigrationRun | D1 metadata + R2 snapshot | cache status | Created automatically after Google SSO when local source exists. |
 | MigrationConflict | D1 | cache/display | Created when auto merge cannot safely decide. |
-| FutureOfflineMutation | Deferred | not active in v1 | Full offline mutation queue requires a later design. |
+| FutureOfflineMutation | Deferred | future local queue only until replay | Full offline mutation queue and conflict handling direction is defined in `docs/WEBDEV_OFFLINE_MUTATION_CONFLICT_DESIGN.md`; v1 still blocks offline edits. |
 
 ## 3. Settings Boundary
 
@@ -64,7 +64,7 @@ Cloud entities should carry:
 - deleted/tombstone status where needed;
 - source metadata for imports.
 
-Conflicts must not be silently overwritten. WebDev v1 blocks offline edits to current data, so ordinary offline-write conflicts should not be created. Automatic migration can still create conflict records, and user-facing resolution behavior requires a separate UX plan.
+Conflicts must not be silently overwritten. WebDev v1 blocks offline edits to current data, so ordinary offline-write conflicts should not be created. Automatic migration can still create conflict records. Future offline-write conflicts must follow the queue / replay / field-aware conflict model in `docs/WEBDEV_OFFLINE_MUTATION_CONFLICT_DESIGN.md` before offline edits are enabled.
 
 ## 5. Privacy Boundary
 
@@ -76,4 +76,3 @@ The data authority model must not record:
 - account emails in public repo evidence;
 - local private paths;
 - full migration snapshots in docs or logs.
-

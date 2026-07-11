@@ -1,6 +1,7 @@
 import { HttpError } from './http';
 import { newId, nowISO } from './crypto';
 import { sanitizeJsonValue } from './schema';
+import { recordSyncChange } from './sync';
 import type { Env } from './types';
 
 type TaskRow = Record<string, unknown>;
@@ -151,7 +152,9 @@ export async function createTask(env: Env, accountId: string, input: Record<stri
     now,
     now
   ).run();
-  return await getTask(env, accountId, id);
+  const task = await getTask(env, accountId, id);
+  await recordSyncChange(env, accountId, 'task', id, 'created', task.revision);
+  return task;
 }
 
 export async function getTask(env: Env, accountId: string, id: string): Promise<Record<string, unknown>> {
@@ -192,14 +195,18 @@ export async function updateTask(env: Env, accountId: string, id: string, patch:
   updates.push('updated_at = ?', 'revision = revision + 1');
   values.push(nowISO(), accountId, id);
   await env.DB.prepare(`UPDATE tasks SET ${updates.join(', ')} WHERE account_id = ? AND id = ?`).bind(...values).run();
-  return await getTask(env, accountId, id);
+  const task = await getTask(env, accountId, id);
+  await recordSyncChange(env, accountId, 'task', id, 'updated', task.revision);
+  return task;
 }
 
 export async function deleteTask(env: Env, accountId: string, id: string): Promise<{ deleted: true; id: string }> {
-  await getTask(env, accountId, id);
+  const task = await getTask(env, accountId, id);
+  const nextRevision = Number(task.revision || 1) + 1;
   await env.DB.prepare(
     'UPDATE tasks SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE account_id = ? AND id = ?'
   ).bind(nowISO(), nowISO(), accountId, id).run();
+  await recordSyncChange(env, accountId, 'task', id, 'deleted', nextRevision);
   return { deleted: true, id };
 }
 
@@ -270,7 +277,9 @@ export async function createCalendarEvent(env: Env, accountId: string, input: Re
     now,
     now
   ).run();
-  return await getCalendarEvent(env, accountId, id);
+  const event = await getCalendarEvent(env, accountId, id);
+  await recordSyncChange(env, accountId, 'calendar_event', id, 'created', event.revision);
+  return event;
 }
 
 export async function getCalendarEvent(env: Env, accountId: string, id: string): Promise<Record<string, unknown>> {
@@ -318,14 +327,18 @@ export async function updateCalendarEvent(env: Env, accountId: string, id: strin
   updates.push('updated_at = ?', 'revision = revision + 1');
   values.push(nowISO(), accountId, id);
   await env.DB.prepare(`UPDATE calendar_events SET ${updates.join(', ')} WHERE account_id = ? AND id = ?`).bind(...values).run();
-  return await getCalendarEvent(env, accountId, id);
+  const event = await getCalendarEvent(env, accountId, id);
+  await recordSyncChange(env, accountId, 'calendar_event', id, 'updated', event.revision);
+  return event;
 }
 
 export async function deleteCalendarEvent(env: Env, accountId: string, id: string): Promise<{ deleted: true; id: string }> {
-  await getCalendarEvent(env, accountId, id);
+  const event = await getCalendarEvent(env, accountId, id);
+  const nextRevision = Number(event.revision || 1) + 1;
   await env.DB.prepare(
     'UPDATE calendar_events SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE account_id = ? AND id = ?'
   ).bind(nowISO(), nowISO(), accountId, id).run();
+  await recordSyncChange(env, accountId, 'calendar_event', id, 'deleted', nextRevision);
   return { deleted: true, id };
 }
 
@@ -374,7 +387,9 @@ export async function createPlan(env: Env, accountId: string, input: Record<stri
     now,
     now
   ).run();
-  return await getPlan(env, accountId, id);
+  const plan = await getPlan(env, accountId, id);
+  await recordSyncChange(env, accountId, 'plan', id, 'created', plan.revision);
+  return plan;
 }
 
 export async function getPlan(env: Env, accountId: string, id: string): Promise<Record<string, unknown>> {
@@ -417,14 +432,18 @@ export async function updatePlan(env: Env, accountId: string, id: string, patch:
   updates.push('updated_at = ?', 'revision = revision + 1');
   values.push(nowISO(), accountId, id);
   await env.DB.prepare(`UPDATE plans SET ${updates.join(', ')} WHERE account_id = ? AND id = ?`).bind(...values).run();
-  return await getPlan(env, accountId, id);
+  const plan = await getPlan(env, accountId, id);
+  await recordSyncChange(env, accountId, 'plan', id, 'updated', plan.revision);
+  return plan;
 }
 
 export async function deletePlan(env: Env, accountId: string, id: string): Promise<{ deleted: true; id: string }> {
-  await getPlan(env, accountId, id);
+  const plan = await getPlan(env, accountId, id);
+  const nextRevision = Number(plan.revision || 1) + 1;
   await env.DB.prepare(
     'UPDATE plans SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE account_id = ? AND id = ?'
   ).bind(nowISO(), nowISO(), accountId, id).run();
+  await recordSyncChange(env, accountId, 'plan', id, 'deleted', nextRevision);
   return { deleted: true, id };
 }
 function bucketDto(row: Record<string, unknown>): Record<string, unknown> {
@@ -464,7 +483,9 @@ export async function createBucket(env: Env, accountId: string, input: Record<st
     now,
     now
   ).run();
-  return await getBucket(env, accountId, id);
+  const bucket = await getBucket(env, accountId, id);
+  await recordSyncChange(env, accountId, 'bucket', id, 'created', bucket.revision);
+  return bucket;
 }
 
 export async function getBucket(env: Env, accountId: string, id: string): Promise<Record<string, unknown>> {
@@ -505,14 +526,18 @@ export async function updateBucket(env: Env, accountId: string, id: string, patc
   updates.push('updated_at = ?', 'revision = revision + 1');
   values.push(nowISO(), accountId, id);
   await env.DB.prepare(`UPDATE buckets SET ${updates.join(', ')} WHERE account_id = ? AND id = ?`).bind(...values).run();
-  return await getBucket(env, accountId, id);
+  const bucket = await getBucket(env, accountId, id);
+  await recordSyncChange(env, accountId, 'bucket', id, 'updated', bucket.revision);
+  return bucket;
 }
 
 export async function deleteBucket(env: Env, accountId: string, id: string): Promise<{ deleted: true; id: string }> {
-  await getBucket(env, accountId, id);
+  const bucket = await getBucket(env, accountId, id);
+  const nextRevision = Number(bucket.revision || 1) + 1;
   await env.DB.prepare(
     'UPDATE buckets SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE account_id = ? AND id = ?'
   ).bind(nowISO(), nowISO(), accountId, id).run();
+  await recordSyncChange(env, accountId, 'bucket', id, 'deleted', nextRevision);
   return { deleted: true, id };
 }
 
@@ -552,7 +577,9 @@ export async function createLabel(env: Env, accountId: string, input: Record<str
     now,
     now
   ).run();
-  return await getLabel(env, accountId, id);
+  const label = await getLabel(env, accountId, id);
+  await recordSyncChange(env, accountId, 'label', id, 'created', label.revision);
+  return label;
 }
 
 export async function getLabel(env: Env, accountId: string, id: string): Promise<Record<string, unknown>> {
@@ -589,14 +616,18 @@ export async function updateLabel(env: Env, accountId: string, id: string, patch
   updates.push('updated_at = ?', 'revision = revision + 1');
   values.push(nowISO(), accountId, id);
   await env.DB.prepare(`UPDATE labels SET ${updates.join(', ')} WHERE account_id = ? AND id = ?`).bind(...values).run();
-  return await getLabel(env, accountId, id);
+  const label = await getLabel(env, accountId, id);
+  await recordSyncChange(env, accountId, 'label', id, 'updated', label.revision);
+  return label;
 }
 
 export async function deleteLabel(env: Env, accountId: string, id: string): Promise<{ deleted: true; id: string }> {
-  await getLabel(env, accountId, id);
+  const label = await getLabel(env, accountId, id);
+  const nextRevision = Number(label.revision || 1) + 1;
   await env.DB.prepare(
     'UPDATE labels SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE account_id = ? AND id = ?'
   ).bind(nowISO(), nowISO(), accountId, id).run();
+  await recordSyncChange(env, accountId, 'label', id, 'deleted', nextRevision);
   return { deleted: true, id };
 }
 function containerDto(row: Record<string, unknown>): Record<string, unknown> {
@@ -651,7 +682,9 @@ export async function createContainer(env: Env, accountId: string, input: Record
     now,
     now
   ).run();
-  return await getContainer(env, accountId, id);
+  const container = await getContainer(env, accountId, id);
+  await recordSyncChange(env, accountId, 'container', id, 'created', container.revision);
+  return container;
 }
 
 export async function getContainer(env: Env, accountId: string, id: string): Promise<Record<string, unknown>> {
@@ -699,14 +732,18 @@ export async function updateContainer(env: Env, accountId: string, id: string, p
   updates.push('updated_at = ?', 'revision = revision + 1');
   values.push(nowISO(), accountId, id);
   await env.DB.prepare(`UPDATE containers SET ${updates.join(', ')} WHERE account_id = ? AND id = ?`).bind(...values).run();
-  return await getContainer(env, accountId, id);
+  const container = await getContainer(env, accountId, id);
+  await recordSyncChange(env, accountId, 'container', id, 'updated', container.revision);
+  return container;
 }
 
 export async function deleteContainer(env: Env, accountId: string, id: string): Promise<{ deleted: true; id: string }> {
-  await getContainer(env, accountId, id);
+  const container = await getContainer(env, accountId, id);
+  const nextRevision = Number(container.revision || 1) + 1;
   await env.DB.prepare(
     'UPDATE containers SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE account_id = ? AND id = ?'
   ).bind(nowISO(), nowISO(), accountId, id).run();
+  await recordSyncChange(env, accountId, 'container', id, 'deleted', nextRevision);
   return { deleted: true, id };
 }
 export async function getSettings(env: Env, accountId: string): Promise<Record<string, unknown>> {
@@ -736,6 +773,10 @@ export async function updateSettings(env: Env, accountId: string, patch: Record<
          updated_at = excluded.updated_at,
          revision = revision + 1`
     ).bind(accountId, key, sanitizeJsonValue(value), now).run();
+    const row = await env.DB.prepare(
+      'SELECT revision FROM product_settings WHERE account_id = ? AND key = ?'
+    ).bind(accountId, key).first<{ revision: number }>();
+    await recordSyncChange(env, accountId, 'product_setting', key, 'updated', row?.revision ?? null);
   }
   return await getSettings(env, accountId);
 }

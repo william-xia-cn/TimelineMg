@@ -174,7 +174,7 @@ Still needs future Product Owner review before next implementation or deployment
 - final Web App framework/build acceptance if deviating from Vite + React;
 - production release model and preview environment policy;
 - conflict-resolution UX for automatic migration.
-- future offline mutation queue and conflict handling beyond v1 read-only offline mode.
+- Product Owner approval to implement the future offline mutation queue and conflict handling model described in `docs/WEBDEV_OFFLINE_MUTATION_CONFLICT_DESIGN.md`; v1 still blocks offline edits.
 
 ## 9. Immediate Next Work
 
@@ -189,6 +189,7 @@ Current first implementation package:
 - D-048 approves the initial Cloudflare Worker scaffold, D1 schema, migration entry, Pages/Vite/React Web App shell, Repository/API clients, and static scaffold tests under `workers/` and `pages/`.
 - Cloudflare resources, real resource ids, deployment, production data migration, Chrome Extension changes, and Desktop Runtime business changes remain unapproved.
 
-Next implementation item:
+Next implementation items:
 
-- Expand the Web App from shell to real migrated product modules by extracting domain services and Repository-backed UI one module at a time, starting only after the next Product Owner-approved work package.
+- Add local offline mutation queue schema behind a disabled feature flag, while keeping v1 offline writes blocked in user-facing UI.
+- Continue expanding the Web App from shell to real migrated product modules by extracting domain services and Repository-backed UI one module at a time, starting only after the next Product Owner-approved work package.
