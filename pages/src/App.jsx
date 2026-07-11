@@ -199,6 +199,9 @@ export function App() {
   const [migrationResult, setMigrationResult] = useState(null);
   const [migrationConflicts, setMigrationConflicts] = useState([]);
   const [migrationConflictStatus, setMigrationConflictStatus] = useState('Not loaded');
+  const [syncReplayOutcomes, setSyncReplayOutcomes] = useState([]);
+  const [syncReplayDetail, setSyncReplayDetail] = useState(null);
+  const [syncReplayStatus, setSyncReplayStatus] = useState('Not loaded');
   const [reminderSession, setReminderSession] = useState(null);
 
   useEffect(() => platform.onNetworkChange(setOnline), [platform]);
@@ -759,6 +762,35 @@ export function App() {
     }
   }
 
+  async function refreshSyncReplayDiagnostics() {
+    if (!apiClient.getSession()?.token) {
+      setSyncReplayOutcomes([]);
+      setSyncReplayDetail(null);
+      setSyncReplayStatus('Google SSO session required before loading replay diagnostics.');
+      return;
+    }
+    try {
+      const data = await apiClient.listSyncMutationOutcomes({ status: 'rejected', limit: 20 });
+      setSyncReplayOutcomes(data.outcomes || []);
+      setSyncReplayDetail(null);
+      setSyncReplayStatus(data.count ? `${data.count} replay outcomes loaded.` : 'No replay outcomes recorded.');
+    } catch (error) {
+      setSyncReplayStatus(formatStatus(error));
+      setStatus({ phase: 'error', message: formatStatus(error) });
+    }
+  }
+
+  async function inspectSyncReplayOutcome(outcome) {
+    if (!outcome?.mutation_id) return;
+    try {
+      const data = await apiClient.getSyncMutationOutcome(outcome.mutation_id);
+      setSyncReplayDetail(data.outcome || null);
+    } catch (error) {
+      setSyncReplayStatus(formatStatus(error));
+      setStatus({ phase: 'error', message: formatStatus(error) });
+    }
+  }
+
   async function runPreviewMigration() {
     if (!online) {
       setStatus({ phase: 'offline', message: 'Migration requires a network connection.' });
@@ -1027,6 +1059,7 @@ export function App() {
               {migrationResult && <pre>{JSON.stringify(migrationResult, null, 2)}</pre>}
               <MigrationConflictReviewPanel conflicts={migrationConflicts} status={migrationConflictStatus} canWrite={canWrite} onRefresh={refreshMigrationConflicts} onResolve={resolveMigrationConflict} />
             </div>
+            <SyncReplayDiagnosticsPanel outcomes={syncReplayOutcomes} detail={syncReplayDetail} status={syncReplayStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayDiagnostics} onInspect={inspectSyncReplayOutcome} />
             <div className="panel preferences-panel">
               <h2>Preferences</h2>
               <form className="settings-form" onSubmit={saveSettings}>
@@ -1299,6 +1332,51 @@ function MigrationConflictReviewPanel({ conflicts, status, canWrite, onRefresh, 
     </div>
   );
 }
+
+function SyncReplayDiagnosticsPanel({ outcomes, detail, status, canRead, onRefresh, onInspect }) {
+  return (
+    <div className="panel sync-replay-diagnostics">
+      <div className="panel-heading-row">
+        <h2>Sync replay diagnostics</h2>
+        <button type="button" disabled={!canRead} onClick={onRefresh}>Refresh outcomes</button>
+      </div>
+      <p>{status}</p>
+      <p>Offline mutation replay is still disabled. This panel only reads sanitized replay gates and outcomes.</p>
+      {outcomes.length === 0 && <p>No rejected replay outcomes to inspect.</p>}
+      <div className="sync-outcome-list">
+        {outcomes.map(outcome => (
+          <article className="sync-outcome-row" key={outcome.mutation_id}>
+            <div>
+              <strong>{outcome.entity_type} · {outcome.operation}</strong>
+              <span>{outcome.reason || outcome.outcome_status} · attempts {outcome.attempt_count || 1}</span>
+              <span>{outcome.last_seen_at ? new Date(outcome.last_seen_at).toLocaleString() : outcome.mutation_id}</span>
+            </div>
+            <button type="button" onClick={() => onInspect(outcome)}>Inspect gate</button>
+          </article>
+        ))}
+      </div>
+      {detail && (
+        <div className="sync-outcome-detail">
+          <h3>Replay gate detail</h3>
+          <pre>{JSON.stringify({
+            mutation_id: detail.mutation_id,
+            entity_type: detail.entity_type,
+            entity_id: detail.entity_id,
+            operation: detail.operation,
+            replay_status: detail.replay_status,
+            outcome_status: detail.outcome_status,
+            reason: detail.reason,
+            task_replay_gate: detail.task_replay_gate,
+            attempt_count: detail.attempt_count,
+            first_seen_at: detail.first_seen_at,
+            last_seen_at: detail.last_seen_at
+          }, null, 2)}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CalendarEventList({ events, canWrite, onDelete }) {
   return (
     <div className="calendar-list">

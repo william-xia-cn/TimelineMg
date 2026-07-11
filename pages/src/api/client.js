@@ -67,6 +67,16 @@ export function createApiClient({ baseUrl = '', storage = window.localStorage } 
     async getSyncStatus() {
       return request('/sync/status', { method: 'GET' });
     },
+    async listSyncMutationOutcomes({ status = 'rejected', limit = 20 } = {}) {
+      const params = new URLSearchParams();
+      if (status) params.set('status', status);
+      if (limit) params.set('limit', String(limit));
+      const query = params.toString();
+      return request(`/sync/mutations${query ? `?${query}` : ''}`, { method: 'GET' });
+    },
+    async getSyncMutationOutcome(mutationId) {
+      return request(`/sync/mutations/${encodeURIComponent(mutationId)}`, { method: 'GET' });
+    },
     async logout() {
       try {
         if (getSession()?.token) await request('/auth/session', { method: 'DELETE' });

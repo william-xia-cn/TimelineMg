@@ -177,6 +177,7 @@ Current scaffold status:
 - `/sync/changes` is available for Cloud-confirmed change cursors.
 - `/sync/mutations` validates mutation replay requests, reports the Task-only activation gate, field-level conflict preview, and internal disabled transaction skeleton, persists metadata-only outcomes, but returns `disabled_v1`.
 - `GET /sync/mutations` and `GET /sync/mutations/:id` expose replay outcome diagnostics without storing raw mutation payloads.
+- Pages Settings can read these sanitized replay outcomes and inspect Task replay gates for developer diagnostics.
 - `/sync/conflicts` can list and read future sync conflict records.
 - No sync conflict resolution UI or offline write replay is enabled in v1.
 

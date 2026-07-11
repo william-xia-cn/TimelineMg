@@ -281,6 +281,7 @@ assert('Reminder state helper exposes work reminder session state machine',
   reminderState.includes('advanceReminderSession') && reminderState.includes('notification_closed') && reminderState.includes('execution_check_scheduled') && reminderState.includes('execution_check_due'));
 
 const app = read('pages/src/App.jsx');
+const apiClient = read('pages/src/api/client.js');
 for (const label of ['Dashboard', 'Tasks', 'Calendar', 'Settings']) {
   assert(`Web App exposes ${label}`, app.includes(label));
 }
@@ -302,6 +303,10 @@ assert('Web App exposes Reminder state UI first version',
   app.includes('ReminderStatePanel') && app.includes('computeReminderState') && app.includes('advanceReminderSession') && app.includes('Mark clicked'));
 assert('Web App exposes Migration conflict review first version',
   app.includes('MigrationConflictReviewPanel') && app.includes('refreshMigrationConflicts') && app.includes('resolveMigrationConflict'));
+assert('Web App exposes disabled sync replay diagnostics in Settings',
+  app.includes('SyncReplayDiagnosticsPanel') && app.includes('Sync replay diagnostics') && app.includes('Refresh outcomes') && app.includes('Inspect gate') && app.includes('Offline mutation replay is still disabled'));
+assert('Pages API client can read sync replay outcome diagnostics',
+  apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
 assert('Web App uses legacy IndexedDB snapshot adapter for migration preview',
   app.includes('buildLegacyIndexedDbSnapshot') && app.includes("deviceId: 'web-preview'"));
 assert('Web App exposes Calendar event CRUD controls',
@@ -315,7 +320,7 @@ assert('Web App requires Google SSO session for writes',
 assert('Web App renders real Google SSO account entry',
   app.includes('renderGoogleSsoButton') && app.includes('googleButtonRef') && app.includes('Disconnect session') && !app.includes('<button disabled>Connect Google SSO</button>'));
 assert('Web App Settings can refresh real Cloud account and sync status',
-  app.includes('refreshCloudSessionStatus') && app.includes('Refresh account status') && app.includes('apiClient.getSyncStatus') && read('pages/src/api/client.js').includes('/sync/status'));
+  app.includes('refreshCloudSessionStatus') && app.includes('Refresh account status') && app.includes('apiClient.getSyncStatus') && apiClient.includes('/sync/status'));
 
 const pagesReadme = read('pages/README.md');
 assert('Pages README documents offline write block',

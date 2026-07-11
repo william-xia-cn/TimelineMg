@@ -121,7 +121,8 @@
 - [x] Build&Test defined Task-only offline replay activation gates and field-level conflict preview in `/sync/mutations`, including ManageBac source-field blocking, while keeping actual offline writes disabled.
 - [x] Build&Test added disabled Task replay outcome persistence hooks: D1 `sync_mutation_outcomes`, metadata-only recording from `/sync/mutations`, `GET /sync/mutations` diagnostics, and tests proving no raw mutation payload or offline write is applied.
 - [x] Build&Test added Task replay transaction skeleton behind an internal disabled gate: `/sync/mutations` now reports apply/conflict/reject branch steps while `writes_enabled=false` and still applies no user offline writes.
-- [ ] Next recommended Build&Test package: add disabled client-side replay diagnostics in Pages Settings so developers can inspect replay gates/outcomes without enabling offline edits.
+- [x] Build&Test added disabled client-side replay diagnostics in Pages Settings: Web App can read sanitized `/sync/mutations` outcomes and inspect Task replay gates without enabling offline edits or exposing raw mutation payloads.
+- [ ] Next recommended Build&Test package: add disabled sync conflict diagnostics in Pages Settings so developers can inspect `/sync/conflicts` records before any conflict resolution UI is approved.
 
 ## LATER
 
