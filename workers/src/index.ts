@@ -37,6 +37,7 @@ import {
 import { importSnapshot, listMigrationConflicts, resolveMigrationConflict } from './migration';
 import { validateOfflineMutationReplay } from './offlineMutations';
 import { listSyncChanges } from './sync';
+import { getSyncConflict, listSyncConflicts } from './syncConflicts';
 import type { Env } from './types';
 
 type Handler = (request: Request, env: Env, url: URL) => Promise<Response>;
@@ -83,6 +84,8 @@ const routes: Array<{ method: string; pattern: RegExp; handler: Handler }> = [
   { method: 'PATCH', pattern: /^\/migration\/conflicts\/([^/]+)$/, handler: handleResolveMigrationConflict },
   { method: 'GET', pattern: /^\/sync\/changes$/, handler: handleListSyncChanges },
   { method: 'POST', pattern: /^\/sync\/mutations$/, handler: handleSyncMutations },
+  { method: 'GET', pattern: /^\/sync\/conflicts$/, handler: handleListSyncConflicts },
+  { method: 'GET', pattern: /^\/sync\/conflicts\/([^/]+)$/, handler: handleGetSyncConflict },
   { method: 'GET', pattern: /^\/sync\/status$/, handler: handleSyncStatus }
 ];
 
@@ -340,7 +343,8 @@ async function handleSyncStatus(request: Request, env: Env): Promise<Response> {
     offline_writes: 'blocked_v1',
     cache: 'read_only_when_offline',
     change_feed: 'available',
-    mutation_replay: 'disabled_v1'
+    mutation_replay: 'disabled_v1',
+    conflict_records: 'scaffolded'
   });
 }
 
@@ -360,6 +364,22 @@ async function handleSyncMutations(request: Request, env: Env): Promise<Response
   return jsonResponse({
     replay: validateOfflineMutationReplay(body)
   });
+}
+
+async function handleListSyncConflicts(request: Request, env: Env, url: URL): Promise<Response> {
+  const session = await requireSession(env, request);
+  return jsonResponse(await listSyncConflicts(
+    env,
+    session.accountId,
+    url.searchParams.get('status'),
+    url.searchParams.get('limit')
+  ));
+}
+
+async function handleGetSyncConflict(request: Request, env: Env, url: URL): Promise<Response> {
+  const session = await requireSession(env, request);
+  const id = url.pathname.split('/').pop() || '';
+  return jsonResponse({ conflict: await getSyncConflict(env, session.accountId, id) });
 }
 
 export default {

@@ -241,7 +241,7 @@ This roadmap requires separate Product Owner approval before code work.
 | 1 | Add Cloud revision/change cursor fields to D1/API. | Scaffolded on 2026-07-11 with D1 `sync_changes`, Worker `/sync/changes`, and local integration coverage. |
 | 2 | Add local queue schema behind disabled feature flag. | Scaffolded on 2026-07-11 with disabled queue helper, repository state access, and tests proving user-facing offline writes remain blocked. |
 | 3 | Add disabled/internal mutation replay contract skeleton. | Scaffolded on 2026-07-11 with Worker `/sync/mutations`, validation, private-field rejection, and tests proving no user offline write is applied. |
-| 4 | Add Cloud conflict record scaffold for future offline mutation conflicts. | Conflict records can be created by internal validation paths without exposing new user conflict resolution UI. |
+| 4 | Add Cloud conflict record scaffold for future offline mutation conflicts. | Scaffolded on 2026-07-11 with D1 `sync_conflicts`, Worker `/sync/conflicts` read APIs, status exposure, and tests. No conflict resolution UI or offline write enablement is exposed. |
 | 5 | Enable offline queue for Task only. | Offline create/update/complete replay tests and conflict tests pass. |
 | 6 | Add Calendar and Structure entities. | Entity-specific conflict tests pass. |
 | 7 | Add Settings and cross-entity relationship validation. | Settings/runtime boundary tests pass. |
@@ -278,7 +278,7 @@ Do not enable offline writes in the next implementation package.
 
 Recommended next Build&Test package:
 
-1. Add Cloud conflict record scaffold for future offline mutation conflicts.
+1. Define Task-only offline replay activation gates and field-level conflict checks.
 2. Keep offline writes blocked in all user-facing UI.
 3. Do not expose new conflict resolution UI beyond the current migration conflict review until Product Owner approves the offline-write user workflow.
 

@@ -21,6 +21,7 @@
 - Current WebDev sync foundation: D1 `sync_changes`, Worker `/sync/changes`, and repository change recording are scaffolded for future offline mutation replay; user-facing offline writes remain blocked in v1.
 - Current WebDev offline queue foundation: Pages has a disabled offline mutation queue helper and repository state access for future replay work; user-facing offline writes still return `offline_write_blocked`.
 - Current WebDev mutation replay foundation: Worker `/sync/mutations` validates mutation batches but returns disabled replay results and does not apply user offline writes.
+- Current WebDev sync conflict foundation: D1 `sync_conflicts` plus Worker `/sync/conflicts` read APIs are scaffolded for future offline mutation conflicts; no conflict resolution UI or offline write enablement is approved.
 - Cloudflare dev / preview / prod environments now have an initial scaffold under `workers/` and `pages/`; Cloudflare resources remain uncreated/unconfigured in repo, and deploy/release remains unapproved.
 
 ## Collaboration Model

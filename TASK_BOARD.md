@@ -117,7 +117,8 @@
 - [x] Build&Test added Cloud revision / change cursor foundation while keeping v1 offline writes blocked: D1 `sync_changes`, Worker `/sync/changes`, repository change recording, scaffold tests, and local Worker integration coverage.
 - [x] Build&Test added local offline mutation queue schema/helper behind a disabled feature flag, without enabling offline writes in user-facing UI.
 - [x] Build&Test added disabled/internal mutation replay contract tests and Worker validation skeleton; `/sync/mutations` validates and rejects replay without applying user offline writes.
-- [ ] Next recommended Build&Test package: add Cloud conflict record scaffold for future offline mutation conflicts, without exposing conflict resolution UI beyond current migration conflicts.
+- [x] Build&Test added Cloud conflict record scaffold for future offline mutation conflicts: D1 `sync_conflicts`, Worker `/sync/conflicts` read APIs, status exposure, and tests, without exposing conflict resolution UI or enabling offline writes.
+- [ ] Next recommended Build&Test package: define Task-only offline replay activation gates and field-level conflict checks, but keep actual offline writes disabled until Product Owner approval.
 
 ## LATER
 

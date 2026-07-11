@@ -226,6 +226,16 @@ async function main() {
     assert.equal(privateReplayAttempt.payload.error.code, 'offline_mutation_private_data');
     console.log('  PASS mutation replay contract rejects private fields');
 
+    const syncStatus = await request(baseUrl, 'GET', '/sync/status');
+    assert.equal(syncStatus.conflict_records, 'scaffolded');
+    const syncConflicts = await request(baseUrl, 'GET', '/sync/conflicts?status=open');
+    assert.equal(syncConflicts.count, 0);
+    assert.deepEqual(syncConflicts.conflicts, []);
+    const missingSyncConflict = await requestRaw(baseUrl, 'GET', '/sync/conflicts/not-found');
+    assert.equal(missingSyncConflict.response.status, 404);
+    assert.equal(missingSyncConflict.payload.error.code, 'sync_conflict_not_found');
+    console.log('  PASS sync conflict records are scaffolded without replay side effects');
+
     const tasks = await request(baseUrl, 'GET', `/tasks?include_completed=true&search=${encodeURIComponent('Integration Task')}`);
     const events = await request(baseUrl, 'GET', `/calendar/events?date_from=${date}&date_to=${date}`);
     const containers = await request(baseUrl, 'GET', '/containers');
