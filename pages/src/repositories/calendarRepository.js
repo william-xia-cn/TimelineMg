@@ -1,3 +1,5 @@
+import { createOfflineMutationQueue } from './offlineMutationQueue.js';
+
 const CALENDAR_CACHE_KEY = 'timewhere.web.calendar.cache.v1';
 
 export class OfflineCalendarWriteBlockedError extends Error {
@@ -47,8 +49,11 @@ function removeEventFromCache(storage, id) {
   writeCachedEvents(storage, readCachedEvents(storage).filter(event => event.id !== id));
 }
 
-export function createCalendarRepository(apiClient, { storage = window.localStorage, isOnline = () => navigator.onLine } = {}) {
+export function createCalendarRepository(apiClient, { storage = window.localStorage, isOnline = () => navigator.onLine, offlineQueue = createOfflineMutationQueue({ storage }) } = {}) {
   return {
+    getOfflineMutationQueueState() {
+      return offlineQueue.getState();
+    },
     getCachedEvents() {
       return readCachedEvents(storage);
     },

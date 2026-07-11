@@ -1,3 +1,5 @@
+import { createOfflineMutationQueue } from './offlineMutationQueue.js';
+
 const TASK_CACHE_KEY = 'timewhere.web.tasks.cache.v1';
 
 export class OfflineWriteBlockedError extends Error {
@@ -47,8 +49,11 @@ function removeTaskFromCache(storage, id) {
   writeCachedTasks(storage, readCachedTasks(storage).filter(task => task.id !== id));
 }
 
-export function createTaskRepository(apiClient, { storage = window.localStorage, isOnline = () => navigator.onLine } = {}) {
+export function createTaskRepository(apiClient, { storage = window.localStorage, isOnline = () => navigator.onLine, offlineQueue = createOfflineMutationQueue({ storage }) } = {}) {
   return {
+    getOfflineMutationQueueState() {
+      return offlineQueue.getState();
+    },
     getCachedTasks() {
       return readCachedTasks(storage);
     },

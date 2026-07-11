@@ -239,11 +239,12 @@ This roadmap requires separate Product Owner approval before code work.
 |---|---|---|
 | 0 | Keep v1 offline writes blocked. | Current `offline_write_blocked` tests remain green. |
 | 1 | Add Cloud revision/change cursor fields to D1/API. | Scaffolded on 2026-07-11 with D1 `sync_changes`, Worker `/sync/changes`, and local integration coverage. |
-| 2 | Add local queue schema behind disabled feature flag. | Repository tests prove queue creation without enabling UI writes. |
-| 3 | Enable offline queue for Task only. | Offline create/update/complete replay tests and conflict tests pass. |
-| 4 | Add Calendar and Structure entities. | Entity-specific conflict tests pass. |
-| 5 | Add Settings and cross-entity relationship validation. | Settings/runtime boundary tests pass. |
-| 6 | Promote conflict UI from diagnostics to user workflow. | Manual merge / keep cloud / apply local acceptance tests pass. |
+| 2 | Add local queue schema behind disabled feature flag. | Scaffolded on 2026-07-11 with disabled queue helper, repository state access, and tests proving user-facing offline writes remain blocked. |
+| 3 | Add disabled/internal mutation replay contract skeleton. | Worker validation and replay contract tests exist, but user-facing offline writes remain blocked. |
+| 4 | Enable offline queue for Task only. | Offline create/update/complete replay tests and conflict tests pass. |
+| 5 | Add Calendar and Structure entities. | Entity-specific conflict tests pass. |
+| 6 | Add Settings and cross-entity relationship validation. | Settings/runtime boundary tests pass. |
+| 7 | Promote conflict UI from diagnostics to user workflow. | Manual merge / keep cloud / apply local acceptance tests pass. |
 
 ## 13. Test Requirements For Future Build&Test
 
@@ -276,8 +277,8 @@ Do not enable offline writes in the next implementation package.
 
 Recommended next Build&Test package:
 
-1. Add local offline mutation queue schema behind a disabled feature flag.
+1. Add disabled/internal mutation replay contract skeleton in Worker.
 2. Keep offline writes blocked in all user-facing UI.
-3. Add tests proving queued mutation records can be created and inspected only through disabled/internal pathways, without replaying or claiming Cloud success.
+3. Add tests proving malformed/private mutations are rejected and no user-facing offline writes replay or claim Cloud success.
 
 This moves the architecture toward offline-capable WebDev without prematurely creating conflict-heavy user behavior.

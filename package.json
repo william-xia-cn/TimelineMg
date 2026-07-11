@@ -25,9 +25,9 @@
     "webdev:integration": "node tests/webdev-integration.test.js",
     "package:local": "powershell -ExecutionPolicy Bypass -File tools/package-local-unpacked.ps1",
     "package:cws": "powershell -ExecutionPolicy Bypass -File tools/package-cws.ps1",
-    "test": "node tests/scheduling.test.js && node tests/external-links.test.js && node tests/focus.test.js && node tests/calendar.test.js && node tests/taskboard.test.js && node tests/managebac.test.js && node tests/management-review.test.js && node tests/matrixview.test.js && node tests/reminders.test.js && node tests/daily-journal.test.js && node tests/google-sync.test.js && node tests/widget-snapshot.test.js && node tests/platform-boundary.test.js && node tests/baseline-safety.test.js && node tests/webdev-scaffold.test.js && node tests/webdev-migration-adapter.test.js && node tests/webdev-business-parity.test.js && node tests/webdev-integration.test.js",
+    "test": "node tests/scheduling.test.js && node tests/external-links.test.js && node tests/focus.test.js && node tests/calendar.test.js && node tests/taskboard.test.js && node tests/managebac.test.js && node tests/management-review.test.js && node tests/matrixview.test.js && node tests/reminders.test.js && node tests/daily-journal.test.js && node tests/google-sync.test.js && node tests/widget-snapshot.test.js && node tests/platform-boundary.test.js && node tests/baseline-safety.test.js && node tests/webdev-scaffold.test.js && node tests/webdev-migration-adapter.test.js && node tests/webdev-business-parity.test.js && node tests/webdev-offline-queue.test.js && node tests/webdev-integration.test.js",
     "workers:typecheck": "npm --prefix workers run typecheck",
-    "webdev:verify": "node tests/webdev-scaffold.test.js && node tests/webdev-migration-adapter.test.js && node tests/webdev-business-parity.test.js && npm --prefix pages run build && npm --prefix workers run typecheck && node tests/webdev-integration.test.js"
+    "webdev:verify": "node tests/webdev-scaffold.test.js && node tests/webdev-migration-adapter.test.js && node tests/webdev-business-parity.test.js && node tests/webdev-offline-queue.test.js && npm --prefix pages run build && npm --prefix workers run typecheck && node tests/webdev-integration.test.js"
   },
   "repository": {
     "type": "git",

@@ -1,3 +1,5 @@
+import { createOfflineMutationQueue } from './offlineMutationQueue.js';
+
 const SETTINGS_CACHE_KEY = 'timewhere.web.settings.cache.v1';
 
 export class OfflineSettingsWriteBlockedError extends Error {
@@ -34,8 +36,11 @@ function assertOnline(isOnline) {
   if (!isOnline()) throw new OfflineSettingsWriteBlockedError('offline_write_blocked: reconnect before editing settings.');
 }
 
-export function createSettingsRepository(apiClient, { storage = window.localStorage, isOnline = () => navigator.onLine } = {}) {
+export function createSettingsRepository(apiClient, { storage = window.localStorage, isOnline = () => navigator.onLine, offlineQueue = createOfflineMutationQueue({ storage }) } = {}) {
   return {
+    getOfflineMutationQueueState() {
+      return offlineQueue.getState();
+    },
     getCachedSettings() {
       return readCachedSettings(storage);
     },

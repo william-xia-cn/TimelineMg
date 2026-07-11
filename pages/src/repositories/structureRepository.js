@@ -1,3 +1,5 @@
+import { createOfflineMutationQueue } from './offlineMutationQueue.js';
+
 const STRUCTURE_CACHE_KEY = 'timewhere.web.structure.cache.v1';
 
 export class OfflineStructureWriteBlockedError extends Error {
@@ -59,8 +61,11 @@ function removeById(items, id) {
   return items.filter(item => item.id !== id);
 }
 
-export function createStructureRepository(apiClient, { storage = window.localStorage, isOnline = () => navigator.onLine } = {}) {
+export function createStructureRepository(apiClient, { storage = window.localStorage, isOnline = () => navigator.onLine, offlineQueue = createOfflineMutationQueue({ storage }) } = {}) {
   return {
+    getOfflineMutationQueueState() {
+      return offlineQueue.getState();
+    },
     getCachedStructure() {
       return readCache(storage);
     },

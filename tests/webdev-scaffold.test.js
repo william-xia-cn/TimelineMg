@@ -59,6 +59,7 @@ const requiredFiles = [
   'pages/src/domain/calendarDateProjection.js',
   'pages/src/domain/reminderState.js',
   'pages/src/migration/legacyIndexedDbSnapshotAdapter.js',
+  'pages/src/repositories/offlineMutationQueue.js',
   'pages/src/repositories/taskRepository.js',
   'pages/src/repositories/calendarRepository.js',
   'pages/src/repositories/structureRepository.js',
@@ -184,10 +185,17 @@ assert('Pages dev proxy forwards Worker health checks',
   viteConfig.includes("'/health': 'http://127.0.0.1:8787'"));
 
 const taskRepository = read('pages/src/repositories/taskRepository.js');
+const offlineQueue = read('pages/src/repositories/offlineMutationQueue.js');
+assert('Offline mutation queue helper exists but defaults to disabled',
+  offlineQueue.includes('timewhere.web.offline.mutations.v1') && offlineQueue.includes('offline_mutation_queue_disabled') && offlineQueue.includes('enabled = false'));
+assert('Offline mutation queue rejects private fields',
+  offlineQueue.includes('offline_mutation_private_data') && offlineQueue.includes('refresh_token') && offlineQueue.includes('access_token'));
 assert('Task repository persists local read cache',
   taskRepository.includes('timewhere.web.tasks.cache.v1') && taskRepository.includes('writeCachedTasks') && taskRepository.includes('getCachedTasks'));
 assert('Task repository blocks offline writes',
   taskRepository.includes('OfflineWriteBlockedError') && taskRepository.includes('offline_write_blocked'));
+assert('Task repository exposes disabled offline queue state without enabling writes',
+  taskRepository.includes('createOfflineMutationQueue') && taskRepository.includes('getOfflineMutationQueueState'));
 assert('Task repository supports complete reopen and delete',
   taskRepository.includes('completeTask') && taskRepository.includes('reopenTask') && taskRepository.includes('deleteTask'));
 
@@ -290,6 +298,7 @@ assert('root package has webdev integration script', rootPackage.scripts['webdev
 assert('root package webdev verify runs local integration', rootPackage.scripts['webdev:verify']?.includes('node tests/webdev-integration.test.js'));
 assert('root package webdev verify runs migration adapter tests', rootPackage.scripts['webdev:verify']?.includes('node tests/webdev-migration-adapter.test.js'));
 assert('root package webdev verify runs business parity tests', rootPackage.scripts['webdev:verify']?.includes('node tests/webdev-business-parity.test.js'));
+assert('root package webdev verify runs offline queue tests', rootPackage.scripts['webdev:verify']?.includes('node tests/webdev-offline-queue.test.js'));
 assert('root package exposes local WebDev prepare script', rootPackage.scripts['webdev:local:prepare']?.includes('db:local:prepare'));
 assert('root package exposes local WebDev reset script', rootPackage.scripts['webdev:local:reset']?.includes('db:local:reset'));
 assert('root package has workers:typecheck script', rootPackage.scripts['workers:typecheck'] === 'npm --prefix workers run typecheck');
@@ -301,6 +310,7 @@ assert('worker package exposes local D1 reset script', workerPackage.scripts['db
 assert('root test includes webdev scaffold test', rootPackage.scripts.test.includes('tests/webdev-scaffold.test.js'));
 assert('root test includes webdev migration adapter test', rootPackage.scripts.test.includes('tests/webdev-migration-adapter.test.js'));
 assert('root test includes webdev business parity test', rootPackage.scripts.test.includes('tests/webdev-business-parity.test.js'));
+assert('root test includes webdev offline queue test', rootPackage.scripts.test.includes('tests/webdev-offline-queue.test.js'));
 
 if (failed > 0) {
   console.error(`\n${failed} WebDev scaffold checks failed; ${passed} passed.`);
