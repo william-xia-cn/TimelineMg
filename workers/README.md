@@ -57,6 +57,7 @@ Authorization: Bearer timewhere-local-dev-session
 
 - `POST /sync/mutations/dry-run`：复用 replay gate，预览 apply plan / conflict record shape，不写入 outcome、conflict 或业务数据。
 - `POST /sync/mutations/readiness-summary`：基于 dry-run 聚合 candidate counts、blocked reasons、apply/conflict preview counts，用于评估未来是否具备开启 replay 的条件。
+- `POST /sync/mutations/enablement-simulation`：用 readiness summary 和显式 policy/evidence 输入模拟 Gate A-E 是否满足；结果仍是 `simulation_only`，不会开启写入。
 
 这些接口不启用离线写入，不保存 raw mutation payload，不绕过 Product Owner approval。
 

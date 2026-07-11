@@ -53,6 +53,7 @@ const requiredFiles = [
   'workers/src/syncConflicts.ts',
   'workers/src/syncMutationOutcomes.ts',
   'workers/src/syncMutationDryRun.ts',
+  'workers/src/syncReplayEnablementSimulation.ts',
   'workers/src/syncReplayReadiness.ts',
   'workers/src/taskReplayTransaction.ts',
   'pages/README.md',
@@ -136,6 +137,7 @@ for (const [route, pattern] of [
   ['/sync/changes', /sync\\\/changes/],
   ['/sync/mutations', /sync\\\/mutations/],
   ['/sync/mutations/dry-run', /sync\\\/mutations\\\/dry-run/],
+  ['/sync/mutations/enablement-simulation', /sync\\\/mutations\\\/enablement-simulation/],
   ['/sync/mutations/readiness-summary', /sync\\\/mutations\\\/readiness-summary/],
   ['/sync/mutations/:id', /sync\\\/mutations\\\/\(\[\^\/\]\+\)/],
   ['/sync/conflicts', /sync\\\/conflicts/],
@@ -145,7 +147,7 @@ for (const [route, pattern] of [
 }
 assert('Worker sync status documents offline blocked v1', workerIndex.includes("offline_writes: 'blocked_v1'"));
 assert('Worker sync status exposes change feed foundation', workerIndex.includes("change_feed: 'available'") && workerIndex.includes('handleListSyncChanges'));
-assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes("task_replay_gate: 'defined_disabled_v1'") && workerIndex.includes("task_replay_transaction: 'internal_disabled_v1'") && workerIndex.includes("mutation_dry_run: 'internal_disabled_v1'") && workerIndex.includes("replay_readiness_summary: 'internal_disabled_v1'") && workerIndex.includes("mutation_outcomes: 'metadata_only_disabled_v1'") && workerIndex.includes('handleSyncMutations'));
+assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes("task_replay_gate: 'defined_disabled_v1'") && workerIndex.includes("task_replay_transaction: 'internal_disabled_v1'") && workerIndex.includes("mutation_dry_run: 'internal_disabled_v1'") && workerIndex.includes("replay_enablement_simulation: 'internal_disabled_v1'") && workerIndex.includes("replay_readiness_summary: 'internal_disabled_v1'") && workerIndex.includes("mutation_outcomes: 'metadata_only_disabled_v1'") && workerIndex.includes('handleSyncMutations'));
 assert('Worker sync status exposes conflict record scaffold', workerIndex.includes("conflict_records: 'scaffolded'") && workerIndex.includes('handleListSyncConflicts') && workerIndex.includes('handleGetSyncConflict'));
 assert('Worker supports local Cloud session disconnect', workerIndex.includes('handleDeleteSession') && workerIndex.includes('revokeSession'));
 
@@ -178,6 +180,7 @@ const workerOfflineMutations = read('workers/src/offlineMutations.ts');
 const workerSyncConflicts = read('workers/src/syncConflicts.ts');
 const workerSyncMutationDryRun = read('workers/src/syncMutationDryRun.ts');
 const workerSyncMutationOutcomes = read('workers/src/syncMutationOutcomes.ts');
+const workerSyncReplayEnablementSimulation = read('workers/src/syncReplayEnablementSimulation.ts');
 const workerSyncReplayReadiness = read('workers/src/syncReplayReadiness.ts');
 const workerTaskReplayTransaction = read('workers/src/taskReplayTransaction.ts');
 assert('Worker sync change feed records idempotent cursor rows',
@@ -214,6 +217,8 @@ assert('Worker sync mutation dry-run previews apply plan without persisting it',
   workerSyncMutationDryRun.includes('apply_plan') && workerSyncMutationDryRun.includes('buildApplyPlanPreview') && workerSyncMutationDryRun.includes('patch_fields') && workerSyncMutationDryRun.includes('patch: pickFields') && workerSyncMutationDryRun.includes('d1_transaction_steps'));
 assert('Worker sync replay readiness aggregates dry-run counts without enabling writes',
   workerSyncReplayReadiness.includes('buildSyncReplayReadinessSummary') && workerSyncReplayReadiness.includes('buildSyncMutationDryRun') && workerSyncReplayReadiness.includes("replay_enablement: 'not_approved'") && workerSyncReplayReadiness.includes('blocked_reasons') && workerSyncReplayReadiness.includes('sample_results'));
+assert('Worker sync replay enablement simulation evaluates gates without enabling writes',
+  workerSyncReplayEnablementSimulation.includes('buildSyncReplayEnablementSimulation') && workerSyncReplayEnablementSimulation.includes('buildSyncReplayReadinessSummary') && workerSyncReplayEnablementSimulation.includes("replay_enablement: 'simulation_only'") && workerSyncReplayEnablementSimulation.includes('simulated_gate_pass') && workerSyncReplayEnablementSimulation.includes('can_enable_replay: false'));
 assert('Worker repositories record entity changes for future offline replay',
   workerRepository.includes("recordSyncChange(env, accountId, 'task'") && workerRepository.includes("recordSyncChange(env, accountId, 'calendar_event'") && workerRepository.includes("recordSyncChange(env, accountId, 'container'") && workerRepository.includes("recordSyncChange(env, accountId, 'product_setting'"));
 assert('Worker task API returns DTO arrays',

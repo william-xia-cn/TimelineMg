@@ -402,6 +402,51 @@ async function main() {
     assert.notEqual(readinessUnchangedTask.notes, 'Local readiness note');
     console.log('  PASS replay readiness summary aggregates dry-run counts without applying writes');
 
+    const enablementSimulation = await request(baseUrl, 'POST', '/sync/mutations/enablement-simulation', {
+      policy: {
+        task_only_scope_locked: true,
+        managebac_source_fields_blocked: true,
+        same_field_conflicts_create_records: true,
+        delete_update_conflicts_blocked: true,
+        rejected_mutations_stop_retrying: true,
+        private_data_excluded_from_conflicts: true,
+        offline_write_mode: 'queued_pending',
+        cloud_success_after_worker_confirm: true,
+        pending_edits_visible: true,
+        failed_replay_has_user_path: true
+      },
+      evidence: { required_tests: ['npm run webdev:verify', 'npm test', 'sensitive scan'] },
+      mutations: [{
+        mutation_id: 'mut-enable-sim-' + Date.now(),
+        entity_type: 'task',
+        entity_id: createdTask.task.id,
+        operation: 'update',
+        base_values: { notes: 'Base simulation note', priority: 'medium' },
+        cloud_values: { notes: 'Base simulation note', priority: 'medium' },
+        patch: { notes: 'Local simulation note' }
+      }, {
+        mutation_id: 'mut-enable-sim-conflict-' + Date.now(),
+        entity_type: 'task',
+        entity_id: createdTask.task.id,
+        operation: 'update',
+        base_values: { notes: 'Base simulation conflict note' },
+        cloud_values: { notes: 'Cloud simulation conflict note' },
+        patch: { notes: 'Local simulation conflict note' }
+      }]
+    });
+    assert.equal(enablementSimulation.replay_enablement, 'simulation_only');
+    assert.equal(enablementSimulation.writes_enabled, false);
+    assert.equal(enablementSimulation.applies_user_data, false);
+    assert.equal(enablementSimulation.can_enable_replay, false);
+    assert.equal(enablementSimulation.simulated_gate_pass, true);
+    assert(enablementSimulation.gates.every(gate => gate.passed === true));
+    assert.equal(enablementSimulation.readiness_summary.readiness.candidate_counts.apply, 1);
+    assert.equal(enablementSimulation.readiness_summary.readiness.candidate_counts.conflict, 1);
+    const unchangedAfterSimulation = await request(baseUrl, 'GET', '/tasks?include_completed=true&search=' + encodeURIComponent(createdTask.task.title));
+    const simulationUnchangedTask = unchangedAfterSimulation.tasks.find(task => task.id === createdTask.task.id);
+    assert.notEqual(simulationUnchangedTask.notes, 'Local simulation note');
+    console.log('  PASS replay enablement simulation evaluates gates without applying writes');
+
     const dryRunConflictMutationId = `mut-dry-run-conflict-${Date.now()}`;
     const dryRunConflict = await request(baseUrl, 'POST', '/sync/mutations/dry-run', {
       mutations: [{

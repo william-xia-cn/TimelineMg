@@ -128,7 +128,8 @@
 - [x] Build&Test added Task replay apply-plan preview for apply candidates: dry-run reports sanitized patch fields and future D1 write steps while `would_persist=false` and no Task row is changed.
 - [x] Build&Test added replay readiness summary endpoint/card: `POST /sync/mutations/readiness-summary` and Pages Settings aggregate dry-run candidate counts, blocked reasons, and apply/conflict preview counts while replay remains disabled.
 - [x] Build&Test defined the Product Owner review gate checklist for enabling Task-only replay in `docs/WEBDEV_OFFLINE_MUTATION_CONFLICT_DESIGN.md`, including scope lock, readiness evidence, conflict policy, UX semantics, tests, and explicit non-goals.
-- [ ] Next recommended Build&Test package: add a disabled Task replay enablement simulation endpoint or command that evaluates readiness samples against the Gate A-E checklist without applying writes.
+- [x] Build&Test added a disabled Task replay enablement simulation endpoint: `POST /sync/mutations/enablement-simulation` evaluates readiness samples against Gate A-E inputs while `writes_enabled=false`.
+- [ ] Next recommended Build&Test package: add a developer-facing Settings preview for enablement simulation results, or keep simulation Worker-only until Product Owner asks for UI.
 
 ## LATER
 
