@@ -81,6 +81,18 @@ function markPending(task, mutation, operation) {
   };
 }
 
+function clearPendingMarker(task) {
+  if (!task) return task;
+  const {
+    __sync_status: _syncStatus,
+    __pending_mutation_id: _pendingMutationId,
+    __pending_operation: _pendingOperation,
+    __pending_at: _pendingAt,
+    ...rest
+  } = task;
+  return rest;
+}
+
 function mergeTaskIntoCache(storage, task) {
   if (!task?.id) return;
   const tasks = readCachedTasks(storage);
@@ -152,6 +164,33 @@ function updatePendingOfflineTask(storage, offlineQueue, id, patch) {
   return task;
 }
 
+function queuedTaskMutationsWithCache(storage, offlineQueue) {
+  return offlineQueue.listQueuedMutations()
+    .filter(mutation => mutation.entity_type === 'task')
+    .map(mutation => ({
+      ...mutation,
+      task: cachedTaskById(storage, mutation.entity_id)
+    }));
+}
+
+function restoreTaskAfterDiscard(task, mutations) {
+  if (!task) return null;
+  if (mutations.some(mutation => mutation.operation === 'create')) return null;
+  const basePatch = {};
+  const ordered = [...mutations].sort((left, right) => String(left.created_at || '').localeCompare(String(right.created_at || '')));
+  for (const mutation of ordered) {
+    const baseValues = mutation.base_values && typeof mutation.base_values === 'object' ? mutation.base_values : {};
+    for (const [field, value] of Object.entries(baseValues)) {
+      if (!Object.prototype.hasOwnProperty.call(basePatch, field)) basePatch[field] = value;
+    }
+  }
+  return {
+    ...clearPendingMarker(task),
+    ...basePatch,
+    updated_at: nowISO()
+  };
+}
+
 export function createTaskRepository(apiClient, { storage = window.localStorage, isOnline = () => navigator.onLine, offlineQueue = createOfflineMutationQueue({ storage, enabled: true }) } = {}) {
   return {
     getOfflineMutationQueueState() {
@@ -159,6 +198,25 @@ export function createTaskRepository(apiClient, { storage = window.localStorage,
     },
     getCachedTasks() {
       return readCachedTasks(storage);
+    },
+    listPendingTaskMutations() {
+      return queuedTaskMutationsWithCache(storage, offlineQueue);
+    },
+    discardPendingTaskMutations(entityId) {
+      const mutations = queuedTaskMutationsWithCache(storage, offlineQueue)
+        .filter(mutation => mutation.entity_id === entityId);
+      const mutationIds = mutations.map(mutation => mutation.mutation_id);
+      const result = offlineQueue.removeQueuedMutations(mutationIds);
+      const task = cachedTaskById(storage, entityId);
+      const restored = restoreTaskAfterDiscard(task, mutations);
+      if (restored) mergeTaskIntoCache(storage, restored);
+      else removeTaskFromCache(storage, entityId);
+      return {
+        ...result,
+        task: restored,
+        removed_task: !restored,
+        entity_id: entityId
+      };
     },
     async listTasks({ includeCompleted = true, search = '' } = {}) {
       if (!isOnline()) return readCachedTasks(storage);

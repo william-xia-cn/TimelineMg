@@ -444,7 +444,18 @@ Implemented status:
 - Safety output is visible in Pages Settings and `/sync/status`.
 - `writes_enabled`, `applies_user_data`, and `can_run_replay` remain `false`; prod replay remains blocked.
 
-### Phase 5: Explicit Hold Points
+### Phase 5: Pending Task Queue UX Hardening
+
+Goal: make local pending Task edits visible and reversible before replay writes are enabled.
+
+Implemented status:
+
+- Pages Settings includes a `Pending Task queue` panel.
+- `Retry preview` sends queued Task mutations only to dry-run/readiness and keeps `writes_enabled=false`.
+- `Discard local pending` removes local queued Task mutations and clears local pending state without changing Cloud data.
+- Task delete, non-Task replay, batch conflict handling, and local-over-cloud actions remain blocked.
+
+### Explicit Hold Points
 
 The following remain unapproved until Product Owner explicitly approves them:
 
@@ -459,13 +470,13 @@ The following remain unapproved until Product Owner explicitly approves them:
 
 ## 17. Current Recommendation
 
-Continue from the completed Phase 2 queued pending, Phase 3 single Task conflict review, and Phase 4 replay safety gate work.
+Continue from the completed Phase 2 queued pending, Phase 3 single Task conflict review, Phase 4 replay safety gate, and Phase 5 pending queue UX work.
 
 Recommended next Build&Test package:
 
-1. Start Phase 5 Task-only queued pending UX hardening for retry/discard visibility while keeping replay writes gated.
+1. Start Phase 6 Calendar / Container / Settings replay design only.
 2. Keep prod replay disabled and avoid any Cloudflare prod deployment or public release.
-3. Keep Calendar / Container / Settings replay, Browser Extension replay, batch conflict handling, and local-over-cloud actions out of scope until separately approved.
+3. Do not implement Calendar / Container / Settings replay, Browser Extension replay, batch conflict handling, or local-over-cloud actions until separately approved.
 
 
 This moves the architecture toward offline-capable WebDev without prematurely creating conflict-heavy user behavior.

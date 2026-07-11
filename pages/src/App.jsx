@@ -245,6 +245,19 @@ function buildReplayEnablementSimulationPreviewBody(tasks) {
   };
 }
 
+function replayInputFromQueuedMutation(mutation) {
+  return {
+    mutation_id: mutation.mutation_id,
+    entity_type: mutation.entity_type,
+    entity_id: mutation.entity_id,
+    operation: mutation.operation,
+    base_values: mutation.base_values || {},
+    cloud_values: mutation.cloud_values || null,
+    patch: mutation.patch || {},
+    field_paths: Array.isArray(mutation.field_paths) ? mutation.field_paths : Object.keys(mutation.patch || {})
+  };
+}
+
 export function App() {
   const platform = useMemo(() => createBrowserPlatform(), []);
   const googleButtonRef = useRef(null);
@@ -291,6 +304,8 @@ export function App() {
   const [syncEnablementStatus, setSyncEnablementStatus] = useState('Not loaded');
   const [syncReplaySafety, setSyncReplaySafety] = useState(null);
   const [syncReplaySafetyStatus, setSyncReplaySafetyStatus] = useState('Not loaded');
+  const [pendingTaskPreview, setPendingTaskPreview] = useState(null);
+  const [pendingTaskQueueStatus, setPendingTaskQueueStatus] = useState('Not loaded');
   const [syncConflictRecords, setSyncConflictRecords] = useState([]);
   const [syncConflictDetail, setSyncConflictDetail] = useState(null);
   const [syncConflictStatus, setSyncConflictStatus] = useState('Not loaded');
@@ -928,6 +943,46 @@ export function App() {
     }
   }
 
+  async function previewPendingTaskRetry(entityId = null) {
+    if (!apiClient.getSession()?.token) {
+      setPendingTaskPreview(null);
+      setPendingTaskQueueStatus('Google SSO session required before previewing pending Task retry.');
+      return;
+    }
+    if (!online) {
+      setPendingTaskPreview(null);
+      setPendingTaskQueueStatus('Reconnect before previewing pending Task retry.');
+      return;
+    }
+    const queued = taskRepository.listPendingTaskMutations()
+      .filter(mutation => !entityId || mutation.entity_id === entityId);
+    if (!queued.length) {
+      setPendingTaskPreview(null);
+      setPendingTaskQueueStatus('No pending Task mutations to preview.');
+      return;
+    }
+    try {
+      const data = await apiClient.getSyncReplayReadinessSummary({
+        mutations: queued.map(replayInputFromQueuedMutation)
+      });
+      setPendingTaskPreview(data);
+      const counts = data.readiness?.candidate_counts || {};
+      setPendingTaskQueueStatus(`Retry preview loaded: apply ${counts.apply || 0}, conflict ${counts.conflict || 0}, rejected ${counts.reject || 0}; writes remain disabled.`);
+    } catch (error) {
+      setPendingTaskPreview(null);
+      setPendingTaskQueueStatus(formatStatus(error));
+      setStatus({ phase: 'error', message: formatStatus(error) });
+    }
+  }
+
+  function discardPendingTask(entityId) {
+    const result = taskRepository.discardPendingTaskMutations(entityId);
+    setTasks(taskRepository.getCachedTasks());
+    setPendingTaskPreview(null);
+    setPendingTaskQueueStatus(`Discarded ${result.removed_count || 0} local pending mutation${result.removed_count === 1 ? '' : 's'} for ${entityId}.`);
+    setStatus({ phase: 'ready', message: 'Local pending Task changes discarded. Cloud data was not changed.' });
+  }
+
   async function inspectSyncReplayOutcome(outcome) {
     if (!outcome?.mutation_id) return;
     try {
@@ -1035,6 +1090,7 @@ export function App() {
   const dashboardProjection = useMemo(() => computeDashboardProjection({ tasks, containers }), [tasks, containers]);
   const calendarProjection = useMemo(() => computeCalendarDateProjection({ date: selectedDate, tasks, events, containers }), [selectedDate, tasks, events, containers]);
   const reminderState = useMemo(() => computeReminderState({ tasks, remindersEnabled: settingsDraft.reminders_enabled }), [tasks, settingsDraft.reminders_enabled]);
+  const pendingTaskMutations = useMemo(() => taskRepository.listPendingTaskMutations(), [tasks]);
 
   useEffect(() => {
     setReminderSession(current => advanceReminderSession({ previousSession: current, reminderState }));
@@ -1267,6 +1323,7 @@ export function App() {
             <SyncReplayReadinessPanel summary={syncReadinessSummary} status={syncReadinessStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayReadiness} />
             <SyncReplayEnablementSimulationPanel simulation={syncEnablementSimulation} status={syncEnablementStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayEnablementSimulation} />
             <SyncReplaySafetyPanel safety={syncReplaySafety} status={syncReplaySafetyStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplaySafety} />
+            <PendingTaskQueuePanel mutations={pendingTaskMutations} preview={pendingTaskPreview} status={pendingTaskQueueStatus} canPreview={online && hasCloudSession()} onPreviewAll={() => previewPendingTaskRetry()} onPreviewTask={previewPendingTaskRetry} onDiscardTask={discardPendingTask} />
             <SyncReplayDiagnosticsPanel outcomes={syncReplayOutcomes} detail={syncReplayDetail} status={syncReplayStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayDiagnostics} onInspect={inspectSyncReplayOutcome} />
             <SyncConflictDiagnosticsPanel conflicts={syncConflictRecords} detail={syncConflictDetail} status={syncConflictStatus} canRead={hasCloudSession()} canResolve={online && hasCloudSession()} onRefresh={refreshSyncConflictDiagnostics} onInspect={inspectSyncConflict} onResolve={resolveSyncConflictAction} />
             <div className="panel preferences-panel">
@@ -1634,6 +1691,62 @@ function SyncReplaySafetyPanel({ safety, status, canRead, onRefresh }) {
             recommendation: safety.recommendation
           }, null, 2)}</pre>
         </>
+      )}
+    </div>
+  );
+}
+
+function PendingTaskQueuePanel({ mutations, preview, status, canPreview, onPreviewAll, onPreviewTask, onDiscardTask }) {
+  const grouped = mutations.reduce((map, mutation) => {
+    const current = map.get(mutation.entity_id) || {
+      entity_id: mutation.entity_id,
+      task: mutation.task,
+      mutations: []
+    };
+    current.mutations.push(mutation);
+    if (!current.task && mutation.task) current.task = mutation.task;
+    map.set(mutation.entity_id, current);
+    return map;
+  }, new Map());
+  const rows = Array.from(grouped.values()).sort((left, right) => {
+    const leftTime = left.mutations[0]?.created_at || '';
+    const rightTime = right.mutations[0]?.created_at || '';
+    return rightTime.localeCompare(leftTime);
+  });
+  const counts = preview?.readiness?.candidate_counts || null;
+  return (
+    <div className="panel pending-task-queue">
+      <div className="panel-heading-row">
+        <h2>Pending Task queue</h2>
+        <button type="button" disabled={!canPreview || mutations.length === 0} onClick={onPreviewAll}>Retry preview</button>
+      </div>
+      <p>{status}</p>
+      <p>Pending Task edits are local-only until Worker replay is explicitly enabled. Retry preview runs dry-run/readiness only; discard removes local pending changes without changing Cloud data.</p>
+      {rows.length === 0 && <p>No local pending Task edits.</p>}
+      <div className="pending-task-list">
+        {rows.map(row => (
+          <article className="pending-task-row" key={row.entity_id}>
+            <div>
+              <strong>{row.task?.title || row.entity_id}</strong>
+              <span>{row.mutations.length} queued mutation{row.mutations.length === 1 ? '' : 's'} · {row.mutations.map(mutation => mutation.operation).join(', ')}</span>
+              <span>{row.mutations[0]?.created_at ? new Date(row.mutations[0].created_at).toLocaleString() : 'queued locally'}</span>
+            </div>
+            <div className="pending-task-actions">
+              <button type="button" disabled={!canPreview} onClick={() => onPreviewTask(row.entity_id)}>Retry preview</button>
+              <button type="button" onClick={() => onDiscardTask(row.entity_id)}>Discard local pending</button>
+            </div>
+          </article>
+        ))}
+      </div>
+      {preview && (
+        <pre>{JSON.stringify({
+          replay_enablement: preview.replay_enablement,
+          writes_enabled: preview.writes_enabled,
+          applies_user_data: preview.applies_user_data,
+          candidate_counts: counts,
+          blocked_reasons: preview.readiness?.blocked_reasons,
+          sample_results: preview.readiness?.sample_results
+        }, null, 2)}</pre>
       )}
     </div>
   );

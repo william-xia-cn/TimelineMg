@@ -276,12 +276,14 @@ assert('Offline mutation queue helper exists but defaults to disabled',
   offlineQueue.includes('timewhere.web.offline.mutations.v1') && offlineQueue.includes('offline_mutation_queue_disabled') && offlineQueue.includes('enabled = false'));
 assert('Offline mutation queue rejects private fields',
   offlineQueue.includes('offline_mutation_private_data') && offlineQueue.includes('refresh_token') && offlineQueue.includes('access_token'));
+assert('Offline mutation queue can remove selected queued mutations',
+  offlineQueue.includes('removeQueuedMutations') && offlineQueue.includes('removed_count') && offlineQueue.includes('remaining_count'));
 assert('Task repository persists local read cache',
   taskRepository.includes('timewhere.web.tasks.cache.v1') && taskRepository.includes('writeCachedTasks') && taskRepository.includes('getCachedTasks'));
 assert('Task repository queues Task-only offline writes and still blocks offline delete',
   taskRepository.includes('createPendingOfflineTask') && taskRepository.includes('updatePendingOfflineTask') && taskRepository.includes('offline_write_blocked'));
 assert('Task repository exposes queued pending offline queue state for Task writes',
-  taskRepository.includes('createOfflineMutationQueue({ storage, enabled: true })') && taskRepository.includes('getOfflineMutationQueueState') && taskRepository.includes('__sync_status'));
+  taskRepository.includes('createOfflineMutationQueue({ storage, enabled: true })') && taskRepository.includes('getOfflineMutationQueueState') && taskRepository.includes('__sync_status') && taskRepository.includes('listPendingTaskMutations') && taskRepository.includes('discardPendingTaskMutations'));
 assert('Task repository supports complete reopen and delete',
   taskRepository.includes('completeTask') && taskRepository.includes('reopenTask') && taskRepository.includes('deleteTask'));
 
@@ -355,6 +357,8 @@ assert('Web App exposes disabled replay enablement simulation in Settings',
   app.includes('SyncReplayEnablementSimulationPanel') && app.includes('Replay enablement simulation') && app.includes('Run simulation') && app.includes('buildReplayEnablementSimulationPreviewBody'));
 assert('Web App exposes Phase 4 replay safety gate in Settings',
   app.includes('SyncReplaySafetyPanel') && app.includes('Replay safety gate') && app.includes('Refresh safety') && app.includes('kill switch') && app.includes('cannot enable production replay'));
+assert('Web App exposes Phase 5 pending Task queue retry preview and discard UX',
+  app.includes('PendingTaskQueuePanel') && app.includes('Pending Task queue') && app.includes('Retry preview') && app.includes('Discard local pending') && app.includes('previewPendingTaskRetry') && app.includes('discardPendingTask'));
 assert('Pages API client can read sync replay outcome diagnostics',
   apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('getSyncReplayReadinessSummary') && apiClient.includes('getSyncReplayEnablementSimulation') && apiClient.includes('getSyncReplaySafety') && apiClient.includes('/sync/mutations/readiness-summary') && apiClient.includes('/sync/mutations/enablement-simulation') && apiClient.includes('/sync/replay-safety') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
 assert('Web App exposes Phase 3 Task sync conflict review in Settings',

@@ -71,6 +71,12 @@ async function main() {
   assert.equal(enabledQueue.getState().queued_count, 1);
   console.log('  PASS queue rejects private fields');
 
+  const removal = enabledQueue.removeQueuedMutations(['mut_test']);
+  assert.equal(removal.removed_count, 1);
+  assert.equal(removal.remaining_count, 0);
+  assert.equal(enabledQueue.listQueuedMutations().length, 0);
+  console.log('  PASS queue removes selected queued mutations');
+
   const repositoryStorage = new MemoryStorage();
   const repositoryQueue = queueModule.createOfflineMutationQueue({
     storage: repositoryStorage,
@@ -111,6 +117,14 @@ async function main() {
   await assert.rejects(() => taskRepository.deleteTask(createdOffline.id), error => error.code === 'offline_write_blocked');
   assert.equal(repositoryQueue.getState().queued_count, 4);
   console.log('  PASS task repository queues Task-only pending writes while offline and still blocks delete');
+
+  assert.equal(taskRepository.listPendingTaskMutations().length, 4);
+  const discarded = taskRepository.discardPendingTaskMutations(createdOffline.id);
+  assert.equal(discarded.removed_count, 4);
+  assert.equal(discarded.removed_task, true);
+  assert.equal(repositoryQueue.getState().queued_count, 0);
+  assert.equal(taskRepository.getCachedTasks().length, 0);
+  console.log('  PASS task repository can discard local pending Task mutations');
 
   console.log('=====================================');
   console.log('All WebDev offline mutation queue checks passed.');

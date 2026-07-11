@@ -107,6 +107,24 @@ export function createOfflineMutationQueue({
     listQueuedMutations() {
       return readQueue(storage).mutations.filter(item => item.status === 'queued');
     },
+    removeQueuedMutations(mutationIds = []) {
+      const ids = new Set((Array.isArray(mutationIds) ? mutationIds : []).filter(Boolean).map(String));
+      if (!ids.size) return { removed_count: 0, remaining_count: this.listQueuedMutations().length };
+      const queue = readQueue(storage);
+      const remaining = queue.mutations.filter(item => !(item.status === 'queued' && ids.has(item.mutation_id)));
+      const removedCount = queue.mutations.length - remaining.length;
+      const nextQueue = {
+        schema: QUEUE_SCHEMA,
+        updated_at: now(),
+        mutations: remaining
+      };
+      writeQueue(storage, nextQueue);
+      return {
+        removed_count: removedCount,
+        remaining_count: remaining.filter(item => item.status === 'queued').length,
+        updated_at: nextQueue.updated_at
+      };
+    },
     enqueueMutation(input) {
       if (enabled !== true) {
         throw new OfflineMutationQueueDisabledError('offline_mutation_queue_disabled: offline writes are still blocked in WebDev v1.');

@@ -473,6 +473,7 @@ textarea:disabled {
 .sync-readiness-diagnostics,
 .sync-enable-simulation-diagnostics,
 .sync-replay-safety-diagnostics,
+.pending-task-queue,
 .sync-replay-diagnostics,
 .sync-conflict-diagnostics {
   grid-column: span 2;
@@ -519,6 +520,39 @@ textarea:disabled {
 }
 
 .sync-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.pending-task-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.pending-task-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(210px, auto);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid #edf2f7;
+}
+
+.pending-task-row:first-child {
+  border-top: 0;
+}
+
+.pending-task-row span {
+  display: block;
+  margin-top: 3px;
+  color: #657386;
+  font-size: 12px;
+}
+
+.pending-task-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
