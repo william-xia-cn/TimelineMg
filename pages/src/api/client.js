@@ -93,6 +93,12 @@ export function createApiClient({ baseUrl = '', storage = window.localStorage } 
     async getSyncConflict(conflictId) {
       return request(`/sync/conflicts/${encodeURIComponent(conflictId)}`, { method: 'GET' });
     },
+    async resolveSyncConflict(conflictId, resolution) {
+      return request(`/sync/conflicts/${encodeURIComponent(conflictId)}/resolve`, {
+        method: 'POST',
+        body: { resolution }
+      });
+    },
     async logout() {
       try {
         if (getSession()?.token) await request('/auth/session', { method: 'DELETE' });

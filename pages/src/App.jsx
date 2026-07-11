@@ -949,6 +949,31 @@ export function App() {
     }
   }
 
+  async function resolveSyncConflictAction(conflict, resolution) {
+    if (!conflict?.id) return;
+    if (!online) {
+      setSyncConflictStatus('Reconnect before resolving Task sync conflicts.');
+      return;
+    }
+    if (!apiClient.getSession()?.token) {
+      setSyncConflictStatus('Google SSO session required before resolving Task sync conflicts.');
+      return;
+    }
+    try {
+      const data = await apiClient.resolveSyncConflict(conflict.id, resolution);
+      setSyncConflictDetail(data.conflict || null);
+      if (resolution === 'later') {
+        setSyncConflictStatus('Conflict kept open for later review.');
+      } else {
+        setSyncConflictStatus(`Task sync conflict resolved with ${resolution.replace('_', ' ')}; Cloud task data was not overwritten.`);
+        await refreshSyncConflictDiagnostics();
+      }
+    } catch (error) {
+      setSyncConflictStatus(formatStatus(error));
+      setStatus({ phase: 'error', message: formatStatus(error) });
+    }
+  }
+
   async function runPreviewMigration() {
     if (!online) {
       setStatus({ phase: 'offline', message: 'Migration requires a network connection.' });
@@ -1223,7 +1248,7 @@ export function App() {
             <SyncReplayReadinessPanel summary={syncReadinessSummary} status={syncReadinessStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayReadiness} />
             <SyncReplayEnablementSimulationPanel simulation={syncEnablementSimulation} status={syncEnablementStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayEnablementSimulation} />
             <SyncReplayDiagnosticsPanel outcomes={syncReplayOutcomes} detail={syncReplayDetail} status={syncReplayStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayDiagnostics} onInspect={inspectSyncReplayOutcome} />
-            <SyncConflictDiagnosticsPanel conflicts={syncConflictRecords} detail={syncConflictDetail} status={syncConflictStatus} canRead={hasCloudSession()} onRefresh={refreshSyncConflictDiagnostics} onInspect={inspectSyncConflict} />
+            <SyncConflictDiagnosticsPanel conflicts={syncConflictRecords} detail={syncConflictDetail} status={syncConflictStatus} canRead={hasCloudSession()} canResolve={online && hasCloudSession()} onRefresh={refreshSyncConflictDiagnostics} onInspect={inspectSyncConflict} onResolve={resolveSyncConflictAction} />
             <div className="panel preferences-panel">
               <h2>Preferences</h2>
               <form className="settings-form" onSubmit={saveSettings}>
@@ -1607,31 +1632,37 @@ function SyncReplayDiagnosticsPanel({ outcomes, detail, status, canRead, onRefre
   );
 }
 
-function SyncConflictDiagnosticsPanel({ conflicts, detail, status, canRead, onRefresh, onInspect }) {
+function SyncConflictDiagnosticsPanel({ conflicts, detail, status, canRead, canResolve, onRefresh, onInspect, onResolve }) {
+  const taskConflicts = conflicts.filter(conflict => conflict.entity_type === 'task');
   return (
     <div className="panel sync-conflict-diagnostics">
       <div className="panel-heading-row">
-        <h2>Sync conflict diagnostics</h2>
+        <h2>Task sync conflicts</h2>
         <button type="button" disabled={!canRead} onClick={onRefresh}>Refresh conflicts</button>
       </div>
       <p>{status}</p>
-      <p>Sync conflict resolution is not approved yet. This panel only reads sanitized conflict records.</p>
-      {conflicts.length === 0 && <p>No sync conflict records to inspect.</p>}
+      <p>Resolve one Task conflict at a time. This phase can keep Cloud data or discard the local pending change; it cannot overwrite Cloud with local data.</p>
+      {taskConflicts.length === 0 && <p>No open Task sync conflicts to review.</p>}
       <div className="sync-conflict-list">
-        {conflicts.map(conflict => (
+        {taskConflicts.map(conflict => (
           <article className="sync-conflict-row" key={conflict.id}>
             <div>
               <strong>{conflict.entity_type} · {conflict.reason}</strong>
               <span>{conflict.entity_id || conflict.mutation_id || conflict.id}</span>
               <span>{conflict.created_at ? new Date(conflict.created_at).toLocaleString() : conflict.status}</span>
             </div>
-            <button type="button" onClick={() => onInspect(conflict)}>Inspect conflict</button>
+            <div className="sync-conflict-actions">
+              <button type="button" onClick={() => onInspect(conflict)}>Inspect</button>
+              <button type="button" disabled={!canResolve} onClick={() => onResolve(conflict, 'keep_cloud')}>Keep cloud</button>
+              <button type="button" disabled={!canResolve} onClick={() => onResolve(conflict, 'discard_local')}>Discard local</button>
+              <button type="button" disabled={!canRead} onClick={() => onResolve(conflict, 'later')}>Later</button>
+            </div>
           </article>
         ))}
       </div>
       {detail && (
         <div className="sync-conflict-detail">
-          <h3>Conflict detail</h3>
+          <h3>Task conflict detail</h3>
           <pre>{JSON.stringify({
             id: detail.id,
             mutation_id: detail.mutation_id,
@@ -1644,6 +1675,11 @@ function SyncConflictDiagnosticsPanel({ conflicts, detail, status, canRead, onRe
             created_at: detail.created_at,
             resolved_at: detail.resolved_at
           }, null, 2)}</pre>
+          <div className="conflict-actions">
+            <button type="button" disabled={!canResolve || detail.entity_type !== 'task'} onClick={() => onResolve(detail, 'keep_cloud')}>Keep cloud</button>
+            <button type="button" disabled={!canResolve || detail.entity_type !== 'task'} onClick={() => onResolve(detail, 'discard_local')}>Discard local</button>
+            <button type="button" disabled={!canRead || detail.entity_type !== 'task'} onClick={() => onResolve(detail, 'later')}>Later</button>
+          </div>
         </div>
       )}
     </div>

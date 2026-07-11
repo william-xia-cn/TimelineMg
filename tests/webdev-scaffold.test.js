@@ -141,6 +141,7 @@ for (const [route, pattern] of [
   ['/sync/mutations/readiness-summary', /sync\\\/mutations\\\/readiness-summary/],
   ['/sync/mutations/:id', /sync\\\/mutations\\\/\(\[\^\/\]\+\)/],
   ['/sync/conflicts', /sync\\\/conflicts/],
+  ['/sync/conflicts/:id/resolve', /sync\\\/conflicts\\\/\(\[\^\/\]\+\)\\\/resolve/],
   ['/sync/status', /sync\\\/status/]
 ]) {
   assert(`Worker route includes ${route}`, pattern.test(workerIndex));
@@ -197,8 +198,16 @@ assert('Worker offline mutation replay preserves ManageBac source edit boundary'
   workerOfflineMutations.includes('MANAGEBAC_LOCAL_EXECUTION_FIELDS') && workerOfflineMutations.includes('MANAGEBAC_SOURCE_CONTROLLED_FIELDS') && workerOfflineMutations.includes('managebac_local_execution_fields'));
 assert('Worker sync conflict scaffold can create and list sanitized records',
   workerSyncConflicts.includes('createSyncConflictRecord') && workerSyncConflicts.includes('listSyncConflicts') && workerSyncConflicts.includes('getSyncConflict') && workerSyncConflicts.includes('sync_conflict_private_data') && workerSyncConflicts.includes('PRIVATE_KEY_PATTERN'));
-assert('Worker sync conflict scaffold does not expose a resolution route yet',
-  !workerIndex.includes('handleResolveSyncConflict') && !workerIndex.includes('/sync\\/conflicts\\/([^/]+)\\/resolve'));
+assert('Worker sync conflict resolution is limited to single Task keep-cloud discard-local later',
+  workerIndex.includes('handleResolveSyncConflict')
+    && workerIndex.includes('/sync\\/conflicts\\/([^/]+)\\/resolve')
+    && workerSyncConflicts.includes('resolveSyncConflict')
+    && workerSyncConflicts.includes('sync_conflict_resolution_scope_blocked')
+    && workerSyncConflicts.includes("'keep_cloud'")
+    && workerSyncConflicts.includes("'discard_local'")
+    && workerSyncConflicts.includes("'later'")
+    && workerSyncConflicts.includes('writes_cloud_data: false')
+    && workerSyncConflicts.includes('applies_local_data: false'));
 assert('Worker sync mutation outcome scaffold persists metadata only',
   workerSyncMutationOutcomes.includes('recordSyncMutationOutcomes') && workerSyncMutationOutcomes.includes('listSyncMutationOutcomes') && workerSyncMutationOutcomes.includes('getSyncMutationOutcome') && workerSyncMutationOutcomes.includes("mode: 'disabled_v1_metadata_only'") && workerSyncMutationOutcomes.includes('task_gate_json'));
 assert('Worker sync mutation outcome scaffold does not persist raw mutation payloads',
@@ -333,10 +342,12 @@ assert('Web App exposes disabled replay enablement simulation in Settings',
   app.includes('SyncReplayEnablementSimulationPanel') && app.includes('Replay enablement simulation') && app.includes('Run simulation') && app.includes('buildReplayEnablementSimulationPreviewBody'));
 assert('Pages API client can read sync replay outcome diagnostics',
   apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('getSyncReplayReadinessSummary') && apiClient.includes('getSyncReplayEnablementSimulation') && apiClient.includes('/sync/mutations/readiness-summary') && apiClient.includes('/sync/mutations/enablement-simulation') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
-assert('Web App exposes disabled sync conflict diagnostics in Settings',
-  app.includes('SyncConflictDiagnosticsPanel') && app.includes('Sync conflict diagnostics') && app.includes('Refresh conflicts') && app.includes('Inspect conflict') && app.includes('Sync conflict resolution is not approved yet'));
-assert('Pages API client can read sync conflict diagnostics',
-  apiClient.includes('listSyncConflicts') && apiClient.includes('getSyncConflict') && apiClient.includes('/sync/conflicts') && apiClient.includes('encodeURIComponent(conflictId)'));
+assert('Web App exposes Phase 3 Task sync conflict review in Settings',
+  app.includes('SyncConflictDiagnosticsPanel') && app.includes('Task sync conflicts') && app.includes('Refresh conflicts') && app.includes('Inspect') && app.includes('Keep cloud') && app.includes('Discard local') && app.includes('Later'));
+assert('Web App exposes Phase 3 Task sync conflict actions without apply-local overwrite',
+  app.includes('cannot overwrite Cloud with local data') && !app.includes('Apply local'));
+assert('Pages API client can read and resolve Task sync conflicts',
+  apiClient.includes('listSyncConflicts') && apiClient.includes('getSyncConflict') && apiClient.includes('resolveSyncConflict') && apiClient.includes('/sync/conflicts') && apiClient.includes('/resolve') && apiClient.includes('encodeURIComponent(conflictId)'));
 assert('Web App uses legacy IndexedDB snapshot adapter for migration preview',
   app.includes('buildLegacyIndexedDbSnapshot') && app.includes("deviceId: 'web-preview'"));
 assert('Web App exposes Calendar event CRUD controls',

@@ -642,6 +642,39 @@ async function main() {
     assert.equal(taskAfterConflictReplay.task.notes, 'Applied by test-only replay');
     console.log('  PASS test-only task replay persists same-field conflicts without applying local value');
 
+    const laterConflictResolution = await request(baseUrl, 'POST', `/sync/conflicts/${encodeURIComponent(replayConflict.id)}/resolve`, {
+      resolution: 'later'
+    });
+    assert.equal(laterConflictResolution.resolution, 'later');
+    assert.equal(laterConflictResolution.status_changed, false);
+    assert.equal(laterConflictResolution.conflict.status, 'open');
+    console.log('  PASS Task sync conflict later action keeps the conflict open');
+
+    const keepCloudResolution = await request(baseUrl, 'POST', `/sync/conflicts/${encodeURIComponent(replayConflict.id)}/resolve`, {
+      resolution: 'keep_cloud'
+    });
+    assert.equal(keepCloudResolution.resolution, 'keep_cloud');
+    assert.equal(keepCloudResolution.status_changed, true);
+    assert.equal(keepCloudResolution.writes_cloud_data, false);
+    assert.equal(keepCloudResolution.applies_local_data, false);
+    assert.equal(keepCloudResolution.conflict.status, 'keep_cloud');
+    const taskAfterKeepCloudResolution = await request(baseUrl, 'GET', `/tasks/${encodeURIComponent(createdTask.task.id)}`);
+    assert.equal(taskAfterKeepCloudResolution.task.notes, 'Applied by test-only replay');
+    const closedReplayConflicts = await request(baseUrl, 'GET', '/sync/conflicts?status=open');
+    assert(!closedReplayConflicts.conflicts.some(conflict => conflict.id === replayConflict.id));
+    const resolvedReplayOutcome = await request(baseUrl, 'GET', `/sync/mutations/${encodeURIComponent(testConflictMutationId)}`);
+    assert.equal(resolvedReplayOutcome.outcome.outcome_status, 'kept_cloud');
+    console.log('  PASS Task sync conflict keep-cloud closes metadata without overwriting Cloud task data');
+
+    const nonTaskConflictId = `sync-conflict-non-task-${Date.now()}`;
+    runWorkerSql(persistTo, `INSERT INTO sync_conflicts (id, account_id, mutation_id, entity_type, entity_id, reason, local_json, cloud_json, status, created_at) VALUES ('${nonTaskConflictId}', 'acct_local_dev', 'mut-non-task-conflict-${Date.now()}', 'container', 'container-example', 'field_conflict', '{}', '{}', 'open', '2026-01-01T00:00:00.000Z');`);
+    const nonTaskResolution = await requestRaw(baseUrl, 'POST', `/sync/conflicts/${encodeURIComponent(nonTaskConflictId)}/resolve`, {
+      resolution: 'keep_cloud'
+    });
+    assert.equal(nonTaskResolution.response.status, 400);
+    assert.equal(nonTaskResolution.payload.error.code, 'sync_conflict_resolution_scope_blocked');
+    console.log('  PASS Phase 3 sync conflict resolution rejects non-Task conflicts');
+
     const testOnlyNonTask = await request(baseUrl, 'POST', '/sync/mutations', {
       test_only_task_replay_enabled: true,
       mutations: [{

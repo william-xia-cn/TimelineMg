@@ -37,7 +37,7 @@ import {
 import { importSnapshot, listMigrationConflicts, resolveMigrationConflict } from './migration';
 import { validateOfflineMutationReplay } from './offlineMutations';
 import { listSyncChanges } from './sync';
-import { getSyncConflict, listSyncConflicts } from './syncConflicts';
+import { getSyncConflict, listSyncConflicts, resolveSyncConflict } from './syncConflicts';
 import { buildSyncMutationDryRun } from './syncMutationDryRun';
 import { buildSyncReplayEnablementSimulation } from './syncReplayEnablementSimulation';
 import { buildSyncReplayReadinessSummary } from './syncReplayReadiness';
@@ -96,6 +96,7 @@ const routes: Array<{ method: string; pattern: RegExp; handler: Handler }> = [
   { method: 'POST', pattern: /^\/sync\/mutations\/readiness-summary$/, handler: handleSyncReplayReadinessSummary },
   { method: 'GET', pattern: /^\/sync\/mutations\/([^/]+)$/, handler: handleGetSyncMutationOutcome },
   { method: 'GET', pattern: /^\/sync\/conflicts$/, handler: handleListSyncConflicts },
+  { method: 'POST', pattern: /^\/sync\/conflicts\/([^/]+)\/resolve$/, handler: handleResolveSyncConflict },
   { method: 'GET', pattern: /^\/sync\/conflicts\/([^/]+)$/, handler: handleGetSyncConflict },
   { method: 'GET', pattern: /^\/sync\/status$/, handler: handleSyncStatus }
 ];
@@ -443,6 +444,14 @@ async function handleGetSyncConflict(request: Request, env: Env, url: URL): Prom
   const session = await requireSession(env, request);
   const id = url.pathname.split('/').pop() || '';
   return jsonResponse({ conflict: await getSyncConflict(env, session.accountId, id) });
+}
+
+async function handleResolveSyncConflict(request: Request, env: Env, url: URL): Promise<Response> {
+  const session = await requireSession(env, request);
+  const parts = url.pathname.split('/');
+  const id = parts[parts.length - 2] || '';
+  const body = await readJson<{ resolution?: string }>(request);
+  return jsonResponse(await resolveSyncConflict(env, session.accountId, id, body.resolution || 'later'));
 }
 
 export default {

@@ -510,11 +510,18 @@ textarea:disabled {
 .sync-outcome-row,
 .sync-conflict-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 118px;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
   gap: 10px;
   align-items: center;
   padding: 10px 0;
   border-top: 1px solid #edf2f7;
+}
+
+.sync-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .sync-outcome-row:first-child,

@@ -241,12 +241,12 @@ This roadmap requires separate Product Owner approval before code work.
 | 1 | Add Cloud revision/change cursor fields to D1/API. | Scaffolded on 2026-07-11 with D1 `sync_changes`, Worker `/sync/changes`, and local integration coverage. |
 | 2 | Add local queue schema behind disabled feature flag. | Scaffolded on 2026-07-11 with disabled queue helper, repository state access, and tests proving user-facing offline writes remain blocked. |
 | 3 | Add disabled/internal mutation replay contract skeleton. | Scaffolded on 2026-07-11 with Worker `/sync/mutations`, validation, private-field rejection, and tests proving no user offline write is applied. |
-| 4 | Add Cloud conflict record scaffold for future offline mutation conflicts. | Scaffolded on 2026-07-11 with D1 `sync_conflicts`, Worker `/sync/conflicts` read APIs, status exposure, and tests. No conflict resolution UI or offline write enablement is exposed. |
+| 4 | Add Cloud conflict record scaffold for future offline mutation conflicts. | Scaffolded on 2026-07-11 with D1 `sync_conflicts`, Worker `/sync/conflicts` read APIs, status exposure, and tests. Phase 3 now adds single Task conflict resolution metadata actions only. |
 | 5 | Define Task-only replay activation gates and field-level conflict checks while disabled. | Scaffolded on 2026-07-11 with `/sync/mutations` returning Task-only gate diagnostics, field-level conflict preview, ManageBac source-field blocking, and tests proving no offline write is applied. |
 | 6 | Add disabled Task replay outcome persistence hooks. | Scaffolded on 2026-07-11 with D1 `sync_mutation_outcomes`, metadata-only outcome recording, `GET /sync/mutations` diagnostics, and tests proving raw mutation payloads are not persisted. |
 | 7 | Add Task replay transaction skeleton behind an internal disabled gate. | Scaffolded on 2026-07-11 with `/sync/mutations` returning apply/conflict/reject branch steps while `writes_enabled=false`, and tests proving no user offline write is applied. |
 | 8 | Add disabled client-side replay diagnostics in Pages Settings. | Scaffolded on 2026-07-11 with Settings reading sanitized `/sync/mutations` outcomes and Task replay gates while offline writes remain blocked. |
-| 9 | Add disabled sync conflict diagnostics in Pages Settings. | Scaffolded on 2026-07-11 with Settings reading sanitized `/sync/conflicts` records before any conflict resolution UI is approved. |
+| 9 | Add sync conflict review in Pages Settings. | Started as diagnostics on 2026-07-11; Phase 3 now supports single Task `keep_cloud` / `discard_local` / `later` actions without applying local data to Cloud. |
 | 10 | Add an internal disabled Task replay dry-run endpoint or command. | Scaffolded on 2026-07-11 with `POST /sync/mutations/dry-run` joining replay gates with existing outcomes/conflicts without applying writes or persisting diagnostics. |
 | 11 | Add dry-run conflict creation preview. | Scaffolded on 2026-07-11 with conflict candidates reporting exact sanitized conflict record shape while `would_persist=false`. |
 | 12 | Add Task replay apply-plan preview for apply candidates. | Scaffolded on 2026-07-11 with dry-run reporting sanitized patch fields and future D1 write steps while `would_persist=false`. |
@@ -409,18 +409,20 @@ Hold point:
 
 ### Phase 3: Conflict Surfacing
 
-Goal: make Task replay conflicts diagnosable before offering resolution actions.
+Goal: make Task replay conflicts diagnosable and allow the narrow Product Owner-approved single-conflict actions.
 
 Scope:
 
 - List sanitized conflict records from `/sync/conflicts`.
 - Show entity type, operation, conflicting fields, local summary, Cloud summary, and suggested next step.
+- Allow one Task conflict at a time to be marked `keep_cloud`, `discard_local`, or `later`.
 - Do not expose raw mutation payloads, account emails, tokens, cookies, OAuth secrets, private local paths, or full snapshots.
 - Do not auto-resolve delete/update conflicts.
+- Do not provide apply-local / local-over-cloud resolution.
 
 Hold point:
 
-- User-facing conflict resolution actions require a separate Product Owner decision.
+- Implemented under D-049 only for single Task conflicts; batch handling, non-Task conflicts, and local-over-cloud remain separate approvals.
 
 ### Phase 4: Safety And Rollback
 
@@ -441,7 +443,7 @@ The following remain unapproved until Product Owner explicitly approves them:
 - enabling offline writes in user-facing Web App flows;
 - Calendar / Container / Settings replay;
 - auto-merge of disjoint stale updates;
-- conflict resolution UI with apply-local / keep-cloud actions;
+- conflict resolution UI with apply-local / local-over-cloud actions;
 - Desktop Runtime background replay;
 - Browser Extension replay;
 - deployment to production Cloudflare resources;
@@ -449,13 +451,13 @@ The following remain unapproved until Product Owner explicitly approves them:
 
 ## 17. Current Recommendation
 
-Do not enable offline writes in the next implementation package.
+Continue from the completed Phase 2 queued pending and Phase 3 single Task conflict review work.
 
 Recommended next Build&Test package:
 
-1. Review Phase 1 test-only evidence and decide whether to continue toward Phase 2 client queue activation.
-2. Keep offline writes blocked in all user-facing UI.
-3. Do not expose new conflict resolution UI beyond the current migration conflict review until Product Owner approves the offline-write user workflow.
+1. Start Phase 4 local/dev replay production-gate preparation with a kill switch and replay safety evidence.
+2. Keep prod replay disabled and avoid any Cloudflare prod deployment or public release.
+3. Keep Calendar / Container / Settings replay, Browser Extension replay, batch conflict handling, and local-over-cloud actions out of scope until separately approved.
 
 
 This moves the architecture toward offline-capable WebDev without prematurely creating conflict-heavy user behavior.
