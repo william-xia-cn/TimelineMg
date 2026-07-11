@@ -281,13 +281,88 @@ Before enabling offline writes, Product Owner should decide:
 4. Queue retention policy for applied/rejected mutations.
 5. Whether Desktop Runtime should expose additional network/background wake hooks, or whether Web App foreground replay is sufficient.
 
-## 15. Current Recommendation
+## 15. Task-Only Replay Enablement Review Gate
+
+Task-only replay must remain disabled until Product Owner explicitly approves moving from diagnostics to a real write path. The approval should be based on current readiness evidence, not on the existence of endpoint scaffolding alone.
+
+### Gate A: Scope Lock
+
+Before any replay write path is enabled:
+
+- only `task` mutations are in scope;
+- create/update/complete/reopen/delete semantics are listed explicitly;
+- Calendar, Container, Structure, Settings, ReminderState, and migration conflicts remain out of scope;
+- ManageBac source-controlled fields remain blocked;
+- local execution fields are listed separately from source facts;
+- no replay applies user data unless `writes_enabled=true` is introduced by a separately approved change.
+
+### Gate B: Readiness Evidence
+
+Build&Test must provide recent evidence from `POST /sync/mutations/readiness-summary` using representative offline mutation samples:
+
+| Evidence | Required before approval |
+|---|---|
+| apply candidate count | Non-zero apply candidates for ordinary Task edits. |
+| conflict candidate count | Same-field conflicts are visible as conflict candidates, not silently applied. |
+| reject candidate count | Rejections are explainable by approved gate rules. |
+| blocked reasons | Every blocked reason has a documented user-facing or developer-facing next step. |
+| apply plan previews | Apply previews list sanitized patch fields and D1 transaction steps. |
+| conflict previews | Conflict previews include sanitized local/cloud field deltas and no private data. |
+| stored outcome count | Metadata-only outcome records remain useful and do not include raw mutation payloads. |
+| stored conflict count | Existing conflict records can be listed and inspected before enabling resolution. |
+
+### Gate C: Conflict Policy
+
+Product Owner must approve the initial conflict policy:
+
+- same-field stale updates create conflict records;
+- disjoint-field stale updates may be auto-merge candidates only after review;
+- delete/update conflicts must not silently choose either side;
+- rejected mutations must not retry forever;
+- conflict records must exclude tokens, cookies, account emails, OAuth secrets, local private paths, and raw full snapshots;
+- user-facing conflict UI is not implied by enabling diagnostics.
+
+### Gate D: UX And Offline Write Semantics
+
+Product Owner must choose the user experience before queueing real offline edits:
+
+- offline edits are either blocked, queued as pending, or stored as drafts;
+- pending edits must be visibly marked and reversible;
+- Cloud success must not be claimed until Worker confirms replay;
+- failed replay must show clear retry / conflict / discard paths;
+- Settings diagnostics must remain available for support.
+
+### Gate E: Test And Safety Bar
+
+The implementation package that first enables Task replay must include:
+
+- unit tests for validation, allowed fields, private-field rejection, and ManageBac boundaries;
+- integration tests proving idempotent replay by `mutation_id`;
+- integration tests for apply, conflict, reject, retry, and no-duplicate-create flows;
+- tests proving disabled non-Task entity replay remains blocked;
+- tests proving local cache and Cloud D1 converge after successful replay;
+- `npm run webdev:verify`;
+- `npm test`;
+- sensitive information scan over docs, Pages, Workers, and tests.
+
+### Gate F: Explicit Non-Goals
+
+Approval to enable Task-only replay does not approve:
+
+- Calendar / Container / Settings replay;
+- full offline-first UX;
+- sync conflict resolution UI beyond the approved Task scope;
+- Google Drive Sync changes;
+- Desktop Runtime background sync changes;
+- deployment, public release, tag, merge, or production Cloudflare resource changes.
+
+## 16. Current Recommendation
 
 Do not enable offline writes in the next implementation package.
 
 Recommended next Build&Test package:
 
-1. Define the Product Owner review gate checklist for enabling Task-only replay, including required acceptance data from readiness summaries and conflict preview diagnostics.
+1. Add a disabled Task replay enablement simulation endpoint or command that takes readiness samples plus expected policy and reports whether Gate A-E would pass, without applying writes.
 2. Keep offline writes blocked in all user-facing UI.
 3. Do not expose new conflict resolution UI beyond the current migration conflict review until Product Owner approves the offline-write user workflow.
 
