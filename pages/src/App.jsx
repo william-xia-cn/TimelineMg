@@ -983,6 +983,11 @@ export function App() {
     setStatus({ phase: 'ready', message: 'Local pending Task changes discarded. Cloud data was not changed.' });
   }
 
+  function openPendingTaskQueue() {
+    setActiveView('settings');
+    setPendingTaskQueueStatus('Review local pending Task edits. Retry preview is dry-run only; discard does not change Cloud data.');
+  }
+
   async function inspectSyncReplayOutcome(outcome) {
     if (!outcome?.mutation_id) return;
     try {
@@ -1240,8 +1245,9 @@ export function App() {
                 </select>
                 <button type="button" onClick={refreshTasks}>Refresh</button>
               </div>
+              <TaskPendingBanner mutations={pendingTaskMutations} onOpenQueue={openPendingTaskQueue} />
               <TaskList tasks={visibleTasks} canWrite={taskCanWrite} canDelete={taskDeleteAllowed} onPatch={updateTaskState} onDelete={deleteTask} onSelect={task => setSelectedTaskId(task.id)} />
-              <TaskDetailPanel task={selectedTask} plans={plans} buckets={buckets} labels={labels} canWrite={taskCanWrite} onSave={patch => selectedTask && updateTaskState(selectedTask, patch)} onClose={() => setSelectedTaskId(null)} />
+              <TaskDetailPanel task={selectedTask} plans={plans} buckets={buckets} labels={labels} canWrite={taskCanWrite && selectedTask?.__sync_status !== 'pending'} onSave={patch => selectedTask && updateTaskState(selectedTask, patch)} onClose={() => setSelectedTaskId(null)} />
             </div>
           </section>
         )}
@@ -1444,6 +1450,7 @@ export function App() {
 function TaskDetailPanel({ task, plans, buckets, labels, canWrite, onSave, onClose }) {
   const [form, setForm] = useState(null);
   const isManageBac = isManageBacSourceTask(task);
+  const isPending = task?.__sync_status === 'pending';
 
   useEffect(() => {
     if (!task) {
@@ -1508,6 +1515,7 @@ function TaskDetailPanel({ task, plans, buckets, labels, canWrite, onSave, onClo
         <button type="button" onClick={onClose}>Close</button>
       </div>
       {isManageBac && <p className="source-boundary-note">ManageBac source task: title, due date, Plan and source metadata are read-only. Local execution fields remain editable.</p>}
+      {isPending && <p className="pending-detail-note">This Task has local pending sync. Use Settings / Pending Task queue to retry preview or discard it before direct Cloud edits.</p>}
       <form className="task-detail-form" onSubmit={submit}>
         <label><span>Title</span><input value={form.title} onChange={event => updateField('title', event.target.value)} disabled={!canWrite || isManageBac} /></label>
         <label><span>Start</span><input type="date" value={form.start_date} onChange={event => updateField('start_date', event.target.value)} disabled={!canWrite} /></label>
@@ -1869,6 +1877,20 @@ function CalendarEventList({ events, canWrite, onDelete }) {
   );
 }
 
+function TaskPendingBanner({ mutations, onOpenQueue }) {
+  if (!mutations.length) return null;
+  const taskCount = new Set(mutations.map(mutation => mutation.entity_id)).size;
+  return (
+    <div className="task-pending-banner">
+      <div>
+        <strong>{taskCount} Task{taskCount === 1 ? '' : 's'} pending local sync</strong>
+        <span>{mutations.length} queued mutation{mutations.length === 1 ? '' : 's'} need retry preview or local discard before direct Cloud edits.</span>
+      </div>
+      <button type="button" onClick={onOpenQueue}>Open pending queue</button>
+    </div>
+  );
+}
+
 function TaskList({ tasks, canWrite, canDelete = canWrite, onPatch, onDelete, onSelect, title = 'Current work' }) {
   return (
     <div className="panel task-list">
@@ -1876,22 +1898,25 @@ function TaskList({ tasks, canWrite, canDelete = canWrite, onPatch, onDelete, on
       {tasks.length === 0 && <p>No tasks match this view.</p>}
       {tasks.map(task => {
         const completed = isCompleted(task);
+        const pending = task.__sync_status === 'pending';
+        const pendingLabel = task.__pending_operation ? `Pending sync: ${task.__pending_operation}` : 'Pending sync';
+        const pendingTitle = 'Resolve local pending sync in Settings before direct Cloud edits.';
         return (
-          <article className={`task-row ${completed ? 'completed' : ''}`} key={task.id}>
+          <article className={`task-row ${completed ? 'completed' : ''} ${pending ? 'pending-sync' : ''}`} key={task.id}>
             {completed ? <CheckCircle2 size={18} className="done" /> : <Circle size={18} />}
             <div className="task-main" role="button" tabIndex={0} onClick={() => onSelect?.(task)} onKeyDown={event => { if (event.key === 'Enter') onSelect?.(task); }}>
               <strong>{task.title}</strong>
               <span>{formatTaskMeta(task)}</span>
-              {task.__sync_status === 'pending' && <em className="pending-sync-badge">Pending sync</em>}
+              {pending && <em className="pending-sync-badge">{pendingLabel}{task.__pending_at ? ` · ${new Date(task.__pending_at).toLocaleString()}` : ''}</em>}
               {(task.notes || task.description) && <p>{task.notes || task.description}</p>}
             </div>
             <div className="task-actions">
               {completed ? (
-                <button type="button" disabled={!canWrite} title="Reopen task" onClick={() => onPatch(task, { progress: 'not_started', completed_at: null })}><RotateCcw size={16} /></button>
+                <button type="button" disabled={!canWrite || pending} title={pending ? pendingTitle : 'Reopen task'} onClick={() => onPatch(task, { progress: 'not_started', completed_at: null })}><RotateCcw size={16} /></button>
               ) : (
-                <button type="button" disabled={!canWrite} title="Complete task" onClick={() => onPatch(task, { progress: 'completed' })}><CheckCircle2 size={16} /></button>
+                <button type="button" disabled={!canWrite || pending} title={pending ? pendingTitle : 'Complete task'} onClick={() => onPatch(task, { progress: 'completed' })}><CheckCircle2 size={16} /></button>
               )}
-              <button type="button" disabled={!canDelete} title={canDelete ? 'Delete task' : 'Delete requires reconnect'} onClick={() => onDelete(task)}><Trash2 size={16} /></button>
+              <button type="button" disabled={!canDelete || pending} title={pending ? 'Discard local pending in Settings before deleting' : canDelete ? 'Delete task' : 'Delete requires reconnect'} onClick={() => onDelete(task)}><Trash2 size={16} /></button>
             </div>
           </article>
         );

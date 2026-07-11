@@ -578,6 +578,21 @@ Dependency result meanings:
 
 This phase is evidence only. It does not approve topological batch replay, entity remapping, local-over-cloud resolution, or non-Task replay.
 
+### Phase 8: Task-Scope Offline UX Hardening
+
+Goal: make Task pending state visible and safer without expanding to full-entity offline-first.
+
+Implemented status:
+
+- Tasks page shows a lightweight pending banner when local Task mutations exist.
+- The banner links users to Settings / Pending Task queue.
+- Pending Task rows carry the `pending-sync` visual state and show pending operation / timestamp context.
+- Pending Tasks cannot be directly completed, reopened, edited in detail, or deleted through Cloud actions until their local pending state is retried later or discarded locally.
+- Task detail explains that pending local sync must be handled in the Pending Task queue before direct Cloud edits.
+- Calendar / Container / Settings offline writes remain blocked.
+
+This phase does not enable Worker replay writes, background replay, automatic conflict resolution, local-over-cloud resolution, or full offline-first behavior.
+
 ### Explicit Hold Points
 
 The following remain unapproved until Product Owner explicitly approves them:
@@ -593,11 +608,11 @@ The following remain unapproved until Product Owner explicitly approves them:
 
 ## 17. Current Recommendation
 
-Continue from the completed Phase 2 queued pending, Phase 3 single Task conflict review, Phase 4 replay safety gate, Phase 5 pending queue UX work, Phase 6 non-Task replay design boundary, and Phase 7 dependency analysis.
+Continue from the completed Phase 2 queued pending, Phase 3 single Task conflict review, Phase 4 replay safety gate, Phase 5 pending queue UX work, Phase 6 non-Task replay design boundary, Phase 7 dependency analysis, and Phase 8 Task-scope offline UX hardening.
 
 Recommended next Build&Test package:
 
-1. Start Phase 8 Task-scope offline UX improvements without expanding to full-entity offline-first.
+1. Start Phase 9 preview readiness hardening without prod release or replay enablement.
 2. Keep prod replay disabled and avoid any Cloudflare prod deployment or public release.
 3. Do not implement Calendar / Container / Settings replay, Browser Extension replay, batch conflict handling, or local-over-cloud actions until separately approved.
 

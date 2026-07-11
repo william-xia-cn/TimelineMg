@@ -139,7 +139,8 @@
 - [x] Build&Test implemented Phase 5 Task-only queued pending UX hardening for retry preview and discard local pending visibility while keeping Task delete and non-Task replay blocked.
 - [x] Build&Test documented Phase 6 Calendar/Container/Settings replay design only, preserving non-Task replay block and requiring separate approval before implementation.
 - [x] Build&Test implemented Phase 7 read-only cross-entity dependency analysis inside replay readiness, detecting same-batch satisfied dependencies and ordering blockers without enabling replay writes.
-- [ ] Next Build&Test package: Phase 8 Task-scope offline UX improvements without full-entity offline-first.
+- [x] Build&Test implemented Phase 8 Task-scope offline UX hardening: Tasks page pending banner, pending row operation/timestamp display, and direct Cloud edit/delete blocking for pending Tasks.
+- [ ] Next Build&Test package: Phase 9 preview readiness hardening without prod release or replay enablement.
 
 ## LATER
 

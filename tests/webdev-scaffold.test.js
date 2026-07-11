@@ -336,6 +336,7 @@ assert('Reminder state helper exposes work reminder session state machine',
   reminderState.includes('advanceReminderSession') && reminderState.includes('notification_closed') && reminderState.includes('execution_check_scheduled') && reminderState.includes('execution_check_due'));
 
 const app = read('pages/src/App.jsx');
+const pagesStyles = read('pages/src/styles.css');
 const apiClient = read('pages/src/api/client.js');
 for (const label of ['Dashboard', 'Tasks', 'Calendar', 'Settings']) {
   assert(`Web App exposes ${label}`, app.includes(label));
@@ -369,6 +370,15 @@ assert('Web App exposes Phase 4 replay safety gate in Settings',
   app.includes('SyncReplaySafetyPanel') && app.includes('Replay safety gate') && app.includes('Refresh safety') && app.includes('kill switch') && app.includes('cannot enable production replay'));
 assert('Web App exposes Phase 5 pending Task queue retry preview and discard UX',
   app.includes('PendingTaskQueuePanel') && app.includes('Pending Task queue') && app.includes('Retry preview') && app.includes('Discard local pending') && app.includes('previewPendingTaskRetry') && app.includes('discardPendingTask'));
+assert('Web App hardens Phase 8 Task pending UX without enabling full offline-first',
+  app.includes('TaskPendingBanner')
+    && app.includes('Open pending queue')
+    && app.includes("selectedTask?.__sync_status !== 'pending'")
+    && app.includes('Resolve local pending sync in Settings before direct Cloud edits.')
+    && app.includes('pending-detail-note')
+    && app.includes('Discard local pending in Settings before deleting')
+    && pagesStyles.includes('task-pending-banner')
+    && pagesStyles.includes('task-row.pending-sync'));
 assert('Pages API client can read sync replay outcome diagnostics',
   apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('getSyncReplayReadinessSummary') && apiClient.includes('getSyncReplayEnablementSimulation') && apiClient.includes('getSyncReplaySafety') && apiClient.includes('/sync/mutations/readiness-summary') && apiClient.includes('/sync/mutations/enablement-simulation') && apiClient.includes('/sync/replay-safety') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
 assert('Web App exposes Phase 3 Task sync conflict review in Settings',

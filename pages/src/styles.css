@@ -252,6 +252,29 @@ textarea:disabled {
   background: #fff8e6;
 }
 
+.task-pending-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #f2c46d;
+  border-radius: 7px;
+  background: #fff8e6;
+}
+
+.task-pending-banner strong,
+.task-pending-banner span {
+  display: block;
+}
+
+.task-pending-banner span {
+  margin-top: 3px;
+  color: #7a4b00;
+  font-size: 12px;
+}
+
 .pending-sync-badge {
   display: inline-flex;
   width: fit-content;
@@ -278,6 +301,16 @@ textarea:disabled {
   border-radius: 7px;
   color: #1d2b3c;
   background: #edf4fb;
+}
+
+.pending-detail-note {
+  margin: 0 0 12px;
+  padding: 9px 10px;
+  border: 1px solid #f2c46d;
+  border-radius: 7px;
+  color: #7a4b00;
+  background: #fff8e6;
+  font-size: 13px;
 }
 
 .task-form {
