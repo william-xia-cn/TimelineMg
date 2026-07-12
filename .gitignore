@@ -16,6 +16,7 @@ Thumbs.db
 # Build artifacts
 .tmp/
 dist/
+/artifacts/
 build/
 !platforms/desktop-electron/build/
 !platforms/desktop-electron/build/icon.ico
