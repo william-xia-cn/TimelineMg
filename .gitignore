@@ -27,6 +27,11 @@ build/
 # Local private keys
 *.pem
 *.key
+*.p12
+*.pfx
+*.cer
+*.keychain
+*.keychain-db
 desktop-oauth.local.json
 platforms/desktop-electron/desktop-oauth-secrets.js
 
