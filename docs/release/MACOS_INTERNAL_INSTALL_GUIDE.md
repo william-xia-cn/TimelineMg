@@ -13,15 +13,17 @@ TimeWhere-0.3.4-mac-internal-installer.dmg.sha256
 
 当前已验证的一键安装器基线：
 
-- GitHub Actions run：[`29186636314`](https://github.com/william-xia-cn/TimelineMg/actions/runs/29186636314)
-- 构建提交：`b6a6699da3381479127e50a00c11f7f6419f8f5d`
-- DMG 文件大小：`222684509` bytes
-- DMG SHA256：`d85179539501a0eb0cf93fcaf4c8083c36fa0bac52e7f84c1ecc8b25b710b633`
-- GitHub artifact SHA256：`a58047d3dfb40275515b31ded13c6e3b138e97cab82b3c0758c93ed2c7005b94`
+- GitHub Actions run：[`29187333836`](https://github.com/william-xia-cn/TimelineMg/actions/runs/29187333836)，云端构建、DMG 创建、只读挂载及内容验证通过
+- 云端构建提交：`d39e8e43cf0cc48316b3687b57c867af9a66de36`
+- GitHub artifact SHA256：`49f8afe60a65b0f5e5b012dfdea3a6865f12e5a2267f40bb48b90d3cc3e7b4a4`
+- 本机同版本修正版 DMG 文件大小：`221644678` bytes
+- 本机同版本修正版 DMG SHA256：`54cf4cdb3939c5726cade7d402cdaa02372978c726d144aff2fb904124ee3295`
 - 公钥证书 SHA256：`9dd8abe0acc893bf30495f494cea8cf7b404b90120d5f986e3551ee47fdf96bf`
 - 安装器与 payload 签名身份：`TimeWhere Internal Code Signing`
 - Payload Bundle ID：`cn.williamxia.timewhere`
 - Payload 架构：`x86_64 arm64`
+
+> 云端 artifact 已通过 GitHub Actions 验证，但在 2026-07-12 下载到当前 Mac 进行复核时，artifact CDN 两次中途断开。因此上面的 DMG 文件大小和 DMG SHA256 是本机使用相同修正版源码生成、只读挂载并严格验证的文件值；分发云端 DMG 时，必须以其同包 sidecar 记录的值为准，不得用本机 DMG 哈希代替。
 
 下载后校验 DMG：
 
@@ -29,11 +31,7 @@ TimeWhere-0.3.4-mac-internal-installer.dmg.sha256
 shasum -a 256 TimeWhere-0.3.4-mac-internal-installer.dmg
 ```
 
-结果必须等于：
-
-```text
-d85179539501a0eb0cf93fcaf4c8083c36fa0bac52e7f84c1ecc8b25b710b633
-```
+结果必须与同次下载的 `TimeWhere-0.3.4-mac-internal-installer.dmg.sha256` 第一列完全一致。不同构建环境生成的 DMG 容器哈希可能不同，即使内部应用与安装逻辑相同，也不得混用其他构建的固定哈希。
 
 目标 Mac 只需：
 
