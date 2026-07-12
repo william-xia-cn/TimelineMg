@@ -2,6 +2,14 @@ name: Build TimeWhere Desktop macOS
 
 on:
   workflow_dispatch:
+    inputs:
+      signing_mode:
+        description: Build signing mode
+        required: true
+        default: internal-self-signed
+        type: choice
+        options:
+          - internal-self-signed
 
 jobs:
   build-mac:
@@ -25,14 +33,93 @@ jobs:
       - name: Install desktop electron dependencies
         run: npm --prefix platforms/desktop-electron install
 
-      - name: Build macOS package
+      - name: Validate required secrets
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET }}
+        run: |
+          for secret_name in \
+            MACOS_CERTIFICATE_P12_BASE64 \
+            MACOS_CERTIFICATE_PASSWORD \
+            TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET; do
+            if [[ -z "${!secret_name}" ]]; then
+              echo "::error::Required GitHub Actions secret is missing: ${secret_name}"
+              exit 1
+            fi
+          done
+
+      - name: Import internal signing certificate
+        id: signing
+        env:
+          MACOS_CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          certificate_path="$RUNNER_TEMP/timewhere-internal-signing.p12"
+          keychain_path="$RUNNER_TEMP/timewhere-signing.keychain-db"
+          keychain_password="$(openssl rand -hex 32)"
+
+          printf '%s' "$MACOS_CERTIFICATE_P12_BASE64" \
+            | openssl base64 -d -A -out "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" \
+            -A \
+            -t cert \
+            -f pkcs12 \
+            -k "$keychain_path"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$keychain_password" \
+            "$keychain_path"
+          security list-keychain -d user -s "$keychain_path"
+
+          identity="$(security find-identity -v -p codesigning "$keychain_path" \
+            | sed -n '1s/.*"\(.*\)"/\1/p')"
+          if [[ -z "$identity" ]]; then
+            echo "::error::No valid code-signing identity was found in the imported certificate."
+            exit 1
+          fi
+          if [[ "$identity" == *"Developer ID"* ]]; then
+            echo "::error::Developer ID certificates are blocked in this internal lane."
+            exit 1
+          fi
+          echo "identity=$identity" >> "$GITHUB_OUTPUT"
+
+      - name: Build unsigned macOS app bundle
         env:
           TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run electron:package:mac
 
-      - name: Upload macOS package artifact
+      - name: Sign and verify internal macOS app bundle
+        env:
+          TIMEWHERE_CODESIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
+        run: |
+          app_path="$(find platforms/desktop-electron/dist -type d -name 'TimeWhere.app' -print -quit)"
+          if [[ -z "$app_path" ]]; then
+            echo "::error::TimeWhere.app was not produced by electron-builder."
+            exit 1
+          fi
+          scripts/release/sign-mac-self-signed.sh "$app_path"
+          scripts/release/verify-mac-self-signed.sh "$app_path"
+
+      - name: Package signed app and checksum
+        run: |
+          app_path="$(find platforms/desktop-electron/dist -type d -name 'TimeWhere.app' -print -quit)"
+          version="$(node -p "require('./platforms/desktop-electron/package.json').version")"
+          output_zip="$RUNNER_TEMP/TimeWhere-${version}-mac-universal-internal-self-signed.zip"
+          scripts/release/package-mac-internal-zip.sh "$app_path" "$output_zip"
+          mkdir -p artifacts/mac
+          mv "$output_zip" "${output_zip}.sha256" artifacts/mac/
+
+      - name: Upload signed macOS package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TimeWhere-mac-package
-          path: platforms/desktop-electron/dist/*.zip
+          name: TimeWhere-mac-internal-self-signed
+          path: artifacts/mac/*
           if-no-files-found: error
+          retention-days: 7
