@@ -11,6 +11,30 @@ TimeWhere-0.3.4-mac-internal-installer.dmg
 TimeWhere-0.3.4-mac-internal-installer.dmg.sha256
 ```
 
+当前已验证的一键安装器基线：
+
+- GitHub Actions run：[`29186636314`](https://github.com/william-xia-cn/TimelineMg/actions/runs/29186636314)
+- 构建提交：`b6a6699da3381479127e50a00c11f7f6419f8f5d`
+- DMG 文件大小：`222684509` bytes
+- DMG SHA256：`d85179539501a0eb0cf93fcaf4c8083c36fa0bac52e7f84c1ecc8b25b710b633`
+- GitHub artifact SHA256：`a58047d3dfb40275515b31ded13c6e3b138e97cab82b3c0758c93ed2c7005b94`
+- 公钥证书 SHA256：`9dd8abe0acc893bf30495f494cea8cf7b404b90120d5f986e3551ee47fdf96bf`
+- 安装器与 payload 签名身份：`TimeWhere Internal Code Signing`
+- Payload Bundle ID：`cn.williamxia.timewhere`
+- Payload 架构：`x86_64 arm64`
+
+下载后校验 DMG：
+
+```bash
+shasum -a 256 TimeWhere-0.3.4-mac-internal-installer.dmg
+```
+
+结果必须等于：
+
+```text
+d85179539501a0eb0cf93fcaf4c8083c36fa0bac52e7f84c1ecc8b25b710b633
+```
+
 目标 Mac 只需：
 
 1. 用 sidecar 核对 DMG 的 SHA256。
