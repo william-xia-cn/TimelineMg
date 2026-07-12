@@ -22,10 +22,11 @@ Self-signed internal release rules:
 - Prefer the same internal certificate across internal versions. Certificate rotation can change code identity and may affect macOS trust and operator diagnostics.
 
 Public macOS release remains a separate future lane requiring Apple Developer Program, Developer ID Application certificate, hardened runtime, notarization, stapling, and Gatekeeper verification.
-## GitHub Actions Unsigned Package SOP
+## GitHub Actions Internal Self-Signed Package SOP
 
-For the Windows-side workflow that triggers the macOS Universal zip build,
-downloads the GitHub Actions artifact, and records SHA256 evidence, use
+For the workflow that triggers the macOS Universal build, signs it with the
+internal identity, downloads the GitHub Actions artifact, and records SHA256
+evidence, use
 `platforms/desktop-electron/README.md` -> `macOS GitHub Actions Packaging SOP`.
 
 Boundary rules:
@@ -38,6 +39,19 @@ Boundary rules:
   requires separate explicit Product Owner approval for that sharing action.
 - This SOP still does not approve Developer ID signing, notarization, GitHub
   Release creation, public distribution, or auto-update publication.
+
+GitHub Actions internal signing uses three repository secrets:
+
+- `MACOS_CERTIFICATE_P12_BASE64`
+- `MACOS_CERTIFICATE_PASSWORD`
+- `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET`
+
+The workflow imports the `.p12` into an ephemeral keychain, blocks Developer ID
+identities in this lane, signs and verifies the generated `TimeWhere.app`, then
+packages the final signed app with a SHA256 sidecar. The private certificate,
+password, temporary keychain, and generated OAuth metadata module are never
+uploaded as artifacts. Use the `MacRelease` branch for this packaging lane and
+do not make product-code edits on that branch.
 
 ## Usage Agent Boundary
 
