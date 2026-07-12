@@ -23,7 +23,7 @@ Self-signed internal release rules:
 
 Approved installation paths:
 
-- Default: the D-046 internal DMG installer, Control-opened by an administrator and authorized once.
+- Default: the D-046 internal DMG installer, Control-opened by an administrator and authorized once through interactive `sudo` in Terminal. A TTY is required because macOS may reject non-interactive System Keychain trust changes.
 - Recovery: manual certificate import, `ditto` extraction, signature verification, and application copy.
 
 The installer may add only the pinned public certificate to the System Keychain with Code Signing trust and may remove quarantine only from the fully verified `/Applications/TimeWhere.app`. It must not disable Gatekeeper or carry any private key or certificate password.
