@@ -20,6 +20,7 @@ console.log('\nTimeWhere macOS internal installer checks');
 console.log('==========================================');
 
 const rootInstaller = read('scripts/release/install-mac-internal-root.sh');
+const terminalInstaller = read('scripts/release/install-mac-internal-terminal.command');
 const dmgBuilder = read('scripts/release/build-mac-internal-installer-dmg.sh');
 const installerApp = read('scripts/release/Install TimeWhere.js');
 const workflow = read('.github/workflows/timewhere-desktop-mac.yml');
@@ -43,9 +44,14 @@ check('installer never disables Gatekeeper',
 check('DMG builder rejects private certificate bundles',
   dmgBuilder.includes('Private certificate bundle must not be present'));
 check('DMG builder verifies its mounted payload',
-  dmgBuilder.includes('hdiutil attach') && dmgBuilder.includes('codesign --verify --deep --strict'));
-check('native installer requests one administrator authorization',
-  installerApp.includes('administratorPrivileges: true'));
+  dmgBuilder.includes('hdiutil attach')
+    && dmgBuilder.includes('install-mac-internal-terminal.command')
+    && dmgBuilder.includes('codesign --verify --deep --strict'));
+check('native installer uses one interactive sudo authorization in Terminal',
+  installerApp.includes('/usr/bin/open -a Terminal')
+    && terminalInstaller.includes('/usr/bin/sudo --')
+    && !installerApp.includes("Application('Terminal')")
+    && !installerApp.includes('administratorPrivileges: true'));
 check('workflow builds the internal installer DMG',
   workflow.includes('build-mac-internal-installer-dmg.sh'));
 
