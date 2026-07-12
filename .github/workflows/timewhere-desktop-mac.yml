@@ -87,6 +87,18 @@ jobs:
             echo "::error::Developer ID certificates are blocked in this internal lane."
             exit 1
           fi
+
+          openssl pkcs12 \
+            -in "$certificate_path" \
+            -clcerts \
+            -nokeys \
+            -passin env:MACOS_CERTIFICATE_PASSWORD \
+            -out "$RUNNER_TEMP/timewhere-internal-signing-certificate.pem"
+          openssl x509 \
+            -in "$RUNNER_TEMP/timewhere-internal-signing-certificate.pem" \
+            -outform DER \
+            -out "$RUNNER_TEMP/TimeWhere-Internal-Code-Signing.cer"
+
           echo "identity=$identity" >> "$GITHUB_OUTPUT"
 
       - name: Build unsigned macOS app bundle
@@ -108,14 +120,28 @@ jobs:
           scripts/release/sign-mac-self-signed.sh "$app_path"
           scripts/release/verify-mac-self-signed.sh "$app_path"
 
-      - name: Package signed app and checksum
+      - name: Package signed app, installer DMG, and checksums
+        env:
+          TIMEWHERE_CODESIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
+          TIMEWHERE_ALLOW_UNTRUSTED_SIGNING_IDENTITY: "1"
         run: |
           app_path="$(find platforms/desktop-electron/dist -type d -name 'TimeWhere.app' -print -quit)"
           version="$(node -p "require('./platforms/desktop-electron/package.json').version")"
           output_zip="$RUNNER_TEMP/TimeWhere-${version}-mac-universal-internal-self-signed.zip"
+          output_dmg="$RUNNER_TEMP/TimeWhere-${version}-mac-internal-installer.dmg"
           scripts/release/package-mac-internal-zip.sh "$app_path" "$output_zip"
+          scripts/release/build-mac-internal-installer-dmg.sh \
+            "$app_path" \
+            "$RUNNER_TEMP/TimeWhere-Internal-Code-Signing.cer" \
+            "$output_dmg"
           mkdir -p artifacts/mac
-          mv "$output_zip" "${output_zip}.sha256" artifacts/mac/
+          mv \
+            "$output_zip" \
+            "${output_zip}.sha256" \
+            "$output_dmg" \
+            "${output_dmg}.sha256" \
+            "$RUNNER_TEMP/TimeWhere-Internal-Code-Signing.cer" \
+            artifacts/mac/
 
       - name: Upload signed macOS package artifact
         uses: actions/upload-artifact@v4
