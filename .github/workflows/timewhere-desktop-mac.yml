@@ -130,7 +130,7 @@ jobs:
           output_zip="$RUNNER_TEMP/TimeWhere-${version}-mac-universal-internal-self-signed.zip"
           output_dmg="$RUNNER_TEMP/TimeWhere-${version}-mac-internal-installer.dmg"
           scripts/release/package-mac-internal-zip.sh "$app_path" "$output_zip"
-          scripts/release/build-mac-internal-installer-dmg.sh \
+          bash scripts/release/build-mac-internal-installer-dmg.sh \
             "$app_path" \
             "$RUNNER_TEMP/TimeWhere-Internal-Code-Signing.cer" \
             "$output_dmg"
