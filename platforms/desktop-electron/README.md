@@ -30,18 +30,45 @@ Note: mac 打包通常需要在 macOS 上执行 `npm run electron:package:mac`�
 
 ## macOS GitHub Actions Packaging SOP
 
-Use this SOP when producing an internal macOS Universal zip from Windows. This
-creates a GitHub Actions artifact only; it is not a public release, signing,
-notarization, GitHub Release, auto-update publication, or external distribution
-approval.
+Use this SOP when producing an internally self-signed macOS Universal zip with
+GitHub Actions. The workflow imports a password-protected internal signing
+certificate into an ephemeral runner keychain, signs and verifies
+`TimeWhere.app`, creates a final zip and SHA256 sidecar, and uploads a private
+Actions artifact. It is not Developer ID signing, notarization, a GitHub
+Release, auto-update publication, or external distribution approval.
 
 Prerequisites:
 
 - `gh` CLI is installed and logged in.
 - Current account has repository `workflow` permission.
-- The package candidate commit has been committed and pushed to `master`.
+- The package candidate commit has been committed and pushed to `MacRelease`.
 - Product Owner has explicitly approved triggering the workflow with the
   repository secret `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET`.
+- The repository Actions secrets below have been configured:
+  - `MACOS_CERTIFICATE_P12_BASE64`: one-line Base64 of the password-protected
+    internal code-signing `.p12`.
+  - `MACOS_CERTIFICATE_PASSWORD`: password used when exporting that `.p12`.
+  - `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET`: existing internal desktop OAuth
+    packaging input.
+
+Prepare the signing secrets on the approved administrator Mac:
+
+1. Create the `TimeWhere Internal Code Signing` self-signed Code Signing
+   identity in Keychain Access as described in
+   `docs/release/MACOS_INTERNAL_SELF_SIGNED_RELEASE.md`.
+2. Export the identity and private key as a password-protected `.p12` outside
+   the repository.
+3. Convert it to a one-line value without printing it to release evidence:
+
+```bash
+openssl base64 -A -in /secure/path/TimeWhere-Internal-Code-Signing.p12 \
+  | pbcopy
+```
+
+Paste the clipboard value into `MACOS_CERTIFICATE_P12_BASE64`, and store the
+export password separately in `MACOS_CERTIFICATE_PASSWORD`. Delete unnecessary
+export copies after the GitHub secret is confirmed; retain the authoritative
+identity in the administrator-controlled Keychain.
 
 1. Verify GitHub CLI login:
 
@@ -52,7 +79,8 @@ gh auth status
 2. Trigger the macOS workflow:
 
 ```powershell
-gh workflow run timewhere-desktop-mac.yml --ref master
+gh workflow run timewhere-desktop-mac.yml --ref MacRelease \
+  -f signing_mode=internal-self-signed
 ```
 
 The command returns a run URL. Record the numeric run id from the URL.
@@ -67,7 +95,7 @@ gh run watch <run_id> --exit-status
 
 ```powershell
 New-Item -ItemType Directory -Force -Path artifacts/mac/<run_id> | Out-Null
-gh run download <run_id> --name TimeWhere-mac-package --dir artifacts/mac/<run_id>
+gh run download <run_id> --name TimeWhere-mac-internal-self-signed --dir artifacts/mac/<run_id>
 ```
 
 5. Record package evidence:
@@ -83,8 +111,9 @@ Evidence to report:
 
 - commit SHA and branch
 - workflow run id
-- artifact name: `TimeWhere-mac-package`
+- artifact name: `TimeWhere-mac-internal-self-signed`
 - zip file name, local path, byte size, and SHA256
+- signature identity and leaf-certificate SHA256 from the workflow log
 
 Secret and sharing boundary:
 
@@ -93,6 +122,8 @@ Secret and sharing boundary:
   into the desktop artifact.
 - Do not write the raw secret value in docs, logs, release reports, commits, or
   user-facing diagnostics.
+- The `.p12`, its password, and runner keychain must never be committed or
+  uploaded as workflow artifacts. The Actions artifact is retained for 7 days.
 - Uploading the macOS zip to a shared Google Drive folder or any external
   destination requires separate explicit Product Owner approval acknowledging
   that the artifact contains the internal Desktop OAuth client metadata secret.
