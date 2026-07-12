@@ -78,7 +78,7 @@ jobs:
           # The ephemeral runner does not trust the internal root. List the
           # imported identity without -v; target Macs establish trust locally.
           identity="$(security find-identity -p codesigning "$keychain_path" \
-            | sed -n '1s/.*"\(.*\)"/\1/p')"
+            | awk -F'"' '/^[[:space:]]*[0-9]+\)/ { print $2; exit }')"
           if [[ -z "$identity" ]]; then
             echo "::error::No valid code-signing identity was found in the imported certificate."
             exit 1
