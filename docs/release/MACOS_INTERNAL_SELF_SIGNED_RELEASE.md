@@ -21,6 +21,13 @@ Self-signed internal release rules:
 - Do not commit private keys, `.p12`, `.pfx`, `.cer`, keychain files, tokens, cookies, account emails, or local private paths.
 - Prefer the same internal certificate across internal versions. Certificate rotation can change code identity and may affect macOS trust and operator diagnostics.
 
+Approved installation paths:
+
+- Default: the D-046 internal DMG installer, Control-opened by an administrator and authorized once.
+- Recovery: manual certificate import, `ditto` extraction, signature verification, and application copy.
+
+The installer may add only the pinned public certificate to the System Keychain with Code Signing trust and may remove quarantine only from the fully verified `/Applications/TimeWhere.app`. It must not disable Gatekeeper or carry any private key or certificate password.
+
 Public macOS release remains a separate future lane requiring Apple Developer Program, Developer ID Application certificate, hardened runtime, notarization, stapling, and Gatekeeper verification.
 ## GitHub Actions Internal Self-Signed Package SOP
 
