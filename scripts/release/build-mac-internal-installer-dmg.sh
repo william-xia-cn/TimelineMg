@@ -88,7 +88,10 @@ mkdir -p "$resources/Payload"
 ditto "$app_path" "$resources/Payload/TimeWhere.app"
 cp "$cert_path" "$resources/TimeWhere-Internal-Code-Signing.cer"
 cp "$script_dir/install-mac-internal-root.sh" "$resources/install-mac-internal-root.sh"
-chmod 755 "$resources/install-mac-internal-root.sh"
+cp "$script_dir/install-mac-internal-terminal.command" "$resources/install-mac-internal-terminal.command"
+chmod 755 \
+  "$resources/install-mac-internal-root.sh" \
+  "$resources/install-mac-internal-terminal.command"
 printf '%s\n' "$version" > "$resources/version.txt"
 
 cat > "$staging/安装说明.txt" <<EOF
@@ -119,6 +122,8 @@ hdiutil attach -readonly -nobrowse -mountpoint "$mountpoint" "$output_dmg" >/dev
 [[ -f "$mountpoint/安装说明.txt" ]] || fail "Quick-start guide missing from DMG."
 [[ -d "$mountpoint/.TimeWhereInstaller/Payload/TimeWhere.app" ]] \
   || fail "TimeWhere payload missing from DMG."
+[[ -x "$mountpoint/.TimeWhereInstaller/install-mac-internal-terminal.command" ]] \
+  || fail "Interactive Terminal installer command missing from DMG."
 [[ ! -e "$mountpoint/.TimeWhereInstaller/TimeWhere-Internal-Code-Signing.p12" ]] \
   || fail "Private certificate bundle must not be present."
 codesign --verify --strict --verbose=2 "$mountpoint/安装 TimeWhere.app"
