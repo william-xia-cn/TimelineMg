@@ -88,12 +88,11 @@ jobs:
             exit 1
           fi
 
-          openssl pkcs12 \
-            -in "$certificate_path" \
-            -clcerts \
-            -nokeys \
-            -passin env:MACOS_CERTIFICATE_PASSWORD \
-            -out "$RUNNER_TEMP/timewhere-internal-signing-certificate.pem"
+          security find-certificate \
+            -c "$identity" \
+            -p \
+            "$keychain_path" \
+            > "$RUNNER_TEMP/timewhere-internal-signing-certificate.pem"
           openssl x509 \
             -in "$RUNNER_TEMP/timewhere-internal-signing-certificate.pem" \
             -outform DER \
