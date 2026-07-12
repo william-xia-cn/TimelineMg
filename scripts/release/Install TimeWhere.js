@@ -11,12 +11,13 @@ function run() {
   const bundlePath = ObjC.unwrap($.NSBundle.mainBundle.bundlePath);
   const dmgRoot = bundlePath.replace(/\/[^/]+$/, '');
   const resourcesDirectory = `${dmgRoot}/.TimeWhereInstaller`;
-  const rootInstaller = `${resourcesDirectory}/install-mac-internal-root.sh`;
+  const terminalInstaller = `${resourcesDirectory}/install-mac-internal-terminal.command`;
 
   try {
     app.displayDialog(
       '将安装 TimeWhere，并把内部代码签名证书设为本机系统级信任。\n\n' +
-        '仅适用于管理员批准的内部 Mac。继续时需要输入一次管理员密码。',
+        '仅适用于管理员批准的内部 Mac。继续后会打开 Terminal，' +
+        '请在其中输入一次管理员密码。',
       {
         buttons: ['取消', '安装'],
         defaultButton: '安装',
@@ -28,15 +29,13 @@ function run() {
     app.doShellScript('/usr/bin/killall TimeWhere >/dev/null 2>&1 || true');
     delay(2);
 
-    const installCommand = `${shellQuote(rootInstaller)} ${shellQuote(resourcesDirectory)}`;
-    const result = app.doShellScript(installCommand, { administratorPrivileges: true });
+    app.doShellScript(`/usr/bin/open -a Terminal ${shellQuote(terminalInstaller)}`);
 
-    app.displayDialog(result, {
-      buttons: ['完成'],
-      defaultButton: '完成',
-      withTitle: 'TimeWhere 安装成功'
+    app.displayDialog('Terminal 已打开。请在 Terminal 中输入管理员密码并按 Return。', {
+      buttons: ['好'],
+      defaultButton: '好',
+      withTitle: '继续安装 TimeWhere'
     });
-    app.doShellScript(`/usr/bin/open -a ${shellQuote('/Applications/TimeWhere.app')}`);
   } catch (error) {
     if (Number(error.errorNumber) !== -128) {
       app.displayDialog(`安装未完成：\n\n${String(error.message || error)}`, {
