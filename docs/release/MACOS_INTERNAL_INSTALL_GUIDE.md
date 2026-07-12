@@ -40,10 +40,11 @@ d85179539501a0eb0cf93fcaf4c8083c36fa0bac52e7f84c1ecc8b25b710b633
 1. 用 sidecar 核对 DMG 的 SHA256。
 2. 双击 DMG。
 3. 按住 Control 点击 `安装 TimeWhere.app`，选择“打开”。
-4. 点击“安装”，输入一次管理员密码。
-5. 等待成功提示；安装器会自动启动 TimeWhere。
+4. 点击“安装”；安装器会打开 Terminal。
+5. 在 Terminal 的 `Password:` 提示处输入一次管理员密码并按 Return。输入时屏幕不会显示字符，这是正常的。
+6. 等待 Terminal 显示安装完成；TimeWhere 会自动启动。
 
-安装器会自动完成公钥证书指纹校验、System Keychain Code Signing 信任、应用签名/版本/双架构验证、旧版本备份与失败回滚，并仅清除最终 `/Applications/TimeWhere.app` 的 quarantine。它不会删除或迁移用户数据。
+安装器使用 Terminal 的交互式 `sudo` 完成一次管理员授权，以满足 macOS System Keychain 信任设置的交互要求。之后会自动完成公钥证书指纹校验、System Keychain Code Signing 信任、应用签名/版本/双架构验证、旧版本备份与失败回滚，并仅清除最终 `/Applications/TimeWhere.app` 的 quarantine。它不会删除或迁移用户数据。
 
 如果一键安装器失败，再使用下方手工恢复流程。
 
