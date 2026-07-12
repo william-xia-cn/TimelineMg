@@ -26,6 +26,11 @@ Mac package output:
 platforms/desktop-electron/dist/TimeWhere-0.3.4-mac-universal.zip
 ```
 
+The internal GitHub Actions lane additionally produces
+`TimeWhere-0.3.4-mac-internal-installer.dmg` and its SHA256 sidecar. This DMG is
+the default installation path for administrator-managed internal Macs; the
+signed Universal zip remains the manual recovery artifact.
+
 Note: mac 打包通常需要在 macOS 上执行 `npm run electron:package:mac`。当前 macOS artifact 目标是 Universal zip，覆盖 Intel Mac 和 Apple Silicon。如果在 Windows 上尝试该命令，可能会因平台能力限制而失败。
 
 ## macOS GitHub Actions Packaging SOP
