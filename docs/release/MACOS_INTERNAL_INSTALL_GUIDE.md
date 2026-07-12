@@ -2,6 +2,29 @@
 
 本文档供管理员在其他受控 Mac 上安装 TimeWhere 内部自签名版本。该版本仅供内部使用，不是 Apple Developer ID 签名或公证版本，不适合公开分发。
 
+## 默认方式：一键 DMG 安装器
+
+新部署默认使用：
+
+```text
+TimeWhere-0.3.4-mac-internal-installer.dmg
+TimeWhere-0.3.4-mac-internal-installer.dmg.sha256
+```
+
+目标 Mac 只需：
+
+1. 用 sidecar 核对 DMG 的 SHA256。
+2. 双击 DMG。
+3. 按住 Control 点击 `安装 TimeWhere.app`，选择“打开”。
+4. 点击“安装”，输入一次管理员密码。
+5. 等待成功提示；安装器会自动启动 TimeWhere。
+
+安装器会自动完成公钥证书指纹校验、System Keychain Code Signing 信任、应用签名/版本/双架构验证、旧版本备份与失败回滚，并仅清除最终 `/Applications/TimeWhere.app` 的 quarantine。它不会删除或迁移用户数据。
+
+如果一键安装器失败，再使用下方手工恢复流程。
+
+## 手工恢复流程
+
 ## 1. 部署文件
 
 将以下三个文件通过管理员批准的内部渠道复制到目标 Mac 的同一目录：
