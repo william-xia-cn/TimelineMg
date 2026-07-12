@@ -75,7 +75,9 @@ jobs:
             "$keychain_path"
           security list-keychain -d user -s "$keychain_path"
 
-          identity="$(security find-identity -v -p codesigning "$keychain_path" \
+          # The ephemeral runner does not trust the internal root. List the
+          # imported identity without -v; target Macs establish trust locally.
+          identity="$(security find-identity -p codesigning "$keychain_path" \
             | sed -n '1s/.*"\(.*\)"/\1/p')"
           if [[ -z "$identity" ]]; then
             echo "::error::No valid code-signing identity was found in the imported certificate."
@@ -96,6 +98,7 @@ jobs:
       - name: Sign and verify internal macOS app bundle
         env:
           TIMEWHERE_CODESIGN_IDENTITY: ${{ steps.signing.outputs.identity }}
+          TIMEWHERE_ALLOW_UNTRUSTED_SIGNING_IDENTITY: "1"
         run: |
           app_path="$(find platforms/desktop-electron/dist -type d -name 'TimeWhere.app' -print -quit)"
           if [[ -z "$app_path" ]]; then
