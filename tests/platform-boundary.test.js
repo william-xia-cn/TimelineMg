@@ -92,8 +92,14 @@ assert('D-042 records Chrome work reminder session adoption',
 assert('Project status records Windows desktop portable implementation boundary',
     projectMaster.includes('Windows desktop portable implementation')
     && projectMaster.includes('D-031 approves a standalone Windows Electron portable app')
-    && projectMaster.includes('D-032 replaces only its Desktop OAuth secret handling')
+    && projectMaster.includes('D-032 governs its internal Desktop OAuth metadata secret')
     && taskBoard.includes('D-031/D-032 Windows desktop portable implementation is active'));
+assert('Internal macOS installer remains limited to the approved self-signed lane',
+    decisions.includes('D-046')
+    && decisions.includes('one-click DMG installer')
+    && decisions.includes('System Keychain')
+    && decisions.includes('must not contain a private key')
+    && projectMaster.includes('D-043/D-046 approve a limited self-signed macOS lane'));
 assert('Dual-platform spec covers desktop OAuth, notifications, portable exe, and bridge as optional',
     spec.includes('standalone Windows Electron app')
     && spec.includes('configured Google Desktop OAuth client ID')
