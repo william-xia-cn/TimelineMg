@@ -13,6 +13,9 @@ It does not use Developer ID, does not notarize, and does not staple.
 
 Optional:
   TIMEWHERE_CODESIGN_EXTRA_ARGS="--options runtime"   Extra codesign args.
+  TIMEWHERE_ALLOW_UNTRUSTED_SIGNING_IDENTITY=1         Allow an imported
+                                                       self-signed identity on
+                                                       an ephemeral CI runner.
 EOF
 }
 
@@ -47,7 +50,12 @@ if ! command -v codesign >/dev/null 2>&1; then
   fail "codesign was not found."
 fi
 
-if ! security find-identity -v -p codesigning | grep -F "$identity" >/dev/null 2>&1; then
+identity_args=(-v)
+if [[ "${TIMEWHERE_ALLOW_UNTRUSTED_SIGNING_IDENTITY:-0}" == "1" ]]; then
+  identity_args=()
+fi
+
+if ! security find-identity "${identity_args[@]}" -p codesigning | grep -F "$identity" >/dev/null 2>&1; then
   fail "Signing identity was not found in the current keychains: $identity"
 fi
 
