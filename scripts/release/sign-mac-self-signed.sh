@@ -50,16 +50,16 @@ if ! command -v codesign >/dev/null 2>&1; then
   fail "codesign was not found."
 fi
 
-identity_args=(-v)
 if [[ "${TIMEWHERE_ALLOW_UNTRUSTED_SIGNING_IDENTITY:-0}" == "1" ]]; then
-  identity_args=()
+  if ! security find-identity -p codesigning | grep -F "$identity" >/dev/null 2>&1; then
+    fail "Signing identity was not found in the current keychains: $identity"
+  fi
+else
+  if ! security find-identity -v -p codesigning | grep -F "$identity" >/dev/null 2>&1; then
+    fail "Valid signing identity was not found in the current keychains: $identity"
+  fi
 fi
 
-if ! security find-identity "${identity_args[@]}" -p codesigning | grep -F "$identity" >/dev/null 2>&1; then
-  fail "Signing identity was not found in the current keychains: $identity"
-fi
-
-extra_args=()
 if [[ -n "${TIMEWHERE_CODESIGN_EXTRA_ARGS:-}" ]]; then
   # shellcheck disable=SC2206
   extra_args=(${TIMEWHERE_CODESIGN_EXTRA_ARGS})
@@ -69,7 +69,11 @@ echo "Signing internal target:"
 echo "  target: $target"
 echo "  identity: $identity"
 
-codesign --force --deep --sign "$identity" "${extra_args[@]}" "$target"
+if [[ -n "${TIMEWHERE_CODESIGN_EXTRA_ARGS:-}" ]]; then
+  codesign --force --deep --sign "$identity" "${extra_args[@]}" "$target"
+else
+  codesign --force --deep --sign "$identity" "$target"
+fi
 codesign --verify --deep --strict --verbose=2 "$target"
 codesign -dv --verbose=4 "$target" 2>&1 | sed -n '/Authority=/p;/Identifier=/p;/TeamIdentifier=/p'
 
