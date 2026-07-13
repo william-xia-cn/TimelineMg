@@ -95,11 +95,19 @@ Working tree clean: ${clean ? 'yes' : 'no'}
 - Gate E: not approved; Desktop Runtime package/signing/distribution remains deferred.
 - Gate R: not approved; prod deployment and release remain blocked.
 
-## Required Evidence Commands
+## Required Evidence Commands Available
+
+> Checked items here mean the command entry exists in package.json; they do not prove the command was rerun for this commit. Attach fresh command output before a Gate R review.
 
 ${requiredScripts.map(script => `- ${checked(Boolean(packageJson.scripts?.[script]))} npm run ${script}`).join('\n')}
 - ${checked(true)} git diff --check
 - ${checked(true)} changed-files sensitive pattern scan
+
+## Execution Evidence To Attach Before Gate R
+
+${requiredScripts.map(script => `- [ ] npm run ${script}`).join('\n')}
+- [ ] git diff --check
+- [ ] changed-files sensitive pattern scan
 
 ## Readiness Evidence Snapshot
 
