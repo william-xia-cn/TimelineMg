@@ -9,6 +9,7 @@ const requiredFiles = [
   'docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md',
   'docs/WEBDEV_COMPLETION_CHECKLIST.md',
   'docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md',
+  'docs/WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md',
   'docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md',
   'docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md',
   'docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md',
@@ -73,6 +74,7 @@ const prodChecklist = exists('docs/WEBDEV_PROD_READINESS_CHECKLIST.md') ? read('
 const previewRunbook = exists('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md') ? read('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md') : '';
 const completionChecklist = exists('docs/WEBDEV_COMPLETION_CHECKLIST.md') ? read('docs/WEBDEV_COMPLETION_CHECKLIST.md') : '';
 const browserExtensionGateD = exists('docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md') ? read('docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md') : '';
+const desktopRuntimeGateE = exists('docs/WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md') ? read('docs/WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md') : '';
 const observabilityRunbook = exists('docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md') ? read('docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md') : '';
 const taskReplayGateB = exists('docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md') ? read('docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md') : '';
 const nonTaskReplayGateC = exists('docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md') ? read('docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md') : '';
@@ -178,7 +180,11 @@ assert('Browser Extension readiness stays Gate D only',
 assert('Desktop Runtime readiness stays Gate E only',
   desktopReadinessCheck.includes('WebDev Desktop Runtime readiness static check')
     && desktopReadinessCheck.includes('Gate E')
+    && desktopRuntimeGateE.includes('Gate E readiness packet')
+    && desktopRuntimeGateE.includes('不批准、不开启、不执行 Desktop internal package')
+    && desktopRuntimeGateE.includes('不签名、不公证、不 staple')
     && desktopReadinessCheck.includes('No desktop package was built, signed, notarized, or distributed')
+    && desktopReadinessCheck.includes('Gate E packet is approval-only')
     && desktopReadinessCheck.includes('business_logic_owner')
     && desktopReadinessCheck.includes('installWebDevNavigationGuards')
     && desktopReadinessCheck.includes("!desktopSmoke.includes('electron-builder')"));
@@ -255,6 +261,7 @@ assertNoObviousSecrets('prod readiness scanned files contain no obvious secrets'
     previewRunbook,
     completionChecklist,
     browserExtensionGateD,
+    desktopRuntimeGateE,
     observabilityRunbook,
     projectMaster,
     taskBoard,

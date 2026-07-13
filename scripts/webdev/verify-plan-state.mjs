@@ -43,6 +43,8 @@ const nonTaskReplayGateCPath = 'docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md'
 assert('non-Task replay Gate C readiness packet exists', exists(nonTaskReplayGateCPath));
 const browserExtensionGateDPath = 'docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md';
 assert('Browser Extension Gate D readiness packet exists', exists(browserExtensionGateDPath));
+const desktopRuntimeGateEPath = 'docs/WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md';
+assert('Desktop Runtime Gate E readiness packet exists', exists(desktopRuntimeGateEPath));
 
 const checklist = exists(checklistPath) ? read(checklistPath) : '';
 const parityChecklist = exists(parityPath) ? read(parityPath) : '';
@@ -52,6 +54,7 @@ const observabilityRunbook = exists(observabilityRunbookPath) ? read(observabili
 const taskReplayGateB = exists(taskReplayGateBPath) ? read(taskReplayGateBPath) : '';
 const nonTaskReplayGateC = exists(nonTaskReplayGateCPath) ? read(nonTaskReplayGateCPath) : '';
 const browserExtensionGateD = exists(browserExtensionGateDPath) ? read(browserExtensionGateDPath) : '';
+const desktopRuntimeGateE = exists(desktopRuntimeGateEPath) ? read(desktopRuntimeGateEPath) : '';
 for (const phase of ['Phase 0', 'Phase 1', 'Phase 2', 'Phase 3', 'Phase 4', 'Phase 5', 'Phase 6', 'Phase 7', 'Phase 8', 'Phase 9', 'Phase 10']) {
   assert(`${phase} is represented in completion checklist`, checklist.includes(phase));
 }
@@ -96,6 +99,12 @@ assert('Browser Extension Gate D packet records readiness-only boundary',
     && browserExtensionGateD.includes('不提交 CWS')
     && browserExtensionGateD.includes('Extension IndexedDB 不作为 canonical data source')
     && browserExtensionGateD.includes('npm.cmd run webdev:extension:readiness'));
+assert('Desktop Runtime Gate E packet records readiness-only boundary',
+  desktopRuntimeGateE.includes('Gate E readiness packet')
+    && desktopRuntimeGateE.includes('不批准、不开启、不执行 Desktop internal package')
+    && desktopRuntimeGateE.includes('不签名、不公证、不 staple')
+    && desktopRuntimeGateE.includes('Desktop preload 不暴露 Task / Calendar / Migration 业务 API')
+    && desktopRuntimeGateE.includes('npm.cmd run webdev:desktop:readiness'));
 
 const wrangler = read('workers/wrangler.toml');
 assert('wrangler declares dev preview and prod names',
@@ -175,6 +184,8 @@ assert('root package exposes local WebDev Desktop Runtime smoke',
   packageJson.scripts?.['webdev:desktop:readiness'] === 'node scripts/webdev/desktop-runtime-readiness-check.mjs'
     && packageJson.scripts?.['webdev:desktop:smoke'] === 'node scripts/webdev/desktop-runtime-smoke.mjs'
     && checklist.includes('webdev:desktop:readiness')
+    && checklist.includes('WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md')
+    && desktopRuntimeGateE.includes('webdev:desktop:readiness')
     && checklist.includes('webdev:desktop:smoke')
     && parityChecklist.includes('webdev:desktop:smoke')
     && previewRunbook.includes('webdev:desktop:smoke')
@@ -202,6 +213,7 @@ const scanned = [
   taskReplayGateB,
   nonTaskReplayGateC,
   browserExtensionGateD,
+  desktopRuntimeGateE,
   workerEnvExample,
   pagesEnvExample,
   wrangler

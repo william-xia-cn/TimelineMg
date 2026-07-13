@@ -9,6 +9,7 @@ const requiredFiles = [
   'platforms/desktop-electron/preload.js',
   'platforms/desktop-electron/README.md',
   'scripts/webdev/desktop-runtime-smoke.mjs',
+  'docs/WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md',
   'docs/WEBDEV_COMPLETION_CHECKLIST.md',
   'docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md',
   'docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md',
@@ -48,6 +49,7 @@ const main = exists('platforms/desktop-electron/main.js') ? read('platforms/desk
 const preload = exists('platforms/desktop-electron/preload.js') ? read('platforms/desktop-electron/preload.js') : '';
 const desktopReadme = exists('platforms/desktop-electron/README.md') ? read('platforms/desktop-electron/README.md') : '';
 const desktopSmoke = exists('scripts/webdev/desktop-runtime-smoke.mjs') ? read('scripts/webdev/desktop-runtime-smoke.mjs') : '';
+const gateEPacket = exists('docs/WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md') ? read('docs/WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md') : '';
 const completionChecklist = exists('docs/WEBDEV_COMPLETION_CHECKLIST.md') ? read('docs/WEBDEV_COMPLETION_CHECKLIST.md') : '';
 const parityChecklist = exists('docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md') ? read('docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md') : '';
 const previewRunbook = exists('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md') ? read('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md') : '';
@@ -95,6 +97,7 @@ assert('Desktop Runtime smoke is local-only and packaging-free',
 
 assert('Desktop docs keep Gate E packaging and distribution out of readiness',
   completionChecklist.includes('Gate E')
+    && completionChecklist.includes('WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md')
     && completionChecklist.includes('webdev:desktop:readiness')
     && completionChecklist.includes('不生成安装包')
     && parityChecklist.includes('Desktop Runtime')
@@ -103,6 +106,13 @@ assert('Desktop docs keep Gate E packaging and distribution out of readiness',
     && previewRunbook.includes('不生成安装包')
     && prodReadiness.includes('Desktop Runtime Readiness')
     && prodReadiness.includes('Gate E 未批准前只做 readiness'));
+
+assert('Gate E packet is approval-only and does not approve desktop package or signing',
+  gateEPacket.includes('Gate E readiness packet')
+    && gateEPacket.includes('不批准、不开启、不执行 Desktop internal package')
+    && gateEPacket.includes('不签名、不公证、不 staple')
+    && gateEPacket.includes('Desktop preload 不暴露 Task / Calendar / Migration 业务 API')
+    && gateEPacket.includes('npm.cmd run webdev:desktop:readiness'));
 
 assert('Desktop README documents WebDev runtime mode and smoke boundary',
   desktopReadme.includes('TIMEWHERE_DESKTOP_RUNTIME_MODE')

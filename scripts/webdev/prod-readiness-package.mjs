@@ -63,7 +63,7 @@ const readinessEvidence = [
   ['Gate R remains unapproved', projectMaster.includes('Prod deploy/release remains unapproved')],
   ['Prod readiness checklist declares non-release boundary', prodChecklist.includes('不等于发布')],
   ['Browser Extension Gate D readiness is represented', packageJson.scripts?.['webdev:extension:readiness'] === 'node scripts/webdev/browser-extension-readiness-check.mjs' && completionChecklist.includes('WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md')],
-  ['Desktop Runtime Gate E readiness is represented', packageJson.scripts?.['webdev:desktop:readiness'] === 'node scripts/webdev/desktop-runtime-readiness-check.mjs'],
+  ['Desktop Runtime Gate E readiness is represented', packageJson.scripts?.['webdev:desktop:readiness'] === 'node scripts/webdev/desktop-runtime-readiness-check.mjs' && completionChecklist.includes('WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md')],
   ['Task replay Gate B readiness is represented', packageJson.scripts?.['webdev:gate-b:readiness'] === 'node scripts/webdev/task-replay-gate-b-readiness-check.mjs' && completionChecklist.includes('WEBDEV_TASK_REPLAY_GATE_B_READINESS.md')],
   ['Non-Task replay Gate C readiness is represented', packageJson.scripts?.['webdev:gate-c:readiness'] === 'node scripts/webdev/non-task-replay-gate-c-readiness-check.mjs' && completionChecklist.includes('WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md')],
   ['Observability / backup readiness is represented', packageJson.scripts?.['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs' && prodChecklist.includes('WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md')],

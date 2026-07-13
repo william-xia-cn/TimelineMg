@@ -84,6 +84,7 @@ const requiredFiles = [
   'docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md',
   'docs/WEBDEV_PROD_READINESS_CHECKLIST.md',
   'docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md',
+  'docs/WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md',
   'docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md',
   'docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md',
   'docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md',
@@ -129,6 +130,7 @@ const businessParityChecklist = read('docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md')
 const previewRunbook = read('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md');
 const prodReadinessChecklist = read('docs/WEBDEV_PROD_READINESS_CHECKLIST.md');
 const browserExtensionGateDPacket = read('docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md');
+const desktopRuntimeGateEPacket = read('docs/WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md');
 const observabilityBackupRunbook = read('docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md');
 const taskReplayGateBPacket = read('docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md');
 const nonTaskReplayGateCPacket = read('docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md');
@@ -195,6 +197,13 @@ assert('WebDev Browser Extension Gate D packet records readiness-only boundary',
     && browserExtensionGateDPacket.includes('Extension IndexedDB 不作为 canonical data source')
     && browserExtensionGateDPacket.includes('npm.cmd run webdev:extension:readiness')
     && !obviousSecretPattern.test(browserExtensionGateDPacket));
+assert('WebDev Desktop Runtime Gate E packet records readiness-only boundary',
+  desktopRuntimeGateEPacket.includes('Gate E readiness packet')
+    && desktopRuntimeGateEPacket.includes('不批准、不开启、不执行 Desktop internal package')
+    && desktopRuntimeGateEPacket.includes('不签名、不公证、不 staple')
+    && desktopRuntimeGateEPacket.includes('Desktop preload 不暴露 Task / Calendar / Migration 业务 API')
+    && desktopRuntimeGateEPacket.includes('npm.cmd run webdev:desktop:readiness')
+    && !obviousSecretPattern.test(desktopRuntimeGateEPacket));
 assert('WebDev observability backup runbook records Gate R readiness-only boundary',
   observabilityBackupRunbook.includes('Gate R readiness runbook')
     && observabilityBackupRunbook.includes('D1 schema-only export rehearsal')
@@ -851,6 +860,7 @@ assert('WebDev Desktop Runtime readiness check preserves runtime-only boundary',
     && desktopRuntimeReadinessCheck.includes('installWebDevNavigationGuards')
     && desktopRuntimeReadinessCheck.includes('Desktop preload exposes native bridge only')
     && desktopRuntimeReadinessCheck.includes('Gate E')
+    && desktopRuntimeReadinessCheck.includes('Gate E packet is approval-only')
     && desktopRuntimeReadinessCheck.includes('No desktop package was built, signed, notarized, or distributed')
     && desktopRuntimeReadinessCheck.includes("!desktopSmoke.includes('package:win')")
     && desktopRuntimeReadinessCheck.includes("!desktopSmoke.includes('electron-builder')"));
