@@ -222,6 +222,7 @@ assert('prod readiness package is evidence-only and gate-aware',
     && prodReadinessPackage.includes('readiness-only')
     && prodReadinessPackage.includes('Gate R: not approved')
     && prodReadinessPackage.includes('webdev:preview:acceptance')
+    && prodReadinessPackage.includes('Latest preview acceptance recheck is recorded')
     && prodReadinessPackage.includes('webdev:extension:readiness')
     && prodReadinessPackage.includes('webdev:desktop:readiness')
     && prodReadinessPackage.includes('webdev:gate-b:readiness')

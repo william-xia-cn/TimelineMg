@@ -71,7 +71,8 @@ const readinessEvidence = [
   ['Rollback package is represented', prodChecklist.includes('Rollback plan')],
   ['Completion audit is represented', packageJson.scripts?.['webdev:completion:audit'] === 'node scripts/webdev/completion-audit.mjs' && completionChecklist.includes('webdev:completion:audit')],
   ['Gate B/C/D/E/R limits remain listed', completionChecklist.includes('| B |') && completionChecklist.includes('| C |') && completionChecklist.includes('| D |') && completionChecklist.includes('| E |') && completionChecklist.includes('| R |')],
-  ['Task board records preview acceptance hardening', taskBoard.includes('webdev:preview:data-hygiene-smoke')]
+  ['Task board records preview acceptance hardening', taskBoard.includes('webdev:preview:data-hygiene-smoke')],
+  ['Latest preview acceptance recheck is recorded', taskBoard.includes('reran `npm run webdev:preview:acceptance` after the WebDev completion audit / docs cleanup work') && projectMaster.includes('webdev:preview:acceptance` was rerun after the WebDev completion audit / docs cleanup work')]
 ];
 
 const scriptEvidence = requiredScripts.map(script => [script, Boolean(packageJson.scripts?.[script])]);
