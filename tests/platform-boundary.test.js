@@ -117,7 +117,7 @@ assert('TimeWherePlatform exposes desktop-capable contract',
     && platformJs.includes("chromeBridge: ['connectExtension', 'getStatus']")
     && platformJs.includes("sync: ['getStatus', 'requestRun', 'pause', 'resume']")
     && platformJs.includes("external: ['openUrl']")
-    && platformJs.includes("system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'confirmGoogleAccountSwitch']"));
+    && platformJs.includes("system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'getDesktopRuntimeInfo', 'confirmGoogleAccountSwitch']"));
 assert('Chrome adapter wraps expected platform APIs',
     platformJs.includes("name: 'chrome-extension'")
     && platformJs.includes('chromeRef.tabs.create')
@@ -142,6 +142,7 @@ assert('Desktop adapter delegates auth, reminders, and Chrome bridge to Electron
     && platformJs.includes("call('system.setDesktopSettings'")
     && platformJs.includes("call('system.writeWidgetSnapshot'")
     && platformJs.includes("call('system.getDesktopProfile'")
+    && platformJs.includes("call('system.getDesktopRuntimeInfo'")
     && platformJs.includes("call('system.confirmGoogleAccountSwitch'")
     && platformJs.includes('bridge.onWindowActivated')
     && platformJs.includes('bridge.onNotificationClose')
@@ -154,6 +155,7 @@ assert('Fallback platform returns desktop system settings capability as not_supp
     && platformJs.includes("setDesktopSettings: () => ({ status: 'not_supported'")
     && platformJs.includes("writeWidgetSnapshot: () => ({ status: 'not_supported'")
     && platformJs.includes("getDesktopProfile: () => ({ status: 'not_supported'")
+    && platformJs.includes("getDesktopRuntimeInfo: () => ({ status: 'not_supported'")
     && platformJs.includes('sync: { getStatus: notSupported, requestRun: notSupported, pause: notSupported, resume: notSupported }')
     && platformJs.includes("confirmGoogleAccountSwitch: () => ({ status: 'not_supported'"));
 assert('Shared sync runtime keeps Chrome and Desktop sync aligned with serialized jobs and conflict pause',
@@ -289,6 +291,18 @@ assert('Desktop main loads packaged extension resources and exposes navigation r
     && electronMain.includes('TimeWhere-0.3.4-win-portable.exe') === false
     && electronMain.includes('Menu.setApplicationMenu')
     && electronMain.includes('TIMEWHERE_ELECTRON_SMOKE'));
+assert('Desktop main supports opt-in WebDev Runtime shell without changing legacy default',
+    electronMain.includes('TIMEWHERE_DESKTOP_RUNTIME_MODE')
+    && electronMain.includes('TIMEWHERE_WEB_APP_URL')
+    && electronMain.includes('TIMEWHERE_WEBDEV_APP_URL')
+    && electronMain.includes("mode: isWebDevRuntimeMode() ? 'webdev' : 'extension_legacy'")
+    && electronMain.includes("business_logic_owner: isWebDevRuntimeMode() ? 'web_app' : 'extension_legacy'")
+    && electronMain.includes('function resolveWebAppRoute')
+    && electronMain.includes('function installWebDevNavigationGuards')
+    && electronMain.includes('if (!isWebDevRuntimeMode()) return')
+    && electronMain.includes('isAllowedWebAppNavigation(url)')
+    && electronMain.includes("method === 'system.getDesktopRuntimeInfo'")
+    && electronMain.includes("url.hash = view"));
 assert('Desktop main exposes auth, reminders, notifications, and Chrome bridge IPC',
     electronMain.includes("method === 'auth.getGoogleToken'")
     && electronMain.includes('serializeAuthError')

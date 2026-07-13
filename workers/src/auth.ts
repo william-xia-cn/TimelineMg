@@ -62,6 +62,49 @@ export async function upsertAccount(env: Env, identity: GoogleIdentity): Promise
   return { accountId };
 }
 
+export async function loadAccountBundle(env: Env, accountId: string): Promise<Record<string, unknown>> {
+  const account = await env.DB.prepare(
+    'SELECT id, email, display_name, picture_url, created_at, updated_at FROM accounts WHERE id = ?'
+  ).bind(accountId).first<Record<string, unknown>>();
+  if (!account) throw new HttpError(404, 'account_not_found', 'Account not found');
+  const profile = await ensureUserProfile(env, accountId);
+  return { account, profile };
+}
+
+export async function updateUserProfile(env: Env, accountId: string, input: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const name = normalizeProfileName(input.name);
+  const profile = await ensureUserProfile(env, accountId);
+  await env.DB.prepare(
+    'UPDATE user_profiles SET name = ?, updated_at = ? WHERE id = ? AND account_id = ?'
+  ).bind(name, nowISO(), profile.id, accountId).run();
+  return await ensureUserProfile(env, accountId);
+}
+
+function normalizeProfileName(value: unknown): string {
+  const name = typeof value === 'string' ? value.trim() : '';
+  if (!name) throw new HttpError(400, 'missing_profile_name', 'Workspace profile name is required');
+  return name.slice(0, 120);
+}
+
+async function ensureUserProfile(env: Env, accountId: string): Promise<Record<string, unknown>> {
+  const existing = await env.DB.prepare(
+    'SELECT id, account_id, name, created_at, updated_at FROM user_profiles WHERE account_id = ? ORDER BY created_at ASC LIMIT 1'
+  ).bind(accountId).first<Record<string, unknown>>();
+  if (existing) return existing;
+  const now = nowISO();
+  const profile = {
+    id: newId('profile'),
+    account_id: accountId,
+    name: 'Personal Workspace',
+    created_at: now,
+    updated_at: now
+  };
+  await env.DB.prepare(
+    'INSERT INTO user_profiles (id, account_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
+  ).bind(profile.id, accountId, profile.name, now, now).run();
+  return profile;
+}
+
 export async function createSession(env: Env, accountId: string): Promise<{ token: string; expires_at: string }> {
   const sessionId = newId('sess');
   const token = `${sessionId}.${crypto.randomUUID().replace(/-/g, '')}`;
@@ -72,6 +115,12 @@ export async function createSession(env: Env, accountId: string): Promise<{ toke
     'INSERT INTO account_sessions (id, account_id, token_hash, created_at, expires_at) VALUES (?, ?, ?, ?, ?)'
   ).bind(sessionId, accountId, tokenHash, now, expiresAt).run();
   return { token, expires_at: expiresAt };
+}
+
+export async function refreshSession(env: Env, session: SessionContext): Promise<{ token: string; expires_at: string }> {
+  const nextSession = await createSession(env, session.accountId);
+  await revokeSession(env, session.sessionId);
+  return nextSession;
 }
 
 export async function revokeSession(env: Env, sessionId: string): Promise<void> {

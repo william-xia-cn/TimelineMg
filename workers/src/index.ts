@@ -1,4 +1,4 @@
-import { createSession, requireSession, revokeSession, upsertAccount, verifyGoogleIdToken } from './auth';
+import { createSession, loadAccountBundle, refreshSession, requireSession, revokeSession, updateUserProfile, upsertAccount, verifyGoogleIdToken } from './auth';
 import { handleError, HttpError, jsonResponse, optionsResponse, readJson } from './http';
 import {
   createBucket,
@@ -36,7 +36,7 @@ import {
 } from './repositories';
 import { importSnapshot, listMigrationConflicts, resolveMigrationConflict } from './migration';
 import { validateOfflineMutationReplay } from './offlineMutations';
-import { listSyncChanges } from './sync';
+import { getLatestSyncCursor, listSyncChanges } from './sync';
 import { getSyncConflict, listSyncConflicts, resolveSyncConflict } from './syncConflicts';
 import { buildSyncMutationDryRun } from './syncMutationDryRun';
 import { buildSyncReplayEnablementSimulation } from './syncReplayEnablementSimulation';
@@ -52,8 +52,12 @@ type Handler = (request: Request, env: Env, url: URL) => Promise<Response>;
 const routes: Array<{ method: string; pattern: RegExp; handler: Handler }> = [
   { method: 'GET', pattern: /^\/health$/, handler: async (_request, env) => jsonResponse({ service: 'timewhere-api', env: env.TIMEWHERE_ENV || 'unknown' }) },
   { method: 'POST', pattern: /^\/auth\/google$/, handler: handleGoogleAuth },
+  { method: 'POST', pattern: /^\/auth\/session\/refresh$/, handler: handleRefreshSession },
   { method: 'DELETE', pattern: /^\/auth\/session$/, handler: handleDeleteSession },
   { method: 'GET', pattern: /^\/account\/me$/, handler: handleAccountMe },
+  { method: 'GET', pattern: /^\/account\/profile$/, handler: handleGetAccountProfile },
+  { method: 'PATCH', pattern: /^\/account\/profile$/, handler: handleUpdateAccountProfile },
+  { method: 'GET', pattern: /^\/account\/status$/, handler: handleAccountStatus },
   { method: 'GET', pattern: /^\/tasks$/, handler: handleListTasks },
   { method: 'POST', pattern: /^\/tasks$/, handler: handleCreateTask },
   { method: 'GET', pattern: /^\/tasks\/([^/]+)$/, handler: handleGetTask },
@@ -89,6 +93,7 @@ const routes: Array<{ method: string; pattern: RegExp; handler: Handler }> = [
   { method: 'POST', pattern: /^\/migration\/runs$/, handler: handleCreateMigrationRun },
   { method: 'GET', pattern: /^\/migration\/conflicts$/, handler: handleListMigrationConflicts },
   { method: 'PATCH', pattern: /^\/migration\/conflicts\/([^/]+)$/, handler: handleResolveMigrationConflict },
+  { method: 'GET', pattern: /^\/sync\/bootstrap$/, handler: handleSyncBootstrap },
   { method: 'GET', pattern: /^\/sync\/changes$/, handler: handleListSyncChanges },
   { method: 'GET', pattern: /^\/sync\/mutations$/, handler: handleListSyncMutationOutcomes },
   { method: 'POST', pattern: /^\/sync\/mutations$/, handler: handleSyncMutations },
@@ -108,29 +113,74 @@ async function handleGoogleAuth(request: Request, env: Env): Promise<Response> {
   const identity = await verifyGoogleIdToken(env, body.id_token || '');
   const account = await upsertAccount(env, identity);
   const session = await createSession(env, account.accountId);
+  const bundle = await loadAccountBundle(env, account.accountId);
   return jsonResponse({
-    account: {
-      id: account.accountId,
-      email: identity.email || null,
-      name: identity.name || 'Google User',
-      picture: identity.picture || null
-    },
+    account: bundle.account,
+    profile: bundle.profile,
     session
   });
 }
 
 async function handleAccountMe(request: Request, env: Env): Promise<Response> {
   const session = await requireSession(env, request);
-  const account = await env.DB.prepare(
-    'SELECT id, email, display_name, picture_url, created_at, updated_at FROM accounts WHERE id = ?'
-  ).bind(session.accountId).first();
-  return jsonResponse({ account });
+  return jsonResponse(await loadAccountBundle(env, session.accountId));
+}
+
+async function handleGetAccountProfile(request: Request, env: Env): Promise<Response> {
+  const session = await requireSession(env, request);
+  const bundle = await loadAccountBundle(env, session.accountId);
+  return jsonResponse({ profile: bundle.profile });
+}
+
+async function handleUpdateAccountProfile(request: Request, env: Env): Promise<Response> {
+  const session = await requireSession(env, request);
+  const body = await readJson<Record<string, unknown>>(request);
+  const profile = await updateUserProfile(env, session.accountId, body);
+  return jsonResponse({ profile });
 }
 
 async function handleDeleteSession(request: Request, env: Env): Promise<Response> {
   const session = await requireSession(env, request);
   await revokeSession(env, session.sessionId);
   return jsonResponse({ disconnected: true });
+}
+
+async function handleRefreshSession(request: Request, env: Env): Promise<Response> {
+  const session = await requireSession(env, request);
+  const nextSession = await refreshSession(env, session);
+  const bundle = await loadAccountBundle(env, session.accountId);
+  return jsonResponse({
+    account: bundle.account,
+    profile: bundle.profile,
+    session: nextSession
+  });
+}
+
+async function handleAccountStatus(request: Request, env: Env): Promise<Response> {
+  const session = await requireSession(env, request);
+  const bundle = await loadAccountBundle(env, session.accountId);
+  return jsonResponse({
+    ...bundle,
+    runtime: {
+      service: 'timewhere-api',
+      environment: env.TIMEWHERE_ENV || 'unknown',
+      data_authority: 'cloud_d1_canonical',
+      indexeddb_role: 'cache_migration_source_offline_queue',
+      auth: {
+        google_sso_configured: Boolean(env.GOOGLE_OIDC_CLIENT_ID),
+        google_tokens_stored_by_worker: false,
+        session_owner: 'timewhere_cloud'
+      },
+      gates: {
+        preview_resources_required: true,
+        task_replay_writes_enabled: false,
+        non_task_replay_enabled: false,
+        browser_extension_replay_enabled: false,
+        desktop_distribution_enabled: false,
+        prod_release_enabled: false
+      }
+    }
+  });
 }
 
 async function handleListTasks(request: Request, env: Env, url: URL): Promise<Response> {
@@ -369,6 +419,49 @@ async function handleSyncStatus(request: Request, env: Env): Promise<Response> {
     replay_safety_gate: replaySafety,
     mutation_outcomes: 'metadata_only_disabled_v1',
     conflict_records: 'scaffolded'
+  });
+}
+
+async function handleSyncBootstrap(request: Request, env: Env): Promise<Response> {
+  const session = await requireSession(env, request);
+  const [
+    accountBundle,
+    tasks,
+    events,
+    plans,
+    buckets,
+    labels,
+    containers,
+    settings,
+    cursor
+  ] = await Promise.all([
+    loadAccountBundle(env, session.accountId),
+    listTasks(env, session.accountId, { includeCompleted: true }),
+    listCalendarEvents(env, session.accountId),
+    listPlans(env, session.accountId),
+    listBuckets(env, session.accountId),
+    listLabels(env, session.accountId),
+    listContainers(env, session.accountId),
+    getSettings(env, session.accountId),
+    getLatestSyncCursor(env, session.accountId)
+  ]);
+  return jsonResponse({
+    schema: 'timewhere-cloud-bootstrap-v1',
+    authority: 'cloud_d1_canonical',
+    offline_write_policy: 'blocked_v1',
+    generated_at: new Date().toISOString(),
+    cursor,
+    account: accountBundle.account,
+    profile: accountBundle.profile,
+    entities: {
+      tasks,
+      calendar_events: events,
+      plans,
+      buckets,
+      labels,
+      containers,
+      settings
+    }
   });
 }
 

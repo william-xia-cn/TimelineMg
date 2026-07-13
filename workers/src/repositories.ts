@@ -220,8 +220,13 @@ function eventDto(row: Record<string, unknown>): Record<string, unknown> {
       payload = null;
     }
   }
+  const payloadRecord = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : {};
   return {
     ...row,
+    repeat: typeof payloadRecord.repeat === 'string' ? payloadRecord.repeat : undefined,
+    repeat_days: Array.isArray(payloadRecord.repeat_days) ? payloadRecord.repeat_days : [],
     payload,
     payload_json: undefined
   };

@@ -6,16 +6,18 @@
 
 - Web App 是目标架构中的主要业务实现入口。
 - 当前 scaffold 提供 Dashboard / Tasks / Calendar / Settings 壳层、Google SSO UI、Repository client、Platform adapter 和自动迁移入口预览。
+- Account 已支持 Google SSO -> TimeWhere Cloud session，以及有效 session 的本地刷新；Web App 不保存 Google token，也不配置 client secret；Settings 可通过 `/account/status` 显示脱敏 runtime/gate 状态，并通过 `/account/profile` 编辑 TimeWhere workspace/profile 名称。
 - Tasks 已进入 WebDev Task-only queued pending 阶段：通过 Repository 访问 Worker `/tasks`，在线时支持 Cloud-backed 创建、完成/重开、删除、搜索/筛选；离线且已有 Google SSO session 时，Task create/update/complete/reopen 写入本地 pending queue 并标记待同步，delete 仍需联网；Tasks 页显示 pending banner，pending 任务禁止直接 Cloud edit/delete，Settings 可查看 pending queue、执行 retry preview、或 discard local pending。
-- Calendar Events 已进入第一版 WebDev 迁移实现：通过 Repository 访问 Worker `/calendar/events`，支持 Cloud-backed 创建、删除、搜索和本地只读 cache。
-- Plans / Labels / Buckets / Containers 已进入第一版 WebDev 迁移实现：通过 Repository 访问 Worker `/plans`、`/labels`、`/buckets` 和 `/containers`，在 Settings 中提供基础结构管理，并保留本地只读 cache。
-- Settings 已进入第一版 WebDev 迁移实现：通过 Repository 访问 Worker `/settings`，支持基础偏好保存、本地只读 cache 和离线写入阻断。
+- Calendar Events 已进入第一版 WebDev 迁移实现：通过 Repository 访问 Worker `/calendar/events`，支持 Cloud-backed 创建、编辑、删除、搜索、payload-based recurrence first version 和本地只读 cache。
+- Plans / Labels / Buckets / Containers 已进入第一版 WebDev 迁移实现：通过 Repository 访问 Worker `/plans`、`/labels`、`/buckets` 和 `/containers`，在 Settings 中提供基础创建、编辑、删除和 Container 启停管理，并保留本地只读 cache。
+- Settings 已进入第一版 WebDev 迁移实现：通过 Repository 访问 Worker `/settings`，支持默认任务偏好、提醒、外观、周起始日与 Arrange 偏好保存、本地只读 cache 和离线写入阻断。
 - Dashboard 已接入第一版 Daily Settle 只读投影 helper：基于当前 Tasks 与 Containers 显示当前容器和投影当前工作，不在本地写入自动排布结果。
 - Task detail 已进入第一版 WebDev 迁移实现：可从任务列表打开详情，编辑 title、日期、计划、bucket、labels、checklist、notes 等 Cloud 字段。
 - Calendar date projection 已进入第一版 WebDev 迁移实现：按选定日期聚合 containers、calendar events 与 tasks，提供当天时间线视图。
 - Reminder state UI 已进入第一版 WebDev 迁移实现：基于当前任务与提醒设置显示 due / idle / disabled 状态，不发送系统通知。
 - Migration conflict review 已进入第一版 WebDev 迁移实现：自动迁移发现同 legacy_id 的云端记录已变化时写入 open conflict，跳过本次覆盖；Settings 中可读取 open conflicts 并标记 use_cloud / use_local / skip。
 - Sync replay diagnostics 已进入 disabled/internal 第一版：Settings 可读取 `/sync/mutations` 中 sanitized replay outcomes 和 Task gate 详情，用于开发排查；不启用离线写入，也不显示原始 patch/base/cloud payload。
+- Sync bootstrap / changes 已进入第一版：API client 可读取 `/sync/bootstrap` 中的只读 canonical snapshot 和最新 cursor，并通过 `/sync/changes` 拉取 cursor 后的 Cloud-confirmed 增量；Web App 登录后优先初始化 Tasks / Calendar / Structure / Settings 本地 read cache，Settings 可手动刷新增量变化，且 hydrate / 增量应用都会保留本地 pending Task 标记；不应用 mutation，也不启用离线写 Cloud。
 - Sync conflict review 已进入 Phase 3：Settings 可读取 `/sync/conflicts` 中 sanitized Task conflict records，并支持单条 `keep_cloud` / `discard_local` / `later`；不会把本地值覆盖到 Cloud。
 - Replay safety gate 已进入 Phase 4：Settings 可读取 `/sync/replay-safety`，显示 kill switch、环境门禁、prod 禁止和 blocker 状态；不会启用 replay 写入。
 - Replay readiness 已进入 Phase 9 preview hardening：Settings 可显示 evidence gaps、dependency blockers、cloud validation 数量和 required evidence；仍然不能启用 replay。
@@ -45,6 +47,7 @@ Worker 侧需要配置同一个 `GOOGLE_OIDC_CLIENT_ID`，用于校验 Google ID
 WebDev 当前离线策略按 D-049 进入 Task-only queued pending，非 Task 数据仍保持离线写入阻断：
 
 - 可以显示最后一次 local cache；
+- 登录后优先用 `/sync/bootstrap` 初始化 read cache，后续可用 `/sync/changes` 按 cursor 增量刷新 cache；
 - Task create/update/complete/reopen 可进入本地 `queued` mutation queue，并在 UI 中显示 `Pending sync`；
 - Tasks 页会显示 `Open pending queue` 入口；pending 任务在 replay 或 discard 前不能直接执行 Cloud edit/delete；
 - Settings 的 `Pending Task queue` 可查看本地 queued mutations；`Retry preview` 只运行 dry-run/readiness，不写 Cloud；`Discard local pending` 只清本地 pending；

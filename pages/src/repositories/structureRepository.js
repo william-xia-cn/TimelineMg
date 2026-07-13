@@ -61,6 +61,15 @@ function removeById(items, id) {
   return items.filter(item => item.id !== id);
 }
 
+function collectionKeyForType(type) {
+  return {
+    plan: 'plans',
+    bucket: 'buckets',
+    label: 'labels',
+    container: 'containers'
+  }[type] || null;
+}
+
 export function createStructureRepository(apiClient, { storage = window.localStorage, isOnline = () => navigator.onLine, offlineQueue = createOfflineMutationQueue({ storage }) } = {}) {
   return {
     getOfflineMutationQueueState() {
@@ -68,6 +77,32 @@ export function createStructureRepository(apiClient, { storage = window.localSto
     },
     getCachedStructure() {
       return readCache(storage);
+    },
+    hydrateCache(structure) {
+      const nextStructure = {
+        plans: Array.isArray(structure?.plans) ? structure.plans : [],
+        buckets: Array.isArray(structure?.buckets) ? structure.buckets : [],
+        labels: Array.isArray(structure?.labels) ? structure.labels : [],
+        containers: Array.isArray(structure?.containers) ? structure.containers : []
+      };
+      writeCache(storage, nextStructure);
+      return nextStructure;
+    },
+    applyCloudItem(type, item) {
+      const key = collectionKeyForType(type);
+      if (!key || !item?.id) return readCache(storage);
+      const cache = readCache(storage);
+      const next = { ...cache, [key]: mergeById(cache[key], item) };
+      writeCache(storage, next);
+      return next;
+    },
+    removeCloudItem(type, id) {
+      const key = collectionKeyForType(type);
+      if (!key) return readCache(storage);
+      const cache = readCache(storage);
+      const next = { ...cache, [key]: removeById(cache[key], id) };
+      writeCache(storage, next);
+      return next;
     },
     async listStructure({ search = '' } = {}) {
       if (!isOnline()) return readCache(storage);

@@ -114,6 +114,35 @@ async function main() {
   assert.equal(reopenedOffline.progress, 'not_started');
   assert.equal(reopenedOffline.completed_at, null);
   assert.equal(repositoryQueue.getState().queued_count, 4);
+  const hydratedWithPending = taskRepository.hydrateCache([{
+    id: createdOffline.id,
+    title: 'Cloud stale title',
+    notes: 'Cloud stale note',
+    progress: 'not_started',
+    revision: 1
+  }, {
+    id: 'cloud-only-task',
+    title: 'Cloud only task',
+    progress: 'not_started',
+    revision: 1
+  }]);
+  const pendingAfterHydrate = hydratedWithPending.find(task => task.id === createdOffline.id);
+  assert.equal(pendingAfterHydrate.__sync_status, 'pending');
+  assert.equal(pendingAfterHydrate.notes, 'Offline note');
+  assert(hydratedWithPending.some(task => task.id === 'cloud-only-task'));
+  console.log('  PASS bootstrap cache hydrate preserves local pending Task values');
+  const cloudApplyWhilePending = taskRepository.applyCloudTask({
+    id: createdOffline.id,
+    title: 'Cloud changed while pending',
+    notes: 'Cloud note while pending',
+    progress: 'not_started',
+    revision: 2
+  });
+  assert.equal(cloudApplyWhilePending.__sync_status, 'pending');
+  assert.equal(cloudApplyWhilePending.notes, 'Offline note');
+  taskRepository.removeCloudTask(createdOffline.id);
+  assert(taskRepository.getCachedTasks().some(task => task.id === createdOffline.id && task.__sync_status === 'pending'));
+  console.log('  PASS incremental Cloud changes do not overwrite local pending Task values');
   await assert.rejects(() => taskRepository.deleteTask(createdOffline.id), error => error.code === 'offline_write_blocked');
   assert.equal(repositoryQueue.getState().queued_count, 4);
   console.log('  PASS task repository queues Task-only pending writes while offline and still blocks delete');
@@ -123,7 +152,8 @@ async function main() {
   assert.equal(discarded.removed_count, 4);
   assert.equal(discarded.removed_task, true);
   assert.equal(repositoryQueue.getState().queued_count, 0);
-  assert.equal(taskRepository.getCachedTasks().length, 0);
+  assert.equal(taskRepository.getCachedTasks().length, 1);
+  assert.equal(taskRepository.getCachedTasks()[0].id, 'cloud-only-task');
   console.log('  PASS task repository can discard local pending Task mutations');
 
   console.log('=====================================');

@@ -32,6 +32,7 @@ console.log('WebDev scaffold tests');
 const requiredFiles = [
   'workers/README.md',
   'workers/wrangler.toml',
+  'workers/.dev.vars.example',
   'workers/package.json',
   'workers/package-lock.json',
   'workers/tsconfig.json',
@@ -58,6 +59,7 @@ const requiredFiles = [
   'workers/src/syncReplaySafety.ts',
   'workers/src/taskReplayTransaction.ts',
   'pages/README.md',
+  'pages/.env.example',
   'pages/package.json',
   'pages/package-lock.json',
   'pages/vite.config.js',
@@ -75,7 +77,20 @@ const requiredFiles = [
   'pages/src/repositories/structureRepository.js',
   'pages/src/repositories/settingsRepository.js',
   'pages/src/repositories/migrationRepository.js',
-  'pages/src/platform/browserPlatform.js'
+  'pages/src/platform/browserPlatform.js',
+  'docs/WEBDEV_COMPLETION_CHECKLIST.md',
+  'docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md',
+  'docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md',
+  'docs/WEBDEV_PROD_READINESS_CHECKLIST.md',
+  'scripts/webdev/verify-plan-state.mjs',
+  'scripts/webdev/preview-preflight.mjs',
+  'scripts/webdev/provision-cloudflare.mjs',
+  'scripts/webdev/deploy-cloudflare-preview.mjs',
+  'scripts/webdev/preview-smoke.mjs',
+  'scripts/webdev/preview-core-smoke.mjs',
+  'scripts/webdev/prod-readiness-check.mjs',
+  'scripts/webdev/ui-walkthrough.mjs',
+  'scripts/webdev/desktop-runtime-smoke.mjs'
 ];
 
 for (const file of requiredFiles) {
@@ -92,6 +107,50 @@ assert('wrangler uses APP_CACHE binding', wrangler.includes('binding = "APP_CACH
 assert('wrangler does not contain real Cloudflare UUIDs', !/database_id\s*=\s*"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}"/i.test(wrangler));
 assert('wrangler defaults replay kill switch on and local dev replay disabled',
   wrangler.includes('TIMEWHERE_TASK_REPLAY_KILL_SWITCH = "on"') && wrangler.includes('TIMEWHERE_TASK_REPLAY_LOCAL_DEV_ENABLED = "false"'));
+const workerDevVarsExample = read('workers/.dev.vars.example');
+const pagesEnvExample = read('pages/.env.example');
+const completionChecklist = read('docs/WEBDEV_COMPLETION_CHECKLIST.md');
+const businessParityChecklist = read('docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md');
+const previewRunbook = read('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md');
+const prodReadinessChecklist = read('docs/WEBDEV_PROD_READINESS_CHECKLIST.md');
+const obviousSecretPattern = new RegExp([
+  'GOC' + 'SPX-',
+  'ya29\\.',
+  'AIza[0-9A-Za-z_-]{20,}',
+  'database_id\\s*=\\s*"[a-f0-9-]{36}"'
+].join('|'), 'i');
+assert('Worker env example documents Google SSO public client id without secrets',
+  workerDevVarsExample.includes('GOOGLE_OIDC_CLIENT_ID=your-web-client-id.apps.googleusercontent.com')
+    && !/client_secret|token|cookie/i.test(workerDevVarsExample));
+assert('Pages env example documents Worker API and Google SSO public client id without secrets',
+  pagesEnvExample.includes('VITE_WORKER_API_BASE_URL=http://127.0.0.1:8787')
+    && pagesEnvExample.includes('VITE_GOOGLE_OIDC_CLIENT_ID=your-web-client-id.apps.googleusercontent.com')
+    && !/client_secret|token|cookie/i.test(pagesEnvExample));
+assert('WebDev completion checklist records phases and approval gates',
+  completionChecklist.includes('Phase 0')
+    && completionChecklist.includes('Phase 10')
+    && completionChecklist.includes('Gate A')
+    && completionChecklist.includes('Gate R')
+    && completionChecklist.includes('当前明确未批准'));
+assert('WebDev business parity checklist records implemented and gated capabilities',
+  businessParityChecklist.includes('Tasks CRUD')
+    && businessParityChecklist.includes('Daily Settle projection')
+    && businessParityChecklist.includes('Automatic migration')
+    && businessParityChecklist.includes('Desktop Runtime')
+    && businessParityChecklist.includes('Gate B')
+    && businessParityChecklist.includes('Phase 5 完成定义'));
+assert('WebDev preview runbook records Gate A acceptance evidence and stop conditions',
+  previewRunbook.includes('Gate A readiness runbook')
+    && previewRunbook.includes('Preview Acceptance Evidence')
+    && previewRunbook.includes('Desktop Runtime Preview Smoke')
+    && previewRunbook.includes('Stop Conditions')
+    && !obviousSecretPattern.test(previewRunbook));
+assert('WebDev prod readiness checklist records Gate R non-release boundary',
+  prodReadinessChecklist.includes('Gate R readiness checklist')
+    && prodReadinessChecklist.includes('不等于发布')
+    && prodReadinessChecklist.includes('Prod Readiness Package')
+    && prodReadinessChecklist.includes('Security / Privacy Readiness')
+    && !obviousSecretPattern.test(prodReadinessChecklist));
 
 const sql = read('workers/migrations/0001_initial.sql');
 const taskParityMigration = read('workers/migrations/0002_task_parity_fields.sql');
@@ -126,8 +185,11 @@ assert('D1 sync mutation outcomes live in versioned migration after 0004',
 const workerIndex = read('workers/src/index.ts');
 for (const [route, pattern] of [
   ['/auth/google', /auth\\\/google/],
+  ['/auth/session/refresh', /auth\\\/session\\\/refresh/],
   ['/auth/session', /auth\\\/session/],
   ['/account/me', /account\\\/me/],
+  ['/account/profile', /account\\\/profile/],
+  ['/account/status', /account\\\/status/],
   ['/tasks', /\/tasks/],
   ['/calendar/events', /calendar\\\/events/],
   ['/plans', /\/plans/],
@@ -137,6 +199,7 @@ for (const [route, pattern] of [
   ['/settings', /\/settings/],
   ['/migration/runs', /migration\\\/runs/],
   ['/migration/conflicts', /migration\\\/conflicts/],
+  ['/sync/bootstrap', /sync\\\/bootstrap/],
   ['/sync/changes', /sync\\\/changes/],
   ['/sync/mutations', /sync\\\/mutations/],
   ['/sync/mutations/dry-run', /sync\\\/mutations\\\/dry-run/],
@@ -152,9 +215,24 @@ for (const [route, pattern] of [
 }
 assert('Worker sync status documents offline blocked v1', workerIndex.includes("offline_writes: 'blocked_v1'"));
 assert('Worker sync status exposes change feed foundation', workerIndex.includes("change_feed: 'available'") && workerIndex.includes('handleListSyncChanges'));
+assert('Worker exposes read-only Cloud bootstrap snapshot for local cache setup',
+  workerIndex.includes('handleSyncBootstrap')
+    && workerIndex.includes("schema: 'timewhere-cloud-bootstrap-v1'")
+    && workerIndex.includes("offline_write_policy: 'blocked_v1'")
+    && workerIndex.includes('getLatestSyncCursor'));
 assert('Worker sync status keeps mutation replay disabled', workerIndex.includes("mutation_replay: 'disabled_v1'") && workerIndex.includes("task_replay_gate: 'defined_disabled_v1'") && workerIndex.includes("task_replay_transaction: 'internal_disabled_v1'") && workerIndex.includes("mutation_dry_run: 'internal_disabled_v1'") && workerIndex.includes("replay_enablement_simulation: 'internal_disabled_v1'") && workerIndex.includes("replay_readiness_summary: 'internal_disabled_v1'") && workerIndex.includes("replay_preview_hardening: 'phase9_internal_readiness_only'") && workerIndex.includes('replay_safety_gate') && workerIndex.includes("mutation_outcomes: 'metadata_only_disabled_v1'") && workerIndex.includes('handleSyncMutations'));
 assert('Worker sync status exposes conflict record scaffold', workerIndex.includes("conflict_records: 'scaffolded'") && workerIndex.includes('handleListSyncConflicts') && workerIndex.includes('handleGetSyncConflict'));
-assert('Worker supports local Cloud session disconnect', workerIndex.includes('handleDeleteSession') && workerIndex.includes('revokeSession'));
+assert('Worker supports local Cloud session disconnect and refresh',
+  workerIndex.includes('handleDeleteSession')
+    && workerIndex.includes('handleRefreshSession')
+    && workerIndex.includes('revokeSession')
+    && workerIndex.includes('refreshSession'));
+assert('Worker exposes account profile and safe runtime status without Google tokens',
+  workerIndex.includes('handleAccountStatus')
+    && workerIndex.includes('handleUpdateAccountProfile')
+    && workerIndex.includes('google_tokens_stored_by_worker: false')
+    && workerIndex.includes("data_authority: 'cloud_d1_canonical'")
+    && workerIndex.includes('task_replay_writes_enabled: false'));
 
 const migration = read('workers/src/migration.ts');
 assert('migration stores raw snapshot in R2', migration.includes('SNAPSHOTS.put'));
@@ -178,6 +256,10 @@ assert('Workers README forbids committed Cloudflare secrets',
   workersReadme.includes('不提交真实 Cloudflare resource id') && workersReadme.includes('不记录 token'));
 assert('Workers README documents local D1 prepare command',
   workersReadme.includes('webdev:local:prepare') && workersReadme.includes('timewhere-local-dev-session'));
+assert('Workers README documents TimeWhere session refresh boundary',
+  workersReadme.includes('/auth/session/refresh') && workersReadme.includes('不接触 Google token'));
+assert('Workers README documents account profile and runtime status endpoints',
+  workersReadme.includes('/account/profile') && workersReadme.includes('/account/status') && workersReadme.includes('workspace/profile'));
 
 const workerRepository = read('workers/src/repositories.ts');
 const workerSync = read('workers/src/sync.ts');
@@ -191,7 +273,7 @@ const workerSyncReplaySafety = read('workers/src/syncReplaySafety.ts');
 const workerSyncReplayDependencies = read('workers/src/syncReplayDependencies.ts');
 const workerTaskReplayTransaction = read('workers/src/taskReplayTransaction.ts');
 assert('Worker sync change feed records idempotent cursor rows',
-  workerSync.includes('recordSyncChange') && workerSync.includes('listSyncChanges') && workerSync.includes('next_cursor') && workerSync.includes('entity_revision'));
+  workerSync.includes('recordSyncChange') && workerSync.includes('listSyncChanges') && workerSync.includes('getLatestSyncCursor') && workerSync.includes('next_cursor') && workerSync.includes('entity_revision'));
 assert('Worker offline mutation replay skeleton validates but remains disabled',
   workerOfflineMutations.includes('validateOfflineMutationReplay') && workerOfflineMutations.includes("replay_status: 'disabled_v1'") && workerOfflineMutations.includes("accepted: false") && workerOfflineMutations.includes('offline_replay_disabled_v1'));
 assert('Worker offline mutation replay rejects private fields',
@@ -279,6 +361,9 @@ assert('Google SSO helper uses public client id env and GIS script',
   googleSso.includes('VITE_GOOGLE_OIDC_CLIENT_ID') && googleSso.includes('accounts.google.com/gsi/client') && googleSso.includes('renderGoogleSsoButton'));
 assert('Google SSO helper does not reference client secrets',
   !googleSso.includes('client_secret') && !googleSso.includes('GOOGLE_CLIENT_SECRET'));
+const pagesApiClient = read('pages/src/api/client.js');
+assert('Pages API client uses configured Worker API base URL',
+  pagesApiClient.includes('VITE_WORKER_API_BASE_URL') && pagesApiClient.includes('createApiClient({'));
 
 const pagesPackage = JSON.parse(read('pages/package.json'));
 assert('Pages package depends on React', Boolean(pagesPackage.dependencies.react));
@@ -287,6 +372,10 @@ assert('Pages package depends on lucide-react', Boolean(pagesPackage.dependencie
 const viteConfig = read('pages/vite.config.js');
 assert('Pages dev proxy forwards Worker health checks',
   viteConfig.includes("'/health': 'http://127.0.0.1:8787'"));
+assert('Pages dev proxy forwards structure APIs',
+  viteConfig.includes("'/plans': 'http://127.0.0.1:8787'")
+    && viteConfig.includes("'/buckets': 'http://127.0.0.1:8787'")
+    && viteConfig.includes("'/labels': 'http://127.0.0.1:8787'"));
 
 const taskRepository = read('pages/src/repositories/taskRepository.js');
 const offlineQueue = read('pages/src/repositories/offlineMutationQueue.js');
@@ -297,17 +386,28 @@ assert('Offline mutation queue rejects private fields',
 assert('Offline mutation queue can remove selected queued mutations',
   offlineQueue.includes('removeQueuedMutations') && offlineQueue.includes('removed_count') && offlineQueue.includes('remaining_count'));
 assert('Task repository persists local read cache',
-  taskRepository.includes('timewhere.web.tasks.cache.v1') && taskRepository.includes('writeCachedTasks') && taskRepository.includes('getCachedTasks'));
+  taskRepository.includes('timewhere.web.tasks.cache.v1') && taskRepository.includes('writeCachedTasks') && taskRepository.includes('getCachedTasks') && taskRepository.includes('hydrateCache'));
+assert('Task repository can apply read-only Cloud task changes without overwriting pending tasks',
+  taskRepository.includes('applyCloudTask')
+    && taskRepository.includes('removeCloudTask')
+    && taskRepository.includes('hasPendingTask')
+    && taskRepository.includes('queuedTaskMutationsWithCache')
+    && taskRepository.includes('return cachedTaskById(storage, task.id)')
+    && taskRepository.includes('return cachedTaskById(storage, id)'));
 assert('Task repository queues Task-only offline writes and still blocks offline delete',
   taskRepository.includes('createPendingOfflineTask') && taskRepository.includes('updatePendingOfflineTask') && taskRepository.includes('offline_write_blocked'));
 assert('Task repository exposes queued pending offline queue state for Task writes',
   taskRepository.includes('createOfflineMutationQueue({ storage, enabled: true })') && taskRepository.includes('getOfflineMutationQueueState') && taskRepository.includes('__sync_status') && taskRepository.includes('listPendingTaskMutations') && taskRepository.includes('discardPendingTaskMutations'));
+assert('Task repository bootstrap hydrate preserves local pending Task cache entries',
+  taskRepository.includes('hydrateTaskCache') && taskRepository.includes('pendingTasks') && taskRepository.includes('clearPendingMarker'));
 assert('Task repository supports complete reopen and delete',
   taskRepository.includes('completeTask') && taskRepository.includes('reopenTask') && taskRepository.includes('deleteTask'));
 
 const calendarRepository = read('pages/src/repositories/calendarRepository.js');
 assert('Calendar repository persists local read cache',
-  calendarRepository.includes('timewhere.web.calendar.cache.v1') && calendarRepository.includes('writeCachedEvents') && calendarRepository.includes('getCachedEvents'));
+  calendarRepository.includes('timewhere.web.calendar.cache.v1') && calendarRepository.includes('writeCachedEvents') && calendarRepository.includes('getCachedEvents') && calendarRepository.includes('hydrateCache'));
+assert('Calendar repository can apply read-only Cloud event changes',
+  calendarRepository.includes('applyCloudEvent') && calendarRepository.includes('removeCloudEvent') && calendarRepository.includes('mergeEventIntoCache') && calendarRepository.includes('removeEventFromCache'));
 assert('Calendar repository blocks offline writes',
   calendarRepository.includes('OfflineCalendarWriteBlockedError') && calendarRepository.includes('offline_write_blocked'));
 assert('Calendar repository supports list create update delete',
@@ -315,7 +415,9 @@ assert('Calendar repository supports list create update delete',
 
 const structureRepository = read('pages/src/repositories/structureRepository.js');
 assert('Structure repository persists local read cache',
-  structureRepository.includes('timewhere.web.structure.cache.v1') && structureRepository.includes('getCachedStructure') && structureRepository.includes('writeCache'));
+  structureRepository.includes('timewhere.web.structure.cache.v1') && structureRepository.includes('getCachedStructure') && structureRepository.includes('writeCache') && structureRepository.includes('hydrateCache'));
+assert('Structure repository can apply read-only Cloud structure changes',
+  structureRepository.includes('collectionKeyForType') && structureRepository.includes('applyCloudItem') && structureRepository.includes('removeCloudItem') && structureRepository.includes("plan: 'plans'") && structureRepository.includes("container: 'containers'"));
 assert('Structure repository blocks offline writes',
   structureRepository.includes('OfflineStructureWriteBlockedError') && structureRepository.includes('offline_write_blocked'));
 assert('Structure repository supports plan label bucket and container CRUD',
@@ -323,7 +425,7 @@ assert('Structure repository supports plan label bucket and container CRUD',
 
 const settingsRepository = read('pages/src/repositories/settingsRepository.js');
 assert('Settings repository persists local read cache',
-  settingsRepository.includes('timewhere.web.settings.cache.v1') && settingsRepository.includes('getCachedSettings') && settingsRepository.includes('writeCachedSettings'));
+  settingsRepository.includes('timewhere.web.settings.cache.v1') && settingsRepository.includes('getCachedSettings') && settingsRepository.includes('writeCachedSettings') && settingsRepository.includes('hydrateCache'));
 assert('Settings repository blocks offline writes',
   settingsRepository.includes('OfflineSettingsWriteBlockedError') && settingsRepository.includes('offline_write_blocked'));
 assert('Settings repository supports get and update settings',
@@ -349,6 +451,12 @@ const apiClient = read('pages/src/api/client.js');
 for (const label of ['Dashboard', 'Tasks', 'Calendar', 'Settings']) {
   assert(`Web App exposes ${label}`, app.includes(label));
 }
+assert('Web App supports hash/query view routing for Desktop Runtime',
+  app.includes('function getInitialActiveView')
+    && app.includes('window.location.hash')
+    && app.includes("new URLSearchParams(window.location.search).get('view')")
+    && app.includes('function navigateToView')
+    && app.includes('window.history.pushState'));
 assert('Web App exposes Task-only queued pending while non-Task writes remain blocked',
   app.includes('Queue task locally') && app.includes('Pending sync') && app.includes('offline_write_blocked'));
 assert('Web App includes migration preview', app.includes('Run migration preview'));
@@ -390,7 +498,13 @@ assert('Web App hardens Phase 8 Task pending UX without enabling full offline-fi
     && pagesStyles.includes('task-pending-banner')
     && pagesStyles.includes('task-row.pending-sync'));
 assert('Pages API client can read sync replay outcome diagnostics',
-  apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('getSyncReplayReadinessSummary') && apiClient.includes('getSyncReplayEnablementSimulation') && apiClient.includes('getSyncReplaySafety') && apiClient.includes('/sync/mutations/readiness-summary') && apiClient.includes('/sync/mutations/enablement-simulation') && apiClient.includes('/sync/replay-safety') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
+  apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('getSyncReplayReadinessSummary') && apiClient.includes('getSyncReplayEnablementSimulation') && apiClient.includes('getSyncReplaySafety') && apiClient.includes('getSyncBootstrap') && apiClient.includes('/sync/bootstrap') && apiClient.includes('/sync/mutations/readiness-summary') && apiClient.includes('/sync/mutations/enablement-simulation') && apiClient.includes('/sync/replay-safety') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
+assert('Pages API client can read sync changes by cursor',
+  apiClient.includes('listSyncChanges') && apiClient.includes('/sync/changes') && apiClient.includes('cursor') && apiClient.includes('limit'));
+assert('Pages API client can refresh TimeWhere Cloud session without Google secrets',
+  apiClient.includes('refreshSession') && apiClient.includes('/auth/session/refresh') && !apiClient.includes('client_secret'));
+assert('Pages API client can read safe account status and update workspace profile',
+  apiClient.includes('getAccountStatus') && apiClient.includes('/account/status') && apiClient.includes('updateAccountProfile') && apiClient.includes('/account/profile'));
 assert('Web App exposes Phase 3 Task sync conflict review in Settings',
   app.includes('SyncConflictDiagnosticsPanel') && app.includes('Task sync conflicts') && app.includes('Refresh conflicts') && app.includes('Inspect') && app.includes('Keep cloud') && app.includes('Discard local') && app.includes('Later'));
 assert('Web App exposes Phase 3 Task sync conflict actions without apply-local overwrite',
@@ -400,17 +514,48 @@ assert('Pages API client can read and resolve Task sync conflicts',
 assert('Web App uses legacy IndexedDB snapshot adapter for migration preview',
   app.includes('buildLegacyIndexedDbSnapshot') && app.includes("deviceId: 'web-preview'"));
 assert('Web App exposes Calendar event CRUD controls',
-  app.includes('Create calendar event') && app.includes('Save event to Cloud') && app.includes('Search calendar events') && app.includes('Delete event'));
+  app.includes('Create calendar event') && app.includes('Save event to Cloud') && app.includes('Search calendar events') && app.includes('CalendarEventDetailPanel') && app.includes('Save calendar event detail') && app.includes('Edit event') && app.includes('calendarRepository.updateEvent') && app.includes('Delete event'));
+assert('Web App exposes Calendar event recurrence fields without changing D1 schema',
+  app.includes('Repeat days') && app.includes('active_start_date') && app.includes('parseRepeatDaysText') && app.includes('payload: {') && app.includes('repeat_days'));
 assert('Web App exposes Structure management controls',
-  app.includes('Add plan') && app.includes('Add bucket') && app.includes('Add label') && app.includes('Add container') && app.includes('Search buckets and containers') && app.includes('Google SSO session required before creating Cloud plans') && app.includes('Google SSO session required before creating Cloud buckets') && app.includes('Google SSO session required before creating Cloud labels'));
+  app.includes('Add plan') && app.includes('Add bucket') && app.includes('Add label') && app.includes('Add container') && app.includes('Search buckets and containers') && app.includes('StructureDetailPanel') && app.includes('Save structure detail') && app.includes('Edit plan') && app.includes('Edit container') && app.includes('Enabled') && app.includes('structureRepository.updatePlan') && app.includes('structureRepository.updateContainer') && app.includes('Google SSO session required before creating Cloud plans') && app.includes('Google SSO session required before creating Cloud buckets') && app.includes('Google SSO session required before creating Cloud labels'));
 assert('Web App exposes Cloud settings controls',
-  app.includes('Default duration') && app.includes('Default priority') && app.includes('Enable reminders') && app.includes('Save settings'));
+  app.includes('Default duration') && app.includes('Default priority') && app.includes('Start week on') && app.includes('Theme') && app.includes('Background') && app.includes('Avatar') && app.includes('Enable notifications') && app.includes('Reminder before') && app.includes('Arrange trigger') && app.includes('Defensive threshold') && app.includes('Heal time') && app.includes('default_duration') && app.includes('appearance_background') && app.includes('Save settings'));
 assert('Web App requires Google SSO session for writes and Task queueing',
   app.includes('Google SSO session required before creating or queueing tasks') && app.includes('Google SSO session required before editing or queueing tasks') && app.includes('Google SSO session required before creating Cloud calendar events'));
 assert('Web App renders real Google SSO account entry',
   app.includes('renderGoogleSsoButton') && app.includes('googleButtonRef') && app.includes('Disconnect session') && !app.includes('<button disabled>Connect Google SSO</button>'));
+assert('Web App exposes TimeWhere session refresh control',
+  app.includes('refreshTimeWhereSession') && app.includes('Refresh session') && app.includes('TimeWhere Cloud session refreshed.'));
 assert('Web App Settings can refresh real Cloud account and sync status',
-  app.includes('refreshCloudSessionStatus') && app.includes('Refresh account status') && app.includes('apiClient.getSyncStatus') && apiClient.includes('/sync/status'));
+  app.includes('refreshCloudSessionStatus') && app.includes('Refresh account status') && app.includes('apiClient.getSyncStatus') && app.includes('apiClient.getAccountStatus') && apiClient.includes('/sync/status'));
+assert('Web App Settings exposes editable TimeWhere workspace profile and safe gate status',
+  app.includes('Workspace profile')
+    && app.includes('Save workspace')
+    && app.includes('saveAccountProfile')
+    && app.includes('task_replay_writes_enabled')
+    && app.includes('prod_release_enabled'));
+assert('Web App hydrates read cache from read-only sync bootstrap',
+  app.includes('refreshFromBootstrap')
+    && app.includes('apiClient.getSyncBootstrap')
+    && app.includes('taskRepository.hydrateCache')
+    && app.includes('calendarRepository.hydrateCache')
+    && app.includes('structureRepository.hydrateCache')
+    && app.includes('settingsRepository.hydrateCache')
+    && app.includes('Cloud bootstrap loaded'));
+assert('Web App can refresh read cache from read-only sync changes cursor',
+  app.includes('SYNC_CURSOR_KEY')
+    && app.includes('refreshIncrementalChanges')
+    && app.includes('applyReadOnlyCloudChange')
+    && app.includes('apiClient.listSyncChanges')
+    && app.includes('Read cache cursor')
+    && app.includes('Refresh changes')
+    && app.includes('taskRepository.applyCloudTask')
+    && app.includes('taskRepository.removeCloudTask')
+    && app.includes('calendarRepository.applyCloudEvent')
+    && app.includes('calendarRepository.removeCloudEvent')
+    && app.includes('structureRepository.applyCloudItem')
+    && app.includes('structureRepository.removeCloudItem'));
 
 const pagesReadme = read('pages/README.md');
 assert('Pages README documents Task-only queued pending and non-Task offline write block',
@@ -419,6 +564,12 @@ assert('Pages README documents Worker proxy',
   pagesReadme.includes('127.0.0.1:4173') && pagesReadme.includes('127.0.0.1:8787'));
 assert('Pages README documents Google SSO client id configuration',
   pagesReadme.includes('VITE_GOOGLE_OIDC_CLIENT_ID') && pagesReadme.includes('GOOGLE_OIDC_CLIENT_ID') && pagesReadme.includes('不需要也不能配置 client secret'));
+assert('Pages README documents TimeWhere session refresh without Google token',
+  pagesReadme.includes('有效 session 的本地刷新') && pagesReadme.includes('不保存 Google token'));
+assert('Pages README documents account workspace profile and runtime status',
+  pagesReadme.includes('workspace/profile') && pagesReadme.includes('/account/status'));
+assert('Pages README documents read-only sync bootstrap and incremental change refresh',
+  pagesReadme.includes('/sync/bootstrap') && pagesReadme.includes('/sync/changes') && pagesReadme.includes('cursor') && pagesReadme.includes('不应用 mutation'));
 assert('Pages README documents Tasks and Calendar migration v1',
   pagesReadme.includes('Tasks 已进入 WebDev Task-only queued pending 阶段') && pagesReadme.includes('Calendar Events 已进入第一版 WebDev 迁移实现'));
 assert('Pages README documents Structure migration v1',
@@ -432,11 +583,110 @@ const rootPackage = JSON.parse(read('package.json'));
 const workerPackage = JSON.parse(read('workers/package.json'));
 assert('root package has webdev:check script', rootPackage.scripts['webdev:check'] === 'node tests/webdev-scaffold.test.js');
 assert('root package has webdev:verify script', rootPackage.scripts['webdev:verify']?.includes('npm --prefix pages run build') && rootPackage.scripts['webdev:verify']?.includes('npm --prefix workers run typecheck'));
+assert('root package has WebDev preview preflight script', rootPackage.scripts['webdev:preview:preflight'] === 'node scripts/webdev/preview-preflight.mjs');
+const webdevPreviewPreflight = read('scripts/webdev/preview-preflight.mjs');
+assert('WebDev preview preflight is read-only and gate-aware',
+  webdevPreviewPreflight.includes('Gate A')
+    && webdevPreviewPreflight.includes('REPLACE_WITH_PREVIEW_D1_ID')
+    && webdevPreviewPreflight.includes('TIMEWHERE_TASK_REPLAY_KILL_SWITCH = "on"')
+    && !webdevPreviewPreflight.includes('wrangler deploy')
+    && !webdevPreviewPreflight.includes('d1 create')
+    && !webdevPreviewPreflight.includes('r2 bucket create')
+    && !webdevPreviewPreflight.includes('kv namespace create'));
+assert('root package has Gate A Cloudflare provision/deploy scripts',
+  rootPackage.scripts['webdev:cloudflare:provision'] === 'node scripts/webdev/provision-cloudflare.mjs'
+    && rootPackage.scripts['webdev:preview:deploy'] === 'node scripts/webdev/deploy-cloudflare-preview.mjs');
+assert('root package has Gate A preview smoke script',
+  rootPackage.scripts['webdev:preview:smoke'] === 'node scripts/webdev/preview-smoke.mjs');
+assert('root package has Gate A preview core smoke script',
+  rootPackage.scripts['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs');
+assert('root package has Gate R readiness-only script',
+  rootPackage.scripts['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs');
+const cloudflareProvision = read('scripts/webdev/provision-cloudflare.mjs');
+const previewDeploy = read('scripts/webdev/deploy-cloudflare-preview.mjs');
+const previewSmoke = read('scripts/webdev/preview-smoke.mjs');
+const previewCoreSmoke = read('scripts/webdev/preview-core-smoke.mjs');
+const prodReadinessCheck = read('scripts/webdev/prod-readiness-check.mjs');
+assert('Cloudflare provision script targets dev and preview only',
+  cloudflareProvision.includes('timewhere-dev-api')
+    && cloudflareProvision.includes('timewhere-preview-api')
+    && cloudflareProvision.includes('timewhere-dev-web')
+    && cloudflareProvision.includes('timewhere-preview-web')
+    && !cloudflareProvision.includes('timewhere-api"')
+    && !cloudflareProvision.includes('timewhere-web"'));
+assert('Cloudflare provision script writes resource ids only to ignored local state',
+  cloudflareProvision.includes('.wrangler')
+    && cloudflareProvision.includes('timewhere-cloudflare-resources.local.json')
+    && cloudflareProvision.includes('timewhere-webdev.generated.wrangler.toml'));
+assert('preview deploy script uses generated local config and preview environment',
+  previewDeploy.includes('timewhere-cloudflare-resources.local.json')
+    && previewDeploy.includes('timewhere-webdev.generated.wrangler.toml')
+    && previewDeploy.includes("'--env', 'preview'")
+    && previewDeploy.includes("'--branch',")
+    && previewDeploy.includes("'WebDev'")
+    && previewDeploy.includes('canonicalPagesUrl'));
+assert('preview smoke script is Gate A only and refuses non-preview resources',
+  previewSmoke.includes('timewhere-preview-api')
+    && previewSmoke.includes('timewhere-preview-web')
+    && previewSmoke.includes('Preview smoke refuses to run against a non-preview'));
+assert('preview smoke script checks Worker Pages D1 R2 and KV without prod',
+  previewSmoke.includes('/health')
+    && previewSmoke.includes('sqlite_master')
+    && previewSmoke.includes("'r2'")
+    && previewSmoke.includes("'kv'")
+    && !previewSmoke.includes('timewhere-api"'));
+assert('preview core smoke script uses temporary smoke account and cleans up',
+  previewCoreSmoke.includes('preview-smoke-')
+    && previewCoreSmoke.includes('cleanupSmokeAccounts')
+    && previewCoreSmoke.includes('deleteSmokeSnapshot')
+    && previewCoreSmoke.includes('No prod resources were touched')
+    && previewCoreSmoke.includes('no Google session, token, account email, or Cloudflare id was printed'));
+assert('preview core smoke script covers core Worker APIs without replay enablement',
+  previewCoreSmoke.includes('/account/status')
+    && previewCoreSmoke.includes('/tasks')
+    && previewCoreSmoke.includes('/calendar/events')
+    && previewCoreSmoke.includes('/settings')
+    && previewCoreSmoke.includes('/sync/bootstrap')
+    && previewCoreSmoke.includes('/sync/changes')
+    && previewCoreSmoke.includes('/migration/runs')
+    && previewCoreSmoke.includes('/migration/conflicts?status=open')
+    && previewCoreSmoke.includes('idempotent retry')
+    && !previewCoreSmoke.includes('writes_enabled=true'));
+assert('prod readiness script is static and release-gated',
+  prodReadinessCheck.includes('WebDev prod readiness static check')
+    && prodReadinessCheck.includes('No prod resource was created')
+    && prodReadinessCheck.includes("!packageJson.scripts?.['webdev:prod:deploy']")
+    && prodReadinessCheck.includes('REPLACE_WITH_PROD_D1_ID')
+    && prodReadinessCheck.includes('TIMEWHERE_TASK_REPLAY_KILL_SWITCH = \"on\"'));
 assert('root package has webdev integration script', rootPackage.scripts['webdev:integration'] === 'node tests/webdev-integration.test.js');
+assert('root package has WebDev UI walkthrough script', rootPackage.scripts['webdev:ui:walkthrough'] === 'node scripts/webdev/ui-walkthrough.mjs');
+const webdevUiWalkthrough = read('scripts/webdev/ui-walkthrough.mjs');
+assert('WebDev UI walkthrough exercises read cache change refresh',
+  /getByRole\('button', \{ name: 'Refresh changes' \}\)\.click/.test(webdevUiWalkthrough)
+    && webdevUiWalkthrough.includes('Settings refreshes read cache changes by cursor')
+    && /Applied \\d\+ updated/.test(webdevUiWalkthrough)
+    && webdevUiWalkthrough.includes('requestWorker')
+    && webdevUiWalkthrough.includes("POST', '/tasks'")
+    && webdevUiWalkthrough.includes('Tasks view receives incremental Cloud task from sync changes'));
+const webdevDesktopRuntimeSmoke = read('scripts/webdev/desktop-runtime-smoke.mjs');
+assert('root package has WebDev Desktop Runtime smoke script', rootPackage.scripts['webdev:desktop:smoke'] === 'node scripts/webdev/desktop-runtime-smoke.mjs');
+assert('root package has local WebDev acceptance script',
+  rootPackage.scripts['webdev:acceptance:local']?.includes('npm run webdev:verify')
+    && rootPackage.scripts['webdev:acceptance:local']?.includes('npm run webdev:ui:walkthrough')
+    && rootPackage.scripts['webdev:acceptance:local']?.includes('npm run webdev:desktop:smoke'));
+assert('WebDev Desktop Runtime smoke loads local Pages through Electron without packaging',
+  webdevDesktopRuntimeSmoke.includes('TIMEWHERE_ELECTRON_SMOKE')
+    && webdevDesktopRuntimeSmoke.includes('TIMEWHERE_DESKTOP_RUNTIME_MODE')
+    && webdevDesktopRuntimeSmoke.includes('TIMEWHERE_WEB_APP_URL')
+    && webdevDesktopRuntimeSmoke.includes('Electron loaded WebDev Runtime mode')
+    && webdevDesktopRuntimeSmoke.includes('platforms/desktop-electron')
+    && !webdevDesktopRuntimeSmoke.includes('package:win')
+    && !webdevDesktopRuntimeSmoke.includes('package:mac'));
 assert('root package webdev verify runs local integration', rootPackage.scripts['webdev:verify']?.includes('node tests/webdev-integration.test.js'));
 assert('root package webdev verify runs migration adapter tests', rootPackage.scripts['webdev:verify']?.includes('node tests/webdev-migration-adapter.test.js'));
 assert('root package webdev verify runs business parity tests', rootPackage.scripts['webdev:verify']?.includes('node tests/webdev-business-parity.test.js'));
 assert('root package webdev verify runs offline queue tests', rootPackage.scripts['webdev:verify']?.includes('node tests/webdev-offline-queue.test.js'));
+assert('root package webdev verify runs preview preflight', rootPackage.scripts['webdev:verify']?.includes('npm run webdev:preview:preflight'));
 assert('root package exposes local WebDev prepare script', rootPackage.scripts['webdev:local:prepare']?.includes('db:local:prepare'));
 assert('root package exposes local WebDev reset script', rootPackage.scripts['webdev:local:reset']?.includes('db:local:reset'));
 assert('root package has workers:typecheck script', rootPackage.scripts['workers:typecheck'] === 'npm --prefix workers run typecheck');

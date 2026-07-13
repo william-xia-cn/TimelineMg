@@ -44,6 +44,11 @@ export function createSettingsRepository(apiClient, { storage = window.localStor
     getCachedSettings() {
       return readCachedSettings(storage);
     },
+    hydrateCache(settings) {
+      const nextSettings = settings && typeof settings === 'object' ? settings : {};
+      writeCachedSettings(storage, nextSettings);
+      return nextSettings;
+    },
     async getSettings() {
       if (!isOnline()) return readCachedSettings(storage);
       const data = await apiClient.request('/settings', { method: 'GET' });

@@ -8,6 +8,7 @@ import {
   Database,
   LayoutDashboard,
   ListChecks,
+  Pencil,
   RefreshCw,
   RotateCcw,
   Settings,
@@ -26,6 +27,8 @@ import { computeCalendarDateProjection } from './domain/calendarDateProjection.j
 import { advanceReminderSession, computeReminderState } from './domain/reminderState.js';
 import { buildLegacyIndexedDbSnapshot } from './migration/legacyIndexedDbSnapshotAdapter.js';
 import { disableGoogleAutoSelect, GOOGLE_SSO_CLIENT_ID, renderGoogleSsoButton } from './auth/googleSso.js';
+
+const SYNC_CURSOR_KEY = 'timewhere.web.sync.cursor.v1';
 
 const seedTasks = [
   { id: 'local-preview-1', title: 'Review WebDev architecture contracts', progress: 'not_started', priority: 'important', due_date: '2026-07-10', source: 'preview' },
@@ -73,7 +76,11 @@ const emptyEventDraft = {
   title: '',
   date: '',
   time_start: '',
-  time_end: ''
+  time_end: '',
+  repeat: 'none',
+  repeat_days_text: '',
+  active_start_date: '',
+  active_end_date: ''
 };
 
 const emptyPlanDraft = {
@@ -100,16 +107,54 @@ const emptyContainerDraft = {
 };
 
 const defaultSettingsDraft = {
+  default_duration: 45,
+  default_priority: 'medium',
   default_task_duration: 45,
   default_task_priority: 'medium',
-  reminders_enabled: true
+  notification_enabled: true,
+  reminders_enabled: true,
+  reminder_before: 15,
+  start_week_on: 1,
+  theme: 'light',
+  appearance_background: 'calm',
+  appearance_avatar: 'default',
+  arrange_trigger: 'manual',
+  defensive_threshold: 24,
+  heal_time: '23:00'
 };
 
 function normalizeSettingsDraft(settings) {
+  const source = settings && typeof settings === 'object' ? settings : {};
+  const defaultDuration = source.default_duration ?? source.default_task_duration ?? defaultSettingsDraft.default_duration;
+  const defaultPriority = source.default_priority ?? source.default_task_priority ?? defaultSettingsDraft.default_priority;
+  const notificationEnabled = source.notification_enabled ?? source.reminders_enabled ?? defaultSettingsDraft.notification_enabled;
   return {
     ...defaultSettingsDraft,
-    ...(settings && typeof settings === 'object' ? settings : {})
+    ...source,
+    default_duration: defaultDuration,
+    default_priority: defaultPriority,
+    default_task_duration: defaultDuration,
+    default_task_priority: defaultPriority,
+    notification_enabled: Boolean(notificationEnabled),
+    reminders_enabled: Boolean(notificationEnabled)
   };
+}
+
+const webAppViews = new Set(['dashboard', 'tasks', 'calendar', 'settings']);
+
+function normalizeView(value) {
+  const next = String(value || '').replace(/^#\/?/, '').replace(/^\/+/, '').trim().toLowerCase();
+  return webAppViews.has(next) ? next : 'dashboard';
+}
+
+function getInitialActiveView() {
+  const hashView = typeof window !== 'undefined' ? window.location.hash : '';
+  if (hashView) return normalizeView(hashView);
+  if (typeof window !== 'undefined') {
+    const queryView = new URLSearchParams(window.location.search).get('view');
+    if (queryView) return normalizeView(queryView);
+  }
+  return 'dashboard';
 }
 
 function formatStatus(error) {
@@ -143,8 +188,22 @@ function formatEventMeta(event) {
   const parts = [];
   if (event.date) parts.push(event.date);
   if (event.time_start || event.time_end) parts.push(`${event.time_start || '--:--'}-${event.time_end || '--:--'}`);
+  const repeat = event.repeat || event.payload?.repeat || 'none';
+  if (repeat && repeat !== 'none') parts.push(`repeat ${repeat}`);
   if (event.source) parts.push(event.source);
   return parts.join(' · ');
+}
+
+function parseRepeatDaysText(value) {
+  const seen = new Set();
+  return String(value || '')
+    .split(/[,\s]+/)
+    .map(part => Number(part.trim()))
+    .filter(day => Number.isInteger(day) && day >= 0 && day <= 6 && !seen.has(day) && seen.add(day));
+}
+
+function formatRepeatDaysText(days) {
+  return Array.isArray(days) ? days.join(',') : '';
 }
 
 function formatContainerMeta(container) {
@@ -153,6 +212,10 @@ function formatContainerMeta(container) {
   if (container.repeat) parts.push(container.repeat);
   parts.push(container.enabled === false ? 'disabled' : 'enabled');
   return parts.join(' · ');
+}
+
+function replaceById(items, item) {
+  return items.map(current => current.id === item.id ? item : current);
 }
 
 function localDateKey(date = new Date()) {
@@ -258,12 +321,27 @@ function replayInputFromQueuedMutation(mutation) {
   };
 }
 
+function readStoredSyncCursor() {
+  const value = Number(window.localStorage?.getItem(SYNC_CURSOR_KEY) || 0);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function writeStoredSyncCursor(cursor) {
+  const value = Number(cursor || 0);
+  const normalized = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  window.localStorage?.setItem(SYNC_CURSOR_KEY, String(normalized));
+  return normalized;
+}
+
 export function App() {
   const platform = useMemo(() => createBrowserPlatform(), []);
   const googleButtonRef = useRef(null);
   const [online, setOnline] = useState(navigator.onLine);
   const [session, setSession] = useState(() => apiClient.getSession());
   const [account, setAccount] = useState(() => apiClient.getSession()?.account || null);
+  const [accountProfile, setAccountProfile] = useState(() => apiClient.getSession()?.profile || null);
+  const [accountStatus, setAccountStatus] = useState(null);
+  const [profileDraft, setProfileDraft] = useState(() => apiClient.getSession()?.profile?.name || 'Personal Workspace');
   const [ssoState, setSsoState] = useState({ phase: GOOGLE_SSO_CLIENT_ID ? 'idle' : 'not_configured', message: GOOGLE_SSO_CLIENT_ID ? 'Google SSO ready.' : 'Set VITE_GOOGLE_OIDC_CLIENT_ID to enable Google SSO.' });
   const [cloudSessionStatus, setCloudSessionStatus] = useState('Cloud session not checked.');
   const taskRepository = useMemo(() => createTaskRepository(apiClient, { isOnline: () => navigator.onLine }), []);
@@ -271,7 +349,7 @@ export function App() {
   const structureRepository = useMemo(() => createStructureRepository(apiClient, { isOnline: () => navigator.onLine }), []);
   const settingsRepository = useMemo(() => createSettingsRepository(apiClient, { isOnline: () => navigator.onLine }), []);
   const migrationRepository = useMemo(() => createMigrationRepository(apiClient), []);
-  const [activeView, setActiveView] = useState('dashboard');
+  const [activeView, setActiveView] = useState(getInitialActiveView);
   const [tasks, setTasks] = useState(() => taskRepository.getCachedTasks().length ? taskRepository.getCachedTasks() : seedTasks);
   const [events, setEvents] = useState(() => calendarRepository.getCachedEvents().length ? calendarRepository.getCachedEvents() : seedEvents);
   const [plans, setPlans] = useState(() => structureRepository.getCachedStructure().plans.length ? structureRepository.getCachedStructure().plans : seedPlans);
@@ -292,6 +370,8 @@ export function App() {
   const [structureSearch, setStructureSearch] = useState('');
   const [selectedDate, setSelectedDate] = useState(() => localDateKey());
   const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [selectedEventId, setSelectedEventId] = useState(null);
+  const [selectedStructure, setSelectedStructure] = useState(null);
   const [migrationResult, setMigrationResult] = useState(null);
   const [migrationConflicts, setMigrationConflicts] = useState([]);
   const [migrationConflictStatus, setMigrationConflictStatus] = useState('Not loaded');
@@ -309,16 +389,39 @@ export function App() {
   const [syncConflictRecords, setSyncConflictRecords] = useState([]);
   const [syncConflictDetail, setSyncConflictDetail] = useState(null);
   const [syncConflictStatus, setSyncConflictStatus] = useState('Not loaded');
+  const [syncCursor, setSyncCursor] = useState(readStoredSyncCursor);
+  const [syncIncrementalStatus, setSyncIncrementalStatus] = useState('Not loaded');
   const [reminderSession, setReminderSession] = useState(null);
 
   useEffect(() => platform.onNetworkChange(setOnline), [platform]);
+
+  useEffect(() => {
+    function handleRouteChange() {
+      setActiveView(getInitialActiveView());
+    }
+    window.addEventListener('hashchange', handleRouteChange);
+    window.addEventListener('popstate', handleRouteChange);
+    return () => {
+      window.removeEventListener('hashchange', handleRouteChange);
+      window.removeEventListener('popstate', handleRouteChange);
+    };
+  }, []);
+
+  function navigateToView(view) {
+    const nextView = normalizeView(view);
+    setActiveView(nextView);
+    const nextHash = `#${nextView}`;
+    if (window.location.hash !== nextHash) {
+      window.history.pushState(null, '', `${window.location.pathname}${window.location.search}${nextHash}`);
+    }
+  }
 
   useEffect(() => {
     let disposed = false;
     async function refreshAccount() {
       if (!online || !session?.token) return;
       try {
-        const data = await apiClient.getAccount();
+        const data = await apiClient.getAccountStatus();
         if (disposed) return;
         const nextAccount = data.account ? {
           id: data.account.id,
@@ -326,15 +429,21 @@ export function App() {
           name: data.account.display_name || data.account.name || null,
           picture: data.account.picture_url || data.account.picture || null
         } : session.account || null;
+        const nextProfile = data.profile || session.profile || null;
         setAccount(nextAccount);
-        apiClient.setSession({ ...apiClient.getSession(), account: nextAccount });
-        setCloudSessionStatus(`Cloud account active: ${nextAccount?.name || nextAccount?.email || 'Google account'}`);
+        setAccountProfile(nextProfile);
+        setAccountStatus(data.runtime || null);
+        setProfileDraft(nextProfile?.name || 'Personal Workspace');
+        apiClient.setSession({ ...apiClient.getSession(), account: nextAccount, profile: nextProfile });
+        setCloudSessionStatus(`Cloud account active: ${nextAccount?.name || nextAccount?.email || 'Google account'} · ${nextProfile?.name || 'Personal Workspace'}`);
       } catch (error) {
         if (disposed) return;
         if (error instanceof ApiError && [401, 403].includes(error.status)) {
           apiClient.logoutLocal();
           setSession(null);
           setAccount(null);
+          setAccountProfile(null);
+          setAccountStatus(null);
           setStatus({ phase: 'blocked', message: 'Google SSO session expired. Sign in again to edit Cloud data.' });
           setCloudSessionStatus('Cloud session expired or invalid.');
         }
@@ -471,8 +580,153 @@ export function App() {
     }
   }
 
+  async function refreshFromBootstrap() {
+    if (!online || !apiClient.getSession()?.token) return false;
+    try {
+      const bootstrap = await apiClient.getSyncBootstrap();
+      if (bootstrap?.account) {
+        const nextAccount = {
+          id: bootstrap.account.id,
+          email: bootstrap.account.email || null,
+          name: bootstrap.account.display_name || bootstrap.account.name || null,
+          picture: bootstrap.account.picture_url || bootstrap.account.picture || null
+        };
+        setAccount(nextAccount);
+        setAccountProfile(bootstrap.profile || null);
+        setProfileDraft(bootstrap.profile?.name || 'Personal Workspace');
+        apiClient.setSession({ ...apiClient.getSession(), account: nextAccount, profile: bootstrap.profile || null });
+      }
+      const entities = bootstrap?.entities || {};
+      const nextTasks = taskRepository.hydrateCache(entities.tasks || []);
+      const nextEvents = calendarRepository.hydrateCache(entities.calendar_events || []);
+      const nextStructure = structureRepository.hydrateCache({
+        plans: entities.plans || [],
+        buckets: entities.buckets || [],
+        labels: entities.labels || [],
+        containers: entities.containers || []
+      });
+      const nextSettings = settingsRepository.hydrateCache(entities.settings || {});
+      setTasks(nextTasks);
+      setEvents(nextEvents);
+      setPlans(nextStructure.plans);
+      setBuckets(nextStructure.buckets);
+      setLabels(nextStructure.labels);
+      setContainers(nextStructure.containers);
+      setSettingsDraft(normalizeSettingsDraft(nextSettings));
+      const nextCursor = writeStoredSyncCursor(bootstrap?.cursor || 0);
+      setSyncCursor(nextCursor);
+      setStatus({ phase: 'ready', message: `Cloud bootstrap loaded · cursor ${bootstrap?.cursor ?? 0}` });
+      setCloudSessionStatus(`${bootstrap?.authority || 'cloud_d1_canonical'} · ${bootstrap?.offline_write_policy || 'blocked_v1'} · cursor ${bootstrap?.cursor ?? 0}`);
+      setSyncIncrementalStatus(`Bootstrap cache ready at cursor ${nextCursor}.`);
+      return true;
+    } catch (error) {
+      setStatus({ phase: 'error', message: formatStatus(error) });
+      return false;
+    }
+  }
+
   async function refreshWorkspace() {
+    if (await refreshFromBootstrap()) return;
     await Promise.all([refreshTasks(), refreshEvents(), refreshStructure(), refreshSettings()]);
+  }
+
+  async function applyReadOnlyCloudChange(change) {
+    const type = change?.entity_type;
+    const id = change?.entity_id;
+    const operation = change?.operation;
+    if (!type || !id) return 'skipped';
+    if (operation === 'deleted') {
+      if (type === 'task') taskRepository.removeCloudTask(id);
+      else if (type === 'calendar_event') calendarRepository.removeCloudEvent(id);
+      else if (['plan', 'bucket', 'label', 'container'].includes(type)) structureRepository.removeCloudItem(type, id);
+      return 'deleted';
+    }
+    try {
+      if (type === 'task') {
+        const data = await apiClient.request(`/tasks/${encodeURIComponent(id)}`, { method: 'GET' });
+        taskRepository.applyCloudTask(data.task);
+        return 'updated';
+      }
+      if (type === 'calendar_event') {
+        const data = await apiClient.request(`/calendar/events/${encodeURIComponent(id)}`, { method: 'GET' });
+        calendarRepository.applyCloudEvent(data.event);
+        return 'updated';
+      }
+      if (type === 'plan') {
+        const data = await apiClient.request(`/plans/${encodeURIComponent(id)}`, { method: 'GET' });
+        structureRepository.applyCloudItem('plan', data.plan);
+        return 'updated';
+      }
+      if (type === 'bucket') {
+        const data = await apiClient.request(`/buckets/${encodeURIComponent(id)}`, { method: 'GET' });
+        structureRepository.applyCloudItem('bucket', data.bucket);
+        return 'updated';
+      }
+      if (type === 'label') {
+        const data = await apiClient.request(`/labels/${encodeURIComponent(id)}`, { method: 'GET' });
+        structureRepository.applyCloudItem('label', data.label);
+        return 'updated';
+      }
+      if (type === 'container') {
+        const data = await apiClient.request(`/containers/${encodeURIComponent(id)}`, { method: 'GET' });
+        structureRepository.applyCloudItem('container', data.container);
+        return 'updated';
+      }
+      if (type === 'product_setting') {
+        const settings = await settingsRepository.getSettings();
+        setSettingsDraft(normalizeSettingsDraft(settings));
+        return 'updated';
+      }
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        if (type === 'task') taskRepository.removeCloudTask(id);
+        else if (type === 'calendar_event') calendarRepository.removeCloudEvent(id);
+        else if (['plan', 'bucket', 'label', 'container'].includes(type)) structureRepository.removeCloudItem(type, id);
+        return 'deleted';
+      }
+      throw error;
+    }
+    return 'skipped';
+  }
+
+  async function refreshIncrementalChanges() {
+    if (!online) {
+      setSyncIncrementalStatus('Offline: cached data remains readable; reconnect before pulling Cloud changes.');
+      return;
+    }
+    if (!apiClient.getSession()?.token) {
+      setSyncIncrementalStatus('Google SSO session required before pulling Cloud changes.');
+      return;
+    }
+    const cursor = readStoredSyncCursor();
+    setSyncIncrementalStatus(`Pulling Cloud changes after cursor ${cursor}...`);
+    try {
+      const result = await apiClient.listSyncChanges({ cursor, limit: 100 });
+      let updated = 0;
+      let deleted = 0;
+      let skipped = 0;
+      for (const change of result.changes || []) {
+        const status = await applyReadOnlyCloudChange(change);
+        if (status === 'updated') updated += 1;
+        else if (status === 'deleted') deleted += 1;
+        else skipped += 1;
+      }
+      const nextCursor = writeStoredSyncCursor(result.next_cursor ?? cursor);
+      setSyncCursor(nextCursor);
+      setTasks(taskRepository.getCachedTasks());
+      setEvents(calendarRepository.getCachedEvents());
+      const structure = structureRepository.getCachedStructure();
+      setPlans(structure.plans);
+      setBuckets(structure.buckets);
+      setLabels(structure.labels);
+      setContainers(structure.containers);
+      setSettingsDraft(normalizeSettingsDraft(settingsRepository.getCachedSettings()));
+      setSyncIncrementalStatus(`Applied ${updated} updated, ${deleted} deleted, ${skipped} skipped Cloud changes · cursor ${nextCursor}.`);
+      setStatus({ phase: 'ready', message: `Cloud change cursor refreshed · cursor ${nextCursor}` });
+    } catch (error) {
+      setSyncIncrementalStatus(formatStatus(error));
+      setStatus({ phase: 'error', message: formatStatus(error) });
+    }
   }
 
   async function refreshCloudSessionStatus() {
@@ -485,9 +739,22 @@ export function App() {
       return;
     }
     try {
-      const [accountData, syncData] = await Promise.all([apiClient.getAccount(), apiClient.getSyncStatus()]);
-      const displayName = accountData.account?.display_name || accountData.account?.email || 'Google account';
-      setCloudSessionStatus(`${displayName} · ${syncData.mode} · offline writes ${syncData.offline_writes}`);
+      const [accountData, syncData] = await Promise.all([apiClient.getAccountStatus(), apiClient.getSyncStatus()]);
+      const nextAccount = accountData.account ? {
+        id: accountData.account.id,
+        email: accountData.account.email || null,
+        name: accountData.account.display_name || accountData.account.name || null,
+        picture: accountData.account.picture_url || accountData.account.picture || null
+      } : account;
+      setAccount(nextAccount);
+      setAccountProfile(accountData.profile || null);
+      setAccountStatus(accountData.runtime || null);
+      setProfileDraft(accountData.profile?.name || 'Personal Workspace');
+      apiClient.setSession({ ...apiClient.getSession(), account: nextAccount, profile: accountData.profile || null });
+      const displayName = nextAccount?.name || nextAccount?.email || 'Google account';
+      const profileName = accountData.profile?.name || 'Personal Workspace';
+      const taskReplay = accountData.runtime?.gates?.task_replay_writes_enabled ? 'Task replay writes on' : 'Task replay writes off';
+      setCloudSessionStatus(`${displayName} · ${profileName} · ${syncData.mode} · ${syncData.offline_writes} · ${taskReplay}`);
     } catch (error) {
       setCloudSessionStatus(formatStatus(error));
       setStatus({ phase: 'error', message: formatStatus(error) });
@@ -501,6 +768,8 @@ export function App() {
       const nextSession = apiClient.getSession();
       setSession(nextSession);
       setAccount(data.account || nextSession?.account || null);
+      setAccountProfile(data.profile || nextSession?.profile || null);
+      setProfileDraft((data.profile || nextSession?.profile)?.name || 'Personal Workspace');
       setStatus({ phase: 'ready', message: 'Google SSO connected. Cloud writes are enabled.' });
       setSsoState({ phase: 'connected', message: 'Google SSO connected.' });
       await refreshCloudSessionStatus();
@@ -518,6 +787,9 @@ export function App() {
       disableGoogleAutoSelect();
       setSession(null);
       setAccount(null);
+      setAccountProfile(null);
+      setAccountStatus(null);
+      setProfileDraft('Personal Workspace');
       setStatus({ phase: 'preview', message: 'Google SSO disconnected. Preview/cache remains available.' });
       setCloudSessionStatus('No active TimeWhere Cloud session. Connect with Google SSO.');
       setSsoState({ phase: GOOGLE_SSO_CLIENT_ID ? 'idle' : 'not_configured', message: GOOGLE_SSO_CLIENT_ID ? 'Google SSO ready.' : 'Set VITE_GOOGLE_OIDC_CLIENT_ID to enable Google SSO.' });
@@ -525,6 +797,52 @@ export function App() {
     } catch (error) {
       setStatus({ phase: 'error', message: formatStatus(error) });
       setSsoState({ phase: 'error', message: formatStatus(error) });
+    }
+  }
+
+  async function refreshTimeWhereSession() {
+    if (!online) {
+      setCloudSessionStatus('Offline: reconnect before refreshing the TimeWhere Cloud session.');
+      return;
+    }
+    if (!apiClient.getSession()?.token) {
+      setCloudSessionStatus('No active TimeWhere Cloud session. Connect with Google SSO.');
+      return;
+    }
+    setSsoState({ phase: 'refreshing', message: 'Refreshing TimeWhere Cloud session...' });
+    try {
+      const data = await apiClient.refreshSession();
+      const nextSession = apiClient.getSession();
+      setSession(nextSession);
+      setAccount(data.account || nextSession?.account || null);
+      setAccountProfile(data.profile || nextSession?.profile || null);
+      setProfileDraft((data.profile || nextSession?.profile)?.name || 'Personal Workspace');
+      const expiresAt = nextSession?.expires_at ? new Date(nextSession.expires_at).toLocaleString() : 'unknown';
+      setCloudSessionStatus(`Session refreshed. Expires ${expiresAt}.`);
+      setStatus({ phase: 'ready', message: 'TimeWhere Cloud session refreshed.' });
+      setSsoState({ phase: 'connected', message: 'Google SSO connected.' });
+    } catch (error) {
+      setCloudSessionStatus(formatStatus(error));
+      setStatus({ phase: 'error', message: formatStatus(error) });
+      setSsoState({ phase: 'error', message: formatStatus(error) });
+    }
+  }
+
+  async function saveAccountProfile(event) {
+    event.preventDefault();
+    if (!hasCloudSession()) {
+      setCloudSessionStatus('Google SSO session required before saving workspace profile.');
+      return;
+    }
+    try {
+      const data = await apiClient.updateAccountProfile({ name: profileDraft });
+      setAccountProfile(data.profile);
+      apiClient.setSession({ ...apiClient.getSession(), profile: data.profile });
+      setStatus({ phase: 'ready', message: 'Workspace profile saved to Cloud account.' });
+      await refreshCloudSessionStatus();
+    } catch (error) {
+      setStatus({ phase: 'error', message: formatStatus(error) });
+      setCloudSessionStatus(formatStatus(error));
     }
   }
 
@@ -606,12 +924,20 @@ export function App() {
     }
     if (!eventDraft.title.trim()) return;
     try {
+      const repeat = eventDraft.repeat || 'none';
+      const repeatDays = parseRepeatDaysText(eventDraft.repeat_days_text);
       const created = await calendarRepository.createEvent({
         title: eventDraft.title.trim(),
         date: eventDraft.date || null,
         time_start: eventDraft.time_start || null,
         time_end: eventDraft.time_end || null,
-        source: 'web_app'
+        active_start_date: repeat === 'none' ? null : eventDraft.active_start_date || eventDraft.date || null,
+        active_end_date: repeat === 'none' ? null : eventDraft.active_end_date || null,
+        source: 'web_app',
+        payload: {
+          repeat,
+          repeat_days: repeat === 'weekly' || repeat === 'custom' ? repeatDays : []
+        }
       });
       setEvents(current => [created, ...current.filter(item => item.id !== created.id)]);
       setEventDraft(emptyEventDraft);
@@ -633,7 +959,27 @@ export function App() {
     try {
       await calendarRepository.deleteEvent(event.id);
       setEvents(current => current.filter(item => item.id !== event.id));
+      setSelectedEventId(current => current === event.id ? null : current);
       setStatus({ phase: 'ready', message: 'Calendar event deleted from Cloud canonical store.' });
+    } catch (error) {
+      setStatus({ phase: 'error', message: formatStatus(error) });
+    }
+  }
+
+  async function updateEventState(event, nextPatch) {
+    if (!online) {
+      setStatus({ phase: 'offline', message: 'offline_write_blocked: reconnect before editing current calendar data.' });
+      return;
+    }
+    if (!hasCloudSession()) {
+      setStatus({ phase: 'blocked', message: 'Google SSO session required before editing Cloud calendar events.' });
+      return;
+    }
+    try {
+      const updated = await calendarRepository.updateEvent(event.id, nextPatch);
+      setEvents(current => current.map(item => item.id === updated.id ? updated : item));
+      setSelectedEventId(updated.id);
+      setStatus({ phase: 'ready', message: 'Calendar event updated in Cloud canonical store.' });
     } catch (error) {
       setStatus({ phase: 'error', message: formatStatus(error) });
     }
@@ -677,6 +1023,7 @@ export function App() {
     try {
       await structureRepository.deletePlan(plan.id);
       setPlans(current => current.filter(item => item.id !== plan.id));
+      setSelectedStructure(current => current?.type === 'plan' && current.id === plan.id ? null : current);
       setStatus({ phase: 'ready', message: 'Plan deleted from Cloud canonical store.' });
     } catch (error) {
       setStatus({ phase: 'error', message: formatStatus(error) });
@@ -719,6 +1066,7 @@ export function App() {
     try {
       await structureRepository.deleteBucket(bucket.id);
       setBuckets(current => current.filter(item => item.id !== bucket.id));
+      setSelectedStructure(current => current?.type === 'bucket' && current.id === bucket.id ? null : current);
       setStatus({ phase: 'ready', message: 'Bucket deleted from Cloud canonical store.' });
     } catch (error) {
       setStatus({ phase: 'error', message: formatStatus(error) });
@@ -761,6 +1109,7 @@ export function App() {
     try {
       await structureRepository.deleteLabel(label.id);
       setLabels(current => current.filter(item => item.id !== label.id));
+      setSelectedStructure(current => current?.type === 'label' && current.id === label.id ? null : current);
       setStatus({ phase: 'ready', message: 'Label deleted from Cloud canonical store.' });
     } catch (error) {
       setStatus({ phase: 'error', message: formatStatus(error) });
@@ -806,7 +1155,39 @@ export function App() {
     try {
       await structureRepository.deleteContainer(container.id);
       setContainers(current => current.filter(item => item.id !== container.id));
+      setSelectedStructure(current => current?.type === 'container' && current.id === container.id ? null : current);
       setStatus({ phase: 'ready', message: 'Container deleted from Cloud canonical store.' });
+    } catch (error) {
+      setStatus({ phase: 'error', message: formatStatus(error) });
+    }
+  }
+
+  async function updateStructureItem(type, item, patch) {
+    if (!online) {
+      setStatus({ phase: 'offline', message: 'offline_write_blocked: reconnect before editing structure data.' });
+      return;
+    }
+    if (!hasCloudSession()) {
+      setStatus({ phase: 'blocked', message: `Google SSO session required before editing Cloud ${type}s.` });
+      return;
+    }
+    try {
+      let updated;
+      if (type === 'plan') {
+        updated = await structureRepository.updatePlan(item.id, patch);
+        setPlans(current => replaceById(current, updated));
+      } else if (type === 'bucket') {
+        updated = await structureRepository.updateBucket(item.id, patch);
+        setBuckets(current => replaceById(current, updated));
+      } else if (type === 'label') {
+        updated = await structureRepository.updateLabel(item.id, patch);
+        setLabels(current => replaceById(current, updated));
+      } else if (type === 'container') {
+        updated = await structureRepository.updateContainer(item.id, patch);
+        setContainers(current => replaceById(current, updated));
+      }
+      if (updated?.id) setSelectedStructure({ type, id: updated.id });
+      setStatus({ phase: 'ready', message: `${type} updated in Cloud canonical store.` });
     } catch (error) {
       setStatus({ phase: 'error', message: formatStatus(error) });
     }
@@ -823,10 +1204,24 @@ export function App() {
       return;
     }
     try {
+      const defaultDuration = Number(settingsDraft.default_duration || settingsDraft.default_task_duration || 45);
+      const defaultPriority = settingsDraft.default_priority || settingsDraft.default_task_priority || 'medium';
+      const notificationEnabled = Boolean(settingsDraft.notification_enabled);
       const saved = await settingsRepository.updateSettings({
-        default_task_duration: Number(settingsDraft.default_task_duration || 45),
-        default_task_priority: settingsDraft.default_task_priority || 'medium',
-        reminders_enabled: Boolean(settingsDraft.reminders_enabled)
+        default_duration: defaultDuration,
+        default_priority: defaultPriority,
+        default_task_duration: defaultDuration,
+        default_task_priority: defaultPriority,
+        notification_enabled: notificationEnabled,
+        reminders_enabled: notificationEnabled,
+        reminder_before: Number(settingsDraft.reminder_before || 15),
+        start_week_on: Number(settingsDraft.start_week_on ?? 1),
+        theme: settingsDraft.theme || 'light',
+        appearance_background: settingsDraft.appearance_background || 'calm',
+        appearance_avatar: settingsDraft.appearance_avatar || 'default',
+        arrange_trigger: settingsDraft.arrange_trigger || 'manual',
+        defensive_threshold: Number(settingsDraft.defensive_threshold || 24),
+        heal_time: settingsDraft.heal_time || '23:00'
       });
       setSettingsDraft(normalizeSettingsDraft(saved));
       setStatus({ phase: 'ready', message: 'Settings saved to Cloud canonical store.' });
@@ -984,7 +1379,7 @@ export function App() {
   }
 
   function openPendingTaskQueue() {
-    setActiveView('settings');
+    navigateToView('settings');
     setPendingTaskQueueStatus('Review local pending Task edits. Retry preview is dry-run only; discard does not change Cloud data.');
   }
 
@@ -1094,7 +1489,7 @@ export function App() {
   });
   const dashboardProjection = useMemo(() => computeDashboardProjection({ tasks, containers }), [tasks, containers]);
   const calendarProjection = useMemo(() => computeCalendarDateProjection({ date: selectedDate, tasks, events, containers }), [selectedDate, tasks, events, containers]);
-  const reminderState = useMemo(() => computeReminderState({ tasks, remindersEnabled: settingsDraft.reminders_enabled }), [tasks, settingsDraft.reminders_enabled]);
+  const reminderState = useMemo(() => computeReminderState({ tasks, remindersEnabled: settingsDraft.notification_enabled !== false && settingsDraft.reminders_enabled !== false }), [tasks, settingsDraft.notification_enabled, settingsDraft.reminders_enabled]);
   const pendingTaskMutations = useMemo(() => taskRepository.listPendingTaskMutations(), [tasks]);
 
   useEffect(() => {
@@ -1107,8 +1502,19 @@ export function App() {
   const pendingCount = tasks.filter(task => !isCompleted(task)).length;
   const completedCount = tasks.filter(isCompleted).length;
   const selectedTask = tasks.find(task => task.id === selectedTaskId) || null;
+  const selectedEvent = events.find(event => event.id === selectedEventId) || null;
+  const selectedStructureItem = selectedStructure?.type === 'plan'
+    ? plans.find(item => item.id === selectedStructure.id) || null
+    : selectedStructure?.type === 'bucket'
+      ? buckets.find(item => item.id === selectedStructure.id) || null
+      : selectedStructure?.type === 'label'
+        ? labels.find(item => item.id === selectedStructure.id) || null
+        : selectedStructure?.type === 'container'
+          ? containers.find(item => item.id === selectedStructure.id) || null
+          : null;
   const accountName = account?.name || account?.display_name || account?.email || 'Google account';
   const accountPicture = account?.picture || account?.picture_url || null;
+  const accountProfileName = accountProfile?.name || 'Personal Workspace';
   const hasSession = hasCloudSession();
   const canWrite = online && hasSession;
   const taskCanWrite = hasSession;
@@ -1122,10 +1528,10 @@ export function App() {
           <span>TimeWhere</span>
         </div>
         <nav className="nav-list" aria-label="Primary">
-          <button className={activeView === 'dashboard' ? 'active' : ''} onClick={() => setActiveView('dashboard')}><LayoutDashboard size={18} />Dashboard</button>
-          <button className={activeView === 'tasks' ? 'active' : ''} onClick={() => setActiveView('tasks')}><ListChecks size={18} />Tasks</button>
-          <button className={activeView === 'calendar' ? 'active' : ''} onClick={() => setActiveView('calendar')}><CalendarDays size={18} />Calendar</button>
-          <button className={activeView === 'settings' ? 'active' : ''} onClick={() => setActiveView('settings')}><Settings size={18} />Settings</button>
+          <button className={activeView === 'dashboard' ? 'active' : ''} onClick={() => navigateToView('dashboard')}><LayoutDashboard size={18} />Dashboard</button>
+          <button className={activeView === 'tasks' ? 'active' : ''} onClick={() => navigateToView('tasks')}><ListChecks size={18} />Tasks</button>
+          <button className={activeView === 'calendar' ? 'active' : ''} onClick={() => navigateToView('calendar')}><CalendarDays size={18} />Calendar</button>
+          <button className={activeView === 'settings' ? 'active' : ''} onClick={() => navigateToView('settings')}><Settings size={18} />Settings</button>
         </nav>
         <div className={`cloud-state ${online ? status.phase : 'offline'}`}>
           {online ? <Cloud size={18} /> : <WifiOff size={18} />}
@@ -1273,6 +1679,29 @@ export function App() {
                   <span>End</span>
                   <input type="time" value={eventDraft.time_end} onChange={event => setEventDraft(current => ({ ...current, time_end: event.target.value }))} disabled={!canWrite} />
                 </label>
+                <label>
+                  <span>Repeat</span>
+                  <select value={eventDraft.repeat} onChange={event => setEventDraft(current => ({ ...current, repeat: event.target.value }))} disabled={!canWrite}>
+                    <option value="none">None</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekday">Weekday</option>
+                    <option value="weekend">Weekend</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Repeat days</span>
+                  <input value={eventDraft.repeat_days_text} onChange={event => setEventDraft(current => ({ ...current, repeat_days_text: event.target.value }))} placeholder="0,1,2 for Sun,Mon,Tue" disabled={!canWrite || !['weekly', 'custom'].includes(eventDraft.repeat)} />
+                </label>
+                <label>
+                  <span>Active start</span>
+                  <input type="date" value={eventDraft.active_start_date} onChange={event => setEventDraft(current => ({ ...current, active_start_date: event.target.value }))} disabled={!canWrite || eventDraft.repeat === 'none'} />
+                </label>
+                <label>
+                  <span>Active end</span>
+                  <input type="date" value={eventDraft.active_end_date} onChange={event => setEventDraft(current => ({ ...current, active_end_date: event.target.value }))} disabled={!canWrite || eventDraft.repeat === 'none'} />
+                </label>
                 <button type="submit" disabled={!canWrite}>Save event to Cloud</button>
               </form>
             </div>
@@ -1286,7 +1715,8 @@ export function App() {
                 <input type="date" value={selectedDate} onChange={event => setSelectedDate(event.target.value)} />
               </label>
               <CalendarProjectionPanel projection={calendarProjection} onSelectTask={task => setSelectedTaskId(task.id)} />
-              <CalendarEventList events={visibleEvents} canWrite={canWrite} onDelete={deleteEvent} />
+              <CalendarEventList events={visibleEvents} canWrite={canWrite} onSelect={event => setSelectedEventId(event.id)} onDelete={deleteEvent} />
+              <CalendarEventDetailPanel event={selectedEvent} canWrite={canWrite} onSave={patch => selectedEvent && updateEventState(selectedEvent, patch)} onClose={() => setSelectedEventId(null)} />
             </div>
           </section>
         )}
@@ -1297,15 +1727,26 @@ export function App() {
               <h2>Account</h2>
               <p>Google SSO creates a TimeWhere Cloud session through the Worker.</p>
               {hasCloudSession() ? (
-                <div className="account-card">
-                  {accountPicture ? <img src={accountPicture} alt="" /> : <div className="account-initial">{accountName.slice(0, 1).toUpperCase()}</div>}
-                  <div>
-                    <strong>{accountName}</strong>
-                    {account?.email && <span>{account.email}</span>}
-                    {session?.expires_at && <span>Session expires {new Date(session.expires_at).toLocaleString()}</span>}
+                <>
+                  <div className="account-card">
+                    {accountPicture ? <img src={accountPicture} alt="" /> : <div className="account-initial">{accountName.slice(0, 1).toUpperCase()}</div>}
+                    <div>
+                      <strong>{accountName}</strong>
+                      {account?.email && <span>{account.email}</span>}
+                      <span>Workspace: {accountProfileName}</span>
+                      {session?.expires_at && <span>Session expires {new Date(session.expires_at).toLocaleString()}</span>}
+                    </div>
+                    <button type="button" onClick={refreshTimeWhereSession}>Refresh session</button>
+                    <button type="button" onClick={disconnectGoogleSession}>Disconnect session</button>
                   </div>
-                  <button type="button" onClick={disconnectGoogleSession}>Disconnect session</button>
-                </div>
+                  <form className="account-profile-form" onSubmit={saveAccountProfile}>
+                    <label>
+                      <span>Workspace profile</span>
+                      <input value={profileDraft} onChange={event => setProfileDraft(event.target.value)} disabled={!canWrite} />
+                    </label>
+                    <button type="submit" disabled={!canWrite}>Save workspace</button>
+                  </form>
+                </>
               ) : (
                 <>
                   <div className="google-sso-button" ref={googleButtonRef} />
@@ -1316,7 +1757,20 @@ export function App() {
               <div className="cloud-session-status">
                 <strong>Cloud session</strong>
                 <span>{cloudSessionStatus}</span>
+                <span>Read cache cursor: {syncCursor}</span>
+                <span>{syncIncrementalStatus}</span>
+                {accountStatus && (
+                  <span>
+                    {accountStatus.environment} · {accountStatus.data_authority} · Google SSO {accountStatus.auth?.google_sso_configured ? 'configured' : 'not configured'}
+                  </span>
+                )}
+                {accountStatus?.gates && (
+                  <span>
+                    Gates: Task replay writes {accountStatus.gates.task_replay_writes_enabled ? 'on' : 'off'} · non-Task replay {accountStatus.gates.non_task_replay_enabled ? 'on' : 'off'} · prod release {accountStatus.gates.prod_release_enabled ? 'on' : 'off'}
+                  </span>
+                )}
                 <button type="button" onClick={refreshCloudSessionStatus}>Refresh account status</button>
+                <button type="button" onClick={refreshIncrementalChanges} disabled={!online || !hasCloudSession()}>Refresh changes</button>
               </div>
             </div>
             <div className="panel">
@@ -1337,20 +1791,72 @@ export function App() {
               <form className="settings-form" onSubmit={saveSettings}>
                 <label>
                   <span>Default duration</span>
-                  <input type="number" min="5" step="5" value={settingsDraft.default_task_duration} onChange={event => setSettingsDraft(current => ({ ...current, default_task_duration: event.target.value }))} disabled={!canWrite} />
+                  <input type="number" min="5" step="5" value={settingsDraft.default_duration} onChange={event => setSettingsDraft(current => ({ ...current, default_duration: event.target.value, default_task_duration: event.target.value }))} disabled={!canWrite} />
                 </label>
                 <label>
                   <span>Default priority</span>
-                  <select value={settingsDraft.default_task_priority} onChange={event => setSettingsDraft(current => ({ ...current, default_task_priority: event.target.value }))} disabled={!canWrite}>
+                  <select value={settingsDraft.default_priority} onChange={event => setSettingsDraft(current => ({ ...current, default_priority: event.target.value, default_task_priority: event.target.value }))} disabled={!canWrite}>
                     <option value="urgent">Urgent</option>
                     <option value="important">Important</option>
                     <option value="medium">Medium</option>
                     <option value="low">Low</option>
                   </select>
                 </label>
+                <label>
+                  <span>Start week on</span>
+                  <select value={settingsDraft.start_week_on} onChange={event => setSettingsDraft(current => ({ ...current, start_week_on: Number(event.target.value) }))} disabled={!canWrite}>
+                    <option value={1}>Monday</option>
+                    <option value={0}>Sunday</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Theme</span>
+                  <select value={settingsDraft.theme} onChange={event => setSettingsDraft(current => ({ ...current, theme: event.target.value }))} disabled={!canWrite}>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                    <option value="system">System</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Background</span>
+                  <select value={settingsDraft.appearance_background} onChange={event => setSettingsDraft(current => ({ ...current, appearance_background: event.target.value }))} disabled={!canWrite}>
+                    <option value="calm">Calm</option>
+                    <option value="focus">Focus</option>
+                    <option value="plain">Plain</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Avatar</span>
+                  <select value={settingsDraft.appearance_avatar} onChange={event => setSettingsDraft(current => ({ ...current, appearance_avatar: event.target.value }))} disabled={!canWrite}>
+                    <option value="default">Default</option>
+                    <option value="blue">Blue</option>
+                    <option value="green">Green</option>
+                    <option value="none">None</option>
+                  </select>
+                </label>
                 <label className="check-row">
-                  <input type="checkbox" checked={Boolean(settingsDraft.reminders_enabled)} onChange={event => setSettingsDraft(current => ({ ...current, reminders_enabled: event.target.checked }))} disabled={!canWrite} />
-                  <span>Enable reminders</span>
+                  <input type="checkbox" checked={Boolean(settingsDraft.notification_enabled)} onChange={event => setSettingsDraft(current => ({ ...current, notification_enabled: event.target.checked, reminders_enabled: event.target.checked }))} disabled={!canWrite} />
+                  <span>Enable notifications</span>
+                </label>
+                <label>
+                  <span>Reminder before</span>
+                  <input type="number" min="0" max="180" step="5" value={settingsDraft.reminder_before} onChange={event => setSettingsDraft(current => ({ ...current, reminder_before: event.target.value }))} disabled={!canWrite || !settingsDraft.notification_enabled} />
+                </label>
+                <label>
+                  <span>Arrange trigger</span>
+                  <select value={settingsDraft.arrange_trigger} onChange={event => setSettingsDraft(current => ({ ...current, arrange_trigger: event.target.value }))} disabled={!canWrite}>
+                    <option value="manual">Manual</option>
+                    <option value="review">Review first</option>
+                    <option value="auto">Automatic</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Defensive threshold</span>
+                  <input type="number" min="0" max="168" value={settingsDraft.defensive_threshold} onChange={event => setSettingsDraft(current => ({ ...current, defensive_threshold: event.target.value }))} disabled={!canWrite} />
+                </label>
+                <label>
+                  <span>Heal time</span>
+                  <input type="time" value={settingsDraft.heal_time} onChange={event => setSettingsDraft(current => ({ ...current, heal_time: event.target.value }))} disabled={!canWrite} />
                 </label>
                 <button type="submit" disabled={!canWrite}>Save settings</button>
               </form>
@@ -1376,7 +1882,10 @@ export function App() {
                       <strong>{plan.name}</strong>
                       <span>{plan.subject || plan.icon_char || 'plan'}</span>
                     </div>
-                    <button type="button" disabled={!canWrite} title="Delete plan" onClick={() => deletePlan(plan)}><Trash2 size={15} /></button>
+                    <div className="structure-actions">
+                      <button type="button" title="Edit plan" onClick={() => setSelectedStructure({ type: 'plan', id: plan.id })}><Pencil size={15} /></button>
+                      <button type="button" disabled={!canWrite} title="Delete plan" onClick={() => deletePlan(plan)}><Trash2 size={15} /></button>
+                    </div>
                   </article>
                 ))}
               </div>
@@ -1390,8 +1899,14 @@ export function App() {
                 {buckets.map(bucket => (
                   <article className="structure-row" key={bucket.id}>
                     <span className="swatch" style={{ backgroundColor: bucket.color || '#cbd7e4' }} />
-                    <strong>{bucket.name}</strong>
-                    <button type="button" disabled={!canWrite} title="Delete bucket" onClick={() => deleteBucket(bucket)}><Trash2 size={15} /></button>
+                    <div>
+                      <strong>{bucket.name}</strong>
+                      <span>{bucket.plan_id || 'bucket'}</span>
+                    </div>
+                    <div className="structure-actions">
+                      <button type="button" title="Edit bucket" onClick={() => setSelectedStructure({ type: 'bucket', id: bucket.id })}><Pencil size={15} /></button>
+                      <button type="button" disabled={!canWrite} title="Delete bucket" onClick={() => deleteBucket(bucket)}><Trash2 size={15} /></button>
+                    </div>
                   </article>
                 ))}
               </div>
@@ -1405,8 +1920,14 @@ export function App() {
                 {labels.map(label => (
                   <article className="structure-row" key={label.id}>
                     <span className="swatch" style={{ backgroundColor: label.color || '#cbd7e4' }} />
-                    <strong>{label.name}</strong>
-                    <button type="button" disabled={!canWrite} title="Delete label" onClick={() => deleteLabel(label)}><Trash2 size={15} /></button>
+                    <div>
+                      <strong>{label.name}</strong>
+                      <span>{label.plan_id || 'label'}</span>
+                    </div>
+                    <div className="structure-actions">
+                      <button type="button" title="Edit label" onClick={() => setSelectedStructure({ type: 'label', id: label.id })}><Pencil size={15} /></button>
+                      <button type="button" disabled={!canWrite} title="Delete label" onClick={() => deleteLabel(label)}><Trash2 size={15} /></button>
+                    </div>
                   </article>
                 ))}
               </div>
@@ -1431,10 +1952,14 @@ export function App() {
                       <strong>{container.name}</strong>
                       <span>{formatContainerMeta(container)}</span>
                     </div>
-                    <button type="button" disabled={!canWrite} title="Delete container" onClick={() => deleteContainer(container)}><Trash2 size={15} /></button>
+                    <div className="structure-actions">
+                      <button type="button" title="Edit container" onClick={() => setSelectedStructure({ type: 'container', id: container.id })}><Pencil size={15} /></button>
+                      <button type="button" disabled={!canWrite} title="Delete container" onClick={() => deleteContainer(container)}><Trash2 size={15} /></button>
+                    </div>
                   </article>
                 ))}
               </div>
+              <StructureDetailPanel selection={selectedStructure} item={selectedStructureItem} plans={plans} canWrite={canWrite} onSave={(type, item, patch) => updateStructureItem(type, item, patch)} onClose={() => setSelectedStructure(null)} />
             </div>
             <div className="panel">
               <h2>Data authority</h2>
@@ -1537,6 +2062,107 @@ function TaskDetailPanel({ task, plans, buckets, labels, canWrite, onSave, onClo
   );
 }
 
+function StructureDetailPanel({ selection, item, plans, canWrite, onSave, onClose }) {
+  const [form, setForm] = useState(null);
+  const type = selection?.type || null;
+  const typeLabel = type ? type.slice(0, 1).toUpperCase() + type.slice(1) : 'Structure';
+
+  useEffect(() => {
+    if (!type || !item) {
+      setForm(null);
+      return;
+    }
+    setForm({
+      name: item.name || '',
+      color: item.color || '#2364aa',
+      icon_char: item.icon_char || '',
+      subject: item.subject || '',
+      subject_in_matrixview: item.subject_in_matrixview || '',
+      plan_id: item.plan_id || '',
+      sort_order: item.sort_order ?? '',
+      time_start: item.time_start || '',
+      time_end: item.time_end || '',
+      repeat: item.repeat || 'weekday',
+      enabled: item.enabled !== false,
+      active_start_date: item.active_start_date || '',
+      active_end_date: item.active_end_date || ''
+    });
+  }, [type, item?.id, item?.revision]);
+
+  if (!type || !item || !form) {
+    return <div className="structure-detail-panel empty-detail"><h3>Structure detail</h3><p>Select a Plan, Bucket, Label or Container to edit Cloud structure fields.</p></div>;
+  }
+
+  function updateField(field, value) {
+    setForm(current => ({ ...current, [field]: value }));
+  }
+
+  function submit(event) {
+    event.preventDefault();
+    if (!form.name.trim()) return;
+    let patch = { name: form.name.trim() };
+    if (type === 'plan') {
+      patch = {
+        ...patch,
+        color: form.color || null,
+        icon_char: form.icon_char || null,
+        subject: form.subject || null,
+        subject_in_matrixview: form.subject_in_matrixview || null,
+        sort_order: form.sort_order === '' ? null : Number(form.sort_order || 0)
+      };
+    } else if (type === 'bucket') {
+      patch = {
+        ...patch,
+        color: form.color || null,
+        plan_id: form.plan_id || null,
+        sort_order: form.sort_order === '' ? null : Number(form.sort_order || 0)
+      };
+    } else if (type === 'label') {
+      patch = {
+        ...patch,
+        color: form.color || null,
+        plan_id: form.plan_id || null
+      };
+    } else if (type === 'container') {
+      patch = {
+        ...patch,
+        time_start: form.time_start || null,
+        time_end: form.time_end || null,
+        repeat: form.repeat || null,
+        enabled: Boolean(form.enabled),
+        active_start_date: form.active_start_date || null,
+        active_end_date: form.active_end_date || null
+      };
+    }
+    onSave(type, item, patch);
+  }
+
+  return (
+    <div className="structure-detail-panel">
+      <div className="panel-heading-row">
+        <h3>{typeLabel} detail</h3>
+        <button type="button" onClick={onClose}>Close</button>
+      </div>
+      <form className="structure-detail-form" onSubmit={submit}>
+        <label><span>Name</span><input value={form.name} onChange={event => updateField('name', event.target.value)} disabled={!canWrite} /></label>
+        {type !== 'container' && <label><span>Color</span><input type="color" value={form.color} onChange={event => updateField('color', event.target.value)} disabled={!canWrite} /></label>}
+        {type === 'plan' && <label><span>Icon</span><input value={form.icon_char} onChange={event => updateField('icon_char', event.target.value.slice(0, 2))} disabled={!canWrite} /></label>}
+        {type === 'plan' && <label><span>Subject</span><input value={form.subject} onChange={event => updateField('subject', event.target.value)} disabled={!canWrite} /></label>}
+        {type === 'plan' && <label><span>Matrix subject</span><input value={form.subject_in_matrixview} onChange={event => updateField('subject_in_matrixview', event.target.value)} disabled={!canWrite} /></label>}
+        {(type === 'plan' || type === 'bucket') && <label><span>Sort order</span><input type="number" value={form.sort_order} onChange={event => updateField('sort_order', event.target.value)} disabled={!canWrite} /></label>}
+        {(type === 'bucket' || type === 'label') && <label><span>Plan</span><select value={form.plan_id} onChange={event => updateField('plan_id', event.target.value)} disabled={!canWrite}><option value="">No plan</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</select></label>}
+        {type === 'container' && <label><span>Start</span><input type="time" value={form.time_start} onChange={event => updateField('time_start', event.target.value)} disabled={!canWrite} /></label>}
+        {type === 'container' && <label><span>End</span><input type="time" value={form.time_end} onChange={event => updateField('time_end', event.target.value)} disabled={!canWrite} /></label>}
+        {type === 'container' && <label><span>Repeat</span><select value={form.repeat} onChange={event => updateField('repeat', event.target.value)} disabled={!canWrite}><option value="weekday">Weekday</option><option value="weekend">Weekend</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></label>}
+        {type === 'container' && <label><span>Active start</span><input type="date" value={form.active_start_date} onChange={event => updateField('active_start_date', event.target.value)} disabled={!canWrite} /></label>}
+        {type === 'container' && <label><span>Active end</span><input type="date" value={form.active_end_date} onChange={event => updateField('active_end_date', event.target.value)} disabled={!canWrite} /></label>}
+        {type === 'container' && <label className="check-row"><input type="checkbox" checked={Boolean(form.enabled)} onChange={event => updateField('enabled', event.target.checked)} disabled={!canWrite} /><span>Enabled</span></label>}
+        <button type="submit" disabled={!canWrite}>Save structure detail</button>
+      </form>
+    </div>
+  );
+}
+
 function ReminderStatePanel({ state, session, onSessionEvent }) {
   return (
     <div className={`metric wide reminder-state ${state.status}`}>
@@ -1576,6 +2202,78 @@ function CalendarProjectionPanel({ projection, compact = false, onSelectTask }) 
           </article>
         ))}
       </div>
+    </div>
+  );
+}
+
+function CalendarEventDetailPanel({ event, canWrite, onSave, onClose }) {
+  const [form, setForm] = useState(null);
+
+  useEffect(() => {
+    if (!event) {
+      setForm(null);
+      return;
+    }
+    setForm({
+      title: event.title || '',
+      date: event.date || '',
+      time_start: event.time_start || '',
+      time_end: event.time_end || '',
+      repeat: event.repeat || event.payload?.repeat || 'none',
+      repeat_days_text: formatRepeatDaysText(event.repeat_days || event.payload?.repeat_days),
+      active_start_date: event.active_start_date || '',
+      active_end_date: event.active_end_date || '',
+      source: event.source || 'web_app'
+    });
+  }, [event?.id]);
+
+  if (!event || !form) {
+    return <div className="panel calendar-event-detail empty-detail"><h2>Calendar event detail</h2><p>Select an event to inspect and edit Cloud schedule fields.</p></div>;
+  }
+
+  function updateField(field, value) {
+    setForm(current => ({ ...current, [field]: value }));
+  }
+
+  function submit(detailEvent) {
+    detailEvent.preventDefault();
+    if (!form.title.trim()) return;
+    const repeat = form.repeat || 'none';
+    const repeatDays = parseRepeatDaysText(form.repeat_days_text);
+    onSave({
+      title: form.title.trim(),
+      date: form.date || null,
+      time_start: form.time_start || null,
+      time_end: form.time_end || null,
+      active_start_date: repeat === 'none' ? null : form.active_start_date || form.date || null,
+      active_end_date: repeat === 'none' ? null : form.active_end_date || null,
+      payload: {
+        ...(event.payload && typeof event.payload === 'object' ? event.payload : {}),
+        repeat,
+        repeat_days: repeat === 'weekly' || repeat === 'custom' ? repeatDays : []
+      }
+    });
+  }
+
+  return (
+    <div className="panel calendar-event-detail">
+      <div className="panel-heading-row">
+        <h2>Calendar event detail</h2>
+        <button type="button" onClick={onClose}>Close</button>
+      </div>
+      <p className="source-boundary-note">Calendar source metadata is read-only in WebDev v1. Edit the title and schedule fields only.</p>
+      <form className="calendar-detail-form" onSubmit={submit}>
+        <label><span>Title</span><input value={form.title} onChange={detailEvent => updateField('title', detailEvent.target.value)} disabled={!canWrite} /></label>
+        <label><span>Date</span><input type="date" value={form.date} onChange={detailEvent => updateField('date', detailEvent.target.value)} disabled={!canWrite} /></label>
+        <label><span>Start</span><input type="time" value={form.time_start} onChange={detailEvent => updateField('time_start', detailEvent.target.value)} disabled={!canWrite} /></label>
+        <label><span>End</span><input type="time" value={form.time_end} onChange={detailEvent => updateField('time_end', detailEvent.target.value)} disabled={!canWrite} /></label>
+        <label><span>Repeat</span><select value={form.repeat} onChange={detailEvent => updateField('repeat', detailEvent.target.value)} disabled={!canWrite}><option value="none">None</option><option value="daily">Daily</option><option value="weekday">Weekday</option><option value="weekend">Weekend</option><option value="weekly">Weekly</option><option value="custom">Custom</option></select></label>
+        <label><span>Repeat days</span><input value={form.repeat_days_text} onChange={detailEvent => updateField('repeat_days_text', detailEvent.target.value)} placeholder="0,1,2 for Sun,Mon,Tue" disabled={!canWrite || !['weekly', 'custom'].includes(form.repeat)} /></label>
+        <label><span>Active start</span><input type="date" value={form.active_start_date} onChange={detailEvent => updateField('active_start_date', detailEvent.target.value)} disabled={!canWrite || form.repeat === 'none'} /></label>
+        <label><span>Active end</span><input type="date" value={form.active_end_date} onChange={detailEvent => updateField('active_end_date', detailEvent.target.value)} disabled={!canWrite || form.repeat === 'none'} /></label>
+        <label className="full-row"><span>Source</span><input value={form.source} disabled readOnly /></label>
+        <button type="submit" disabled={!canWrite}>Save calendar event detail</button>
+      </form>
     </div>
   );
 }
@@ -1864,7 +2562,7 @@ function SyncConflictDiagnosticsPanel({ conflicts, detail, status, canRead, canR
   );
 }
 
-function CalendarEventList({ events, canWrite, onDelete }) {
+function CalendarEventList({ events, canWrite, onSelect, onDelete }) {
   return (
     <div className="calendar-list">
       <h2>Calendar events</h2>
@@ -1872,11 +2570,14 @@ function CalendarEventList({ events, canWrite, onDelete }) {
       {events.map(event => (
         <article className="event-row" key={event.id}>
           <CalendarDays size={18} />
-          <div>
+          <div className="event-main" role="button" tabIndex={0} onClick={() => onSelect?.(event)} onKeyDown={keyboardEvent => { if (keyboardEvent.key === 'Enter') onSelect?.(event); }}>
             <strong>{event.title}</strong>
             <span>{formatEventMeta(event)}</span>
           </div>
-          <button type="button" disabled={!canWrite} title="Delete event" onClick={() => onDelete(event)}><Trash2 size={16} /></button>
+          <div className="event-actions">
+            <button type="button" title="Edit event" onClick={() => onSelect?.(event)}><Pencil size={16} /></button>
+            <button type="button" disabled={!canWrite} title="Delete event" onClick={() => onDelete(event)}><Trash2 size={16} /></button>
+          </div>
         </article>
       ))}
     </div>

@@ -79,3 +79,11 @@ export async function listSyncChanges(
     changes
   };
 }
+
+export async function getLatestSyncCursor(env: Env, accountId: string): Promise<number> {
+  const row = await env.DB.prepare(
+    'SELECT MAX(sequence) AS cursor FROM sync_changes WHERE account_id = ?'
+  ).bind(accountId).first<{ cursor: number | null }>();
+  const cursor = Number(row?.cursor || 0);
+  return Number.isFinite(cursor) && cursor > 0 ? Math.floor(cursor) : 0;
+}

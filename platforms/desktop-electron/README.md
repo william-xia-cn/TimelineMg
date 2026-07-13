@@ -4,15 +4,32 @@ This package builds the standalone TimeWhere desktop shell. The first desktop ta
 
 The desktop app loads the existing TimeWhere pages from `extension/`, stores runtime data in Chromium IndexedDB, and does not require the Chrome extension to be installed. Chrome extension connection is an optional Settings integration only.
 
+## WebDev Runtime Mode
+
+WebDev v1 repositions Desktop as a runtime around the Web App. The current Electron shell keeps the legacy extension-backed mode as default, and exposes an opt-in WebDev runtime mode for local development:
+
+```powershell
+$env:TIMEWHERE_DESKTOP_RUNTIME_MODE = 'webdev'
+$env:TIMEWHERE_WEB_APP_URL = 'http://127.0.0.1:4173/'
+npm run electron:dev
+```
+
+In this mode Electron loads the configured Web App URL and maps native desktop routes to Web App hash views such as `#dashboard`, `#tasks`, `#calendar`, and `#settings`. The desktop shell remains responsible only for native runtime capabilities: window, tray, notification, autostart, secure storage, external link handling, and preload IPC bridge. Business logic remains owned by the Web App.
+
+This is not a packaging or release approval. Internal package generation, signing, notarization, auto-update, and distribution remain separate Gate E decisions.
+
 ## Commands
 
 ```powershell
 npm --prefix platforms/desktop-electron install
 npm run electron:dev
 npm run electron:smoke
+npm run webdev:desktop:smoke
 npm run electron:package:win
 npm run electron:package:mac
 ```
+
+`npm run webdev:desktop:smoke` starts local WebDev Worker / Pages services and launches Electron in `TIMEWHERE_DESKTOP_RUNTIME_MODE=webdev` smoke mode. It is a local runtime check only; it does not create a desktop package, sign, notarize, or distribute anything.
 
 Windows package output:
 

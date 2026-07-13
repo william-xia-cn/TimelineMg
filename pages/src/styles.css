@@ -430,7 +430,8 @@ textarea:disabled {
   font-size: 12px;
 }
 
-.calendar-form input {
+.calendar-form input,
+.calendar-form select {
   width: 100%;
   min-height: 40px;
   border: 1px solid #cbd7e4;
@@ -457,7 +458,7 @@ textarea:disabled {
 .event-row {
   min-height: 58px;
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) 32px;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   border-top: 1px solid #edf2f7;
@@ -476,6 +477,21 @@ textarea:disabled {
   margin-top: 2px;
   color: #657386;
   font-size: 13px;
+}
+
+.event-main {
+  min-width: 0;
+  cursor: pointer;
+}
+
+.event-main:focus {
+  outline: 2px solid #2364aa;
+  outline-offset: 2px;
+}
+
+.event-actions {
+  display: flex;
+  gap: 6px;
 }
 
 .event-row button {
@@ -713,7 +729,7 @@ textarea:disabled {
 .structure-row {
   min-height: 42px;
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) 32px;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   padding: 6px 0;
@@ -742,6 +758,11 @@ textarea:disabled {
   border: 1px solid #cbd7e4;
 }
 
+.structure-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .structure-row button {
   width: 32px;
   height: 32px;
@@ -752,9 +773,73 @@ textarea:disabled {
   background: #edf4fb;
 }
 
+.structure-detail-panel {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #edf2f7;
+}
+
+.structure-detail-panel.empty-detail {
+  background: #f8fbff;
+  border: 1px solid #d8e3ef;
+  border-radius: 7px;
+  padding: 12px;
+}
+
+.structure-detail-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.structure-detail-form label span {
+  display: block;
+  margin-bottom: 5px;
+  color: #657386;
+  font-size: 12px;
+}
+
+.structure-detail-form input,
+.structure-detail-form select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #cbd7e4;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #1d252f;
+  padding: 0 10px;
+}
+
+.structure-detail-form input[type="color"] {
+  padding: 4px;
+}
+
+.structure-detail-form .check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.structure-detail-form .check-row input {
+  width: 16px;
+  min-height: 16px;
+}
+
+.structure-detail-form .check-row span {
+  margin: 0;
+  color: #1d252f;
+  font-size: 14px;
+}
+
+.structure-detail-form button {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 920px) {
   .compact-form,
-  .container-form {
+  .container-form,
+  .structure-detail-form {
     grid-template-columns: 1fr;
   }
 
@@ -903,7 +988,8 @@ textarea:disabled {
   margin-top: 14px;
 }
 
-.task-detail-panel.empty-detail {
+.task-detail-panel.empty-detail,
+.calendar-event-detail.empty-detail {
   background: #f8fbff;
 }
 
@@ -937,7 +1023,37 @@ textarea:disabled {
   min-height: 32px;
 }
 
-.task-detail-form {
+.account-profile-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.account-profile-form label span {
+  display: block;
+  margin-bottom: 5px;
+  color: #657386;
+  font-size: 12px;
+}
+
+.account-profile-form input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #cbd7e4;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #1d252f;
+  padding: 0 10px;
+}
+
+.calendar-event-detail {
+  margin-top: 14px;
+}
+
+.task-detail-form,
+.calendar-detail-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
@@ -945,6 +1061,7 @@ textarea:disabled {
 }
 
 .task-detail-form label span,
+.calendar-detail-form label span,
 .date-picker-row span {
   display: block;
   margin-bottom: 5px;
@@ -955,6 +1072,8 @@ textarea:disabled {
 .task-detail-form input,
 .task-detail-form select,
 .task-detail-form textarea,
+.calendar-detail-form input,
+.calendar-detail-form select,
 .date-picker-row input {
   width: 100%;
   min-height: 38px;
@@ -972,7 +1091,9 @@ textarea:disabled {
 }
 
 .task-detail-form .full-row,
-.task-detail-form button {
+.task-detail-form button,
+.calendar-detail-form .full-row,
+.calendar-detail-form button {
   grid-column: 1 / -1;
 }
 
@@ -1101,6 +1222,7 @@ textarea:disabled {
 
 @media (max-width: 920px) {
   .task-detail-form,
+  .calendar-detail-form,
   .projection-row {
     grid-template-columns: 1fr;
   }

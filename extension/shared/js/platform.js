@@ -260,6 +260,9 @@
                 getDesktopProfile() {
                     return { status: 'not_supported', reason: 'already_running_in_chrome_extension' };
                 },
+                getDesktopRuntimeInfo() {
+                    return { status: 'not_supported', reason: 'already_running_in_chrome_extension' };
+                },
                 confirmGoogleAccountSwitch() {
                     return { status: 'not_supported', reason: 'already_running_in_chrome_extension' };
                 }
@@ -458,6 +461,9 @@
                 getDesktopProfile() {
                     return call('system.getDesktopProfile');
                 },
+                getDesktopRuntimeInfo() {
+                    return call('system.getDesktopRuntimeInfo');
+                },
                 confirmGoogleAccountSwitch(payload = {}) {
                     return call('system.confirmGoogleAccountSwitch', payload);
                 }
@@ -517,6 +523,7 @@
                 setDesktopSettings: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
                 writeWidgetSnapshot: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
                 getDesktopProfile: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
+                getDesktopRuntimeInfo: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
                 confirmGoogleAccountSwitch: () => ({ status: 'not_supported', reason: 'platform_unavailable' })
             }
         };
@@ -537,7 +544,7 @@
         chromeBridge: ['connectExtension', 'getStatus'],
         sync: ['getStatus', 'requestRun', 'pause', 'resume'],
         external: ['openUrl'],
-        system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'confirmGoogleAccountSwitch']
+        system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'getDesktopRuntimeInfo', 'confirmGoogleAccountSwitch']
     };
 })(typeof globalThis !== 'undefined' ? globalThis : window);
 

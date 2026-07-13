@@ -58,14 +58,34 @@ export function createApiClient({ baseUrl = '', storage = window.localStorage } 
     },
     async loginWithGoogleIdToken(idToken) {
       const data = await request('/auth/google', { method: 'POST', body: { id_token: idToken } });
-      setSession({ ...data.session, account: data.account });
+      setSession({ ...data.session, account: data.account, profile: data.profile });
       return data;
     },
     async getAccount() {
       return request('/account/me', { method: 'GET' });
     },
+    async getAccountStatus() {
+      return request('/account/status', { method: 'GET' });
+    },
+    async updateAccountProfile(profile) {
+      return request('/account/profile', { method: 'PATCH', body: profile });
+    },
+    async refreshSession() {
+      const data = await request('/auth/session/refresh', { method: 'POST' });
+      setSession({ ...data.session, account: data.account, profile: data.profile });
+      return data;
+    },
     async getSyncStatus() {
       return request('/sync/status', { method: 'GET' });
+    },
+    async getSyncBootstrap() {
+      return request('/sync/bootstrap', { method: 'GET' });
+    },
+    async listSyncChanges({ cursor = 0, limit = 100 } = {}) {
+      const params = new URLSearchParams();
+      params.set('cursor', String(cursor || 0));
+      params.set('limit', String(limit || 100));
+      return request(`/sync/changes?${params.toString()}`, { method: 'GET' });
     },
     async listSyncMutationOutcomes({ status = 'rejected', limit = 20 } = {}) {
       const params = new URLSearchParams();
@@ -115,4 +135,6 @@ export function createApiClient({ baseUrl = '', storage = window.localStorage } 
   };
 }
 
-export const apiClient = createApiClient();
+export const apiClient = createApiClient({
+  baseUrl: import.meta.env.VITE_WORKER_API_BASE_URL || ''
+});

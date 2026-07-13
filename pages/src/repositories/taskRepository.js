@@ -110,6 +110,10 @@ function cachedTaskById(storage, id) {
   return readCachedTasks(storage).find(task => task.id === id) || null;
 }
 
+function hasPendingTask(storage, offlineQueue, id) {
+  return queuedTaskMutationsWithCache(storage, offlineQueue).some(mutation => mutation.entity_id === id && mutation.task);
+}
+
 function createPendingOfflineTask(storage, offlineQueue, input) {
   const id = input.id || defaultTaskId();
   const createdAt = nowISO();
@@ -191,6 +195,37 @@ function restoreTaskAfterDiscard(task, mutations) {
   };
 }
 
+function hydrateTaskCache(storage, offlineQueue, tasks) {
+  const incomingTasks = Array.isArray(tasks) ? tasks : [];
+  const pendingTasks = queuedTaskMutationsWithCache(storage, offlineQueue)
+    .map(mutation => mutation.task)
+    .filter(Boolean);
+  const byId = new Map();
+  for (const task of incomingTasks) {
+    if (task?.id) byId.set(task.id, clearPendingMarker(task));
+  }
+  for (const task of pendingTasks) {
+    if (task?.id) byId.set(task.id, task);
+  }
+  const hydrated = Array.from(byId.values());
+  writeCachedTasks(storage, hydrated);
+  return hydrated;
+}
+
+function applyCloudTaskToCache(storage, offlineQueue, task) {
+  if (!task?.id) return null;
+  if (hasPendingTask(storage, offlineQueue, task.id)) return cachedTaskById(storage, task.id);
+  const cloudTask = clearPendingMarker(task);
+  mergeTaskIntoCache(storage, cloudTask);
+  return cloudTask;
+}
+
+function removeCloudTaskFromCache(storage, offlineQueue, id) {
+  if (hasPendingTask(storage, offlineQueue, id)) return cachedTaskById(storage, id);
+  removeTaskFromCache(storage, id);
+  return null;
+}
+
 export function createTaskRepository(apiClient, { storage = window.localStorage, isOnline = () => navigator.onLine, offlineQueue = createOfflineMutationQueue({ storage, enabled: true }) } = {}) {
   return {
     getOfflineMutationQueueState() {
@@ -198,6 +233,15 @@ export function createTaskRepository(apiClient, { storage = window.localStorage,
     },
     getCachedTasks() {
       return readCachedTasks(storage);
+    },
+    hydrateCache(tasks) {
+      return hydrateTaskCache(storage, offlineQueue, tasks);
+    },
+    applyCloudTask(task) {
+      return applyCloudTaskToCache(storage, offlineQueue, task);
+    },
+    removeCloudTask(id) {
+      return removeCloudTaskFromCache(storage, offlineQueue, id);
     },
     listPendingTaskMutations() {
       return queuedTaskMutationsWithCache(storage, offlineQueue);

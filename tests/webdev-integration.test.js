@@ -7,7 +7,7 @@ const { pathToFileURL } = require('url');
 
 const rootDir = path.resolve(__dirname, '..');
 const workersDir = path.join(rootDir, 'workers');
-const localSession = process.env.TIMEWHERE_LOCAL_SESSION_BEARER || 'timewhere-local-dev-session';
+let activeSession = process.env.TIMEWHERE_LOCAL_SESSION_BEARER || 'timewhere-local-dev-session';
 
 function command(name) {
   return name;
@@ -111,15 +111,28 @@ async function waitForHealth(baseUrl, child) {
   throw new Error(`Timed out waiting for Worker health. Last error: ${lastError?.message || 'unknown'}\n${child.logs.join('').slice(-4000)}`);
 }
 
-async function request(baseUrl, method, pathname, body) {
-  const response = await fetch(`${baseUrl}${pathname}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${localSession}`,
-      'Content-Type': 'application/json'
-    },
-    body: body === undefined ? undefined : JSON.stringify(body)
-  });
+async function request(baseUrl, method, pathname, body, bearer = activeSession) {
+  const canRetry = method === 'GET'
+    || pathname.startsWith('/sync/mutations')
+    || pathname.startsWith('/sync/conflicts');
+  let response = null;
+  for (let attempt = 1; attempt <= (canRetry ? 3 : 1); attempt += 1) {
+    try {
+      response = await fetch(`${baseUrl}${pathname}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${bearer}`,
+          'Content-Type': 'application/json'
+        },
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+      break;
+    } catch (error) {
+      if (attempt === (canRetry ? 3 : 1)) throw error;
+      await new Promise(resolve => setTimeout(resolve, attempt * 250));
+    }
+  }
+  if (!response) throw new Error(`${method} ${pathname} did not return a response`);
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.status === 'error') {
     const detail = payload?.error ? `${payload.error.code}: ${payload.error.message}` : `HTTP ${response.status}`;
@@ -128,15 +141,27 @@ async function request(baseUrl, method, pathname, body) {
   return payload.data;
 }
 
-async function requestRaw(baseUrl, method, pathname, body) {
-  const response = await fetch(`${baseUrl}${pathname}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${localSession}`,
-      'Content-Type': 'application/json'
-    },
-    body: body === undefined ? undefined : JSON.stringify(body)
-  });
+async function requestRaw(baseUrl, method, pathname, body, bearer = activeSession) {
+  let response = null;
+  let lastError = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      response = await fetch(`${baseUrl}${pathname}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${bearer}`,
+          'Content-Type': 'application/json'
+        },
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 3) throw error;
+      await new Promise(resolve => setTimeout(resolve, attempt * 250));
+    }
+  }
+  if (!response) throw lastError || new Error(`${method} ${pathname} did not return a response`);
   const payload = await response.json().catch(() => null);
   return { response, payload };
 }
@@ -161,7 +186,33 @@ async function main() {
 
     const account = await request(baseUrl, 'GET', '/account/me');
     assert.equal(account.account.id, 'acct_local_dev');
-    console.log('  PASS seeded mock session can read account');
+    assert.equal(account.profile.name, 'Local Dev Workspace');
+    const accountStatus = await request(baseUrl, 'GET', '/account/status');
+    assert.equal(accountStatus.account.id, 'acct_local_dev');
+    assert.equal(accountStatus.runtime.data_authority, 'cloud_d1_canonical');
+    assert.equal(accountStatus.runtime.auth.google_tokens_stored_by_worker, false);
+    assert.equal(accountStatus.runtime.gates.task_replay_writes_enabled, false);
+    const updatedProfile = await request(baseUrl, 'PATCH', '/account/profile', {
+      name: 'Integration Workspace'
+    });
+    assert.equal(updatedProfile.profile.name, 'Integration Workspace');
+    const accountAfterProfileUpdate = await request(baseUrl, 'GET', '/account/me');
+    assert.equal(accountAfterProfileUpdate.profile.name, 'Integration Workspace');
+    console.log('  PASS seeded mock session can read account, profile, and safe runtime status');
+
+    const originalSession = activeSession;
+    const refreshedSession = await request(baseUrl, 'POST', '/auth/session/refresh');
+    assert(refreshedSession.session.token);
+    assert.notEqual(refreshedSession.session.token, originalSession);
+    assert.equal(refreshedSession.account.id, 'acct_local_dev');
+    assert.equal(refreshedSession.profile.name, 'Integration Workspace');
+    const oldSessionAttempt = await requestRaw(baseUrl, 'GET', '/account/me', undefined, originalSession);
+    assert.equal(oldSessionAttempt.response.status, 401);
+    assert.equal(oldSessionAttempt.payload.error.code, 'invalid_session');
+    activeSession = refreshedSession.session.token;
+    const refreshedAccount = await request(baseUrl, 'GET', '/account/me');
+    assert.equal(refreshedAccount.account.id, 'acct_local_dev');
+    console.log('  PASS refreshed TimeWhere session rotates bearer and revokes old session');
 
     const date = todayKey();
     const createdTask = await request(baseUrl, 'POST', '/tasks', {
@@ -203,10 +254,93 @@ async function main() {
     assert.equal(createdEvent.event.date, date);
     console.log('  PASS created calendar event through Worker API');
 
+    const dateWeekday = new Date(Number(date.slice(0, 4)), Number(date.slice(5, 7)) - 1, Number(date.slice(8, 10))).getDay();
+    const updatedEvent = await request(baseUrl, 'PATCH', `/calendar/events/${encodeURIComponent(createdEvent.event.id)}`, {
+      title: 'Integration Planning Block Updated',
+      time_end: '19:15',
+      active_start_date: date,
+      payload: {
+        repeat: 'weekly',
+        repeat_days: [dateWeekday]
+      }
+    });
+    assert.equal(updatedEvent.event.title, 'Integration Planning Block Updated');
+    assert.equal(updatedEvent.event.time_end, '19:15');
+    assert.equal(updatedEvent.event.repeat, 'weekly');
+    assert.deepEqual(updatedEvent.event.repeat_days, [dateWeekday]);
+    console.log('  PASS updated calendar event through Worker API');
+
     const eventChanges = await request(baseUrl, 'GET', `/sync/changes?cursor=${encodeURIComponent(taskChanges.next_cursor)}&limit=20`);
     assert(eventChanges.changes.some(change => change.entity_type === 'calendar_event' && change.entity_id === createdEvent.event.id && change.operation === 'created'));
+    assert(eventChanges.changes.some(change => change.entity_type === 'calendar_event' && change.entity_id === createdEvent.event.id && change.operation === 'updated' && change.entity_revision === updatedEvent.event.revision));
     assert(Number(eventChanges.next_cursor) > Number(taskChanges.next_cursor));
     console.log('  PASS sync change feed advances cursor for later entity changes');
+
+    const listedPlans = await request(baseUrl, 'GET', '/plans');
+    assert(listedPlans.plans.length > 0);
+    const updatedPlan = await request(baseUrl, 'PATCH', `/plans/${encodeURIComponent(listedPlans.plans[0].id)}`, {
+      name: 'Integration Updated Plan',
+      sort_order: 9
+    });
+    assert.equal(updatedPlan.plan.name, 'Integration Updated Plan');
+    assert.equal(updatedPlan.plan.sort_order, 9);
+    console.log('  PASS updated plan structure through Worker API');
+
+    const listedContainers = await request(baseUrl, 'GET', '/containers');
+    assert(listedContainers.containers.length > 0);
+    const updatedContainer = await request(baseUrl, 'PATCH', `/containers/${encodeURIComponent(listedContainers.containers[0].id)}`, {
+      name: 'Integration Updated Container',
+      enabled: false,
+      active_start_date: date
+    });
+    assert.equal(updatedContainer.container.name, 'Integration Updated Container');
+    assert.equal(updatedContainer.container.enabled, false);
+    assert.equal(updatedContainer.container.active_start_date, date);
+    console.log('  PASS updated container structure through Worker API');
+
+    const structureChanges = await request(baseUrl, 'GET', `/sync/changes?cursor=${encodeURIComponent(eventChanges.next_cursor)}&limit=20`);
+    assert(structureChanges.changes.some(change => change.entity_type === 'plan' && change.entity_id === updatedPlan.plan.id && change.operation === 'updated'));
+    assert(structureChanges.changes.some(change => change.entity_type === 'container' && change.entity_id === updatedContainer.container.id && change.operation === 'updated'));
+    assert(Number(structureChanges.next_cursor) > Number(eventChanges.next_cursor));
+    console.log('  PASS sync change feed records structure updates');
+
+    const savedSettings = await request(baseUrl, 'PUT', '/settings', {
+      default_duration: 60,
+      default_priority: 'important',
+      notification_enabled: true,
+      reminder_before: 10,
+      start_week_on: 1,
+      theme: 'light',
+      appearance_background: 'focus',
+      appearance_avatar: 'blue',
+      arrange_trigger: 'review',
+      defensive_threshold: 36,
+      heal_time: '22:30'
+    });
+    assert.equal(savedSettings.settings.default_duration, 60);
+    assert.equal(savedSettings.settings.default_priority, 'important');
+    assert.equal(savedSettings.settings.appearance_background, 'focus');
+    assert.equal(savedSettings.settings.heal_time, '22:30');
+    console.log('  PASS saved expanded product settings through Worker API');
+
+    const settingsChanges = await request(baseUrl, 'GET', `/sync/changes?cursor=${encodeURIComponent(structureChanges.next_cursor)}&limit=30`);
+    assert(settingsChanges.changes.some(change => change.entity_type === 'product_setting' && change.entity_id === 'default_duration' && change.operation === 'updated'));
+    assert(settingsChanges.changes.some(change => change.entity_type === 'product_setting' && change.entity_id === 'appearance_background' && change.operation === 'updated'));
+    assert(Number(settingsChanges.next_cursor) > Number(structureChanges.next_cursor));
+    console.log('  PASS sync change feed records product setting updates');
+
+    const bootstrap = await request(baseUrl, 'GET', '/sync/bootstrap');
+    assert.equal(bootstrap.schema, 'timewhere-cloud-bootstrap-v1');
+    assert.equal(bootstrap.authority, 'cloud_d1_canonical');
+    assert.equal(bootstrap.offline_write_policy, 'blocked_v1');
+    assert.equal(bootstrap.account.id, 'acct_local_dev');
+    assert.equal(bootstrap.profile.name, 'Integration Workspace');
+    assert(bootstrap.entities.tasks.some(task => task.id === createdTask.task.id));
+    assert(bootstrap.entities.calendar_events.some(event => event.id === createdEvent.event.id));
+    assert(bootstrap.entities.plans.some(plan => plan.id === updatedPlan.plan.id));
+    assert.equal(bootstrap.entities.settings.default_duration, 60);
+    assert(Number(bootstrap.cursor) >= Number(settingsChanges.next_cursor));
+    console.log('  PASS sync bootstrap returns read-only canonical snapshot and latest cursor');
 
     const replayMutationId = `mut-integration-${Date.now()}`;
     const replayBody = {
@@ -246,7 +380,7 @@ async function main() {
     assert.equal(repeatedReplayOutcome.outcome.attempt_count, 2);
     const taskAfterReplayAttempt = await request(baseUrl, 'GET', `/tasks/${encodeURIComponent(createdTask.task.id)}`);
     assert.notEqual(taskAfterReplayAttempt.task.title, 'Offline replay must not apply');
-    const changesAfterReplayAttempt = await request(baseUrl, 'GET', `/sync/changes?cursor=${encodeURIComponent(eventChanges.next_cursor)}&limit=20`);
+    const changesAfterReplayAttempt = await request(baseUrl, 'GET', `/sync/changes?cursor=${encodeURIComponent(settingsChanges.next_cursor)}&limit=20`);
     assert.equal(changesAfterReplayAttempt.changes.length, 0);
     console.log('  PASS disabled mutation replay records outcome metadata without applying changes');
 

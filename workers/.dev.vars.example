@@ -1,0 +1,7 @@
+# Copy to a private local `.dev.vars` only when running Worker dev locally.
+# Do not commit `.dev.vars` or any real secret-bearing file.
+
+TIMEWHERE_ENV=dev
+GOOGLE_OIDC_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+TIMEWHERE_TASK_REPLAY_KILL_SWITCH=on
+TIMEWHERE_TASK_REPLAY_LOCAL_DEV_ENABLED=false

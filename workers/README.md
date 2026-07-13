@@ -5,11 +5,12 @@
 ## 定位
 
 - `workers/src/` 提供 Cloud API 入口、Google SSO 会话、Repository 路由和自动迁移入口雏形。
-- `/auth/google`、`/auth/session` 与 `/account/me` 构成第一版 WebDev Cloud session 生命周期；注销 session 不撤销 Google 授权。
+- `/auth/google`、`/auth/session/refresh`、`/auth/session`、`/account/me`、`/account/profile` 与 `/account/status` 构成第一版 WebDev Cloud session 生命周期；刷新 session 只轮换 TimeWhere bearer，不接触 Google token；注销 session 不撤销 Google 授权；workspace/profile 是 TimeWhere 本地业务空间资料，不写回 Google。
 - `/tasks` 已有第一版 Cloud-backed CRUD：返回规范化 Task DTO，支持查询筛选、创建、更新、完成/重开和软删除。
 - `/calendar/events` 已有第一版 Cloud-backed CRUD：返回规范化 Event DTO，支持日期/搜索筛选、创建、更新和软删除。
 - `/plans`、`/labels`、`/buckets` 与 `/containers` 已有第一版 Cloud-backed CRUD：用于 WebDev 结构数据、Daily Settle 后续投影和本地 cache 的 canonical 来源。
 - `/sync/changes` 提供 Cloud-confirmed change cursor，用于未来离线 mutation replay 的安全基础；当前 v1 仍阻止离线写入。
+- `/sync/bootstrap` 提供只读 Cloud canonical snapshot 和最新 cursor，用于 Web App / Desktop Runtime 初始化本地 read cache；它不应用 mutation，也不启用离线写 Cloud。
 - `/sync/mutations` 默认仍是 disabled/internal contract skeleton：校验 mutation batch，定义 Task-only replay activation gate、字段级冲突预判、内部 transaction skeleton，记录 metadata-only outcome，并拒绝 replay，不应用任何用户离线写入。Product Owner 已批准 Phase 1 test-only server write contract；只有请求体显式带 `test_only_task_replay_enabled: true` 的内部测试调用才会应用 Task-only replay。
 - `GET /sync/mutations` 与 `GET /sync/mutations/:id` 提供 replay outcome 诊断读取；当前只保存状态、原因、门禁结果和尝试次数，不保存 patch/base/cloud 原始内容。
 - `POST /sync/mutations/dry-run` 提供 internal disabled dry-run：复用 gate / transaction skeleton，并关联已有 outcome / conflict 记录；对 apply candidate 返回不落库的 sanitized apply plan，对 conflict candidate 返回不落库的 sanitized conflict preview；不写入、不创建 conflict、不应用用户离线写入。

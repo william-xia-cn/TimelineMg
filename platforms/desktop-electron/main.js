@@ -13,6 +13,9 @@ const devExtensionRoot = path.join(repoRoot, 'extension');
 const packagedExtensionRoot = () => path.join(process.resourcesPath, 'extension');
 const preloadPath = path.join(__dirname, 'preload.js');
 const defaultRoute = 'pages/focus/focus.html';
+const desktopRuntimeMode = String(process.env.TIMEWHERE_DESKTOP_RUNTIME_MODE || '').trim().toLowerCase();
+const configuredWebAppUrlRaw = process.env.TIMEWHERE_WEB_APP_URL || process.env.TIMEWHERE_WEBDEV_APP_URL || '';
+const localWebDevAppUrl = 'http://127.0.0.1:4173/';
 const widgetSnapshotSchema = 'timewhere-widget-v1';
 const widgetSnapshotFileName = 'timewhere-widget-v1.json';
 const widgetAppGroupIdentifier = 'group.cn.williamxia.timewhere';
@@ -93,6 +96,85 @@ const routeMap = {
   matrixview: 'pages/settings/matrixview.html',
   managebac: 'pages/settings/managebac-sync.html'
 };
+const webDevViewMap = {
+  dashboard: 'dashboard',
+  focus: 'dashboard',
+  tasks: 'tasks',
+  calendar: 'calendar',
+  settings: 'settings',
+  matrixview: 'settings',
+  managebac: 'settings'
+};
+
+function normalizeConfiguredWebAppUrl(rawUrl) {
+  const value = String(rawUrl || '').trim();
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (url.username || url.password) return null;
+    return url.href;
+  } catch (_) {
+    return null;
+  }
+}
+
+const configuredWebAppUrl = normalizeConfiguredWebAppUrl(configuredWebAppUrlRaw);
+
+function isWebDevRuntimeMode() {
+  return desktopRuntimeMode === 'webdev' || Boolean(configuredWebAppUrl);
+}
+
+function getWebDevAppBaseUrl() {
+  if (configuredWebAppUrl) return configuredWebAppUrl;
+  if (desktopRuntimeMode === 'webdev') return localWebDevAppUrl;
+  return null;
+}
+
+function routeToWebDevView(route = defaultRoute) {
+  const raw = String(route || defaultRoute).replace(/\\/g, '/').trim();
+  if (/^(https?:|chrome-extension:|file:|data:|javascript:)/i.test(raw)) {
+    throw new Error('External routes are not allowed in the desktop WebDev runtime shell');
+  }
+  const alias = routeMap[raw.replace(/^\/+/, '')] || raw;
+  const pathname = alias.replace(/^extension\//, '').replace(/^\/+/, '').split(/[?#]/)[0];
+  if (pathname.includes('/tasks/') || pathname.includes('tasks.html')) return webDevViewMap.tasks;
+  if (pathname.includes('/calendar/') || pathname.includes('calendar.html')) return webDevViewMap.calendar;
+  if (pathname.includes('/settings/') || pathname.includes('settings.html')) return webDevViewMap.settings;
+  const key = raw.replace(/^\/+/, '').split(/[?#]/)[0].toLowerCase();
+  return webDevViewMap[key] || webDevViewMap.dashboard;
+}
+
+function resolveWebAppRoute(route = defaultRoute) {
+  const baseUrl = getWebDevAppBaseUrl();
+  if (!baseUrl) throw new Error('WebDev runtime mode requires TIMEWHERE_WEB_APP_URL or local Pages dev server');
+  const view = routeToWebDevView(route);
+  const url = new URL(baseUrl);
+  url.hash = view;
+  return { url: url.href, route: view, mode: 'webdev' };
+}
+
+function isAllowedWebAppNavigation(rawUrl) {
+  const baseUrl = getWebDevAppBaseUrl();
+  if (!baseUrl) return false;
+  try {
+    return new URL(rawUrl).origin === new URL(baseUrl).origin;
+  } catch (_) {
+    return false;
+  }
+}
+
+function getDesktopRuntimeInfo() {
+  const baseUrl = getWebDevAppBaseUrl();
+  return {
+    status: 'ok',
+    mode: isWebDevRuntimeMode() ? 'webdev' : 'extension_legacy',
+    web_app_origin: baseUrl ? new URL(baseUrl).origin : null,
+    web_app_source: configuredWebAppUrl ? 'env' : (desktopRuntimeMode === 'webdev' ? 'local_dev_default' : null),
+    native_bridge: 'electron_preload',
+    business_logic_owner: isWebDevRuntimeMode() ? 'web_app' : 'extension_legacy'
+  };
+}
 
 function isValidDesktopSettings(payload = {}) {
   const next = {};
@@ -633,10 +715,34 @@ async function writeWidgetSnapshot(snapshot = {}) {
 }
 
 async function loadRoute(win, route = defaultRoute) {
+  if (isWebDevRuntimeMode()) {
+    const resolved = resolveWebAppRoute(route);
+    await win.loadURL(resolved.url);
+    return resolved;
+  }
   const resolved = resolveExtensionRoute(route);
   const url = `${pathToFileURL(resolved.filePath).toString()}${resolved.search}${resolved.hash}`;
   await win.loadURL(url);
   return resolved;
+}
+
+function installWebDevNavigationGuards(win) {
+  if (!win || win.isDestroyed()) return;
+  if (!isWebDevRuntimeMode()) return;
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (isWebDevRuntimeMode() && isAllowedWebAppNavigation(url)) {
+      return { action: 'allow' };
+    }
+    const externalUrl = normalizeExternalHttpUrl(url);
+    if (externalUrl) shell.openExternal(externalUrl).catch(() => {});
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!isWebDevRuntimeMode() || isAllowedWebAppNavigation(url)) return;
+    event.preventDefault();
+    const externalUrl = normalizeExternalHttpUrl(url);
+    if (externalUrl) shell.openExternal(externalUrl).catch(() => {});
+  });
 }
 
 function createMainWindow(route = defaultRoute) {
@@ -662,6 +768,7 @@ function createMainWindow(route = defaultRoute) {
     webPreferences
   });
   mainWindow = win;
+  installWebDevNavigationGuards(win);
 
   loadRoute(mainWindow, route).catch(error => {
     console.error(`TimeWhere desktop route failed: ${error.message}`);
@@ -981,6 +1088,9 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
   }
   if (method === 'system.getDesktopProfile') {
     return getDesktopProfileSnapshot();
+  }
+  if (method === 'system.getDesktopRuntimeInfo') {
+    return getDesktopRuntimeInfo();
   }
   if (method === 'system.confirmGoogleAccountSwitch') {
     return await confirmGoogleAccountSwitch(payload);

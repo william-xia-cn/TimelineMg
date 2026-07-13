@@ -57,6 +57,19 @@ export function createCalendarRepository(apiClient, { storage = window.localStor
     getCachedEvents() {
       return readCachedEvents(storage);
     },
+    hydrateCache(events) {
+      const nextEvents = Array.isArray(events) ? events : [];
+      writeCachedEvents(storage, nextEvents);
+      return nextEvents;
+    },
+    applyCloudEvent(event) {
+      mergeEventIntoCache(storage, event);
+      return event;
+    },
+    removeCloudEvent(id) {
+      removeEventFromCache(storage, id);
+      return null;
+    },
     async listEvents({ dateFrom = '', dateTo = '', search = '' } = {}) {
       if (!isOnline()) return readCachedEvents(storage);
       const params = new URLSearchParams();
