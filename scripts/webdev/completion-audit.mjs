@@ -49,6 +49,7 @@ console.log('=======================');
 
 const requiredFiles = [
   'docs/WEBDEV_COMPLETION_CHECKLIST.md',
+  'docs/WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md',
   'docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md',
   'docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md',
   'docs/WEBDEV_PROD_READINESS_CHECKLIST.md',
@@ -76,6 +77,7 @@ for (const file of requiredFiles) {
 }
 
 const checklist = exists('docs/WEBDEV_COMPLETION_CHECKLIST.md') ? read('docs/WEBDEV_COMPLETION_CHECKLIST.md') : '';
+const targetArchitecture = exists('docs/WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md') ? read('docs/WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md') : '';
 const parity = exists('docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md') ? read('docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md') : '';
 const preview = exists('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md') ? read('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md') : '';
 const prod = exists('docs/WEBDEV_PROD_READINESS_CHECKLIST.md') ? read('docs/WEBDEV_PROD_READINESS_CHECKLIST.md') : '';
@@ -103,6 +105,19 @@ assert('Cloud canonical D1 target is represented',
   hasAll(checklist, ['Cloudflare D1 是 canonical data source', 'Cloud canonical schema'])
     && hasAll(wrangler, ['timewhere-dev-api', 'timewhere-preview-api', 'timewhere-api'])
     && hasAll(workerIndex, ['handleListTasks', 'handleSyncBootstrap', 'handleListSyncChanges']));
+
+assert('Target architecture status baseline is current',
+  hasAll(targetArchitecture, [
+    'Active architecture baseline with implementation status',
+    'D-048 initial scaffold is complete',
+    'D-049 Phase 2-9 is complete',
+    'Gate A dev / preview resources and preview smoke are complete',
+    'Gate B',
+    'Gate C',
+    'Gate D',
+    'Gate E',
+    'Gate R'
+  ]));
 
 assert('Web App full business coverage is represented',
   hasAll(checklist, ['Dashboard / Tasks / Calendar / Settings', 'Daily Settle', 'Reminder'])
@@ -167,6 +182,7 @@ const forbiddenPatterns = [
 ];
 const scanned = [
   checklist,
+  targetArchitecture,
   parity,
   preview,
   prod,

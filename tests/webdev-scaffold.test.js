@@ -821,6 +821,8 @@ assert('prod readiness package script is evidence-only and release-gated',
 assert('completion audit script classifies readiness without approving gated work',
   completionAudit.includes('WebDev completion audit')
     && completionAudit.includes('readiness_complete_pending_approval_gates')
+    && completionAudit.includes('WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md')
+    && completionAudit.includes('Target architecture status baseline is current')
     && completionAudit.includes('does not approve prod, replay, desktop distribution, CWS, tag, merge, or release')
     && completionAudit.includes('webdev:completion:audit')
     && !completionAudit.includes('wrangler deploy')
