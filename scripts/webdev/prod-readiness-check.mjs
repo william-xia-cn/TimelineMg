@@ -166,6 +166,8 @@ assert('prod readiness package is evidence-only and gate-aware',
     && prodReadinessPackage.includes('readiness-only')
     && prodReadinessPackage.includes('Gate R: not approved')
     && prodReadinessPackage.includes('webdev:preview:acceptance')
+    && prodReadinessPackage.includes('webdev:extension:readiness')
+    && prodReadinessPackage.includes('webdev:desktop:readiness')
     && prodReadinessPackage.includes('webdev:prod:readiness')
     && prodReadinessPackage.includes('Re-deploy previous Worker commit')
     && !prodReadinessPackage.includes('wrangler deploy')

@@ -46,6 +46,8 @@ const clean = status.length === 0;
 const requiredScripts = [
   'webdev:verify',
   'webdev:preview:acceptance',
+  'webdev:extension:readiness',
+  'webdev:desktop:readiness',
   'webdev:prod:readiness',
   'webdev:acceptance:local',
   'test'
@@ -57,6 +59,8 @@ const readinessEvidence = [
   ['Preview data hygiene evidence is represented', previewRunbook.includes('webdev:preview:data-hygiene-smoke')],
   ['Gate R remains unapproved', projectMaster.includes('Prod deploy/release remains unapproved')],
   ['Prod readiness checklist declares non-release boundary', prodChecklist.includes('不等于发布')],
+  ['Browser Extension Gate D readiness is represented', packageJson.scripts?.['webdev:extension:readiness'] === 'node scripts/webdev/browser-extension-readiness-check.mjs'],
+  ['Desktop Runtime Gate E readiness is represented', packageJson.scripts?.['webdev:desktop:readiness'] === 'node scripts/webdev/desktop-runtime-readiness-check.mjs'],
   ['Rollback package is represented', prodChecklist.includes('Rollback plan')],
   ['Gate B/C/D/E/R limits remain listed', completionChecklist.includes('| B |') && completionChecklist.includes('| C |') && completionChecklist.includes('| D |') && completionChecklist.includes('| E |') && completionChecklist.includes('| R |')],
   ['Task board records preview acceptance hardening', taskBoard.includes('webdev:preview:data-hygiene-smoke')]
@@ -101,7 +105,7 @@ ${scriptEvidence.map(([name, ok]) => `- ${checked(ok)} ${name}`).join('\n')}
 - Task replay writes are still disabled for user traffic.
 - Calendar / Container / Settings replay is not implemented.
 - Browser Extension is not part of WebDev v1 release scope.
-- Desktop Runtime has only local smoke evidence until Gate E.
+- Desktop Runtime has only local readiness/smoke evidence until Gate E.
 - Prod Cloudflare resource ids must remain placeholders until Gate R approval.
 - Observability and backup policies must be approved before prod resource creation.
 
