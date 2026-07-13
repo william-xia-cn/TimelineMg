@@ -85,6 +85,7 @@ const requiredFiles = [
   'docs/WEBDEV_PROD_READINESS_CHECKLIST.md',
   'docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md',
   'docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md',
+  'docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md',
   'scripts/webdev/verify-plan-state.mjs',
   'scripts/webdev/preview-preflight.mjs',
   'scripts/webdev/provision-cloudflare.mjs',
@@ -100,6 +101,7 @@ const requiredFiles = [
   'scripts/webdev/browser-extension-readiness-check.mjs',
   'scripts/webdev/desktop-runtime-readiness-check.mjs',
   'scripts/webdev/task-replay-gate-b-readiness-check.mjs',
+  'scripts/webdev/non-task-replay-gate-c-readiness-check.mjs',
   'scripts/webdev/observability-backup-readiness-check.mjs',
   'scripts/webdev/desktop-runtime-smoke.mjs'
 ];
@@ -127,6 +129,7 @@ const previewRunbook = read('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md');
 const prodReadinessChecklist = read('docs/WEBDEV_PROD_READINESS_CHECKLIST.md');
 const observabilityBackupRunbook = read('docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md');
 const taskReplayGateBPacket = read('docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md');
+const nonTaskReplayGateCPacket = read('docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md');
 const obviousSecretPattern = new RegExp([
   'GOC' + 'SPX-',
   'ya29\\.',
@@ -197,6 +200,14 @@ assert('WebDev Task replay Gate B packet records readiness-only boundary',
     && taskReplayGateBPacket.includes('Calendar / Container / Settings replay 不包含在 Gate B')
     && taskReplayGateBPacket.includes('npm.cmd run webdev:gate-b:readiness')
     && !obviousSecretPattern.test(taskReplayGateBPacket));
+assert('WebDev non-Task replay Gate C packet records readiness-only boundary',
+  nonTaskReplayGateCPacket.includes('Gate C readiness packet')
+    && nonTaskReplayGateCPacket.includes('不批准、不开启、不实现 Calendar / Container / Settings replay')
+    && nonTaskReplayGateCPacket.includes('C1 Calendar')
+    && nonTaskReplayGateCPacket.includes('C2 Structure')
+    && nonTaskReplayGateCPacket.includes('C3 Settings')
+    && nonTaskReplayGateCPacket.includes('npm.cmd run webdev:gate-c:readiness')
+    && !obviousSecretPattern.test(nonTaskReplayGateCPacket));
 
 const sql = read('workers/migrations/0001_initial.sql');
 const taskParityMigration = read('workers/migrations/0002_task_parity_fields.sql');
@@ -795,6 +806,9 @@ assert('root package has WebDev Browser Extension readiness script',
 assert('root package has WebDev Task replay Gate B readiness script',
   rootPackage.scripts['webdev:gate-b:readiness'] === 'node scripts/webdev/task-replay-gate-b-readiness-check.mjs'
     && rootPackage.scripts['webdev:verify']?.includes('npm run webdev:gate-b:readiness'));
+assert('root package has WebDev non-Task replay Gate C readiness script',
+  rootPackage.scripts['webdev:gate-c:readiness'] === 'node scripts/webdev/non-task-replay-gate-c-readiness-check.mjs'
+    && rootPackage.scripts['webdev:verify']?.includes('npm run webdev:gate-c:readiness'));
 assert('root package has WebDev observability backup readiness script',
   rootPackage.scripts['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs');
 assert('root package has WebDev Desktop Runtime smoke script', rootPackage.scripts['webdev:desktop:smoke'] === 'node scripts/webdev/desktop-runtime-smoke.mjs');

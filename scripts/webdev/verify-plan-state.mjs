@@ -39,6 +39,8 @@ const observabilityRunbookPath = 'docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md';
 assert('observability backup runbook exists', exists(observabilityRunbookPath));
 const taskReplayGateBPath = 'docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md';
 assert('Task replay Gate B readiness packet exists', exists(taskReplayGateBPath));
+const nonTaskReplayGateCPath = 'docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md';
+assert('non-Task replay Gate C readiness packet exists', exists(nonTaskReplayGateCPath));
 
 const checklist = exists(checklistPath) ? read(checklistPath) : '';
 const parityChecklist = exists(parityPath) ? read(parityPath) : '';
@@ -46,6 +48,7 @@ const previewRunbook = exists(previewRunbookPath) ? read(previewRunbookPath) : '
 const prodReadiness = exists(prodReadinessPath) ? read(prodReadinessPath) : '';
 const observabilityRunbook = exists(observabilityRunbookPath) ? read(observabilityRunbookPath) : '';
 const taskReplayGateB = exists(taskReplayGateBPath) ? read(taskReplayGateBPath) : '';
+const nonTaskReplayGateC = exists(nonTaskReplayGateCPath) ? read(nonTaskReplayGateCPath) : '';
 for (const phase of ['Phase 0', 'Phase 1', 'Phase 2', 'Phase 3', 'Phase 4', 'Phase 5', 'Phase 6', 'Phase 7', 'Phase 8', 'Phase 9', 'Phase 10']) {
   assert(`${phase} is represented in completion checklist`, checklist.includes(phase));
 }
@@ -77,6 +80,13 @@ assert('Task replay Gate B packet records readiness-only boundary',
     && taskReplayGateB.includes('Task delete 继续保持用户侧阻断')
     && taskReplayGateB.includes('Calendar / Container / Settings replay 不包含在 Gate B')
     && taskReplayGateB.includes('npm.cmd run webdev:gate-b:readiness'));
+assert('non-Task replay Gate C packet records readiness-only boundary',
+  nonTaskReplayGateC.includes('Gate C readiness packet')
+    && nonTaskReplayGateC.includes('不批准、不开启、不实现 Calendar / Container / Settings replay')
+    && nonTaskReplayGateC.includes('C1 Calendar')
+    && nonTaskReplayGateC.includes('C2 Structure')
+    && nonTaskReplayGateC.includes('C3 Settings')
+    && nonTaskReplayGateC.includes('npm.cmd run webdev:gate-c:readiness'));
 
 const wrangler = read('workers/wrangler.toml');
 assert('wrangler declares dev preview and prod names',
@@ -137,12 +147,19 @@ assert('root package exposes Task replay Gate B readiness-only check',
     && checklist.includes('webdev:gate-b:readiness')
     && taskReplayGateB.includes('webdev:gate-b:readiness')
     && taskBoard.includes('webdev:gate-b:readiness'));
+assert('root package exposes non-Task replay Gate C readiness-only check',
+  packageJson.scripts?.['webdev:gate-c:readiness'] === 'node scripts/webdev/non-task-replay-gate-c-readiness-check.mjs'
+    && checklist.includes('webdev:gate-c:readiness')
+    && nonTaskReplayGateC.includes('webdev:gate-c:readiness')
+    && taskBoard.includes('webdev:gate-c:readiness'));
 assert('webdev:verify runs plan-state check',
   packageJson.scripts?.['webdev:verify']?.includes('npm run webdev:plan:check'));
 assert('webdev:verify runs preview preflight',
   packageJson.scripts?.['webdev:verify']?.includes('npm run webdev:preview:preflight'));
 assert('webdev:verify runs Task replay Gate B readiness',
   packageJson.scripts?.['webdev:verify']?.includes('npm run webdev:gate-b:readiness'));
+assert('webdev:verify runs non-Task replay Gate C readiness',
+  packageJson.scripts?.['webdev:verify']?.includes('npm run webdev:gate-c:readiness'));
 assert('root package exposes local WebDev Desktop Runtime smoke',
   packageJson.scripts?.['webdev:desktop:readiness'] === 'node scripts/webdev/desktop-runtime-readiness-check.mjs'
     && packageJson.scripts?.['webdev:desktop:smoke'] === 'node scripts/webdev/desktop-runtime-smoke.mjs'
@@ -172,6 +189,7 @@ const scanned = [
   prodReadiness,
   observabilityRunbook,
   taskReplayGateB,
+  nonTaskReplayGateC,
   workerEnvExample,
   pagesEnvExample,
   wrangler

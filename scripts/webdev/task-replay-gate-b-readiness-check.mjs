@@ -178,7 +178,8 @@ assert('tests cover pending preservation, idempotency, conflict, and non-Task bl
 
 assert('completion/status docs keep Gate B unapproved',
   completionChecklist.includes('| B | 启用用户可见 Task replay 写 Cloud')
-    && projectMaster.includes('Task replay remains gated')
+    && projectMaster.includes('Task replay')
+    && projectMaster.includes('remain gated')
     && taskBoard.includes('Product Owner approved Phase 1 Task-only test replay server write implementation')
     && taskBoard.toLowerCase().includes('user-facing')
     && taskBoard.toLowerCase().includes('remain blocked'));
