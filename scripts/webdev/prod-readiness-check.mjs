@@ -109,7 +109,7 @@ assert('preview evidence commands are represented before prod readiness',
     && previewRunbook.includes('npm run webdev:preview:data-hygiene-smoke')
     && previewRunbook.includes('npm run webdev:preview:acceptance')
     && previewRunbook.includes('Migration import')
-    && completionChecklist.includes('Preview UI smoke complete under Gate A')
+    && completionChecklist.includes('Preview acceptance hardened under Gate A')
     && completionChecklist.includes('Migration import / idempotent retry / conflict / resolution')
     && taskBoard.includes('webdev:preview:core-smoke'));
 
