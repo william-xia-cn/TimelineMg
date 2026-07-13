@@ -97,6 +97,8 @@ const taskBoard = exists('TASK_BOARD.md') ? read('TASK_BOARD.md') : '';
 const statusShort = git(['status', '--short']);
 const branch = git(['branch', '--show-current'], 'unknown');
 const upstream = git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], 'unknown');
+const headCommit = git(['rev-parse', 'HEAD'], 'unknown');
+const upstreamCommit = git(['rev-parse', '@{u}'], 'unknown');
 
 for (const phase of ['Phase 0', 'Phase 1', 'Phase 2', 'Phase 3', 'Phase 4', 'Phase 5', 'Phase 6', 'Phase 7', 'Phase 8', 'Phase 9', 'Phase 10']) {
   assert(`${phase} has a checklist row`, checklist.includes(`| ${phase} |`));
@@ -175,6 +177,7 @@ assert('Completion audit is registered as a first-class script',
 assert('Git working tree status is readable', typeof statusShort === 'string');
 assert('Audit is running on WebDev branch', branch === 'WebDev');
 assert('WebDev branch tracks origin/WebDev', upstream === 'origin/WebDev');
+assert('WebDev HEAD matches origin/WebDev', headCommit !== 'unknown' && headCommit === upstreamCommit);
 
 const forbiddenPatterns = [
   new RegExp('GOC' + 'SPX-'),
@@ -201,10 +204,12 @@ assert('Audit-scanned docs/config contain no obvious secrets or private identifi
   forbiddenPatterns.every(pattern => !pattern.test(scanned)));
 
 console.log('=======================');
-console.log(`Completion classification: ${statusShort.length === 0 ? 'readiness_complete_pending_approval_gates' : 'readiness_pending_local_changes'}`);
+const completionReady = statusShort.length === 0 && headCommit !== 'unknown' && headCommit === upstreamCommit;
+console.log(`Completion classification: ${completionReady ? 'readiness_complete_pending_approval_gates' : 'readiness_pending_local_changes_or_unpushed_commits'}`);
 console.log(`Branch: ${branch}`);
 console.log(`Upstream: ${upstream}`);
 console.log(`Working tree clean: ${statusShort.length === 0 ? 'yes' : 'no'}`);
+console.log(`Upstream synced: ${headCommit !== 'unknown' && headCommit === upstreamCommit ? 'yes' : 'no'}`);
 console.log(`Checks passed: ${passed}`);
 
 if (failed > 0) {

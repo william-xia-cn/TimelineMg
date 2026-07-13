@@ -40,8 +40,12 @@ const packageJson = JSON.parse(read('package.json'));
 
 const branch = git(['branch', '--show-current']);
 const commit = git(['rev-parse', '--short=12', 'HEAD']);
+const upstream = git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+const headCommit = git(['rev-parse', 'HEAD']);
+const upstreamCommit = git(['rev-parse', '@{u}']);
 const status = git(['status', '--short'], '');
 const clean = status.length === 0;
+const upstreamSynced = headCommit !== 'unknown' && headCommit === upstreamCommit;
 
 const requiredScripts = [
   'webdev:verify',
@@ -83,6 +87,8 @@ Generated at: ${new Date().toISOString()}
 Branch: ${branch}
 Commit: ${commit}
 Working tree clean: ${clean ? 'yes' : 'no'}
+Upstream: ${upstream}
+Upstream synced: ${upstreamSynced ? 'yes' : 'no'}
 
 > This package is readiness-only. It does not approve prod resource creation, prod deployment, public release, GitHub Release, tag, merge, CWS submission, Desktop package/signing/distribution, or replay write enablement.
 
@@ -154,4 +160,7 @@ console.log(sanitize(output));
 
 if (!clean) {
   console.error('WARNING: Working tree is not clean. Re-run after committing readiness changes before using this as Gate R evidence.');
+}
+if (!upstreamSynced) {
+  console.error('WARNING: HEAD does not match upstream. Push or pull WebDev before using this as Gate R evidence.');
 }

@@ -255,4 +255,4 @@ npm run webdev:prod:evidence
 
 `webdev:prod:package` 只把当前分支、commit、Gate 状态、必跑命令可用性、待附加执行证据、已知限制和回滚摘要输出为审批包草稿。命令清单中的 `[x]` 只表示脚本入口存在，不表示该命令已针对当前 commit 重新执行；Gate R 评审前仍需附加新鲜命令输出。它不读取 `.wrangler/`、不调用 Wrangler、不创建文件、不写入真实 Cloudflare resource id、不执行 prod deploy，也不能替代 Product Owner 的 Gate R 批准。
 
-`webdev:prod:evidence` 默认只输出 Gate R 证据命令计划，不执行命令。需要生成本地执行摘要时使用 `npm run webdev:prod:evidence -- --run`；该模式会顺序运行 Gate R 前需要的新鲜证据命令，并只把命令、退出码、耗时、branch/commit 写入 ignored `.wrangler/webdev-gate-r-evidence-summary.json`，不保存原始命令输出，不创建 prod resource，不部署，不发布，不启用 replay。
+`webdev:prod:evidence` 默认只输出 Gate R 证据命令计划，不执行命令。需要生成本地执行摘要时使用 `npm run webdev:prod:evidence -- --run`；该模式会要求工作树干净且 `HEAD == origin/WebDev`，顺序运行 Gate R 前需要的新鲜证据命令，并只把命令、退出码、耗时、branch/commit/upstream sync 状态写入 ignored `.wrangler/webdev-gate-r-evidence-summary.json`，不保存原始命令输出，不创建 prod resource，不部署，不发布，不启用 replay。

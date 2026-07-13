@@ -238,6 +238,7 @@ assert('prod readiness package is evidence-only and gate-aware',
     && prodReadinessPackage.includes('webdev:prod:evidence')
     && prodReadinessPackage.includes('Default mode is plan-only')
     && prodReadinessPackage.includes('.wrangler/webdev-gate-r-evidence-summary.json')
+    && prodReadinessPackage.includes('Upstream synced')
     && prodReadinessPackage.includes('Re-deploy previous Worker commit')
     && !prodReadinessPackage.includes('wrangler deploy')
     && !prodReadinessPackage.includes('pages deploy'));
@@ -246,7 +247,10 @@ assert('prod evidence runner is status-only and release-gated',
   prodEvidenceRunner.includes('WebDev Gate R evidence runner')
     && prodEvidenceRunner.includes('Default mode is plan-only')
     && prodEvidenceRunner.includes('--run')
+    && prodEvidenceRunner.includes('--allow-unpushed')
     && prodEvidenceRunner.includes('webdev-gate-r-evidence-summary.json')
+    && prodEvidenceRunner.includes('upstream_synced')
+    && prodEvidenceRunner.includes('HEAD does not match upstream')
     && prodEvidenceRunner.includes('Raw command output is not stored')
     && prodEvidenceRunner.includes('release_boundary')
     && prodEvidenceRunner.includes('forbiddenCommandFragments')

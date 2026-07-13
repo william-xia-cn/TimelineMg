@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const runMode = process.argv.includes('--run');
 const allowDirty = process.argv.includes('--allow-dirty');
+const allowUnpushed = process.argv.includes('--allow-unpushed');
 const outputDir = path.join(root, '.wrangler');
 const outputFile = path.join(outputDir, 'webdev-gate-r-evidence-summary.json');
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -144,7 +145,10 @@ assertSafeCommandPlan();
 
 const branch = git(['branch', '--show-current'], 'unknown');
 const commit = git(['rev-parse', 'HEAD'], 'unknown');
+const upstream = git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], 'unknown');
+const upstreamCommit = git(['rev-parse', '@{u}'], 'unknown');
 const statusShort = git(['status', '--short']);
+const upstreamSynced = commit !== 'unknown' && commit === upstreamCommit;
 
 if (!runMode) {
   printPlan();
@@ -153,6 +157,11 @@ if (!runMode) {
 
 if (statusShort && !allowDirty) {
   console.error('Working tree is not clean. Commit readiness changes first, or pass --allow-dirty for a local rehearsal.');
+  process.exit(1);
+}
+
+if (!upstreamSynced && !allowUnpushed) {
+  console.error('HEAD does not match upstream. Push or pull WebDev first, or pass --allow-unpushed for a local rehearsal.');
   process.exit(1);
 }
 
@@ -191,6 +200,9 @@ const summary = {
   generated_at: new Date().toISOString(),
   branch,
   commit,
+  upstream,
+  upstream_commit: upstreamCommit,
+  upstream_synced: upstreamSynced,
   working_tree_clean_at_start: statusShort.length === 0,
   started_at: startedAt.toISOString(),
   completed_at: new Date().toISOString(),
