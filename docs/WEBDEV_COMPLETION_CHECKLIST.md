@@ -67,9 +67,10 @@ npm run webdev:preview:deploy
 npm run webdev:preview:smoke
 npm run webdev:preview:core-smoke
 npm run webdev:preview:ui-smoke
+npm run webdev:preview:acceptance
 ```
 
-这些命令只允许操作 `dev / preview`。Cloudflare auth token、Google Web OAuth public client id、真实 Cloudflare resource id 均不得写入仓库；脚本生成的 resource state、deploy config 和 smoke 临时文件位于 ignored 的 `.wrangler/` 目录。`webdev:preview:smoke` 会写入并清理 preview R2 临时对象与 preview KV 临时 key，不触碰 prod。`webdev:preview:core-smoke` 会创建无真实邮箱的临时 smoke account/session，调用 preview Worker API 验证核心 CRUD / sync 读路径和 migration import / idempotent retry / conflict / resolution，随后清理该 smoke account 下的数据与临时迁移 snapshot；它不读取浏览器 session，不打印 token / account email / Cloudflare id。`webdev:preview:ui-smoke` 会创建无真实邮箱的临时 smoke account/session，打开 stable Pages preview 验证 Dashboard / Tasks / Calendar / Settings UI 与 preview Worker 数据路径，随后清理 smoke account。
+这些命令只允许操作 `dev / preview`。Cloudflare auth token、Google Web OAuth public client id、真实 Cloudflare resource id 均不得写入仓库；脚本生成的 resource state、deploy config 和 smoke 临时文件位于 ignored 的 `.wrangler/` 目录。`webdev:preview:smoke` 会写入并清理 preview R2 临时对象与 preview KV 临时 key，不触碰 prod。`webdev:preview:core-smoke` 会创建无真实邮箱的临时 smoke account/session，调用 preview Worker API 验证核心 CRUD / sync 读路径和 migration import / idempotent retry / conflict / resolution，随后清理该 smoke account 下的数据与临时迁移 snapshot；它不读取浏览器 session，不打印 token / account email / Cloudflare id。`webdev:preview:ui-smoke` 会创建无真实邮箱的临时 smoke account/session，打开 stable Pages preview 验证 Dashboard / Tasks / Calendar / Settings UI 与 preview Worker 数据路径，随后清理 smoke account。`webdev:preview:acceptance` 只是串联三条 preview smoke，不新增权限或发布动作。
 
 ## Gate 边界
 

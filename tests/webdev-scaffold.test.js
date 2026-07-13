@@ -603,6 +603,10 @@ assert('root package has Gate A preview core smoke script',
   rootPackage.scripts['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs');
 assert('root package has Gate A preview UI smoke script',
   rootPackage.scripts['webdev:preview:ui-smoke'] === 'node scripts/webdev/preview-ui-smoke.mjs');
+assert('root package has Gate A preview acceptance aggregate script',
+  rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:smoke')
+    && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:core-smoke')
+    && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:ui-smoke'));
 assert('root package has Gate R readiness-only script',
   rootPackage.scripts['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs');
 const cloudflareProvision = read('scripts/webdev/provision-cloudflare.mjs');

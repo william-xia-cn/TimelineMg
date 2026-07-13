@@ -142,6 +142,10 @@ assert('root package exposes preview core smoke script',
   packageJson.scripts?.['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs');
 assert('root package exposes preview UI smoke script',
   packageJson.scripts?.['webdev:preview:ui-smoke'] === 'node scripts/webdev/preview-ui-smoke.mjs');
+assert('root package exposes preview acceptance aggregate script',
+  packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:smoke')
+    && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:core-smoke')
+    && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:ui-smoke'));
 assert('webdev verify runs preview preflight',
   packageJson.scripts?.['webdev:verify']?.includes('npm run webdev:preview:preflight'));
 
