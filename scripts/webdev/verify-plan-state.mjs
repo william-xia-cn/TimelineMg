@@ -168,12 +168,18 @@ assert('root package exposes Gate A preview smoke commands',
     && packageJson.scripts?.['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs'
     && packageJson.scripts?.['webdev:preview:ui-smoke'] === 'node scripts/webdev/preview-ui-smoke.mjs'
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:ui-smoke'));
-assert('root package exposes Gate R readiness-only check',
+assert('root package exposes Gate R internal prod verification commands',
   packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
+    && packageJson.scripts?.['webdev:prod:provision'] === 'node scripts/webdev/provision-cloudflare-prod.mjs'
+    && packageJson.scripts?.['webdev:prod:deploy'] === 'node scripts/webdev/deploy-cloudflare-prod.mjs'
+    && packageJson.scripts?.['webdev:prod:acceptance']?.includes('npm run webdev:prod:data-hygiene-smoke')
     && packageJson.scripts?.['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
     && packageJson.scripts?.['webdev:prod:evidence'] === 'node scripts/webdev/prod-evidence-runner.mjs'
     && packageJson.scripts?.['webdev:prod:evidence:check'] === 'node scripts/webdev/prod-evidence-summary-check.mjs'
     && prodReadiness.includes('webdev:prod:package')
+    && prodReadiness.includes('webdev:prod:provision')
+    && prodReadiness.includes('webdev:prod:deploy')
+    && prodReadiness.includes('webdev:prod:acceptance')
     && prodReadiness.includes('webdev:prod:evidence')
     && prodReadiness.includes('webdev:prod:evidence:check')
     && checklist.includes('webdev:prod:package')

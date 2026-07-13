@@ -184,9 +184,8 @@ assert('completion/status docs keep Gate B unapproved',
     && taskBoard.toLowerCase().includes('user-facing')
     && taskBoard.toLowerCase().includes('remain blocked'));
 
-assert('no prod or release script is exposed by Gate B readiness',
-  !packageJson.scripts?.['webdev:prod:deploy']
-    && !packageJson.scripts?.['webdev:release']
+assert('no replay enable or release script is exposed by Gate B readiness',
+  !packageJson.scripts?.['webdev:release']
     && !packageJson.scripts?.['webdev:task-replay:enable']);
 
 assertNoObviousSecrets('Gate B readiness scanned files contain no obvious secrets',

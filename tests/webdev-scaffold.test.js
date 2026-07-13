@@ -97,6 +97,14 @@ const requiredFiles = [
   'scripts/webdev/preview-core-smoke.mjs',
   'scripts/webdev/preview-ui-smoke.mjs',
   'scripts/webdev/preview-data-hygiene-smoke.mjs',
+  'scripts/webdev/provision-cloudflare-prod.mjs',
+  'scripts/webdev/deploy-cloudflare-prod.mjs',
+  'scripts/webdev/prod-headers-smoke.mjs',
+  'scripts/webdev/prod-sso-smoke.mjs',
+  'scripts/webdev/prod-smoke.mjs',
+  'scripts/webdev/prod-core-smoke.mjs',
+  'scripts/webdev/prod-ui-smoke.mjs',
+  'scripts/webdev/prod-data-hygiene-smoke.mjs',
   'scripts/webdev/prod-readiness-check.mjs',
   'scripts/webdev/prod-readiness-package.mjs',
   'scripts/webdev/prod-evidence-runner.mjs',
@@ -195,8 +203,10 @@ assert('WebDev preview runbook records risk register and rollback plan',
     && previewRunbook.includes('Preview Rollback / Cleanup Plan')
     && previewRunbook.includes('migration import 产生重复或静默覆盖迹象'));
 assert('WebDev prod readiness checklist records Gate R non-release boundary',
-  prodReadinessChecklist.includes('Gate R readiness checklist')
+  prodReadinessChecklist.includes('Gate R internal prod verification checklist')
     && prodReadinessChecklist.includes('不等于发布')
+    && prodReadinessChecklist.includes('webdev:prod:provision')
+    && prodReadinessChecklist.includes('webdev:prod:acceptance')
     && prodReadinessChecklist.includes('Prod Readiness Package')
     && prodReadinessChecklist.includes('WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md')
     && prodReadinessChecklist.includes('Release Risk Register')
@@ -708,8 +718,22 @@ assert('root package has Gate A preview acceptance aggregate script',
     && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:core-smoke')
     && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:ui-smoke')
     && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:data-hygiene-smoke'));
-assert('root package has Gate R readiness-only script',
+assert('root package has Gate R internal prod verification scripts',
   rootPackage.scripts['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
+    && rootPackage.scripts['webdev:prod:provision'] === 'node scripts/webdev/provision-cloudflare-prod.mjs'
+    && rootPackage.scripts['webdev:prod:deploy'] === 'node scripts/webdev/deploy-cloudflare-prod.mjs'
+    && rootPackage.scripts['webdev:prod:headers-smoke'] === 'node scripts/webdev/prod-headers-smoke.mjs'
+    && rootPackage.scripts['webdev:prod:sso-smoke'] === 'node scripts/webdev/prod-sso-smoke.mjs'
+    && rootPackage.scripts['webdev:prod:smoke'] === 'node scripts/webdev/prod-smoke.mjs'
+    && rootPackage.scripts['webdev:prod:core-smoke'] === 'node scripts/webdev/prod-core-smoke.mjs'
+    && rootPackage.scripts['webdev:prod:ui-smoke'] === 'node scripts/webdev/prod-ui-smoke.mjs'
+    && rootPackage.scripts['webdev:prod:data-hygiene-smoke'] === 'node scripts/webdev/prod-data-hygiene-smoke.mjs'
+    && rootPackage.scripts['webdev:prod:acceptance']?.includes('npm run webdev:prod:headers-smoke')
+    && rootPackage.scripts['webdev:prod:acceptance']?.includes('npm run webdev:prod:sso-smoke')
+    && rootPackage.scripts['webdev:prod:acceptance']?.includes('npm run webdev:prod:smoke')
+    && rootPackage.scripts['webdev:prod:acceptance']?.includes('npm run webdev:prod:core-smoke')
+    && rootPackage.scripts['webdev:prod:acceptance']?.includes('npm run webdev:prod:ui-smoke')
+    && rootPackage.scripts['webdev:prod:acceptance']?.includes('npm run webdev:prod:data-hygiene-smoke')
     && rootPackage.scripts['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs'
     && rootPackage.scripts['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
     && rootPackage.scripts['webdev:prod:evidence'] === 'node scripts/webdev/prod-evidence-runner.mjs'
@@ -723,6 +747,14 @@ const previewSmoke = read('scripts/webdev/preview-smoke.mjs');
 const previewCoreSmoke = read('scripts/webdev/preview-core-smoke.mjs');
 const previewUiSmoke = read('scripts/webdev/preview-ui-smoke.mjs');
 const previewDataHygieneSmoke = read('scripts/webdev/preview-data-hygiene-smoke.mjs');
+const prodProvision = read('scripts/webdev/provision-cloudflare-prod.mjs');
+const prodDeploy = read('scripts/webdev/deploy-cloudflare-prod.mjs');
+const prodHeadersSmoke = read('scripts/webdev/prod-headers-smoke.mjs');
+const prodSsoSmoke = read('scripts/webdev/prod-sso-smoke.mjs');
+const prodSmoke = read('scripts/webdev/prod-smoke.mjs');
+const prodCoreSmoke = read('scripts/webdev/prod-core-smoke.mjs');
+const prodUiSmoke = read('scripts/webdev/prod-ui-smoke.mjs');
+const prodDataHygieneSmoke = read('scripts/webdev/prod-data-hygiene-smoke.mjs');
 const prodReadinessCheck = read('scripts/webdev/prod-readiness-check.mjs');
 const prodReadinessPackage = read('scripts/webdev/prod-readiness-package.mjs');
 const prodEvidenceRunner = read('scripts/webdev/prod-evidence-runner.mjs');
@@ -732,7 +764,7 @@ const browserExtensionReadinessCheck = read('scripts/webdev/browser-extension-re
 const desktopRuntimeReadinessCheck = read('scripts/webdev/desktop-runtime-readiness-check.mjs');
 const observabilityBackupReadinessCheck = read('scripts/webdev/observability-backup-readiness-check.mjs');
 assert('Cloudflare preview/provision scripts redact emails and local user paths in command output',
-  [cloudflareProvision, previewDeploy, previewSmoke, previewCoreSmoke, previewUiSmoke, previewDataHygieneSmoke].every(script =>
+  [cloudflareProvision, previewDeploy, previewSmoke, previewCoreSmoke, previewUiSmoke, previewDataHygieneSmoke, prodProvision, prodDeploy, prodSmoke, prodCoreSmoke, prodUiSmoke, prodDataHygieneSmoke].every(script =>
     script.includes('<email>')
       && script.includes('<user-home>')
       && script.includes('replaceAll(root, \'<workspace>\')')));
@@ -814,25 +846,51 @@ assert('preview data hygiene smoke checks temporary smoke cleanup without prod',
     && previewDataHygieneSmoke.includes('timewhere-preview-api')
     && previewDataHygieneSmoke.includes('timewhere-preview-cache')
     && !previewDataHygieneSmoke.includes('timewhere-api"'));
+assert('prod provision/deploy scripts target internal prod and local ignored state',
+  prodProvision.includes('timewhere-api')
+    && prodProvision.includes('timewhere-web')
+    && prodProvision.includes('timewhere-db')
+    && prodProvision.includes('timewhere-snapshots')
+    && prodProvision.includes('timewhere-cache')
+    && prodProvision.includes('timewhere-prod-resources.local.json')
+    && prodProvision.includes('timewhere-webdev.prod.generated.wrangler.toml')
+    && prodDeploy.includes('timewhere-prod-deployment.local.json')
+    && prodDeploy.includes("'--env', 'prod'")
+    && prodDeploy.includes('TimeWhere-WebDev-prod-deploy')
+    && prodDeploy.includes('TIMEWHERE_GOOGLE_WEB_CLIENT_ID'));
+assert('prod smoke scripts use synthetic prod-smoke accounts and stable prod Pages',
+  prodHeadersSmoke.includes('https://timewhere-web.pages.dev')
+    && prodSsoSmoke.includes('window.google?.accounts?.id')
+    && prodSsoSmoke.includes('accounts.google.com')
+    && prodSsoSmoke.includes('without using a real Google session, token, account email, or OAuth secret')
+    && prodSmoke.includes('prod-smoke')
+    && prodSmoke.includes('timewhere-api')
+    && prodCoreSmoke.includes('prod-smoke-')
+    && prodCoreSmoke.includes('source_runtime: \'prod-core-smoke\'')
+    && prodUiSmoke.includes('prod-ui-smoke-')
+    && prodUiSmoke.includes('timewhere-web.pages.dev')
+    && prodDataHygieneSmoke.includes('prod D1 has no smoke account/entity/migration references')
+    && prodDataHygieneSmoke.includes("const prefixes = ['prod-smoke', 'prod-smoke:'];"));
 assert('prod readiness script is static and release-gated',
   prodReadinessCheck.includes('WebDev prod readiness static check')
-    && prodReadinessCheck.includes('No prod resource was created')
-    && prodReadinessCheck.includes("!packageJson.scripts?.['webdev:prod:deploy']")
+    && prodReadinessCheck.includes('Gate R internal prod verification is approved')
+    && prodReadinessCheck.includes("packageJson.scripts?.['webdev:prod:deploy']")
     && prodReadinessCheck.includes('REPLACE_WITH_PROD_D1_ID')
     && prodReadinessCheck.includes('TIMEWHERE_TASK_REPLAY_KILL_SWITCH = \"on\"'));
 assert('prod readiness package script is evidence-only and release-gated',
   prodReadinessPackage.includes('WebDev Prod Readiness Package Draft')
-    && prodReadinessPackage.includes('readiness-only')
-    && prodReadinessPackage.includes('Gate R: not approved')
+    && prodReadinessPackage.includes('internal prod verification')
+    && prodReadinessPackage.includes('Gate R: approved for internal prod verification')
     && prodReadinessPackage.includes('Required Evidence Commands Available')
     && prodReadinessPackage.includes('they do not prove the command was rerun for this commit')
-    && prodReadinessPackage.includes('Attach a fresh status-only evidence summary before a Gate R review')
+    && prodReadinessPackage.includes('Attach a fresh status-only evidence summary before using this as internal prod verification evidence')
     && prodReadinessPackage.includes('Fresh Local Evidence Summary')
-    && prodReadinessPackage.includes('Execution Evidence Status Before Gate R')
+    && prodReadinessPackage.includes('Execution Evidence Status For Internal Prod Verification')
     && prodReadinessPackage.includes('evidenceSummaryCurrent')
     && prodReadinessPackage.includes('expectedEvidenceCommands')
     && prodReadinessPackage.includes('Evidence summary stores no raw output fields')
     && prodReadinessPackage.includes('webdev:preview:acceptance')
+    && prodReadinessPackage.includes('webdev:prod:acceptance')
     && prodReadinessPackage.includes('Latest preview acceptance recheck is recorded')
     && prodReadinessPackage.includes('webdev:extension:readiness')
     && prodReadinessPackage.includes('webdev:desktop:readiness')
@@ -845,8 +903,7 @@ assert('prod readiness package script is evidence-only and release-gated',
     && prodReadinessPackage.includes('current clean pushed HEAD')
     && prodReadinessPackage.includes('Re-deploy previous Worker commit')
     && prodReadinessPackage.includes('sanitize(output)')
-    && !prodReadinessPackage.includes('wrangler deploy')
-    && !prodReadinessPackage.includes('pages deploy'));
+    && !prodReadinessPackage.includes('GitHub Release created'));
 assert('prod evidence runner is status-only and release-gated',
   prodEvidenceRunner.includes('WebDev Gate R evidence runner')
     && prodEvidenceRunner.includes('Default mode is plan-only')
@@ -860,9 +917,8 @@ assert('prod evidence runner is status-only and release-gated',
     && prodEvidenceRunner.includes('release_boundary')
     && prodEvidenceRunner.includes('forbiddenCommandFragments')
     && prodEvidenceRunner.includes('webdev:preview:acceptance')
+    && prodEvidenceRunner.includes('webdev:prod:acceptance')
     && prodEvidenceRunner.includes('webdev:completion:audit')
-    && !prodEvidenceRunner.includes("display: 'wrangler deploy'")
-    && !prodEvidenceRunner.includes("display: 'pages deploy'")
     && !prodEvidenceRunner.includes("command: 'git', args: ['push"));
 assert('prod evidence summary check validates fresh status-only evidence',
   prodEvidenceSummaryCheck.includes('WebDev Gate R evidence summary check')
@@ -875,8 +931,6 @@ assert('prod evidence summary check validates fresh status-only evidence',
     && prodEvidenceSummaryCheck.includes('Raw command output is not stored')
     && prodEvidenceSummaryCheck.includes('release_boundary')
     && prodEvidenceSummaryCheck.includes('Regenerate evidence on the current clean, pushed WebDev HEAD')
-    && !prodEvidenceSummaryCheck.includes('wrangler deploy')
-    && !prodEvidenceSummaryCheck.includes('pages deploy')
     && !prodEvidenceSummaryCheck.includes('gh release')
     && !prodEvidenceSummaryCheck.includes('git push'));
 assert('completion audit script classifies readiness without approving gated work',

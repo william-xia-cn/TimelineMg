@@ -96,6 +96,19 @@ npm run webdev:preview:acceptance
 
 这些命令只允许操作 `dev / preview`。Cloudflare auth token、Google Web OAuth public client id、真实 Cloudflare resource id 均不得写入仓库；脚本生成的 resource state、deploy config 和 smoke 临时文件位于 ignored 的 `.wrangler/` 目录。`webdev:preview:headers-smoke` 只读取 stable Pages preview 响应头，验证 CSP、基础安全头、根 HTML no-store 和 hashed asset immutable cache，不需要 Cloudflare auth。`webdev:preview:smoke` 会写入并清理 preview R2 临时对象与 preview KV 临时 key，不触碰 prod。`webdev:preview:core-smoke` 会创建无真实邮箱的临时 smoke account/session，调用 preview Worker API 验证核心 CRUD / sync 读路径和 migration import / idempotent retry / conflict / resolution，随后清理该 smoke account 下的数据与临时迁移 snapshot；它不读取浏览器 session，不打印 token / account email / Cloudflare id。`webdev:preview:ui-smoke` 会创建无真实邮箱的临时 smoke account/session，打开 stable Pages preview 验证 Dashboard / Tasks / Calendar / Settings UI 与 preview Worker 数据路径，随后清理 smoke account。`webdev:preview:data-hygiene-smoke` 验证 preview D1 / KV / local temp file 没有 smoke 残留。`webdev:preview:acceptance` 串联 preview headers、foundation、core API、UI smoke、data hygiene smoke，不新增权限或发布动作。
 
+Gate R 内部 prod verification 已批准，当前允许执行：
+
+```powershell
+npm run webdev:prod:provision
+npm run webdev:prod:deploy
+npm run webdev:prod:sso-smoke
+npm run webdev:prod:acceptance
+npm run webdev:prod:evidence -- --run
+npm run webdev:prod:evidence:check
+```
+
+这些命令只用于内部可验证 prod 环境；真实 Cloudflare resource id 只能写入 ignored `.wrangler/`，不得写入仓库。它们不批准 public release、GitHub Release、tag、merge、CWS、Desktop package/signing/distribution 或 replay 扩大。
+
 ## Gate 边界
 
 | Gate | 需要批准的动作 |
@@ -105,7 +118,7 @@ npm run webdev:preview:acceptance
 | C | 实现 Calendar / Container / Settings replay。 |
 | D | 定义并实现 Browser Extension 第一阶段范围或 replay。 |
 | E | Desktop Runtime 内部包、签名、公证、自动更新或分发策略。 |
-| R | prod deployment、public release、GitHub Release、tag、merge、CWS、正式发布。 |
+| R | 内部 prod verification 已批准；public release、GitHub Release、tag、merge、CWS、正式发布仍需单独批准。 |
 
 简称 `A` 到 `R` 在执行记录中应写作 `Gate A`、`Gate B`、`Gate C`、`Gate D`、`Gate E`、`Gate R`，避免和普通阶段编号混淆。
 
@@ -119,7 +132,7 @@ npm run webdev:preview:acceptance
 | Gate C | Calendar / Container / Settings replay | Not approved | 仅保留 Gate C readiness packet；不实现、不开启、不中转非 Task replay。 |
 | Gate D | Browser Extension 第一阶段范围、Cloud/WebDev replay、CWS 路线 | Not approved | Browser Extension 仍是生态组件规划；不实现 Extension replay、不部署、不提交 CWS。 |
 | Gate E | Desktop Runtime 内部包、签名、公证、自动更新、分发 | Not approved | 仅允许本地 Runtime readiness / smoke；不打包、不签名、不公证、不分发。 |
-| Gate R | prod Cloudflare resources、prod deploy、tag、merge、GitHub Release、public release、CWS、正式发布 | Not approved | 仅允许 prod readiness / package / evidence 静态或只读证据；不创建 prod 资源、不部署、不发布。 |
+| Gate R | prod Cloudflare resources、prod deploy、tag、merge、GitHub Release、public release、CWS、正式发布 | Partially approved | 允许创建/确认 prod Cloudflare resources、部署 prod Worker / Pages、运行内部 smoke/evidence；不允许 public release、GitHub Release、tag、merge、CWS、Desktop 分发或正式发布。 |
 
 当前整体分类保持 `readiness_complete_pending_approval_gates`。prod release、Calendar / Container / Settings replay、Browser Extension replay、local-over-cloud overwrite、batch conflict handling、full-entity offline-first 仍需单独批准。
 

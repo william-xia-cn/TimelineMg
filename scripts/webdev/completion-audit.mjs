@@ -160,15 +160,16 @@ assert('Preview acceptance evidence is represented for Gate A',
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('webdev:preview:data-hygiene-smoke')
     && projectMaster.includes('preview:data-hygiene-smoke'));
 
-assert('Prod readiness is explicitly non-release and Gate R only',
-  hasAll(prod, ['Gate R readiness checklist', '不等于发布', 'Stop Conditions'])
+assert('Prod verification is explicitly non-release and Gate R internal verification only',
+  hasAll(prod, ['Gate R internal prod verification checklist', '不等于发布', 'Stop Conditions'])
     && hasAll(observability, ['Gate R readiness runbook', 'Stop Conditions'])
     && packageJson.scripts?.['webdev:prod:evidence'] === 'node scripts/webdev/prod-evidence-runner.mjs'
     && packageJson.scripts?.['webdev:prod:evidence:check'] === 'node scripts/webdev/prod-evidence-summary-check.mjs'
+    && packageJson.scripts?.['webdev:prod:acceptance']?.includes('webdev:prod:data-hygiene-smoke')
     && prod.includes('webdev:prod:evidence')
     && prod.includes('webdev:prod:evidence:check')
     && prodEvidenceSummaryCheck.includes('Gate R evidence summary matches current WebDev HEAD')
-    && projectMaster.includes('Prod deploy/release remains unapproved'));
+    && projectMaster.includes('Gate R internal prod verification is approved'));
 
 assert('All approval gates remain explicit',
   hasAll(checklist, ['| B |', '| C |', '| D |', '| E |', '| R |'])

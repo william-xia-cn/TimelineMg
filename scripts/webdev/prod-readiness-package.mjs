@@ -9,6 +9,7 @@ const evidenceSummaryPath = path.join(root, '.wrangler', 'webdev-gate-r-evidence
 const expectedEvidenceCommands = [
   ['webdev_verify', 'npm run webdev:verify'],
   ['preview_acceptance', 'npm run webdev:preview:acceptance'],
+  ['prod_acceptance', 'npm run webdev:prod:acceptance'],
   ['extension_readiness', 'npm run webdev:extension:readiness'],
   ['desktop_readiness', 'npm run webdev:desktop:readiness'],
   ['gate_b_readiness', 'npm run webdev:gate-b:readiness'],
@@ -135,6 +136,7 @@ const evidenceSummaryCurrent = Boolean(evidenceSummary.summary)
 const requiredScripts = [
   'webdev:verify',
   'webdev:preview:acceptance',
+  'webdev:prod:acceptance',
   'webdev:extension:readiness',
   'webdev:desktop:readiness',
   'webdev:gate-b:readiness',
@@ -150,7 +152,7 @@ const readinessEvidence = [
   ['Phase 9 preview runbook exists', previewRunbook.includes('WebDev Preview Acceptance Runbook')],
   ['Preview acceptance aggregator exists', packageJson.scripts?.['webdev:preview:acceptance']?.includes('webdev:preview:data-hygiene-smoke')],
   ['Preview data hygiene evidence is represented', previewRunbook.includes('webdev:preview:data-hygiene-smoke')],
-  ['Gate R remains unapproved', projectMaster.includes('Prod deploy/release remains unapproved')],
+  ['Gate R internal prod verification is approved', projectMaster.includes('Gate R internal prod verification is approved')],
   ['Prod readiness checklist declares non-release boundary', prodChecklist.includes('不等于发布')],
   ['Browser Extension Gate D readiness is represented', packageJson.scripts?.['webdev:extension:readiness'] === 'node scripts/webdev/browser-extension-readiness-check.mjs' && completionChecklist.includes('WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md')],
   ['Desktop Runtime Gate E readiness is represented', packageJson.scripts?.['webdev:desktop:readiness'] === 'node scripts/webdev/desktop-runtime-readiness-check.mjs' && completionChecklist.includes('WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md')],
@@ -160,6 +162,7 @@ const readinessEvidence = [
   ['Rollback package is represented', prodChecklist.includes('Rollback plan')],
   ['Completion audit is represented', packageJson.scripts?.['webdev:completion:audit'] === 'node scripts/webdev/completion-audit.mjs' && completionChecklist.includes('webdev:completion:audit')],
   ['Evidence summary check is represented', packageJson.scripts?.['webdev:prod:evidence:check'] === 'node scripts/webdev/prod-evidence-summary-check.mjs' && completionChecklist.includes('webdev:prod:evidence:check')],
+  ['Prod acceptance aggregator exists', packageJson.scripts?.['webdev:prod:acceptance']?.includes('webdev:prod:data-hygiene-smoke')],
   ['Gate B/C/D/E/R limits remain listed', completionChecklist.includes('| B |') && completionChecklist.includes('| C |') && completionChecklist.includes('| D |') && completionChecklist.includes('| E |') && completionChecklist.includes('| R |')],
   ['Task board records preview acceptance hardening', taskBoard.includes('webdev:preview:data-hygiene-smoke')],
   ['Latest preview acceptance recheck is recorded', taskBoard.includes('reran `npm run webdev:preview:acceptance` after the WebDev completion audit / docs cleanup work') && projectMaster.includes('webdev:preview:acceptance` was rerun after the WebDev completion audit / docs cleanup work')]
@@ -176,7 +179,7 @@ Working tree clean: ${clean ? 'yes' : 'no'}
 Upstream: ${upstream}
 Upstream synced: ${upstreamSynced ? 'yes' : 'no'}
 
-> This package is readiness-only. It does not approve prod resource creation, prod deployment, public release, GitHub Release, tag, merge, CWS submission, Desktop package/signing/distribution, or replay write enablement.
+> This package is for internal prod verification. It does not approve public release, GitHub Release, tag, merge, CWS submission, Desktop package/signing/distribution, or replay write enablement.
 
 ## Current Gate Status
 
@@ -185,11 +188,11 @@ Upstream synced: ${upstreamSynced ? 'yes' : 'no'}
 - Gate C: not approved; Calendar / Container / Settings replay remains design-only.
 - Gate D: not approved; Browser Extension WebDev phase remains deferred.
 - Gate E: not approved; Desktop Runtime package/signing/distribution remains deferred.
-- Gate R: not approved; prod deployment and release remain blocked.
+- Gate R: approved for internal prod verification; public release remains blocked.
 
 ## Required Evidence Commands Available
 
-> Checked items here mean the command entry exists in package.json; they do not prove the command was rerun for this commit. Attach a fresh status-only evidence summary before a Gate R review; raw command output is intentionally not stored.
+> Checked items here mean the command entry exists in package.json; they do not prove the command was rerun for this commit. Attach a fresh status-only evidence summary before using this as internal prod verification evidence; raw command output is intentionally not stored.
 
 ${requiredScripts.map(script => `- ${checked(Boolean(packageJson.scripts?.[script]))} npm run ${script}`).join('\n')}
 - ${checked(true)} git diff --check
@@ -197,7 +200,7 @@ ${requiredScripts.map(script => `- ${checked(Boolean(packageJson.scripts?.[scrip
 
 ## Fresh Local Evidence Summary
 
-> This section reads ignored local status-only evidence from .wrangler/webdev-gate-r-evidence-summary.json. It does not store raw command output and does not replace Product Owner Gate R approval.
+> This section reads ignored local status-only evidence from .wrangler/webdev-gate-r-evidence-summary.json. It does not store raw command output and does not replace any later public release approval.
 
 - ${checked(evidenceSummary.exists)} Evidence summary file exists
 - ${checked(!evidenceSummary.parse_error)} Evidence summary JSON parses${evidenceSummary.parse_error ? `: ${evidenceSummary.parse_error}` : ''}
@@ -213,7 +216,7 @@ ${requiredScripts.map(script => `- ${checked(Boolean(packageJson.scripts?.[scrip
 Generated at: ${evidenceSummary.summary?.generated_at || 'missing'}
 Evidence commit: ${evidenceSummary.summary?.commit ? String(evidenceSummary.summary.commit).slice(0, 12) : 'missing'}
 
-## Execution Evidence Status Before Gate R
+## Execution Evidence Status For Internal Prod Verification
 
 ${expectedEvidenceCommands.map(([id, display]) => `- ${checked(evidenceSummaryCurrent && evidenceCommandMap.get(id)?.exit_code === 0)} ${display}`).join('\n')}
 
@@ -234,14 +237,14 @@ ${scriptEvidence.map(([name, ok]) => `- ${checked(ok)} ${name}`).join('\n')}
 - The runner writes status-only evidence to ignored .wrangler/webdev-gate-r-evidence-summary.json and does not store raw command output.
 - The check validates that the ignored summary matches the current clean HEAD == origin/WebDev, has the required command order, and still contains no raw output.
 
-## Known Limitations For Gate R Review
+## Known Limitations For Internal Prod Verification
 
 - Task replay writes are still disabled for user traffic.
 - Calendar / Container / Settings replay is not implemented.
 - Browser Extension is not part of WebDev v1 release scope.
 - Desktop Runtime has only local readiness/smoke evidence until Gate E.
-- Prod Cloudflare resource ids must remain placeholders until Gate R approval.
-- Observability and backup policies are readiness-scaffolded but still require Gate R review before prod resource creation.
+- Prod Cloudflare resource ids must remain only in ignored .wrangler local state.
+- Observability and backup policies are intentionally lightweight for internal prod verification.
 
 ## Rollback Plan Summary
 
@@ -254,8 +257,6 @@ ${scriptEvidence.map(([name, ok]) => `- ${checked(ok)} ${name}`).join('\n')}
 
 ## Decision Requested Later
 
-- Approve prod resource creation?
-- Approve prod deployment?
 - Approve release announcement?
 - Approve Desktop package/signing/distribution?
 `;

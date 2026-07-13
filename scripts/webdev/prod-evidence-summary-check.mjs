@@ -9,6 +9,7 @@ const summaryPath = path.join(root, '.wrangler', 'webdev-gate-r-evidence-summary
 const expectedCommandIds = [
   'webdev_verify',
   'preview_acceptance',
+  'prod_acceptance',
   'extension_readiness',
   'desktop_readiness',
   'gate_b_readiness',
@@ -35,8 +36,7 @@ const forbiddenRawOutputKeys = new Set([
 ]);
 
 const forbiddenReleaseFragments = [
-  'prod resource',
-  'deployment',
+  'public release',
   'GitHub Release',
   'tag',
   'CWS submission',

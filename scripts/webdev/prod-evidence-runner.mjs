@@ -14,6 +14,7 @@ const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const evidenceCommands = [
   { id: 'webdev_verify', display: 'npm run webdev:verify', command: npmCommand, args: ['run', 'webdev:verify'] },
   { id: 'preview_acceptance', display: 'npm run webdev:preview:acceptance', command: npmCommand, args: ['run', 'webdev:preview:acceptance'] },
+  { id: 'prod_acceptance', display: 'npm run webdev:prod:acceptance', command: npmCommand, args: ['run', 'webdev:prod:acceptance'] },
   { id: 'extension_readiness', display: 'npm run webdev:extension:readiness', command: npmCommand, args: ['run', 'webdev:extension:readiness'] },
   { id: 'desktop_readiness', display: 'npm run webdev:desktop:readiness', command: npmCommand, args: ['run', 'webdev:desktop:readiness'] },
   { id: 'gate_b_readiness', display: 'npm run webdev:gate-b:readiness', command: npmCommand, args: ['run', 'webdev:gate-b:readiness'] },
@@ -27,14 +28,11 @@ const evidenceCommands = [
 ];
 
 const forbiddenCommandFragments = [
-  'wrangler deploy',
-  'pages deploy',
+  'gh release',
   'webdev:preview:deploy',
   'webdev:cloudflare:provision',
-  'webdev:prod:deploy',
   'electron:package',
   'git push',
-  'gh release',
   'gh workflow run'
 ];
 
@@ -213,7 +211,7 @@ const summary = {
   completed_at: new Date().toISOString(),
   result: failed ? 'failed' : 'passed',
   privacy_note: 'Raw command output is not stored. Do not commit this local evidence summary.',
-  release_boundary: 'No prod resource, deployment, GitHub Release, tag, CWS submission, desktop package/signing/distribution, or replay enablement is performed by this runner.',
+  release_boundary: 'Internal prod verification may use already provisioned prod resources. No public release, GitHub Release, tag, CWS submission, desktop package/signing/distribution, or replay enablement is performed by this runner.',
   commands: results
 };
 

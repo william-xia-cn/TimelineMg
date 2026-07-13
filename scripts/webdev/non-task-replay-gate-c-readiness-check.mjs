@@ -142,10 +142,9 @@ assert('completion/status docs keep Gate C unapproved',
     && taskBoard.includes('Calendar/Container/Settings replay implementation')
     && taskBoard.includes('requiring separate approval before implementation'));
 
-assert('Gate C readiness exposes no deployment or release script',
+assert('Gate C readiness exposes no replay enable or release script',
   !packageJson.scripts?.['webdev:gate-c:enable']
     && !packageJson.scripts?.['webdev:non-task-replay:enable']
-    && !packageJson.scripts?.['webdev:prod:deploy']
     && !packageJson.scripts?.['webdev:release']);
 
 assertNoObviousSecrets('Gate C readiness scanned files contain no obvious secrets',

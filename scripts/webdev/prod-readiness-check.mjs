@@ -27,6 +27,14 @@ const requiredFiles = [
   'scripts/webdev/prod-readiness-package.mjs',
   'scripts/webdev/prod-evidence-runner.mjs',
   'scripts/webdev/prod-evidence-summary-check.mjs',
+  'scripts/webdev/provision-cloudflare-prod.mjs',
+  'scripts/webdev/deploy-cloudflare-prod.mjs',
+  'scripts/webdev/prod-headers-smoke.mjs',
+  'scripts/webdev/prod-sso-smoke.mjs',
+  'scripts/webdev/prod-smoke.mjs',
+  'scripts/webdev/prod-core-smoke.mjs',
+  'scripts/webdev/prod-ui-smoke.mjs',
+  'scripts/webdev/prod-data-hygiene-smoke.mjs',
   'scripts/webdev/completion-audit.mjs',
   'package.json',
   '.gitignore'
@@ -95,23 +103,30 @@ const observabilityReadinessCheck = exists('scripts/webdev/observability-backup-
 const prodReadinessPackage = exists('scripts/webdev/prod-readiness-package.mjs') ? read('scripts/webdev/prod-readiness-package.mjs') : '';
 const prodEvidenceRunner = exists('scripts/webdev/prod-evidence-runner.mjs') ? read('scripts/webdev/prod-evidence-runner.mjs') : '';
 const prodEvidenceSummaryCheck = exists('scripts/webdev/prod-evidence-summary-check.mjs') ? read('scripts/webdev/prod-evidence-summary-check.mjs') : '';
+const prodProvision = exists('scripts/webdev/provision-cloudflare-prod.mjs') ? read('scripts/webdev/provision-cloudflare-prod.mjs') : '';
+const prodDeploy = exists('scripts/webdev/deploy-cloudflare-prod.mjs') ? read('scripts/webdev/deploy-cloudflare-prod.mjs') : '';
+const prodSsoSmoke = exists('scripts/webdev/prod-sso-smoke.mjs') ? read('scripts/webdev/prod-sso-smoke.mjs') : '';
+const prodSmoke = exists('scripts/webdev/prod-smoke.mjs') ? read('scripts/webdev/prod-smoke.mjs') : '';
+const prodCoreSmoke = exists('scripts/webdev/prod-core-smoke.mjs') ? read('scripts/webdev/prod-core-smoke.mjs') : '';
+const prodUiSmoke = exists('scripts/webdev/prod-ui-smoke.mjs') ? read('scripts/webdev/prod-ui-smoke.mjs') : '';
+const prodDataHygieneSmoke = exists('scripts/webdev/prod-data-hygiene-smoke.mjs') ? read('scripts/webdev/prod-data-hygiene-smoke.mjs') : '';
 const completionAudit = exists('scripts/webdev/completion-audit.mjs') ? read('scripts/webdev/completion-audit.mjs') : '';
 const packageJson = exists('package.json') ? JSON.parse(read('package.json')) : { scripts: {} };
 const gitignore = exists('.gitignore') ? read('.gitignore') : '';
 
 assert('prod readiness explicitly says it is not release',
   prodChecklist.includes('不等于发布')
-    && prodChecklist.includes('不批准 prod deployment')
+    && prodChecklist.includes('已批准创建/确认 prod Cloudflare resource')
     && prodChecklist.includes('GitHub Release')
     && prodChecklist.includes('tag')
     && prodChecklist.includes('CWS'));
 
-assert('Gate R remains required for prod actions',
+assert('Gate R internal prod verification is approved while public release remains gated',
   prodChecklist.includes('Gate R')
-    && prodChecklist.includes('Approve prod resource creation?')
-    && prodChecklist.includes('Approve prod deployment?')
-    && completionChecklist.includes('| R | prod deployment')
-    && projectMaster.includes('Prod deploy/release remains unapproved'));
+    && prodChecklist.includes('webdev:prod:provision')
+    && prodChecklist.includes('webdev:prod:deploy')
+    && completionChecklist.includes('| R | 内部 prod verification 已批准')
+    && projectMaster.includes('Gate R internal prod verification is approved'));
 
 assert('prod wrangler names are present but ids remain placeholders',
   wrangler.includes('[env.prod]')
@@ -149,7 +164,7 @@ assert('risk register and rollback plan are represented before Gate R',
     && prodChecklist.includes('Preserve R2 migration snapshots')
     && prodChecklist.includes('Disable replay writes / keep kill switch on'));
 
-assert('local and preview scripts exist but prod deploy script is not exposed',
+assert('local, preview, and internal prod verification scripts exist while release scripts stay absent',
   packageJson.scripts?.['webdev:preview:smoke'] === 'node scripts/webdev/preview-smoke.mjs'
     && packageJson.scripts?.['webdev:preview:headers-smoke'] === 'node scripts/webdev/preview-headers-smoke.mjs'
     && packageJson.scripts?.['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs'
@@ -168,12 +183,59 @@ assert('local and preview scripts exist but prod deploy script is not exposed',
     && packageJson.scripts?.['webdev:verify']?.includes('npm run webdev:gate-c:readiness')
     && packageJson.scripts?.['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs'
     && packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
+    && packageJson.scripts?.['webdev:prod:provision'] === 'node scripts/webdev/provision-cloudflare-prod.mjs'
+    && packageJson.scripts?.['webdev:prod:deploy'] === 'node scripts/webdev/deploy-cloudflare-prod.mjs'
+    && packageJson.scripts?.['webdev:prod:headers-smoke'] === 'node scripts/webdev/prod-headers-smoke.mjs'
+    && packageJson.scripts?.['webdev:prod:sso-smoke'] === 'node scripts/webdev/prod-sso-smoke.mjs'
+    && packageJson.scripts?.['webdev:prod:smoke'] === 'node scripts/webdev/prod-smoke.mjs'
+    && packageJson.scripts?.['webdev:prod:core-smoke'] === 'node scripts/webdev/prod-core-smoke.mjs'
+    && packageJson.scripts?.['webdev:prod:ui-smoke'] === 'node scripts/webdev/prod-ui-smoke.mjs'
+    && packageJson.scripts?.['webdev:prod:data-hygiene-smoke'] === 'node scripts/webdev/prod-data-hygiene-smoke.mjs'
+    && packageJson.scripts?.['webdev:prod:acceptance']?.includes('npm run webdev:prod:headers-smoke')
+    && packageJson.scripts?.['webdev:prod:acceptance']?.includes('npm run webdev:prod:sso-smoke')
+    && packageJson.scripts?.['webdev:prod:acceptance']?.includes('npm run webdev:prod:core-smoke')
+    && packageJson.scripts?.['webdev:prod:acceptance']?.includes('npm run webdev:prod:data-hygiene-smoke')
     && packageJson.scripts?.['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
     && packageJson.scripts?.['webdev:prod:evidence'] === 'node scripts/webdev/prod-evidence-runner.mjs'
     && packageJson.scripts?.['webdev:prod:evidence:check'] === 'node scripts/webdev/prod-evidence-summary-check.mjs'
     && packageJson.scripts?.['webdev:completion:audit'] === 'node scripts/webdev/completion-audit.mjs'
-    && !packageJson.scripts?.['webdev:prod:deploy']
+    && !packageJson.scripts?.['webdev:release']
     && !packageJson.scripts?.['webdev:release']);
+
+assert('prod provision/deploy scripts target only internal prod resources and local ignored state',
+  prodProvision.includes('timewhere-api')
+    && prodProvision.includes('timewhere-web')
+    && prodProvision.includes('timewhere-db')
+    && prodProvision.includes('timewhere-snapshots')
+    && prodProvision.includes('timewhere-cache')
+    && prodProvision.includes('timewhere-prod-resources.local.json')
+    && prodProvision.includes('timewhere-webdev.prod.generated.wrangler.toml')
+    && prodDeploy.includes('timewhere-prod-deployment.local.json')
+    && prodDeploy.includes("'--env', 'prod'")
+    && prodDeploy.includes('TimeWhere-WebDev-prod-deploy')
+    && !prodProvision.includes('client_secret')
+    && !prodDeploy.includes('client_secret'));
+
+assert('prod smoke scripts use synthetic prod-smoke data and redact sensitive output',
+  [prodSmoke, prodCoreSmoke, prodDataHygieneSmoke].every(script =>
+    script.includes('prod-smoke')
+      && script.includes('timewhere-prod-resources.local.json')
+      && script.includes('timewhere-webdev.prod.generated.wrangler.toml')
+      && script.includes('<email>')
+      && script.includes('<user-home>'))
+    && prodUiSmoke.includes('prod-ui-smoke')
+    && prodUiSmoke.includes('timewhere-prod-resources.local.json')
+    && prodUiSmoke.includes('timewhere-webdev.prod.generated.wrangler.toml')
+    && prodUiSmoke.includes('<email>')
+    && prodUiSmoke.includes('<user-home>')
+    && prodCoreSmoke.includes('source_runtime: \'prod-core-smoke\'')
+    && prodDataHygieneSmoke.includes('prod D1 has no smoke account/entity/migration references'));
+
+assert('prod Google SSO smoke verifies GIS button without real account data',
+  prodSsoSmoke.includes('https://timewhere-web.pages.dev')
+    && prodSsoSmoke.includes('window.google?.accounts?.id')
+    && prodSsoSmoke.includes('accounts.google.com')
+    && prodSsoSmoke.includes('without using a real Google session, token, account email, or OAuth secret'));
 
 assert('Browser Extension readiness stays Gate D only',
   extensionReadinessCheck.includes('WebDev Browser Extension readiness static check')
@@ -225,13 +287,13 @@ assert('observability and backup readiness is represented without prod actions',
 
 assert('prod readiness package is evidence-only and gate-aware',
   prodReadinessPackage.includes('WebDev Prod Readiness Package Draft')
-    && prodReadinessPackage.includes('readiness-only')
-    && prodReadinessPackage.includes('Gate R: not approved')
+    && prodReadinessPackage.includes('internal prod verification')
+    && prodReadinessPackage.includes('Gate R: approved for internal prod verification')
     && prodReadinessPackage.includes('Required Evidence Commands Available')
     && prodReadinessPackage.includes('they do not prove the command was rerun for this commit')
-    && prodReadinessPackage.includes('Attach a fresh status-only evidence summary before a Gate R review')
+    && prodReadinessPackage.includes('Attach a fresh status-only evidence summary before using this as internal prod verification evidence')
     && prodReadinessPackage.includes('Fresh Local Evidence Summary')
-    && prodReadinessPackage.includes('Execution Evidence Status Before Gate R')
+    && prodReadinessPackage.includes('Execution Evidence Status For Internal Prod Verification')
     && prodReadinessPackage.includes('evidenceSummaryCurrent')
     && prodReadinessPackage.includes('expectedEvidenceCommands')
     && prodReadinessPackage.includes('Evidence summary stores no raw output fields')
@@ -243,6 +305,7 @@ assert('prod readiness package is evidence-only and gate-aware',
     && prodReadinessPackage.includes('webdev:gate-c:readiness')
     && prodReadinessPackage.includes('webdev:observability:readiness')
     && prodReadinessPackage.includes('webdev:prod:readiness')
+    && prodReadinessPackage.includes('webdev:prod:acceptance')
     && prodReadinessPackage.includes('webdev:prod:evidence')
     && prodReadinessPackage.includes('webdev:prod:evidence:check')
     && prodReadinessPackage.includes('Default mode is plan-only')
@@ -250,8 +313,7 @@ assert('prod readiness package is evidence-only and gate-aware',
     && prodReadinessPackage.includes('current clean pushed HEAD')
     && prodReadinessPackage.includes('Upstream synced')
     && prodReadinessPackage.includes('Re-deploy previous Worker commit')
-    && !prodReadinessPackage.includes('wrangler deploy')
-    && !prodReadinessPackage.includes('pages deploy'));
+    && !prodReadinessPackage.includes('GitHub Release created'));
 
 assert('prod evidence runner is status-only and release-gated',
   prodEvidenceRunner.includes('WebDev Gate R evidence runner')
@@ -266,10 +328,9 @@ assert('prod evidence runner is status-only and release-gated',
     && prodEvidenceRunner.includes('Raw command output is not stored')
     && prodEvidenceRunner.includes('release_boundary')
     && prodEvidenceRunner.includes('forbiddenCommandFragments')
+    && prodEvidenceRunner.includes('webdev:prod:acceptance')
     && prodEvidenceRunner.includes('webdev:preview:acceptance')
     && prodEvidenceRunner.includes('webdev:completion:audit')
-    && !prodEvidenceRunner.includes("display: 'wrangler deploy'")
-    && !prodEvidenceRunner.includes("display: 'pages deploy'")
     && !prodEvidenceRunner.includes("command: 'git', args: ['push"));
 
 assert('prod evidence summary check validates fresh status-only evidence',
@@ -346,6 +407,13 @@ assertNoObviousSecrets('prod readiness scanned files contain no obvious secrets'
     prodReadinessPackage,
     prodEvidenceRunner,
     prodEvidenceSummaryCheck,
+    prodProvision,
+    prodDeploy,
+    prodSsoSmoke,
+    prodSmoke,
+    prodCoreSmoke,
+    prodUiSmoke,
+    prodDataHygieneSmoke,
     completionAudit,
     gitignore
   ].join('\n'));
@@ -357,4 +425,4 @@ if (failed > 0) {
 
 console.log('==================================');
 console.log(`All ${passed} WebDev prod readiness checks passed.`);
-console.log('This is readiness evidence only. No prod resource was created, deployed, released, tagged, or published.');
+console.log('This is internal prod verification readiness evidence. The check itself created no prod resource, deployed nothing, and did not release, tag, or publish.');
