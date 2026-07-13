@@ -50,6 +50,7 @@ npm run webdev:observability:readiness
 npm run webdev:prod:readiness
 npm run webdev:prod:package
 npm run webdev:prod:evidence
+npm run webdev:prod:evidence:check
 npm run webdev:completion:audit
 npm test
 git diff --check
@@ -68,6 +69,7 @@ git diff --check
 `npm run webdev:prod:readiness` 只做静态 readiness gate：检查 prod 配置仍是占位、Gate R 未批准、replay 写开关仍关闭、env example 不含 secret；它不创建 Cloudflare prod 资源、不部署、不发布。
 `npm run webdev:prod:package` 只输出 Gate R 审批包草稿：当前分支、commit、Gate 状态、必跑命令可用性、待附加执行证据、已知限制和回滚摘要；它不读取 `.wrangler/`、不调用 Wrangler、不创建 prod 资源、不部署、不发布。审批包中的命令 `[x]` 只表示脚本入口存在，不表示该命令已针对当前 commit 重新执行。
 `npm run webdev:prod:evidence` 默认只输出 Gate R 证据命令计划；`npm run webdev:prod:evidence -- --run` 才会执行命令，并只在 ignored `.wrangler/` 中保存状态摘要，不保存原始输出、不创建 prod 资源、不部署、不发布。
+`npm run webdev:prod:evidence:check` 只读取 ignored `.wrangler/webdev-gate-r-evidence-summary.json`，验证它对应当前 clean 且已推送的 `WebDev` HEAD、命令顺序完整、所有退出码为 0、changed-files scan 为 0、且没有原始输出字段；它不调用 Wrangler、不创建 prod 资源、不部署、不发布。
 `npm run webdev:completion:audit` 只做当前 WebDev 目标完成度审计：核对 Phase 0-10、Gate B/C/D/E/R、核心目标证据、脚本入口、分支状态、`HEAD == origin/WebDev` 和敏感信息边界；它输出 `readiness_complete_pending_approval_gates`，表示 readiness 证据完整且当前 commit 已同步远端，但仍有审批 gate，不能替代 Product Owner 批准。
 
 真实 preview / prod 验收入口：

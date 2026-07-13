@@ -26,6 +26,7 @@ const requiredFiles = [
   'scripts/webdev/observability-backup-readiness-check.mjs',
   'scripts/webdev/prod-readiness-package.mjs',
   'scripts/webdev/prod-evidence-runner.mjs',
+  'scripts/webdev/prod-evidence-summary-check.mjs',
   'scripts/webdev/completion-audit.mjs',
   'package.json',
   '.gitignore'
@@ -93,6 +94,7 @@ const nonTaskReplayGateCCheck = exists('scripts/webdev/non-task-replay-gate-c-re
 const observabilityReadinessCheck = exists('scripts/webdev/observability-backup-readiness-check.mjs') ? read('scripts/webdev/observability-backup-readiness-check.mjs') : '';
 const prodReadinessPackage = exists('scripts/webdev/prod-readiness-package.mjs') ? read('scripts/webdev/prod-readiness-package.mjs') : '';
 const prodEvidenceRunner = exists('scripts/webdev/prod-evidence-runner.mjs') ? read('scripts/webdev/prod-evidence-runner.mjs') : '';
+const prodEvidenceSummaryCheck = exists('scripts/webdev/prod-evidence-summary-check.mjs') ? read('scripts/webdev/prod-evidence-summary-check.mjs') : '';
 const completionAudit = exists('scripts/webdev/completion-audit.mjs') ? read('scripts/webdev/completion-audit.mjs') : '';
 const packageJson = exists('package.json') ? JSON.parse(read('package.json')) : { scripts: {} };
 const gitignore = exists('.gitignore') ? read('.gitignore') : '';
@@ -168,6 +170,7 @@ assert('local and preview scripts exist but prod deploy script is not exposed',
     && packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
     && packageJson.scripts?.['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
     && packageJson.scripts?.['webdev:prod:evidence'] === 'node scripts/webdev/prod-evidence-runner.mjs'
+    && packageJson.scripts?.['webdev:prod:evidence:check'] === 'node scripts/webdev/prod-evidence-summary-check.mjs'
     && packageJson.scripts?.['webdev:completion:audit'] === 'node scripts/webdev/completion-audit.mjs'
     && !packageJson.scripts?.['webdev:prod:deploy']
     && !packageJson.scripts?.['webdev:release']);
@@ -236,6 +239,7 @@ assert('prod readiness package is evidence-only and gate-aware',
     && prodReadinessPackage.includes('webdev:observability:readiness')
     && prodReadinessPackage.includes('webdev:prod:readiness')
     && prodReadinessPackage.includes('webdev:prod:evidence')
+    && prodReadinessPackage.includes('webdev:prod:evidence:check')
     && prodReadinessPackage.includes('Default mode is plan-only')
     && prodReadinessPackage.includes('.wrangler/webdev-gate-r-evidence-summary.json')
     && prodReadinessPackage.includes('Upstream synced')
@@ -261,6 +265,23 @@ assert('prod evidence runner is status-only and release-gated',
     && !prodEvidenceRunner.includes("display: 'wrangler deploy'")
     && !prodEvidenceRunner.includes("display: 'pages deploy'")
     && !prodEvidenceRunner.includes("command: 'git', args: ['push"));
+
+assert('prod evidence summary check validates fresh status-only evidence',
+  prodEvidenceSummaryCheck.includes('WebDev Gate R evidence summary check')
+    && prodEvidenceSummaryCheck.includes('webdev-gate-r-evidence-summary.json')
+    && prodEvidenceSummaryCheck.includes('timewhere-webdev-gate-r-evidence-v1')
+    && prodEvidenceSummaryCheck.includes('origin/WebDev')
+    && prodEvidenceSummaryCheck.includes('upstream_synced')
+    && prodEvidenceSummaryCheck.includes('changed_files_sensitive_scan')
+    && prodEvidenceSummaryCheck.includes('expectedCommandIds')
+    && prodEvidenceSummaryCheck.includes('forbiddenRawOutputKeys')
+    && prodEvidenceSummaryCheck.includes('Raw command output is not stored')
+    && prodEvidenceSummaryCheck.includes('release_boundary')
+    && prodEvidenceSummaryCheck.includes('Regenerate evidence on the current clean, pushed WebDev HEAD')
+    && !prodEvidenceSummaryCheck.includes('wrangler deploy')
+    && !prodEvidenceSummaryCheck.includes('pages deploy')
+    && !prodEvidenceSummaryCheck.includes('gh release')
+    && !prodEvidenceSummaryCheck.includes('git push'));
 
 assert('completion audit is readiness-only and gate-aware',
   completionAudit.includes('WebDev completion audit')
@@ -318,6 +339,7 @@ assertNoObviousSecrets('prod readiness scanned files contain no obvious secrets'
     observabilityReadinessCheck,
     prodReadinessPackage,
     prodEvidenceRunner,
+    prodEvidenceSummaryCheck,
     completionAudit,
     gitignore
   ].join('\n'));

@@ -74,6 +74,7 @@ const readinessEvidence = [
   ['Observability / backup readiness is represented', packageJson.scripts?.['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs' && prodChecklist.includes('WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md')],
   ['Rollback package is represented', prodChecklist.includes('Rollback plan')],
   ['Completion audit is represented', packageJson.scripts?.['webdev:completion:audit'] === 'node scripts/webdev/completion-audit.mjs' && completionChecklist.includes('webdev:completion:audit')],
+  ['Evidence summary check is represented', packageJson.scripts?.['webdev:prod:evidence:check'] === 'node scripts/webdev/prod-evidence-summary-check.mjs' && completionChecklist.includes('webdev:prod:evidence:check')],
   ['Gate B/C/D/E/R limits remain listed', completionChecklist.includes('| B |') && completionChecklist.includes('| C |') && completionChecklist.includes('| D |') && completionChecklist.includes('| E |') && completionChecklist.includes('| R |')],
   ['Task board records preview acceptance hardening', taskBoard.includes('webdev:preview:data-hygiene-smoke')],
   ['Latest preview acceptance recheck is recorded', taskBoard.includes('reran `npm run webdev:preview:acceptance` after the WebDev completion audit / docs cleanup work') && projectMaster.includes('webdev:preview:acceptance` was rerun after the WebDev completion audit / docs cleanup work')]
@@ -126,9 +127,11 @@ ${scriptEvidence.map(([name, ok]) => `- ${checked(ok)} ${name}`).join('\n')}
 ## Evidence Runner
 
 - ${checked(packageJson.scripts?.['webdev:prod:evidence'] === 'node scripts/webdev/prod-evidence-runner.mjs')} npm run webdev:prod:evidence
+- ${checked(packageJson.scripts?.['webdev:prod:evidence:check'] === 'node scripts/webdev/prod-evidence-summary-check.mjs')} npm run webdev:prod:evidence:check
 - Default mode is plan-only.
-- Run `npm run webdev:prod:evidence -- --run` only when fresh Gate R evidence should be generated.
-- The runner writes status-only evidence to ignored `.wrangler/webdev-gate-r-evidence-summary.json` and does not store raw command output.
+- Run npm run webdev:prod:evidence -- --run only when fresh Gate R evidence should be generated.
+- The runner writes status-only evidence to ignored .wrangler/webdev-gate-r-evidence-summary.json and does not store raw command output.
+- The check validates that the ignored summary matches the current clean HEAD == origin/WebDev, has the required command order, and still contains no raw output.
 
 ## Known Limitations For Gate R Review
 

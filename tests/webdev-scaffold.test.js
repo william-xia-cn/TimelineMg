@@ -100,6 +100,7 @@ const requiredFiles = [
   'scripts/webdev/prod-readiness-check.mjs',
   'scripts/webdev/prod-readiness-package.mjs',
   'scripts/webdev/prod-evidence-runner.mjs',
+  'scripts/webdev/prod-evidence-summary-check.mjs',
   'scripts/webdev/completion-audit.mjs',
   'scripts/webdev/ui-walkthrough.mjs',
   'scripts/webdev/browser-extension-readiness-check.mjs',
@@ -701,7 +702,8 @@ assert('root package has Gate R readiness-only script',
   rootPackage.scripts['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
     && rootPackage.scripts['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs'
     && rootPackage.scripts['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
-    && rootPackage.scripts['webdev:prod:evidence'] === 'node scripts/webdev/prod-evidence-runner.mjs');
+    && rootPackage.scripts['webdev:prod:evidence'] === 'node scripts/webdev/prod-evidence-runner.mjs'
+    && rootPackage.scripts['webdev:prod:evidence:check'] === 'node scripts/webdev/prod-evidence-summary-check.mjs');
 assert('root package has WebDev completion audit script',
   rootPackage.scripts['webdev:completion:audit'] === 'node scripts/webdev/completion-audit.mjs');
 const cloudflareProvision = read('scripts/webdev/provision-cloudflare.mjs');
@@ -714,6 +716,7 @@ const previewDataHygieneSmoke = read('scripts/webdev/preview-data-hygiene-smoke.
 const prodReadinessCheck = read('scripts/webdev/prod-readiness-check.mjs');
 const prodReadinessPackage = read('scripts/webdev/prod-readiness-package.mjs');
 const prodEvidenceRunner = read('scripts/webdev/prod-evidence-runner.mjs');
+const prodEvidenceSummaryCheck = read('scripts/webdev/prod-evidence-summary-check.mjs');
 const completionAudit = read('scripts/webdev/completion-audit.mjs');
 const browserExtensionReadinessCheck = read('scripts/webdev/browser-extension-readiness-check.mjs');
 const desktopRuntimeReadinessCheck = read('scripts/webdev/desktop-runtime-readiness-check.mjs');
@@ -821,6 +824,7 @@ assert('prod readiness package script is evidence-only and release-gated',
     && prodReadinessPackage.includes('webdev:observability:readiness')
     && prodReadinessPackage.includes('webdev:prod:readiness')
     && prodReadinessPackage.includes('webdev:prod:evidence')
+    && prodReadinessPackage.includes('webdev:prod:evidence:check')
     && prodReadinessPackage.includes('Default mode is plan-only')
     && prodReadinessPackage.includes('.wrangler/webdev-gate-r-evidence-summary.json')
     && prodReadinessPackage.includes('Re-deploy previous Worker commit')
@@ -844,6 +848,21 @@ assert('prod evidence runner is status-only and release-gated',
     && !prodEvidenceRunner.includes("display: 'wrangler deploy'")
     && !prodEvidenceRunner.includes("display: 'pages deploy'")
     && !prodEvidenceRunner.includes("command: 'git', args: ['push"));
+assert('prod evidence summary check validates fresh status-only evidence',
+  prodEvidenceSummaryCheck.includes('WebDev Gate R evidence summary check')
+    && prodEvidenceSummaryCheck.includes('webdev-gate-r-evidence-summary.json')
+    && prodEvidenceSummaryCheck.includes('timewhere-webdev-gate-r-evidence-v1')
+    && prodEvidenceSummaryCheck.includes('origin/WebDev')
+    && prodEvidenceSummaryCheck.includes('expectedCommandIds')
+    && prodEvidenceSummaryCheck.includes('changed_files_sensitive_scan')
+    && prodEvidenceSummaryCheck.includes('forbiddenRawOutputKeys')
+    && prodEvidenceSummaryCheck.includes('Raw command output is not stored')
+    && prodEvidenceSummaryCheck.includes('release_boundary')
+    && prodEvidenceSummaryCheck.includes('Regenerate evidence on the current clean, pushed WebDev HEAD')
+    && !prodEvidenceSummaryCheck.includes('wrangler deploy')
+    && !prodEvidenceSummaryCheck.includes('pages deploy')
+    && !prodEvidenceSummaryCheck.includes('gh release')
+    && !prodEvidenceSummaryCheck.includes('git push'));
 assert('completion audit script classifies readiness without approving gated work',
   completionAudit.includes('WebDev completion audit')
     && completionAudit.includes('readiness_complete_pending_approval_gates')

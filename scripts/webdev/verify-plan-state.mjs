@@ -162,10 +162,13 @@ assert('root package exposes Gate R readiness-only check',
   packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
     && packageJson.scripts?.['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
     && packageJson.scripts?.['webdev:prod:evidence'] === 'node scripts/webdev/prod-evidence-runner.mjs'
+    && packageJson.scripts?.['webdev:prod:evidence:check'] === 'node scripts/webdev/prod-evidence-summary-check.mjs'
     && prodReadiness.includes('webdev:prod:package')
     && prodReadiness.includes('webdev:prod:evidence')
+    && prodReadiness.includes('webdev:prod:evidence:check')
     && checklist.includes('webdev:prod:package')
-    && checklist.includes('webdev:prod:evidence'));
+    && checklist.includes('webdev:prod:evidence')
+    && checklist.includes('webdev:prod:evidence:check'));
 assert('root package exposes WebDev completion audit',
   packageJson.scripts?.['webdev:completion:audit'] === 'node scripts/webdev/completion-audit.mjs'
     && checklist.includes('webdev:completion:audit'));

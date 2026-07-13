@@ -38,6 +38,7 @@
     "webdev:prod:readiness": "node scripts/webdev/prod-readiness-check.mjs",
     "webdev:prod:package": "node scripts/webdev/prod-readiness-package.mjs",
     "webdev:prod:evidence": "node scripts/webdev/prod-evidence-runner.mjs",
+    "webdev:prod:evidence:check": "node scripts/webdev/prod-evidence-summary-check.mjs",
     "webdev:completion:audit": "node scripts/webdev/completion-audit.mjs",
     "webdev:integration": "node tests/webdev-integration.test.js",
     "webdev:ui:walkthrough": "node scripts/webdev/ui-walkthrough.mjs",
