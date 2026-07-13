@@ -27,6 +27,10 @@ IndexedDB 'TimeWhere' (via Dexie.js) — v4
 ```javascript
 const db = new Dexie('TimeWhere');
 
+// D-013 id 边界：
+// 历史 Dexie keyPath 声明仍保留 ++id 以兼容旧库。
+// 当前 app 写入口为 tasks / containers / events / habits 生成 string UUID / generated string id。
+// plans / buckets / labels 这类 planner helper records 可继续保持 numeric。
 // v2: 基础 schema
 db.version(2).stores({
   settings: 'key',
@@ -51,6 +55,8 @@ db.version(4).stores({
 });
 // v4 migration: 创建默认 Plan，迁移 bucket→bucket_id，status→progress，deadline→due_date
 ```
+
+`++id` 是旧 IndexedDB / Dexie schema 的兼容写法，不代表所有业务实体的 canonical id 都是 numeric auto-increment。按 D-013，当前产品模型以 `tasks`、`containers`、`events`、`habits` 的 string UUID / generated string id 为准；`plans`、`buckets`、`labels` 作为 planner helper records 可继续使用 numeric id，直到另有 schema cleanup 决策。
 
 ---
 

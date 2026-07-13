@@ -193,7 +193,7 @@
 | CWS OAuth extension ID follow-up | Product Owner | Sanitized CWS package removes manifest `key` because CWS rejects it. CWS OAuth client was created for store extension ID `bokjekfjghliieopghopibmhjokgkjkb`; the submitted `0.2.3` package injects that client ID while source keeps the development client ID for unpacked testing. |
 | CWS review follow-up | Product Owner / releaseMg | Monitor the `0.2.3` CWS Private OAuth correction review outcome. Automatic publish after review is enabled; public listing expansion, tag, merge, deploy, and release remain unapproved. |
 | Manual browser validation not run | CLOSED | releaseMg executed `docs/TEST_PLAN.md` L3 checklist and recorded results in `docs/release/RELEASE_GATE_REPORT_INTERNAL_MVP_2026-05-11.md`. |
-| Container id documentation mismatch | Product&Project Mg / Build&Test | Product Owner approved UUID/string ids for tasks, containers, events, and habits; planner helper records may remain numeric. Documentation cleanup remains pending. |
+| Container id documentation mismatch | CLOSED | D-013 id boundary is now reflected in current authority docs: app entities use string UUID / generated string ids; planner helper records may remain numeric; legacy Dexie `++id` declarations are compatibility details, not a schema migration. |
 | P1 baseline behavior risks | CLOSED | Build&Test fix passed Product&Project Mg review and releaseMg narrow recheck returned PASS. |
 | Phase 2A safety hardening | CLOSED | Build&Test fix passed Product&Project Mg review and releaseMg narrow recheck returned PASS_WITH_MANUAL_EVIDENCE. |
 | Documentation baseline drift | CLOSED | Product docs now align to current local-first MVP baseline and mark future/out-of-scope features clearly. |

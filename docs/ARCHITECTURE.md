@@ -4,7 +4,7 @@
 **日期**: 2026-05-22
 **状态**: Internal MVP accepted; baseline stabilized for local-first MVP. Not public release ready.
 
-> Current baseline note (2026-05-22): TimeWhere is a local-first Chrome extension MVP. Task Date Arrange is approved for no-throttle page-open automation on Dashboard / Focus, Planner / Task Board, and Calendar, limited to local scheduling fields and still without background alarms. ManageBac ICS import is an extension-side source import using a saved link plus manual/user-confirmed new-event creation; it is not a cloud sync backend. D-019/D-020 approve optional Google Drive `appDataFolder` data sync v1 while all core features remain fully usable without Google. D-021 approves Chrome system reminder notifications for local tasks only. D-026 records Chrome Side Panel as the primary toolbar surface. The current source is ahead of the CWS package pending review; any further Chrome Web Store submission or public release still requires explicit Product Owner approval.
+> Current baseline note (2026-05-22): TimeWhere is a local-first Chrome extension MVP. D-013 defines canonical business ids: `tasks`, `containers`, `events`, and `habits` use string UUID / generated string ids; planner helper records such as `plans`, `buckets`, and `labels` may remain numeric. Task Date Arrange is approved for no-throttle page-open automation on Dashboard / Focus, Planner / Task Board, and Calendar, limited to local scheduling fields and still without background alarms. ManageBac ICS import is an extension-side source import using a saved link plus manual/user-confirmed new-event creation; it is not a cloud sync backend. D-019/D-020 approve optional Google Drive `appDataFolder` data sync v1 while all core features remain fully usable without Google. D-021 approves Chrome system reminder notifications for local tasks only. D-026 records Chrome Side Panel as the primary toolbar surface. The current source is ahead of the CWS package pending review; any further Chrome Web Store submission or public release still requires explicit Product Owner approval.
 
 ---
 
@@ -55,6 +55,10 @@
 // 使用 Dexie.js 封装 IndexedDB — 当前 v4
 const db = new Dexie('TimeWhere');
 
+// D-013 id 边界：
+// 历史 Dexie keyPath 声明仍保留 ++id 以兼容旧库。
+// 当前 app 写入口为 tasks / containers / events / habits 生成 string UUID / generated string id。
+// plans / buckets / labels 这类 planner helper records 可继续保持 numeric。
 db.version(2).stores({
   settings: 'key',
   tasks: '++id, subject, bucket, deadline, status, createdAt, priority, completed_at',
@@ -77,6 +81,8 @@ db.version(4).stores({
 ```
 
 共 8 个表：`settings`, `plans`, `buckets`, `labels`, `tasks`, `containers`, `habits`, `events`, `sync_log`
+
+这里的 `++id` 是旧 Dexie schema 兼容细节，不是所有表的 canonical product id 类型。按 D-013，业务实体 `tasks`、`containers`、`events`、`habits` 在业务 / 模型层以 string id 记录为准；planner helper records `plans`、`buckets`、`labels` 可继续保持 numeric，直到另有 schema cleanup 决策。
 
 ### 3.2 数据容量
 
