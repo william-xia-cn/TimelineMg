@@ -1489,6 +1489,10 @@ export function App() {
   });
   const dashboardProjection = useMemo(() => computeDashboardProjection({ tasks, containers }), [tasks, containers]);
   const calendarProjection = useMemo(() => computeCalendarDateProjection({ date: selectedDate, tasks, events, containers }), [selectedDate, tasks, events, containers]);
+  const todayKey = localDateKey();
+  const tomorrowKey = localDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
+  const todayProjection = useMemo(() => computeCalendarDateProjection({ date: todayKey, tasks, events, containers }), [todayKey, tasks, events, containers]);
+  const tomorrowProjection = useMemo(() => computeCalendarDateProjection({ date: tomorrowKey, tasks, events, containers }), [tomorrowKey, tasks, events, containers]);
   const reminderState = useMemo(() => computeReminderState({ tasks, remindersEnabled: settingsDraft.notification_enabled !== false && settingsDraft.reminders_enabled !== false }), [tasks, settingsDraft.notification_enabled, settingsDraft.reminders_enabled]);
   const pendingTaskMutations = useMemo(() => taskRepository.listPendingTaskMutations(), [tasks]);
 
@@ -1519,209 +1523,231 @@ export function App() {
   const canWrite = online && hasSession;
   const taskCanWrite = hasSession;
   const taskDeleteAllowed = online && hasSession;
+  const accountInitial = (accountName || 'G').slice(0, 1).toUpperCase();
+  const syncStateClass = !online ? 'offline' : !hasSession ? 'disconnected' : status.phase || 'ready';
+  const syncStateLabel = !online ? '离线缓存' : !hasSession ? 'Google 未连接' : status.message || 'Cloud ready';
+  const taskGroups = [
+    { key: 'not_started', title: 'Not started', tasks: visibleTasks.filter(task => !isCompleted(task) && (task.progress || task.status || 'not_started') !== 'in_progress') },
+    { key: 'in_progress', title: 'In progress', tasks: visibleTasks.filter(task => !isCompleted(task) && (task.progress === 'in_progress' || task.status === 'in_progress')) },
+    { key: 'completed', title: 'Completed', tasks: visibleTasks.filter(isCompleted) }
+  ];
 
   return (
-    <div className="app-shell">
+    <div className={`app-layout webdev-parity view-${activeView}`}>
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">TW</div>
-          <span>TimeWhere</span>
+        <div className="logo">
+          <div className="logo-icon" aria-label="TimeWhere">TW</div>
         </div>
-        <nav className="nav-list" aria-label="Primary">
-          <button className={activeView === 'dashboard' ? 'active' : ''} onClick={() => navigateToView('dashboard')}><LayoutDashboard size={18} />Dashboard</button>
-          <button className={activeView === 'tasks' ? 'active' : ''} onClick={() => navigateToView('tasks')}><ListChecks size={18} />Tasks</button>
-          <button className={activeView === 'calendar' ? 'active' : ''} onClick={() => navigateToView('calendar')}><CalendarDays size={18} />Calendar</button>
-          <button className={activeView === 'settings' ? 'active' : ''} onClick={() => navigateToView('settings')}><Settings size={18} />Settings</button>
+        <nav className="nav-menu" aria-label="Primary">
+          <button className={`nav-item ${activeView === 'dashboard' ? 'active' : ''}`} title="仪表盘" onClick={() => navigateToView('dashboard')}><LayoutDashboard size={22} /><span className="nav-label">Dashboard</span></button>
+          <button className={`nav-item ${activeView === 'tasks' ? 'active' : ''}`} title="任务" onClick={() => navigateToView('tasks')}><ListChecks size={22} /><span className="nav-label">Tasks</span></button>
+          <button className={`nav-item ${activeView === 'calendar' ? 'active' : ''}`} title="日历" onClick={() => navigateToView('calendar')}><CalendarDays size={22} /><span className="nav-label">Calendar</span></button>
         </nav>
-        <div className={`cloud-state ${online ? status.phase : 'offline'}`}>
-          {online ? <Cloud size={18} /> : <WifiOff size={18} />}
-          <span>{online ? status.message : 'Offline read cache'}</span>
+        <div className="sidebar-bottom">
+          <button className={`nav-item ${activeView === 'settings' ? 'active' : ''}`} title="设置" onClick={() => navigateToView('settings')}><Settings size={22} /><span className="nav-label">Settings</span></button>
+          <button className={`user-avatar account-state-button ${syncStateClass}`} title={syncStateLabel} onClick={() => navigateToView('settings')}>
+            {accountPicture ? <img src={accountPicture} alt="" /> : <span>{accountInitial}</span>}
+            <i className={`account-status-dot ${syncStateClass}`} />
+          </button>
         </div>
       </aside>
 
-      <main className="workspace">
-        <header className="topbar">
-          <div>
-            <h1>{activeView === 'dashboard' ? 'Dashboard' : activeView[0].toUpperCase() + activeView.slice(1)}</h1>
-            <p>Cloud canonical data · Web business app · Electron runtime ready</p>
-          </div>
-          <button className="icon-button" onClick={refreshWorkspace} title="Refresh Cloud state"><RefreshCw size={18} /></button>
-        </header>
-
-        {!online && (
-          <section className="notice warning">
-            <AlertTriangle size={18} />
-            <span>当前离线。Task 新建、编辑、完成和重开会进入待同步队列；删除和非 Task 数据仍需重新连接。</span>
+      {activeView === 'dashboard' && (
+        <main className="board-layout dashboard-board">
+          <section className="board-column column-now">
+            <div className="column-header">
+              <h2>当前任务</h2>
+              <button className="icon-btn" type="button" onClick={refreshWorkspace} title="Refresh Cloud state"><RefreshCw size={18} /></button>
+            </div>
+            <div className="column-content custom-scrollbar">
+              <div className="current-container-card">
+                <span>Current container</span>
+                <strong>{dashboardProjection.activeContainer?.name || 'No active container'}</strong>
+                <p>{dashboardProjection.activeContainer ? formatContainerMeta(dashboardProjection.activeContainer) : '当前没有正在进行的时间容器。'}</p>
+              </div>
+              <TaskList title="Projected current work" tasks={dashboardProjection.currentTasks} canWrite={taskCanWrite} canDelete={taskDeleteAllowed} onPatch={updateTaskState} onDelete={deleteTask} onSelect={task => setSelectedTaskId(task.id)} />
+            </div>
           </section>
-        )}
 
-        {online && !hasCloudSession() && (
-          <section className="notice info">
-            <Cloud size={18} />
-            <span>当前未连接 Google SSO。可浏览 preview/cache；创建、完成、删除任务和日历事件需要 Cloud account session。</span>
+          <section className="board-column column-calendar">
+            <div className="column-header calendar-heading">
+              <h2>日程 (今日 & 明日)</h2>
+              <div className="cal-actions">
+                <span>{todayKey}</span>
+              </div>
+            </div>
+            <div className="gcal-container custom-scrollbar">
+              <div className="dashboard-projection-grid">
+                <CalendarProjectionPanel projection={todayProjection} title="Today projection" compact onSelectTask={task => setSelectedTaskId(task.id)} />
+                <CalendarProjectionPanel projection={tomorrowProjection} title="Tomorrow projection" compact onSelectTask={task => setSelectedTaskId(task.id)} />
+              </div>
+            </div>
           </section>
-        )}
 
-        {activeView === 'dashboard' && (
-          <section className="dashboard-grid">
-            <div className="metric">
-              <span>Pending</span>
-              <strong>{pendingCount}</strong>
+          <section className="board-column column-week">
+            <div className="column-header">
+              <h2>本周进度</h2>
             </div>
-            <div className="metric">
-              <span>Completed</span>
-              <strong>{completedCount}</strong>
+            <div className="column-content custom-scrollbar weekly-progress-content">
+              <div className="week-stats-section">
+                <h3>学业产出统计</h3>
+                <div className="week-stat-grid">
+                  <div><span>Pending</span><strong>{pendingCount}</strong></div>
+                  <div><span>Completed</span><strong>{completedCount}</strong></div>
+                  <div><span>Today projection</span><strong>{todayProjection.counts.tasks}</strong></div>
+                </div>
+              </div>
+              <ReminderStatePanel state={reminderState} session={reminderSession} onSessionEvent={updateReminderSession} />
             </div>
-            <div className="metric">
-              <span>Today projection</span>
-              <strong>{dashboardProjection.pendingCount}</strong>
-            </div>
-            <div className="metric wide">
-              <span>Current container</span>
-              <strong>{dashboardProjection.activeContainer?.name || 'No active container'}</strong>
-            </div>
-            <ReminderStatePanel state={reminderState} session={reminderSession} onSessionEvent={updateReminderSession} />
-            <CalendarProjectionPanel projection={calendarProjection} compact />
-            <div className="metric wide">
-              <span>Migration</span>
-              <strong>{migrationResult?.status || 'Ready after Google SSO'}</strong>
-            </div>
-            <TaskList title="Projected current work" tasks={dashboardProjection.currentTasks} canWrite={taskCanWrite} canDelete={taskDeleteAllowed} onPatch={updateTaskState} onDelete={deleteTask} onSelect={task => setSelectedTaskId(task.id)} />
           </section>
-        )}
 
-        {activeView === 'tasks' && (
-          <section className="tasks-layout">
-            <div className="panel task-editor">
-              <h2>Create task</h2>
-              <form className="task-form expanded" onSubmit={addTask}>
-                <label>
-                  <span>Title</span>
-                  <input value={draft.title} onChange={event => setDraft(current => ({ ...current, title: event.target.value }))} placeholder="Add a task" disabled={!taskCanWrite} />
-                </label>
-                <label>
-                  <span>Due date</span>
-                  <input type="date" value={draft.due_date} onChange={event => setDraft(current => ({ ...current, due_date: event.target.value }))} disabled={!taskCanWrite} />
-                </label>
-                <label>
-                  <span>Time</span>
-                  <input type="time" value={draft.schedule_time} onChange={event => setDraft(current => ({ ...current, schedule_time: event.target.value }))} disabled={!taskCanWrite} />
-                </label>
-                <label>
-                  <span>Duration</span>
-                  <input type="number" min="5" step="5" value={draft.duration} onChange={event => setDraft(current => ({ ...current, duration: event.target.value }))} disabled={!taskCanWrite} />
-                </label>
-                <label>
-                  <span>Priority</span>
-                  <select value={draft.priority} onChange={event => setDraft(current => ({ ...current, priority: event.target.value }))} disabled={!taskCanWrite}>
-                    <option value="urgent">Urgent</option>
-                    <option value="important">Important</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Recurrence</span>
-                  <select value={draft.recurrence_frequency} onChange={event => setDraft(current => ({ ...current, recurrence_frequency: event.target.value }))} disabled={!taskCanWrite}>
-                    <option value="none">None</option>
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Repeat count</span>
-                  <input type="number" min="1" max="52" value={draft.recurrence_count} onChange={event => setDraft(current => ({ ...current, recurrence_count: event.target.value }))} disabled={!taskCanWrite || draft.recurrence_frequency === 'none'} />
-                </label>
-                <label className="full-row">
-                  <span>Notes</span>
-                  <textarea value={draft.notes} onChange={event => setDraft(current => ({ ...current, notes: event.target.value }))} disabled={!taskCanWrite} />
-                </label>
-                <button type="submit" disabled={!taskCanWrite}>{online ? 'Save to Cloud' : 'Queue task locally'}</button>
-              </form>
+          <section className="board-column column-feed">
+            <div className="column-header">
+              <h2>消息流 & 提醒</h2>
+              {online ? <Cloud size={18} /> : <WifiOff size={18} />}
             </div>
+            <div className="column-content custom-scrollbar">
+              <div className={`cloud-state ${syncStateClass}`}>
+                <strong>{syncStateLabel}</strong>
+                <span>{accountName} · {accountProfileName}</span>
+              </div>
+              {!online && <section className="notice warning"><AlertTriangle size={18} /><span>当前离线。Task 新建、编辑、完成和重开会进入待同步队列；删除和非 Task 数据仍需重新连接。</span></section>}
+              {online && !hasCloudSession() && <section className="notice info"><Cloud size={18} /><span>当前未连接 Google SSO。可浏览 preview/cache；创建、完成、删除任务和日历事件需要 Cloud account session。</span></section>}
+              <div className="feed-card">
+                <span>Migration</span>
+                <strong>{migrationResult?.status || 'Ready after Google SSO'}</strong>
+              </div>
+              <div className="feed-card">
+                <span>Read cache cursor</span>
+                <strong>{syncCursor}</strong>
+                <p>{syncIncrementalStatus}</p>
+              </div>
+            </div>
+          </section>
+        </main>
+      )}
 
-            <div className="panel task-browser">
-              <div className="task-toolbar">
-                <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tasks" />
+      {activeView === 'tasks' && (
+        <main className="planner-layout">
+          <aside className="context-sidebar">
+            <div className="sidebar-header">
+              <button className="btn-create-plan" type="button" onClick={() => navigateToView('settings')}>+ Create a plan</button>
+            </div>
+            <div className="sidebar-content custom-scrollbar">
+              <nav className="context-menu">
+                <button className="context-item active" type="button">My day</button>
+                <button className="context-item" type="button">My Tasks</button>
+                <button className="context-item managebac-nav-item" type="button">My ManageBac</button>
+                <div className="menu-divider" />
+                <div className="section-title">PLANS</div>
+              </nav>
+              <div className="plans-list">
+                {plans.map(plan => <button className="plan-link" key={plan.id} type="button" onClick={() => setSelectedStructure({ type: 'plan', id: plan.id })}><span className="swatch" style={{ backgroundColor: plan.color || '#cbd7e4' }} />{plan.name}</button>)}
+              </div>
+            </div>
+          </aside>
+
+          <section className="main-content glass-panel">
+            <header className="board-header">
+              <div className="header-breadcrumb"><span>My plans</span><span>/</span><strong>Tasks</strong></div>
+              <span className="view-caption">Current work</span>
+              <button className="icon-btn" type="button" onClick={refreshTasks} title="Refresh tasks"><RefreshCw size={18} /></button>
+            </header>
+            <nav className="view-tabs">
+              <div className="view-tab-buttons">
+                <button className="btn-tab active" type="button">Board</button>
+                <button className="btn-tab" type="button">List</button>
+                <button className="btn-tab" type="button">Calendar</button>
+              </div>
+              <div className="header-actions">
+                <div className="search-bar"><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tasks..." /></div>
                 <select value={filter} onChange={event => setFilter(event.target.value)}>
                   <option value="all">All</option>
                   <option value="pending">Pending</option>
                   <option value="completed">Completed</option>
                 </select>
-                <button type="button" onClick={refreshTasks}>Refresh</button>
               </div>
-              <TaskPendingBanner mutations={pendingTaskMutations} onOpenQueue={openPendingTaskQueue} />
-              <TaskList tasks={visibleTasks} canWrite={taskCanWrite} canDelete={taskDeleteAllowed} onPatch={updateTaskState} onDelete={deleteTask} onSelect={task => setSelectedTaskId(task.id)} />
-              <TaskDetailPanel task={selectedTask} plans={plans} buckets={buckets} labels={labels} canWrite={taskCanWrite && selectedTask?.__sync_status !== 'pending'} onSave={patch => selectedTask && updateTaskState(selectedTask, patch)} onClose={() => setSelectedTaskId(null)} />
-            </div>
+            </nav>
+            <form className="quick-task-compose" onSubmit={addTask}>
+              <input value={draft.title} onChange={event => setDraft(current => ({ ...current, title: event.target.value }))} placeholder="Add a task" disabled={!taskCanWrite} />
+              <input type="date" value={draft.due_date} onChange={event => setDraft(current => ({ ...current, due_date: event.target.value }))} disabled={!taskCanWrite} />
+              <input type="time" value={draft.schedule_time} onChange={event => setDraft(current => ({ ...current, schedule_time: event.target.value }))} disabled={!taskCanWrite} />
+              <select value={draft.priority} onChange={event => setDraft(current => ({ ...current, priority: event.target.value }))} disabled={!taskCanWrite}>
+                <option value="urgent">Urgent</option>
+                <option value="important">Important</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+              <button type="submit" disabled={!taskCanWrite}>{online ? 'Save to Cloud' : 'Queue task locally'}</button>
+            </form>
+            <TaskPendingBanner mutations={pendingTaskMutations} onOpenQueue={openPendingTaskQueue} />
+            <section id="kanbanBoard" className="kanban-board custom-scrollbar">
+              {taskGroups.map(group => (
+                <div className="kanban-column" key={group.key}>
+                  <div className="kanban-column-header"><h3>{group.title}</h3><span>{group.tasks.length}</span></div>
+                  {group.tasks.length === 0 && <p className="empty-column">No tasks</p>}
+                  {group.tasks.map(task => {
+                    const completed = isCompleted(task);
+                    const pending = task.__sync_status === 'pending';
+                    return (
+                      <article className={`kanban-task-card ${completed ? 'completed' : ''} ${pending ? 'pending-sync' : ''}`} key={task.id} onClick={() => setSelectedTaskId(task.id)} role="button" tabIndex={0} onKeyDown={event => { if (event.key === 'Enter') setSelectedTaskId(task.id); }}>
+                        <strong>{task.title}</strong>
+                        <span>{formatTaskMeta(task)}</span>
+                        {pending && <em className="pending-sync-badge">Pending sync</em>}
+                        <div className="task-actions">
+                          {completed ? <button type="button" disabled={!taskCanWrite || pending} title="Reopen task" onClick={event => { event.stopPropagation(); updateTaskState(task, { progress: 'not_started', completed_at: null }); }}><RotateCcw size={16} /></button> : <button type="button" disabled={!taskCanWrite || pending} title="Complete task" onClick={event => { event.stopPropagation(); updateTaskState(task, { progress: 'completed' }); }}><CheckCircle2 size={16} /></button>}
+                          <button type="button" disabled={!taskDeleteAllowed || pending} title="Delete task" onClick={event => { event.stopPropagation(); deleteTask(task); }}><Trash2 size={16} /></button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ))}
+            </section>
           </section>
-        )}
 
-        {activeView === 'calendar' && (
-          <section className="calendar-layout">
-            <div className="panel calendar-editor">
-              <h2>Create calendar event</h2>
-              <form className="calendar-form" onSubmit={addEvent}>
-                <label>
-                  <span>Title</span>
-                  <input value={eventDraft.title} onChange={event => setEventDraft(current => ({ ...current, title: event.target.value }))} placeholder="Add an event" disabled={!canWrite} />
-                </label>
-                <label>
-                  <span>Date</span>
-                  <input type="date" value={eventDraft.date} onChange={event => setEventDraft(current => ({ ...current, date: event.target.value }))} disabled={!canWrite} />
-                </label>
-                <label>
-                  <span>Start</span>
-                  <input type="time" value={eventDraft.time_start} onChange={event => setEventDraft(current => ({ ...current, time_start: event.target.value }))} disabled={!canWrite} />
-                </label>
-                <label>
-                  <span>End</span>
-                  <input type="time" value={eventDraft.time_end} onChange={event => setEventDraft(current => ({ ...current, time_end: event.target.value }))} disabled={!canWrite} />
-                </label>
-                <label>
-                  <span>Repeat</span>
-                  <select value={eventDraft.repeat} onChange={event => setEventDraft(current => ({ ...current, repeat: event.target.value }))} disabled={!canWrite}>
-                    <option value="none">None</option>
-                    <option value="daily">Daily</option>
-                    <option value="weekday">Weekday</option>
-                    <option value="weekend">Weekend</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="custom">Custom</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Repeat days</span>
-                  <input value={eventDraft.repeat_days_text} onChange={event => setEventDraft(current => ({ ...current, repeat_days_text: event.target.value }))} placeholder="0,1,2 for Sun,Mon,Tue" disabled={!canWrite || !['weekly', 'custom'].includes(eventDraft.repeat)} />
-                </label>
-                <label>
-                  <span>Active start</span>
-                  <input type="date" value={eventDraft.active_start_date} onChange={event => setEventDraft(current => ({ ...current, active_start_date: event.target.value }))} disabled={!canWrite || eventDraft.repeat === 'none'} />
-                </label>
-                <label>
-                  <span>Active end</span>
-                  <input type="date" value={eventDraft.active_end_date} onChange={event => setEventDraft(current => ({ ...current, active_end_date: event.target.value }))} disabled={!canWrite || eventDraft.repeat === 'none'} />
-                </label>
-                <button type="submit" disabled={!canWrite}>Save event to Cloud</button>
-              </form>
+          <aside className="planner-detail-rail">
+            <TaskDetailPanel task={selectedTask} plans={plans} buckets={buckets} labels={labels} canWrite={taskCanWrite && selectedTask?.__sync_status !== 'pending'} onSave={patch => selectedTask && updateTaskState(selectedTask, patch)} onClose={() => setSelectedTaskId(null)} />
+          </aside>
+        </main>
+      )}
+
+      {activeView === 'calendar' && (
+        <main className="calendar-layout">
+          <aside className="context-sidebar calendar-tools">
+            <div className="sidebar-header"><h2>Create calendar event</h2></div>
+            <form className="calendar-form" onSubmit={addEvent}>
+              <label><span>Title</span><input value={eventDraft.title} onChange={event => setEventDraft(current => ({ ...current, title: event.target.value }))} placeholder="Add an event" disabled={!canWrite} /></label>
+              <label><span>Date</span><input type="date" value={eventDraft.date} onChange={event => setEventDraft(current => ({ ...current, date: event.target.value }))} disabled={!canWrite} /></label>
+              <label><span>Start</span><input type="time" value={eventDraft.time_start} onChange={event => setEventDraft(current => ({ ...current, time_start: event.target.value }))} disabled={!canWrite} /></label>
+              <label><span>End</span><input type="time" value={eventDraft.time_end} onChange={event => setEventDraft(current => ({ ...current, time_end: event.target.value }))} disabled={!canWrite} /></label>
+              <label><span>Repeat</span><select value={eventDraft.repeat} onChange={event => setEventDraft(current => ({ ...current, repeat: event.target.value }))} disabled={!canWrite}><option value="none">None</option><option value="daily">Daily</option><option value="weekday">Weekday</option><option value="weekend">Weekend</option><option value="weekly">Weekly</option><option value="custom">Custom</option></select></label>
+              <label><span>Repeat days</span><input value={eventDraft.repeat_days_text} onChange={event => setEventDraft(current => ({ ...current, repeat_days_text: event.target.value }))} placeholder="0,1,2" disabled={!canWrite || !['weekly', 'custom'].includes(eventDraft.repeat)} /></label>
+              <button type="submit" disabled={!canWrite}>Save event to Cloud</button>
+            </form>
+          </aside>
+          <section className="main-content glass-panel calendar-main">
+            <header className="board-header">
+              <div className="header-breadcrumb"><span>Calendar</span><span>/</span><strong>{selectedDate}</strong></div>
+              <button className="icon-btn" type="button" onClick={refreshEvents} title="Refresh events"><RefreshCw size={18} /></button>
+            </header>
+            <div className="calendar-control-row">
+              <label className="date-picker-row"><span>Date projection</span><input type="date" value={selectedDate} onChange={event => setSelectedDate(event.target.value)} /></label>
+              <input value={eventSearch} onChange={event => setEventSearch(event.target.value)} placeholder="Search calendar events" />
             </div>
-            <div className="panel calendar-browser">
-              <div className="task-toolbar">
-                <input value={eventSearch} onChange={event => setEventSearch(event.target.value)} placeholder="Search calendar events" />
-                <button type="button" onClick={refreshEvents}>Refresh</button>
-              </div>
-              <label className="date-picker-row">
-                <span>Date projection</span>
-                <input type="date" value={selectedDate} onChange={event => setSelectedDate(event.target.value)} />
-              </label>
+            <div className="gcal-container calendar-workbench">
               <CalendarProjectionPanel projection={calendarProjection} onSelectTask={task => setSelectedTaskId(task.id)} />
-              <CalendarEventList events={visibleEvents} canWrite={canWrite} onSelect={event => setSelectedEventId(event.id)} onDelete={deleteEvent} />
-              <CalendarEventDetailPanel event={selectedEvent} canWrite={canWrite} onSave={patch => selectedEvent && updateEventState(selectedEvent, patch)} onClose={() => setSelectedEventId(null)} />
             </div>
+            <CalendarEventList events={visibleEvents} canWrite={canWrite} onSelect={event => setSelectedEventId(event.id)} onDelete={deleteEvent} />
           </section>
-        )}
+          <aside className="calendar-detail-rail">
+            <CalendarEventDetailPanel event={selectedEvent} canWrite={canWrite} onSave={patch => selectedEvent && updateEventState(selectedEvent, patch)} onClose={() => setSelectedEventId(null)} />
+          </aside>
+        </main>
+      )}
 
-        {activeView === 'settings' && (
+      {activeView === 'settings' && (
+        <main className="settings-workspace">
           <section className="settings-layout">
             <div className="panel account-panel">
               <h2>Account</h2>
@@ -1966,8 +1992,8 @@ export function App() {
               <p><Database size={16} /> Cloud D1 is canonical. IndexedDB is local read cache and migration source.</p>
             </div>
           </section>
-        )}
-      </main>
+        </main>
+      )}
     </div>
   );
 }
@@ -2182,10 +2208,11 @@ function ReminderStatePanel({ state, session, onSessionEvent }) {
   );
 }
 
-function CalendarProjectionPanel({ projection, compact = false, onSelectTask }) {
+function CalendarProjectionPanel({ projection, compact = false, title, onSelectTask }) {
   return (
     <div className={`panel calendar-projection ${compact ? 'compact' : ''}`}>
-      <h2>{compact ? 'Today date projection' : `Date projection ${projection.date}`}</h2>
+      <h2>{title || (compact ? 'Today projection' : 'Date projection')}</h2>
+      {!compact && <p className="projection-date-label">{projection.date}</p>}
       <div className="projection-counts">
         <span>{projection.counts.containers} containers</span>
         <span>{projection.counts.events} events</span>

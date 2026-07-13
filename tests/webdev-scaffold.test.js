@@ -566,6 +566,30 @@ assert('Web App exposes Task CRUD controls',
   app.includes('Save to Cloud') && app.includes('Queue task locally') && app.includes('Complete task') && app.includes('Reopen task') && app.includes('Delete task'));
 assert('Dashboard uses Daily Settle projection helper',
   app.includes('computeDashboardProjection') && app.includes('Today projection') && app.includes('Projected current work') && app.includes('Current container'));
+assert('Web App preserves original TimeWhere shell structure',
+  app.includes('className={`app-layout webdev-parity view-${activeView}`}')
+    && app.includes('nav-menu')
+    && app.includes('sidebar-bottom')
+    && app.includes('account-state-button'));
+assert('Dashboard preserves original multi-column board design',
+  app.includes('board-layout dashboard-board')
+    && app.includes('column-now')
+    && app.includes('column-calendar')
+    && app.includes('column-week')
+    && app.includes('column-feed')
+    && pagesStyles.includes('grid-template-columns: minmax(250px, 1.05fr)'));
+assert('Tasks preserves original planner/sidebar/detail design',
+  app.includes('planner-layout')
+    && app.includes('context-sidebar')
+    && app.includes('kanban-board')
+    && app.includes('planner-detail-rail')
+    && pagesStyles.includes('.kanban-column'));
+assert('Calendar and Settings preserve original dense product surfaces',
+  app.includes('calendar-layout')
+    && app.includes('gcal-container')
+    && app.includes('settings-workspace')
+    && pagesStyles.includes('.settings-layout')
+    && pagesStyles.includes('.calendar-workbench'));
 assert('Web App exposes Task detail first version',
   app.includes('TaskDetailPanel') && app.includes('Save task detail') && app.includes('Checklist') && app.includes('Plan') && app.includes('Bucket'));
 assert('Web App exposes task recurrence fields in create and detail flows',

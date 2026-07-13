@@ -172,22 +172,29 @@ async function main() {
     }, sessionBearer);
     await page.reload({ waitUntil: 'networkidle' });
 
-    await visible(page, 'Dashboard renders current projection', page.getByText('Today projection'));
+    await visible(page, 'Dashboard renders current projection', page.getByRole('heading', { name: 'Today projection' }));
     await visible(page, 'Dashboard renders reminder state', page.getByText('Reminder state'));
     await visible(page, 'Dashboard renders projected current work', page.getByText('Projected current work'));
+    await visible(page, 'Dashboard uses original multi-column board layout', page.locator('.board-layout .column-now'));
+    await visible(page, 'Dashboard uses original calendar board column', page.locator('.board-layout .column-calendar'));
 
-    await page.getByRole('button', { name: /Tasks/ }).click();
+    await page.locator('.sidebar .nav-item[title="任务"]').click();
+    await visible(page, 'Tasks uses original context sidebar', page.locator('.planner-layout .context-sidebar'));
+    await visible(page, 'Tasks uses original kanban board surface', page.locator('.planner-layout .kanban-board'));
+    await visible(page, 'Tasks keeps right detail rail', page.locator('.planner-detail-rail .task-detail-panel'));
     await visible(page, 'Tasks view renders task list', page.getByText('Current work'));
     await page.getByText('Read migration design').click();
     await visible(page, 'Task detail opens from task list', page.getByText('Save task detail'));
 
-    await page.getByRole('button', { name: /Calendar/ }).click();
-    await visible(page, 'Calendar renders date projection', page.getByText('Date projection', { exact: true }));
+    await page.locator('.sidebar .nav-item[title="日历"]').click();
+    await visible(page, 'Calendar uses original workbench layout', page.locator('.calendar-layout .gcal-container'));
+    await visible(page, 'Calendar renders date projection', page.getByRole('heading', { name: 'Date projection' }));
     await visible(page, 'Calendar renders event list', page.getByText('Calendar events', { exact: true }));
     await page.getByRole('button', { name: /Planning block/ }).click();
     await visible(page, 'Calendar event detail opens', page.getByText('Save calendar event detail'));
 
-    await page.getByRole('button', { name: /Settings/ }).click();
+    await page.locator('.sidebar .nav-item[title="设置"]').click();
+    await visible(page, 'Settings uses original card grid surface', page.locator('.settings-workspace .settings-layout'));
     await visible(page, 'Settings renders account panel', page.getByText('Cloud session', { exact: true }));
     await visible(page, 'Settings renders read cache cursor', page.getByText(/Read cache cursor:/));
     const incrementalTaskTitle = `UI incremental sync task ${process.pid}`;
@@ -200,9 +207,9 @@ async function main() {
     console.log('  PASS local Worker created Cloud task after Web App bootstrap');
     await page.getByRole('button', { name: 'Refresh changes' }).click();
     await visible(page, 'Settings refreshes read cache changes by cursor', page.getByText(/Applied \d+ updated, \d+ deleted, \d+ skipped Cloud changes/));
-    await page.getByRole('button', { name: /Tasks/ }).click();
+    await page.locator('.sidebar .nav-item[title="任务"]').click();
     await visible(page, 'Tasks view receives incremental Cloud task from sync changes', page.getByText(incrementalTaskTitle));
-    await page.getByRole('button', { name: /Settings/ }).click();
+    await page.locator('.sidebar .nav-item[title="设置"]').click();
     await visible(page, 'Settings renders expanded preferences', page.getByText('Arrange trigger', { exact: true }));
     await visible(page, 'Settings renders migration panel', page.getByText('Automatic migration', { exact: true }));
     await visible(page, 'Settings renders pending queue panel', page.getByText('Pending Task queue', { exact: true }));

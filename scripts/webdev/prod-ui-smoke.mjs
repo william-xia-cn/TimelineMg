@@ -296,19 +296,26 @@ async function main() {
     }, { token: session.token, expiresAt: session.expiresAt });
     await page.reload({ waitUntil: 'networkidle', timeout: 60000 });
 
-    await visible(page, 'Prod Dashboard renders projection', page.getByText('Today projection'));
+    await visible(page, 'Prod Dashboard renders projection', page.getByRole('heading', { name: 'Today projection' }));
     await visible(page, 'Prod Dashboard renders reminder state', page.getByText('Reminder state'));
+    await visible(page, 'Prod Dashboard uses original multi-column board layout', page.locator('.board-layout .column-now'));
+    await visible(page, 'Prod Dashboard uses original calendar board column', page.locator('.board-layout .column-calendar'));
 
-    await page.getByRole('button', { name: /Tasks/ }).click();
+    await page.locator('.sidebar .nav-item[title="任务"]').click();
+    await visible(page, 'Prod Tasks uses original context sidebar', page.locator('.planner-layout .context-sidebar'));
+    await visible(page, 'Prod Tasks uses original kanban board surface', page.locator('.planner-layout .kanban-board'));
+    await visible(page, 'Prod Tasks keeps right detail rail', page.locator('.planner-detail-rail .task-detail-panel'));
     await visible(page, 'Prod Tasks view receives Cloud task', page.getByText(taskTitle));
     await page.getByText(taskTitle).click();
     await visible(page, 'Prod Task detail opens', page.getByText('Save task detail'));
 
-    await page.getByRole('button', { name: /Calendar/ }).click();
-    await visible(page, 'Prod Calendar renders date projection', page.getByText('Date projection', { exact: true }));
+    await page.locator('.sidebar .nav-item[title="日历"]').click();
+    await visible(page, 'Prod Calendar uses original workbench layout', page.locator('.calendar-layout .gcal-container'));
+    await visible(page, 'Prod Calendar renders date projection', page.getByRole('heading', { name: 'Date projection' }));
     await visible(page, 'Prod Calendar receives Cloud event', page.getByText(eventTitle).first());
 
-    await page.getByRole('button', { name: /Settings/ }).click();
+    await page.locator('.sidebar .nav-item[title="设置"]').click();
+    await visible(page, 'Prod Settings uses original card grid surface', page.locator('.settings-workspace .settings-layout'));
     await visible(page, 'Prod Settings renders Cloud session panel', page.getByText('Cloud session', { exact: true }));
     await visible(page, 'Prod Settings renders data authority panel', page.getByText('Data authority', { exact: true }));
     await visible(page, 'Prod Settings renders migration panel', page.getByText('Automatic migration', { exact: true }));
