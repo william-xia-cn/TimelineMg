@@ -4,6 +4,35 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const evidenceSummaryPath = path.join(root, '.wrangler', 'webdev-gate-r-evidence-summary.json');
+
+const expectedEvidenceCommands = [
+  ['webdev_verify', 'npm run webdev:verify'],
+  ['preview_acceptance', 'npm run webdev:preview:acceptance'],
+  ['extension_readiness', 'npm run webdev:extension:readiness'],
+  ['desktop_readiness', 'npm run webdev:desktop:readiness'],
+  ['gate_b_readiness', 'npm run webdev:gate-b:readiness'],
+  ['gate_c_readiness', 'npm run webdev:gate-c:readiness'],
+  ['observability_readiness', 'npm run webdev:observability:readiness'],
+  ['prod_readiness', 'npm run webdev:prod:readiness'],
+  ['completion_audit', 'npm run webdev:completion:audit'],
+  ['local_acceptance', 'npm run webdev:acceptance:local'],
+  ['npm_test', 'npm test'],
+  ['git_diff_check', 'git diff --check'],
+  ['changed_files_sensitive_scan', 'changed-files sensitive pattern scan']
+];
+
+const forbiddenRawOutputKeys = new Set([
+  'stdout',
+  'stderr',
+  'output',
+  'outputs',
+  'log',
+  'logs',
+  'raw',
+  'raw_output',
+  'rawOutput'
+]);
 
 function read(file) {
   return fs.readFileSync(path.join(root, file), 'utf8');
@@ -21,6 +50,40 @@ function git(args, fallback = 'unknown') {
 
 function checked(condition) {
   return condition ? '[x]' : '[ ]';
+}
+
+function collectForbiddenKeys(value, trail = '$', found = []) {
+  if (!value || typeof value !== 'object') return found;
+
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => collectForbiddenKeys(entry, `${trail}[${index}]`, found));
+    return found;
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    const childTrail = `${trail}.${key}`;
+    if (forbiddenRawOutputKeys.has(key)) {
+      found.push(childTrail);
+    }
+    collectForbiddenKeys(child, childTrail, found);
+  }
+  return found;
+}
+
+function loadEvidenceSummary() {
+  if (!fs.existsSync(evidenceSummaryPath)) {
+    return { exists: false, parse_error: null, summary: null };
+  }
+
+  try {
+    return {
+      exists: true,
+      parse_error: null,
+      summary: JSON.parse(fs.readFileSync(evidenceSummaryPath, 'utf8'))
+    };
+  } catch (error) {
+    return { exists: true, parse_error: error.message, summary: null };
+  }
 }
 
 function sanitize(text) {
@@ -46,6 +109,28 @@ const upstreamCommit = git(['rev-parse', '@{u}']);
 const status = git(['status', '--short'], '');
 const clean = status.length === 0;
 const upstreamSynced = headCommit !== 'unknown' && headCommit === upstreamCommit;
+const evidenceSummary = loadEvidenceSummary();
+const evidenceCommands = Array.isArray(evidenceSummary.summary?.commands) ? evidenceSummary.summary.commands : [];
+const evidenceCommandIds = evidenceCommands.map(command => command?.id);
+const evidenceCommandMap = new Map(evidenceCommands.map(command => [command?.id, command]));
+const evidenceForbiddenRawKeys = collectForbiddenKeys(evidenceSummary.summary);
+const evidenceCommandOrderMatches = expectedEvidenceCommands.length === evidenceCommandIds.length
+  && expectedEvidenceCommands.every(([id], index) => evidenceCommandIds[index] === id);
+const evidenceCommandsPassed = expectedEvidenceCommands.every(([id]) => evidenceCommandMap.get(id)?.exit_code === 0);
+const evidenceSummaryCurrent = Boolean(evidenceSummary.summary)
+  && evidenceSummary.summary.schema === 'timewhere-webdev-gate-r-evidence-v1'
+  && evidenceSummary.summary.branch === branch
+  && evidenceSummary.summary.commit === headCommit
+  && evidenceSummary.summary.upstream === upstream
+  && evidenceSummary.summary.upstream_commit === upstreamCommit
+  && evidenceSummary.summary.upstream_synced === true
+  && evidenceSummary.summary.working_tree_clean_at_start === true
+  && clean
+  && upstreamSynced
+  && evidenceSummary.summary.result === 'passed'
+  && evidenceCommandOrderMatches
+  && evidenceCommandsPassed
+  && evidenceForbiddenRawKeys.length === 0;
 
 const requiredScripts = [
   'webdev:verify',
@@ -104,17 +189,33 @@ Upstream synced: ${upstreamSynced ? 'yes' : 'no'}
 
 ## Required Evidence Commands Available
 
-> Checked items here mean the command entry exists in package.json; they do not prove the command was rerun for this commit. Attach fresh command output before a Gate R review.
+> Checked items here mean the command entry exists in package.json; they do not prove the command was rerun for this commit. Attach a fresh status-only evidence summary before a Gate R review; raw command output is intentionally not stored.
 
 ${requiredScripts.map(script => `- ${checked(Boolean(packageJson.scripts?.[script]))} npm run ${script}`).join('\n')}
 - ${checked(true)} git diff --check
 - ${checked(true)} changed-files sensitive pattern scan
 
-## Execution Evidence To Attach Before Gate R
+## Fresh Local Evidence Summary
 
-${requiredScripts.map(script => `- [ ] npm run ${script}`).join('\n')}
-- [ ] git diff --check
-- [ ] changed-files sensitive pattern scan
+> This section reads ignored local status-only evidence from .wrangler/webdev-gate-r-evidence-summary.json. It does not store raw command output and does not replace Product Owner Gate R approval.
+
+- ${checked(evidenceSummary.exists)} Evidence summary file exists
+- ${checked(!evidenceSummary.parse_error)} Evidence summary JSON parses${evidenceSummary.parse_error ? `: ${evidenceSummary.parse_error}` : ''}
+- ${checked(evidenceSummary.summary?.schema === 'timewhere-webdev-gate-r-evidence-v1')} Evidence summary schema is Gate R v1
+- ${checked(evidenceSummary.summary?.commit === headCommit)} Evidence summary commit matches current HEAD
+- ${checked(evidenceSummary.summary?.upstream_commit === upstreamCommit && evidenceSummary.summary?.upstream_synced === true)} Evidence summary matches current upstream
+- ${checked(evidenceSummary.summary?.result === 'passed')} Evidence summary result is passed
+- ${checked(evidenceCommandOrderMatches)} Evidence command order matches Gate R requirements
+- ${checked(evidenceCommandsPassed)} All evidence commands exited successfully
+- ${checked(evidenceForbiddenRawKeys.length === 0)} Evidence summary stores no raw output fields
+- ${checked(evidenceSummaryCurrent)} Evidence summary is fresh for current clean pushed HEAD
+
+Generated at: ${evidenceSummary.summary?.generated_at || 'missing'}
+Evidence commit: ${evidenceSummary.summary?.commit ? String(evidenceSummary.summary.commit).slice(0, 12) : 'missing'}
+
+## Execution Evidence Status Before Gate R
+
+${expectedEvidenceCommands.map(([id, display]) => `- ${checked(evidenceSummaryCurrent && evidenceCommandMap.get(id)?.exit_code === 0)} ${display}`).join('\n')}
 
 ## Readiness Evidence Snapshot
 
