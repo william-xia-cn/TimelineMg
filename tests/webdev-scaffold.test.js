@@ -83,6 +83,7 @@ const requiredFiles = [
   'docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md',
   'docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md',
   'docs/WEBDEV_PROD_READINESS_CHECKLIST.md',
+  'docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md',
   'scripts/webdev/verify-plan-state.mjs',
   'scripts/webdev/preview-preflight.mjs',
   'scripts/webdev/provision-cloudflare.mjs',
@@ -97,6 +98,7 @@ const requiredFiles = [
   'scripts/webdev/ui-walkthrough.mjs',
   'scripts/webdev/browser-extension-readiness-check.mjs',
   'scripts/webdev/desktop-runtime-readiness-check.mjs',
+  'scripts/webdev/observability-backup-readiness-check.mjs',
   'scripts/webdev/desktop-runtime-smoke.mjs'
 ];
 
@@ -121,6 +123,7 @@ const completionChecklist = read('docs/WEBDEV_COMPLETION_CHECKLIST.md');
 const businessParityChecklist = read('docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md');
 const previewRunbook = read('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md');
 const prodReadinessChecklist = read('docs/WEBDEV_PROD_READINESS_CHECKLIST.md');
+const observabilityBackupRunbook = read('docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md');
 const obviousSecretPattern = new RegExp([
   'GOC' + 'SPX-',
   'ya29\\.',
@@ -172,10 +175,18 @@ assert('WebDev prod readiness checklist records Gate R non-release boundary',
   prodReadinessChecklist.includes('Gate R readiness checklist')
     && prodReadinessChecklist.includes('不等于发布')
     && prodReadinessChecklist.includes('Prod Readiness Package')
+    && prodReadinessChecklist.includes('WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md')
     && prodReadinessChecklist.includes('Release Risk Register')
     && prodReadinessChecklist.includes('Rollback plan')
     && prodReadinessChecklist.includes('Security / Privacy Readiness')
     && !obviousSecretPattern.test(prodReadinessChecklist));
+assert('WebDev observability backup runbook records Gate R readiness-only boundary',
+  observabilityBackupRunbook.includes('Gate R readiness runbook')
+    && observabilityBackupRunbook.includes('D1 schema-only export rehearsal')
+    && observabilityBackupRunbook.includes('R2 migration snapshot')
+    && observabilityBackupRunbook.includes('日志和 evidence 禁止记录')
+    && observabilityBackupRunbook.includes('npm run webdev:observability:readiness')
+    && !obviousSecretPattern.test(observabilityBackupRunbook));
 
 const sql = read('workers/migrations/0001_initial.sql');
 const taskParityMigration = read('workers/migrations/0002_task_parity_fields.sql');
@@ -643,6 +654,7 @@ assert('root package has Gate A preview acceptance aggregate script',
     && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:data-hygiene-smoke'));
 assert('root package has Gate R readiness-only script',
   rootPackage.scripts['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
+    && rootPackage.scripts['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs'
     && rootPackage.scripts['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs');
 const cloudflareProvision = read('scripts/webdev/provision-cloudflare.mjs');
 const previewDeploy = read('scripts/webdev/deploy-cloudflare-preview.mjs');
@@ -655,6 +667,7 @@ const prodReadinessCheck = read('scripts/webdev/prod-readiness-check.mjs');
 const prodReadinessPackage = read('scripts/webdev/prod-readiness-package.mjs');
 const browserExtensionReadinessCheck = read('scripts/webdev/browser-extension-readiness-check.mjs');
 const desktopRuntimeReadinessCheck = read('scripts/webdev/desktop-runtime-readiness-check.mjs');
+const observabilityBackupReadinessCheck = read('scripts/webdev/observability-backup-readiness-check.mjs');
 assert('Cloudflare preview/provision scripts redact emails and local user paths in command output',
   [cloudflareProvision, previewDeploy, previewSmoke, previewCoreSmoke, previewUiSmoke, previewDataHygieneSmoke].every(script =>
     script.includes('<email>')
@@ -746,6 +759,7 @@ assert('prod readiness package script is evidence-only and release-gated',
     && prodReadinessPackage.includes('webdev:preview:acceptance')
     && prodReadinessPackage.includes('webdev:extension:readiness')
     && prodReadinessPackage.includes('webdev:desktop:readiness')
+    && prodReadinessPackage.includes('webdev:observability:readiness')
     && prodReadinessPackage.includes('webdev:prod:readiness')
     && prodReadinessPackage.includes('Re-deploy previous Worker commit')
     && prodReadinessPackage.includes('sanitize(output)')
@@ -764,6 +778,8 @@ assert('WebDev UI walkthrough exercises read cache change refresh',
 const webdevDesktopRuntimeSmoke = read('scripts/webdev/desktop-runtime-smoke.mjs');
 assert('root package has WebDev Browser Extension readiness script',
   rootPackage.scripts['webdev:extension:readiness'] === 'node scripts/webdev/browser-extension-readiness-check.mjs');
+assert('root package has WebDev observability backup readiness script',
+  rootPackage.scripts['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs');
 assert('root package has WebDev Desktop Runtime smoke script', rootPackage.scripts['webdev:desktop:smoke'] === 'node scripts/webdev/desktop-runtime-smoke.mjs');
 assert('root package has WebDev Desktop Runtime readiness script',
   rootPackage.scripts['webdev:desktop:readiness'] === 'node scripts/webdev/desktop-runtime-readiness-check.mjs');
@@ -780,6 +796,14 @@ assert('WebDev Browser Extension readiness check preserves Gate D boundary',
     && browserExtensionReadinessCheck.includes('Gate D')
     && browserExtensionReadinessCheck.includes("!packageJson.scripts?.['webdev:extension:deploy']")
     && browserExtensionReadinessCheck.includes('No Extension replay, CWS submission, release, or deployment was performed'));
+assert('WebDev observability backup readiness check covers error envelope, migration, and no prod action boundary',
+  observabilityBackupReadinessCheck.includes('WebDev observability / backup readiness static check')
+    && observabilityBackupReadinessCheck.includes('Worker API uses structured success and error envelopes')
+    && observabilityBackupReadinessCheck.includes('migration import stores auditable R2 snapshots and D1 run state')
+    && observabilityBackupReadinessCheck.includes('sync conflict records reject private fields')
+    && observabilityBackupReadinessCheck.includes('prod storage bindings remain placeholders until Gate R')
+    && observabilityBackupReadinessCheck.includes('No D1 export, R2 read, Wrangler command, prod resource, deploy, or release was performed')
+    && !observabilityBackupReadinessCheck.includes('child_process'));
 assert('WebDev Desktop Runtime readiness check preserves runtime-only boundary',
   desktopRuntimeReadinessCheck.includes('WebDev Desktop Runtime readiness static check')
     && desktopRuntimeReadinessCheck.includes('business_logic_owner')

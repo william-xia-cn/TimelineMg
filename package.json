@@ -32,6 +32,7 @@
     "webdev:preview:ui-smoke": "node scripts/webdev/preview-ui-smoke.mjs",
     "webdev:preview:data-hygiene-smoke": "node scripts/webdev/preview-data-hygiene-smoke.mjs",
     "webdev:preview:acceptance": "npm run webdev:preview:headers-smoke && npm run webdev:preview:smoke && npm run webdev:preview:core-smoke && npm run webdev:preview:ui-smoke && npm run webdev:preview:data-hygiene-smoke",
+    "webdev:observability:readiness": "node scripts/webdev/observability-backup-readiness-check.mjs",
     "webdev:prod:readiness": "node scripts/webdev/prod-readiness-check.mjs",
     "webdev:prod:package": "node scripts/webdev/prod-readiness-package.mjs",
     "webdev:integration": "node tests/webdev-integration.test.js",

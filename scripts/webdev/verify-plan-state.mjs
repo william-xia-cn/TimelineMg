@@ -35,11 +35,14 @@ const previewRunbookPath = 'docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md';
 assert('preview acceptance runbook exists', exists(previewRunbookPath));
 const prodReadinessPath = 'docs/WEBDEV_PROD_READINESS_CHECKLIST.md';
 assert('prod readiness checklist exists', exists(prodReadinessPath));
+const observabilityRunbookPath = 'docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md';
+assert('observability backup runbook exists', exists(observabilityRunbookPath));
 
 const checklist = exists(checklistPath) ? read(checklistPath) : '';
 const parityChecklist = exists(parityPath) ? read(parityPath) : '';
 const previewRunbook = exists(previewRunbookPath) ? read(previewRunbookPath) : '';
 const prodReadiness = exists(prodReadinessPath) ? read(prodReadinessPath) : '';
+const observabilityRunbook = exists(observabilityRunbookPath) ? read(observabilityRunbookPath) : '';
 for (const phase of ['Phase 0', 'Phase 1', 'Phase 2', 'Phase 3', 'Phase 4', 'Phase 5', 'Phase 6', 'Phase 7', 'Phase 8', 'Phase 9', 'Phase 10']) {
   assert(`${phase} is represented in completion checklist`, checklist.includes(phase));
 }
@@ -57,8 +60,14 @@ assert('preview runbook records Gate A evidence boundary',
 assert('prod readiness checklist records Gate R non-release boundary',
   prodReadiness.includes('Gate R')
     && prodReadiness.includes('Prod Readiness Package')
+    && prodReadiness.includes('WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md')
     && prodReadiness.includes('Security / Privacy Readiness')
     && prodReadiness.includes('不等于发布'));
+assert('observability backup runbook records readiness-only boundary',
+  observabilityRunbook.includes('Gate R readiness runbook')
+    && observabilityRunbook.includes('D1 schema-only export rehearsal')
+    && observabilityRunbook.includes('R2 migration snapshot')
+    && observabilityRunbook.includes('npm run webdev:observability:readiness'));
 
 const wrangler = read('workers/wrangler.toml');
 assert('wrangler declares dev preview and prod names',
@@ -109,6 +118,11 @@ assert('root package exposes Gate D Browser Extension readiness-only check',
     && checklist.includes('webdev:extension:readiness')
     && prodReadiness.includes('webdev:extension:readiness')
     && taskBoard.includes('webdev:extension:readiness'));
+assert('root package exposes observability backup readiness-only check',
+  packageJson.scripts?.['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs'
+    && checklist.includes('webdev:observability:readiness')
+    && prodReadiness.includes('webdev:observability:readiness')
+    && observabilityRunbook.includes('webdev:observability:readiness'));
 assert('webdev:verify runs plan-state check',
   packageJson.scripts?.['webdev:verify']?.includes('npm run webdev:plan:check'));
 assert('webdev:verify runs preview preflight',
@@ -140,6 +154,7 @@ const scanned = [
   parityChecklist,
   previewRunbook,
   prodReadiness,
+  observabilityRunbook,
   workerEnvExample,
   pagesEnvExample,
   wrangler

@@ -8,6 +8,7 @@ const requiredFiles = [
   'docs/WEBDEV_PROD_READINESS_CHECKLIST.md',
   'docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md',
   'docs/WEBDEV_COMPLETION_CHECKLIST.md',
+  'docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md',
   'PROJECT_MASTER.md',
   'TASK_BOARD.md',
   'workers/wrangler.toml',
@@ -16,6 +17,7 @@ const requiredFiles = [
   'pages/public/_headers',
   'scripts/webdev/browser-extension-readiness-check.mjs',
   'scripts/webdev/desktop-runtime-readiness-check.mjs',
+  'scripts/webdev/observability-backup-readiness-check.mjs',
   'scripts/webdev/prod-readiness-package.mjs',
   'package.json',
   '.gitignore'
@@ -65,6 +67,7 @@ for (const file of requiredFiles) {
 const prodChecklist = exists('docs/WEBDEV_PROD_READINESS_CHECKLIST.md') ? read('docs/WEBDEV_PROD_READINESS_CHECKLIST.md') : '';
 const previewRunbook = exists('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md') ? read('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md') : '';
 const completionChecklist = exists('docs/WEBDEV_COMPLETION_CHECKLIST.md') ? read('docs/WEBDEV_COMPLETION_CHECKLIST.md') : '';
+const observabilityRunbook = exists('docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md') ? read('docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md') : '';
 const projectMaster = exists('PROJECT_MASTER.md') ? read('PROJECT_MASTER.md') : '';
 const taskBoard = exists('TASK_BOARD.md') ? read('TASK_BOARD.md') : '';
 const wrangler = exists('workers/wrangler.toml') ? read('workers/wrangler.toml') : '';
@@ -73,6 +76,7 @@ const pagesEnvExample = exists('pages/.env.example') ? read('pages/.env.example'
 const pagesHeaders = exists('pages/public/_headers') ? read('pages/public/_headers') : '';
 const extensionReadinessCheck = exists('scripts/webdev/browser-extension-readiness-check.mjs') ? read('scripts/webdev/browser-extension-readiness-check.mjs') : '';
 const desktopReadinessCheck = exists('scripts/webdev/desktop-runtime-readiness-check.mjs') ? read('scripts/webdev/desktop-runtime-readiness-check.mjs') : '';
+const observabilityReadinessCheck = exists('scripts/webdev/observability-backup-readiness-check.mjs') ? read('scripts/webdev/observability-backup-readiness-check.mjs') : '';
 const prodReadinessPackage = exists('scripts/webdev/prod-readiness-package.mjs') ? read('scripts/webdev/prod-readiness-package.mjs') : '';
 const packageJson = exists('package.json') ? JSON.parse(read('package.json')) : { scripts: {} };
 const gitignore = exists('.gitignore') ? read('.gitignore') : '';
@@ -140,6 +144,7 @@ assert('local and preview scripts exist but prod deploy script is not exposed',
     && packageJson.scripts?.['webdev:acceptance:local']?.includes('npm run webdev:extension:readiness')
     && packageJson.scripts?.['webdev:desktop:readiness'] === 'node scripts/webdev/desktop-runtime-readiness-check.mjs'
     && packageJson.scripts?.['webdev:acceptance:local']?.includes('npm run webdev:desktop:readiness')
+    && packageJson.scripts?.['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs'
     && packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
     && packageJson.scripts?.['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
     && !packageJson.scripts?.['webdev:prod:deploy']
@@ -161,6 +166,15 @@ assert('Desktop Runtime readiness stays Gate E only',
     && desktopReadinessCheck.includes('installWebDevNavigationGuards')
     && desktopReadinessCheck.includes("!desktopSmoke.includes('electron-builder')"));
 
+assert('observability and backup readiness is represented without prod actions',
+  observabilityRunbook.includes('WebDev Observability / Backup Readiness Runbook')
+    && observabilityRunbook.includes('D1 schema-only export rehearsal')
+    && observabilityRunbook.includes('R2 migration snapshot')
+    && observabilityRunbook.includes('Stop Conditions')
+    && observabilityReadinessCheck.includes('WebDev observability / backup readiness static check')
+    && observabilityReadinessCheck.includes('No D1 export, R2 read, Wrangler command, prod resource, deploy, or release was performed')
+    && packageJson.scripts?.['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs');
+
 assert('prod readiness package is evidence-only and gate-aware',
   prodReadinessPackage.includes('WebDev Prod Readiness Package Draft')
     && prodReadinessPackage.includes('readiness-only')
@@ -168,6 +182,7 @@ assert('prod readiness package is evidence-only and gate-aware',
     && prodReadinessPackage.includes('webdev:preview:acceptance')
     && prodReadinessPackage.includes('webdev:extension:readiness')
     && prodReadinessPackage.includes('webdev:desktop:readiness')
+    && prodReadinessPackage.includes('webdev:observability:readiness')
     && prodReadinessPackage.includes('webdev:prod:readiness')
     && prodReadinessPackage.includes('Re-deploy previous Worker commit')
     && !prodReadinessPackage.includes('wrangler deploy')
@@ -204,6 +219,7 @@ assertNoObviousSecrets('prod readiness scanned files contain no obvious secrets'
     prodChecklist,
     previewRunbook,
     completionChecklist,
+    observabilityRunbook,
     projectMaster,
     taskBoard,
     wrangler,
@@ -212,6 +228,7 @@ assertNoObviousSecrets('prod readiness scanned files contain no obvious secrets'
     pagesHeaders,
     extensionReadinessCheck,
     desktopReadinessCheck,
+    observabilityReadinessCheck,
     prodReadinessPackage,
     gitignore
   ].join('\n'));
