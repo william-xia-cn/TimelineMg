@@ -26,7 +26,7 @@ TimeWhere WebDev v1 完成时应满足：
 | Phase 3 | Cloud canonical schema 与 API 完整化 | Local preview complete | D1 schema 与核心实体 CRUD、revision、change feed、只读 bootstrap snapshot、统一错误 envelope、安全 runtime/gate 状态均有测试覆盖。 |
 | Phase 4 | 自动迁移闭环 | Preview smoke backed | legacy IndexedDB snapshot、R2 raw snapshot、D1 import、migration conflict、idempotent retry 均有本地 integration evidence；Gate A preview core smoke 已覆盖 migration import、幂等重试、冲突生成和解决。 |
 | Phase 5 | Web App 完整业务覆盖 | Complete for local preview | Dashboard / Tasks / Calendar / Settings / projection / reminder / migration conflict / structure editing 已有本地实现；`npm run webdev:ui:walkthrough` 提供可重复本地 UI walkthrough。真实 preview cloud evidence 仍归 Phase 9 / Gate A。 |
-| Phase 6 | 离线与同步 v1 收敛 | Guarded | Web App 已用只读 bootstrap 初始化本地 read cache，并可按 `/sync/changes` cursor 增量刷新 Task / Calendar / Structure / Settings cache；Task-only pending 已可见且 hydrate / 增量应用都会保留 pending；真正 replay 写 Cloud、非 Task replay、local-over-cloud 均保持 gate。 |
+| Phase 6 | 离线与同步 v1 收敛 | Guarded with Gate B packet | Web App 已用只读 bootstrap 初始化本地 read cache，并可按 `/sync/changes` cursor 增量刷新 Task / Calendar / Structure / Settings cache；Task-only pending 已可见且 hydrate / 增量应用都会保留 pending；`docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md` 和 `npm run webdev:gate-b:readiness` 提供 Gate B 审批前证据；真正 replay 写 Cloud、非 Task replay、local-over-cloud 均保持 gate。 |
 | Phase 7 | Desktop Runtime 重定位 | Opt-in scaffolded | Electron 增加 `TIMEWHERE_DESKTOP_RUNTIME_MODE=webdev` / `TIMEWHERE_WEB_APP_URL` WebDev runtime mode，可加载 Web App 并保留 native bridge；`npm run webdev:desktop:readiness` 静态验证 Runtime 边界、导航 guard、preload native bridge 和 Gate E 禁止打包边界；`npm run webdev:desktop:smoke` 可本地启动 Worker/Pages 并让 Electron smoke 加载 Web App；默认仍是 legacy extension shell。内部包、签名、公证、自动更新和分发仍归 Gate E。 |
 | Phase 8 | Browser Extension 生态化 | Deferred | 第一阶段范围另行批准；不实现 Extension replay。`npm run webdev:extension:readiness` 静态验证 Extension 仍是 Gate D 后续生态组件，当前 legacy MV3 shell 未接入 WebDev replay / Cloudflare endpoint，也不新增 CWS/release 动作。 |
 | Phase 9 | 内部 preview 验收 | Preview acceptance hardened under Gate A | `docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md` 已定义 preview 验收步骤和证据模板；preview Worker / Pages / Google SSO smoke 已通过；`npm run webdev:preview:headers-smoke` 验证 stable Pages preview CSP / security headers / cache policy；`npm run webdev:preview:smoke` 可复核 preview Worker / Pages / D1 / R2 / KV 基础资源；`npm run webdev:preview:core-smoke` 通过临时 smoke account/session 走 preview Worker API 验证 Account / Structure / Task / Calendar / Settings / Sync bootstrap / Sync changes / Migration import / idempotent retry / conflict / resolution，并清理测试数据；`npm run webdev:preview:ui-smoke` 使用临时 smoke session 打开 stable Pages preview，验证 Dashboard / Tasks / Calendar / Settings UI 能读取 preview Cloud 数据；`npm run webdev:preview:data-hygiene-smoke` 验证 preview smoke 后 D1 / KV / local temp files 无残留。 |
@@ -39,6 +39,7 @@ TimeWhere WebDev v1 完成时应满足：
 ```powershell
 npm run webdev:verify
 npm run webdev:preview:preflight
+npm run webdev:gate-b:readiness
 npm run webdev:ui:walkthrough
 npm run webdev:extension:readiness
 npm run webdev:desktop:readiness
@@ -53,6 +54,7 @@ git diff --check
 
 `npm run webdev:verify` 必须保持只使用本地或占位资源，不创建 Cloudflare 资源、不部署、不写 prod。
 `npm run webdev:preview:preflight` 是 Gate A 前的只读预检：核对 `dev / preview / prod` 命名、占位 resource id、replay kill switch、env example、preview/prod 文档和敏感信息边界；它不创建 Cloudflare 资源、不部署、不执行真实 SSO。
+`npm run webdev:gate-b:readiness` 是只读静态门禁：检查 Task-only pending、默认 disabled replay、dry-run/readiness/simulation、test-only replay dev-only guard、non-Task offline write block 和 Gate B 审批边界；它不启用用户可见 replay 写 Cloud、不部署、不发布。
 `npm run webdev:ui:walkthrough` 会启动本地 Worker、Pages dev server 和无头浏览器，只使用本地 D1 / 占位 session，不创建真实 Cloudflare 资源；walkthrough 会覆盖 Dashboard / Tasks / Calendar / Settings，并在 Web App bootstrap 后由本地 Worker 创建一条 Cloud Task，再通过 Settings 的 `/sync/changes` cursor 刷新把它拉入 Tasks UI。
 `npm run webdev:extension:readiness` 是只读静态门禁：检查 Browser Extension 仍是 Gate D 后续生态组件，未接入 WebDev replay / Cloudflare endpoint，且未新增 Extension deploy / CWS / release 脚本。
 `npm run webdev:desktop:readiness` 是只读静态门禁：检查 Electron WebDev runtime mode、路由 guard、preload native bridge、Desktop 文档和 Gate E 边界；它不启动 Electron、不生成安装包、不签名、不公证、不分发。
@@ -65,6 +67,7 @@ git diff --check
 真实 preview / prod 验收入口：
 
 - Phase 9 preview：`docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md`。
+- Gate B Task replay：`docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md`。
 - Phase 10 prod readiness：`docs/WEBDEV_PROD_READINESS_CHECKLIST.md`。
 
 Gate A 批准后，可执行真实 `dev / preview` 资源准备命令：

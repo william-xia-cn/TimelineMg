@@ -84,6 +84,7 @@ const requiredFiles = [
   'docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md',
   'docs/WEBDEV_PROD_READINESS_CHECKLIST.md',
   'docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md',
+  'docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md',
   'scripts/webdev/verify-plan-state.mjs',
   'scripts/webdev/preview-preflight.mjs',
   'scripts/webdev/provision-cloudflare.mjs',
@@ -98,6 +99,7 @@ const requiredFiles = [
   'scripts/webdev/ui-walkthrough.mjs',
   'scripts/webdev/browser-extension-readiness-check.mjs',
   'scripts/webdev/desktop-runtime-readiness-check.mjs',
+  'scripts/webdev/task-replay-gate-b-readiness-check.mjs',
   'scripts/webdev/observability-backup-readiness-check.mjs',
   'scripts/webdev/desktop-runtime-smoke.mjs'
 ];
@@ -124,6 +126,7 @@ const businessParityChecklist = read('docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md')
 const previewRunbook = read('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md');
 const prodReadinessChecklist = read('docs/WEBDEV_PROD_READINESS_CHECKLIST.md');
 const observabilityBackupRunbook = read('docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md');
+const taskReplayGateBPacket = read('docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md');
 const obviousSecretPattern = new RegExp([
   'GOC' + 'SPX-',
   'ya29\\.',
@@ -187,6 +190,13 @@ assert('WebDev observability backup runbook records Gate R readiness-only bounda
     && observabilityBackupRunbook.includes('日志和 evidence 禁止记录')
     && observabilityBackupRunbook.includes('npm run webdev:observability:readiness')
     && !obviousSecretPattern.test(observabilityBackupRunbook));
+assert('WebDev Task replay Gate B packet records readiness-only boundary',
+  taskReplayGateBPacket.includes('Gate B readiness packet')
+    && taskReplayGateBPacket.includes('不批准、不开启、不发布')
+    && taskReplayGateBPacket.includes('Task delete 继续保持用户侧阻断')
+    && taskReplayGateBPacket.includes('Calendar / Container / Settings replay 不包含在 Gate B')
+    && taskReplayGateBPacket.includes('npm.cmd run webdev:gate-b:readiness')
+    && !obviousSecretPattern.test(taskReplayGateBPacket));
 
 const sql = read('workers/migrations/0001_initial.sql');
 const taskParityMigration = read('workers/migrations/0002_task_parity_fields.sql');
@@ -320,6 +330,10 @@ assert('Worker offline mutation replay includes field-level conflict preview',
   workerOfflineMutations.includes('evaluateFieldConflict') && workerOfflineMutations.includes("'would_conflict'") && workerOfflineMutations.includes("'would_auto_merge'") && workerOfflineMutations.includes('cloud_values_required'));
 assert('Worker offline mutation replay preserves ManageBac source edit boundary',
   workerOfflineMutations.includes('MANAGEBAC_LOCAL_EXECUTION_FIELDS') && workerOfflineMutations.includes('MANAGEBAC_SOURCE_CONTROLLED_FIELDS') && workerOfflineMutations.includes('managebac_local_execution_fields'));
+assert('Worker test-only Task replay is blocked outside local/dev/test environments',
+  workerIndex.includes('assertTestOnlyTaskReplayAllowed(env)')
+    && workerIndex.includes('test_only_task_replay_not_available')
+    && workerIndex.includes("['dev', 'local', 'test'].includes(envName)"));
 assert('Worker sync conflict scaffold can create and list sanitized records',
   workerSyncConflicts.includes('createSyncConflictRecord') && workerSyncConflicts.includes('listSyncConflicts') && workerSyncConflicts.includes('getSyncConflict') && workerSyncConflicts.includes('sync_conflict_private_data') && workerSyncConflicts.includes('PRIVATE_KEY_PATTERN'));
 assert('Worker sync conflict resolution is limited to single Task keep-cloud discard-local later',
@@ -778,6 +792,9 @@ assert('WebDev UI walkthrough exercises read cache change refresh',
 const webdevDesktopRuntimeSmoke = read('scripts/webdev/desktop-runtime-smoke.mjs');
 assert('root package has WebDev Browser Extension readiness script',
   rootPackage.scripts['webdev:extension:readiness'] === 'node scripts/webdev/browser-extension-readiness-check.mjs');
+assert('root package has WebDev Task replay Gate B readiness script',
+  rootPackage.scripts['webdev:gate-b:readiness'] === 'node scripts/webdev/task-replay-gate-b-readiness-check.mjs'
+    && rootPackage.scripts['webdev:verify']?.includes('npm run webdev:gate-b:readiness'));
 assert('root package has WebDev observability backup readiness script',
   rootPackage.scripts['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs');
 assert('root package has WebDev Desktop Runtime smoke script', rootPackage.scripts['webdev:desktop:smoke'] === 'node scripts/webdev/desktop-runtime-smoke.mjs');

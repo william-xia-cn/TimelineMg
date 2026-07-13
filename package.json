@@ -32,6 +32,7 @@
     "webdev:preview:ui-smoke": "node scripts/webdev/preview-ui-smoke.mjs",
     "webdev:preview:data-hygiene-smoke": "node scripts/webdev/preview-data-hygiene-smoke.mjs",
     "webdev:preview:acceptance": "npm run webdev:preview:headers-smoke && npm run webdev:preview:smoke && npm run webdev:preview:core-smoke && npm run webdev:preview:ui-smoke && npm run webdev:preview:data-hygiene-smoke",
+    "webdev:gate-b:readiness": "node scripts/webdev/task-replay-gate-b-readiness-check.mjs",
     "webdev:observability:readiness": "node scripts/webdev/observability-backup-readiness-check.mjs",
     "webdev:prod:readiness": "node scripts/webdev/prod-readiness-check.mjs",
     "webdev:prod:package": "node scripts/webdev/prod-readiness-package.mjs",
@@ -45,7 +46,7 @@
     "package:cws": "powershell -ExecutionPolicy Bypass -File tools/package-cws.ps1",
     "test": "node tests/scheduling.test.js && node tests/external-links.test.js && node tests/focus.test.js && node tests/calendar.test.js && node tests/taskboard.test.js && node tests/managebac.test.js && node tests/management-review.test.js && node tests/matrixview.test.js && node tests/reminders.test.js && node tests/daily-journal.test.js && node tests/google-sync.test.js && node tests/widget-snapshot.test.js && node tests/platform-boundary.test.js && node tests/baseline-safety.test.js && node tests/webdev-scaffold.test.js && node tests/webdev-migration-adapter.test.js && node tests/webdev-business-parity.test.js && node tests/webdev-offline-queue.test.js && node tests/webdev-integration.test.js",
     "workers:typecheck": "npm --prefix workers run typecheck",
-    "webdev:verify": "npm run webdev:plan:check && npm run webdev:preview:preflight && node tests/webdev-scaffold.test.js && node tests/webdev-migration-adapter.test.js && node tests/webdev-business-parity.test.js && node tests/webdev-offline-queue.test.js && npm --prefix pages run build && npm --prefix workers run typecheck && node tests/webdev-integration.test.js"
+    "webdev:verify": "npm run webdev:plan:check && npm run webdev:preview:preflight && npm run webdev:gate-b:readiness && node tests/webdev-scaffold.test.js && node tests/webdev-migration-adapter.test.js && node tests/webdev-business-parity.test.js && node tests/webdev-offline-queue.test.js && npm --prefix pages run build && npm --prefix workers run typecheck && node tests/webdev-integration.test.js"
   },
   "repository": {
     "type": "git",

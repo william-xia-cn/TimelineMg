@@ -479,16 +479,35 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
+function normalizedEnvName(env: Env): string {
+  return String(env.TIMEWHERE_ENV || 'unknown').trim().toLowerCase() || 'unknown';
+}
+
 function isTestOnlyTaskReplayRequest(body: unknown): boolean {
   return isRecord(body) && body.test_only_task_replay_enabled === true;
+}
+
+function assertTestOnlyTaskReplayAllowed(env: Env): void {
+  const envName = normalizedEnvName(env);
+  if (!['dev', 'local', 'test'].includes(envName)) {
+    throw new HttpError(
+      403,
+      'test_only_task_replay_not_available',
+      'Test-only Task replay is available only in local/dev test environments'
+    );
+  }
 }
 
 async function handleSyncMutations(request: Request, env: Env): Promise<Response> {
   const session = await requireSession(env, request);
   const body = await readJson<unknown>(request);
-  const replay = isTestOnlyTaskReplayRequest(body)
-    ? await applyTaskReplayTestOnly(env, session.accountId, body)
-    : attachTaskReplayTransactionSkeleton(validateOfflineMutationReplay(body));
+  let replay;
+  if (isTestOnlyTaskReplayRequest(body)) {
+    assertTestOnlyTaskReplayAllowed(env);
+    replay = await applyTaskReplayTestOnly(env, session.accountId, body);
+  } else {
+    replay = attachTaskReplayTransactionSkeleton(validateOfflineMutationReplay(body));
+  }
   return jsonResponse({
     replay,
     outcome_persistence: await recordSyncMutationOutcomes(env, session.accountId, replay)
