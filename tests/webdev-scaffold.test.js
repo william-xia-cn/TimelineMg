@@ -99,6 +99,7 @@ const requiredFiles = [
   'scripts/webdev/preview-data-hygiene-smoke.mjs',
   'scripts/webdev/prod-readiness-check.mjs',
   'scripts/webdev/prod-readiness-package.mjs',
+  'scripts/webdev/completion-audit.mjs',
   'scripts/webdev/ui-walkthrough.mjs',
   'scripts/webdev/browser-extension-readiness-check.mjs',
   'scripts/webdev/desktop-runtime-readiness-check.mjs',
@@ -699,6 +700,8 @@ assert('root package has Gate R readiness-only script',
   rootPackage.scripts['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
     && rootPackage.scripts['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs'
     && rootPackage.scripts['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs');
+assert('root package has WebDev completion audit script',
+  rootPackage.scripts['webdev:completion:audit'] === 'node scripts/webdev/completion-audit.mjs');
 const cloudflareProvision = read('scripts/webdev/provision-cloudflare.mjs');
 const previewDeploy = read('scripts/webdev/deploy-cloudflare-preview.mjs');
 const previewHeadersSmoke = read('scripts/webdev/preview-headers-smoke.mjs');
@@ -708,6 +711,7 @@ const previewUiSmoke = read('scripts/webdev/preview-ui-smoke.mjs');
 const previewDataHygieneSmoke = read('scripts/webdev/preview-data-hygiene-smoke.mjs');
 const prodReadinessCheck = read('scripts/webdev/prod-readiness-check.mjs');
 const prodReadinessPackage = read('scripts/webdev/prod-readiness-package.mjs');
+const completionAudit = read('scripts/webdev/completion-audit.mjs');
 const browserExtensionReadinessCheck = read('scripts/webdev/browser-extension-readiness-check.mjs');
 const desktopRuntimeReadinessCheck = read('scripts/webdev/desktop-runtime-readiness-check.mjs');
 const observabilityBackupReadinessCheck = read('scripts/webdev/observability-backup-readiness-check.mjs');
@@ -813,6 +817,13 @@ assert('prod readiness package script is evidence-only and release-gated',
     && prodReadinessPackage.includes('sanitize(output)')
     && !prodReadinessPackage.includes('wrangler deploy')
     && !prodReadinessPackage.includes('pages deploy'));
+assert('completion audit script classifies readiness without approving gated work',
+  completionAudit.includes('WebDev completion audit')
+    && completionAudit.includes('readiness_complete_pending_approval_gates')
+    && completionAudit.includes('does not approve prod, replay, desktop distribution, CWS, tag, merge, or release')
+    && completionAudit.includes('webdev:completion:audit')
+    && !completionAudit.includes('wrangler deploy')
+    && !completionAudit.includes('pages deploy'));
 assert('root package has webdev integration script', rootPackage.scripts['webdev:integration'] === 'node tests/webdev-integration.test.js');
 assert('root package has WebDev UI walkthrough script', rootPackage.scripts['webdev:ui:walkthrough'] === 'node scripts/webdev/ui-walkthrough.mjs');
 const webdevUiWalkthrough = read('scripts/webdev/ui-walkthrough.mjs');

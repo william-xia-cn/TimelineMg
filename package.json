@@ -37,6 +37,7 @@
     "webdev:observability:readiness": "node scripts/webdev/observability-backup-readiness-check.mjs",
     "webdev:prod:readiness": "node scripts/webdev/prod-readiness-check.mjs",
     "webdev:prod:package": "node scripts/webdev/prod-readiness-package.mjs",
+    "webdev:completion:audit": "node scripts/webdev/completion-audit.mjs",
     "webdev:integration": "node tests/webdev-integration.test.js",
     "webdev:ui:walkthrough": "node scripts/webdev/ui-walkthrough.mjs",
     "webdev:extension:readiness": "node scripts/webdev/browser-extension-readiness-check.mjs",

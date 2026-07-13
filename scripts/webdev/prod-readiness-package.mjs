@@ -52,6 +52,7 @@ const requiredScripts = [
   'webdev:gate-c:readiness',
   'webdev:observability:readiness',
   'webdev:prod:readiness',
+  'webdev:completion:audit',
   'webdev:acceptance:local',
   'test'
 ];
@@ -68,6 +69,7 @@ const readinessEvidence = [
   ['Non-Task replay Gate C readiness is represented', packageJson.scripts?.['webdev:gate-c:readiness'] === 'node scripts/webdev/non-task-replay-gate-c-readiness-check.mjs' && completionChecklist.includes('WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md')],
   ['Observability / backup readiness is represented', packageJson.scripts?.['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs' && prodChecklist.includes('WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md')],
   ['Rollback package is represented', prodChecklist.includes('Rollback plan')],
+  ['Completion audit is represented', packageJson.scripts?.['webdev:completion:audit'] === 'node scripts/webdev/completion-audit.mjs' && completionChecklist.includes('webdev:completion:audit')],
   ['Gate B/C/D/E/R limits remain listed', completionChecklist.includes('| B |') && completionChecklist.includes('| C |') && completionChecklist.includes('| D |') && completionChecklist.includes('| E |') && completionChecklist.includes('| R |')],
   ['Task board records preview acceptance hardening', taskBoard.includes('webdev:preview:data-hygiene-smoke')]
 ];

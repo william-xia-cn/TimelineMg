@@ -25,6 +25,7 @@ const requiredFiles = [
   'scripts/webdev/non-task-replay-gate-c-readiness-check.mjs',
   'scripts/webdev/observability-backup-readiness-check.mjs',
   'scripts/webdev/prod-readiness-package.mjs',
+  'scripts/webdev/completion-audit.mjs',
   'package.json',
   '.gitignore'
 ];
@@ -90,6 +91,7 @@ const taskReplayGateBCheck = exists('scripts/webdev/task-replay-gate-b-readiness
 const nonTaskReplayGateCCheck = exists('scripts/webdev/non-task-replay-gate-c-readiness-check.mjs') ? read('scripts/webdev/non-task-replay-gate-c-readiness-check.mjs') : '';
 const observabilityReadinessCheck = exists('scripts/webdev/observability-backup-readiness-check.mjs') ? read('scripts/webdev/observability-backup-readiness-check.mjs') : '';
 const prodReadinessPackage = exists('scripts/webdev/prod-readiness-package.mjs') ? read('scripts/webdev/prod-readiness-package.mjs') : '';
+const completionAudit = exists('scripts/webdev/completion-audit.mjs') ? read('scripts/webdev/completion-audit.mjs') : '';
 const packageJson = exists('package.json') ? JSON.parse(read('package.json')) : { scripts: {} };
 const gitignore = exists('.gitignore') ? read('.gitignore') : '';
 
@@ -163,6 +165,7 @@ assert('local and preview scripts exist but prod deploy script is not exposed',
     && packageJson.scripts?.['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs'
     && packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
     && packageJson.scripts?.['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
+    && packageJson.scripts?.['webdev:completion:audit'] === 'node scripts/webdev/completion-audit.mjs'
     && !packageJson.scripts?.['webdev:prod:deploy']
     && !packageJson.scripts?.['webdev:release']);
 
@@ -229,6 +232,13 @@ assert('prod readiness package is evidence-only and gate-aware',
     && !prodReadinessPackage.includes('wrangler deploy')
     && !prodReadinessPackage.includes('pages deploy'));
 
+assert('completion audit is readiness-only and gate-aware',
+  completionAudit.includes('WebDev completion audit')
+    && completionAudit.includes('readiness_complete_pending_approval_gates')
+    && completionAudit.includes('does not approve prod, replay, desktop distribution, CWS, tag, merge, or release')
+    && !completionAudit.includes('wrangler deploy')
+    && !completionAudit.includes('pages deploy'));
+
 assert('local secret files and generated Cloudflare state stay ignored',
   gitignore.includes('.wrangler/')
     && gitignore.includes('workers/.wrangler/')
@@ -277,6 +287,7 @@ assertNoObviousSecrets('prod readiness scanned files contain no obvious secrets'
     nonTaskReplayGateCCheck,
     observabilityReadinessCheck,
     prodReadinessPackage,
+    completionAudit,
     gitignore
   ].join('\n'));
 
