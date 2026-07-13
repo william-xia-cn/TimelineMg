@@ -91,6 +91,7 @@ const requiredFiles = [
   'scripts/webdev/preview-smoke.mjs',
   'scripts/webdev/preview-core-smoke.mjs',
   'scripts/webdev/preview-ui-smoke.mjs',
+  'scripts/webdev/preview-data-hygiene-smoke.mjs',
   'scripts/webdev/prod-readiness-check.mjs',
   'scripts/webdev/ui-walkthrough.mjs',
   'scripts/webdev/desktop-runtime-smoke.mjs'
@@ -629,11 +630,14 @@ assert('root package has Gate A preview core smoke script',
   rootPackage.scripts['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs');
 assert('root package has Gate A preview UI smoke script',
   rootPackage.scripts['webdev:preview:ui-smoke'] === 'node scripts/webdev/preview-ui-smoke.mjs');
+assert('root package has Gate A preview data hygiene smoke script',
+  rootPackage.scripts['webdev:preview:data-hygiene-smoke'] === 'node scripts/webdev/preview-data-hygiene-smoke.mjs');
 assert('root package has Gate A preview acceptance aggregate script',
   rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:headers-smoke')
     && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:smoke')
     && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:core-smoke')
-    && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:ui-smoke'));
+    && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:ui-smoke')
+    && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:data-hygiene-smoke'));
 assert('root package has Gate R readiness-only script',
   rootPackage.scripts['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs');
 const cloudflareProvision = read('scripts/webdev/provision-cloudflare.mjs');
@@ -642,9 +646,10 @@ const previewHeadersSmoke = read('scripts/webdev/preview-headers-smoke.mjs');
 const previewSmoke = read('scripts/webdev/preview-smoke.mjs');
 const previewCoreSmoke = read('scripts/webdev/preview-core-smoke.mjs');
 const previewUiSmoke = read('scripts/webdev/preview-ui-smoke.mjs');
+const previewDataHygieneSmoke = read('scripts/webdev/preview-data-hygiene-smoke.mjs');
 const prodReadinessCheck = read('scripts/webdev/prod-readiness-check.mjs');
 assert('Cloudflare preview/provision scripts redact emails and local user paths in command output',
-  [cloudflareProvision, previewDeploy, previewSmoke, previewCoreSmoke, previewUiSmoke].every(script =>
+  [cloudflareProvision, previewDeploy, previewSmoke, previewCoreSmoke, previewUiSmoke, previewDataHygieneSmoke].every(script =>
     script.includes('<email>')
       && script.includes('<user-home>')
       && script.includes('replaceAll(root, \'<workspace>\')')));
@@ -713,6 +718,14 @@ assert('preview UI smoke script covers core Web App views without Google browser
     && previewUiSmoke.includes('Replay safety gate')
     && previewUiSmoke.includes('no Google session, token, account email, or Cloudflare id was printed')
     && !previewUiSmoke.includes('writes_enabled=true'));
+assert('preview data hygiene smoke checks temporary smoke cleanup without prod',
+  previewDataHygieneSmoke.includes('preview D1 has no smoke account/entity/migration references')
+    && previewDataHygieneSmoke.includes("const prefixes = ['preview-smoke', 'preview-smoke:'];")
+    && previewDataHygieneSmoke.includes('preview KV has no ${prefix} temporary keys')
+    && previewDataHygieneSmoke.includes('local .wrangler has no preview smoke temp files')
+    && previewDataHygieneSmoke.includes('timewhere-preview-api')
+    && previewDataHygieneSmoke.includes('timewhere-preview-cache')
+    && !previewDataHygieneSmoke.includes('timewhere-api"'));
 assert('prod readiness script is static and release-gated',
   prodReadinessCheck.includes('WebDev prod readiness static check')
     && prodReadinessCheck.includes('No prod resource was created')

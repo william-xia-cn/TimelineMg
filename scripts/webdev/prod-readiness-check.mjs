@@ -106,6 +106,7 @@ assert('preview evidence commands are represented before prod readiness',
     && previewRunbook.includes('npm run webdev:preview:headers-smoke')
     && previewRunbook.includes('npm run webdev:preview:core-smoke')
     && previewRunbook.includes('npm run webdev:preview:ui-smoke')
+    && previewRunbook.includes('npm run webdev:preview:data-hygiene-smoke')
     && previewRunbook.includes('npm run webdev:preview:acceptance')
     && previewRunbook.includes('Migration import')
     && completionChecklist.includes('Preview UI smoke complete under Gate A')
@@ -125,8 +126,10 @@ assert('local and preview scripts exist but prod deploy script is not exposed',
     && packageJson.scripts?.['webdev:preview:headers-smoke'] === 'node scripts/webdev/preview-headers-smoke.mjs'
     && packageJson.scripts?.['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs'
     && packageJson.scripts?.['webdev:preview:ui-smoke'] === 'node scripts/webdev/preview-ui-smoke.mjs'
+    && packageJson.scripts?.['webdev:preview:data-hygiene-smoke'] === 'node scripts/webdev/preview-data-hygiene-smoke.mjs'
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:headers-smoke')
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:core-smoke')
+    && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:data-hygiene-smoke')
     && packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
     && !packageJson.scripts?.['webdev:prod:deploy']
     && !packageJson.scripts?.['webdev:release']);

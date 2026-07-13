@@ -39,6 +39,7 @@ npm run webdev:cloudflare:provision
 npm run webdev:preview:deploy
 npm run webdev:preview:headers-smoke
 npm run webdev:preview:smoke
+npm run webdev:preview:data-hygiene-smoke
 ```
 
 执行约束：
@@ -156,10 +157,11 @@ npm run webdev:preview:smoke
 npm run webdev:preview:headers-smoke
 npm run webdev:preview:core-smoke
 npm run webdev:preview:ui-smoke
+npm run webdev:preview:data-hygiene-smoke
 npm run webdev:preview:acceptance
 ```
 
-这些 smoke 只输出资源类别、环境和 PASS/FAIL，不输出 Cloudflare resource id、OAuth secret、token 或账号邮箱。`webdev:preview:headers-smoke` 只读取 stable Pages preview 的响应头，验证 CSP、基础安全头、根 HTML no-store 和 hashed asset immutable cache，不需要 Cloudflare auth。`webdev:preview:core-smoke` 使用临时 smoke account/session 验证 preview Worker API，包括核心 CRUD / sync 读路径以及 migration import / idempotent retry / conflict / resolution；它会在结束时清理测试数据，不读取浏览器 Google session。`webdev:preview:ui-smoke` 使用同类临时 smoke session 打开 stable Pages preview，验证 Dashboard / Tasks / Calendar / Settings UI 能读取 preview Cloud 数据，并在结束时清理测试数据。
+这些 smoke 只输出资源类别、环境和 PASS/FAIL，不输出 Cloudflare resource id、OAuth secret、token 或账号邮箱。`webdev:preview:headers-smoke` 只读取 stable Pages preview 的响应头，验证 CSP、基础安全头、根 HTML no-store 和 hashed asset immutable cache，不需要 Cloudflare auth。`webdev:preview:core-smoke` 使用临时 smoke account/session 验证 preview Worker API，包括核心 CRUD / sync 读路径以及 migration import / idempotent retry / conflict / resolution；它会在结束时清理测试数据，不读取浏览器 Google session。`webdev:preview:ui-smoke` 使用同类临时 smoke session 打开 stable Pages preview，验证 Dashboard / Tasks / Calendar / Settings UI 能读取 preview Cloud 数据，并在结束时清理测试数据。`webdev:preview:data-hygiene-smoke` 在 smoke 之后确认 preview D1 无 smoke account/entity/migration references、preview KV 无 smoke 临时 key、local `.wrangler` 无 smoke temp file。
 
 ## 8. Latest Local Evidence
 
@@ -169,7 +171,8 @@ npm run webdev:preview:acceptance
 - `npm run webdev:preview:headers-smoke`: PASS。覆盖 stable Pages preview CSP、基础安全响应头、根 HTML `Cache-Control: no-store` 和 hashed JS asset immutable cache；不需要 Cloudflare auth。
 - `npm run webdev:preview:core-smoke`: PASS。覆盖 Account status/profile、Structure create、Task create/update/list、Calendar create/update/list、Settings update、Sync bootstrap、Sync changes、Migration import、幂等重试、迁移冲突生成与解决；结束后通过 API / cleanup 删除 smoke 实体、临时迁移 snapshot 和 smoke account，smoke account count 为 0。
 - `npm run webdev:preview:ui-smoke`: PASS。使用临时 smoke account/session 打开 stable Pages preview，验证 Dashboard、Tasks、Calendar、Settings 能读取 preview Worker 数据；结束后清理 smoke account。
-- `npm run webdev:preview:acceptance`: PASS。串联 preview foundation、core API、UI smoke，作为 Gate A preview acceptance 复核入口；不触碰 prod。
+- `npm run webdev:preview:data-hygiene-smoke`: PASS。确认 preview D1 无 smoke account/entity/migration references、preview KV 无 smoke temporary keys、local `.wrangler` 无 smoke temp files；不触碰 prod。
+- `npm run webdev:preview:acceptance`: PASS。串联 preview headers、foundation、core API、UI smoke、data hygiene smoke，作为 Gate A preview acceptance 复核入口；不触碰 prod。
 - `npm run webdev:verify`: PASS。覆盖 plan-state、preview preflight、scaffold、migration adapter、business parity、offline queue、Pages build、Worker typecheck、local integration。
 - `npm run webdev:ui:walkthrough`: PASS。覆盖 Dashboard、Tasks、Calendar、Settings、migration panel、pending queue、sync conflict panel、structure editor 和 `/sync/changes` read-cache refresh。
 - `npm run webdev:desktop:smoke`: PASS。Electron WebDev runtime mode 可加载本地 Web App 并干净退出 smoke。
@@ -224,6 +227,7 @@ Local checks:
 
 Cloud checks:
 - Pages headers:
+- Data hygiene:
 - Worker /health:
 - D1 migrations:
 - R2 snapshot write:
