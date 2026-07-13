@@ -93,6 +93,7 @@ const requiredFiles = [
   'scripts/webdev/preview-ui-smoke.mjs',
   'scripts/webdev/preview-data-hygiene-smoke.mjs',
   'scripts/webdev/prod-readiness-check.mjs',
+  'scripts/webdev/prod-readiness-package.mjs',
   'scripts/webdev/ui-walkthrough.mjs',
   'scripts/webdev/desktop-runtime-smoke.mjs'
 ];
@@ -639,7 +640,8 @@ assert('root package has Gate A preview acceptance aggregate script',
     && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:ui-smoke')
     && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:data-hygiene-smoke'));
 assert('root package has Gate R readiness-only script',
-  rootPackage.scripts['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs');
+  rootPackage.scripts['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
+    && rootPackage.scripts['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs');
 const cloudflareProvision = read('scripts/webdev/provision-cloudflare.mjs');
 const previewDeploy = read('scripts/webdev/deploy-cloudflare-preview.mjs');
 const previewHeadersSmoke = read('scripts/webdev/preview-headers-smoke.mjs');
@@ -648,6 +650,7 @@ const previewCoreSmoke = read('scripts/webdev/preview-core-smoke.mjs');
 const previewUiSmoke = read('scripts/webdev/preview-ui-smoke.mjs');
 const previewDataHygieneSmoke = read('scripts/webdev/preview-data-hygiene-smoke.mjs');
 const prodReadinessCheck = read('scripts/webdev/prod-readiness-check.mjs');
+const prodReadinessPackage = read('scripts/webdev/prod-readiness-package.mjs');
 assert('Cloudflare preview/provision scripts redact emails and local user paths in command output',
   [cloudflareProvision, previewDeploy, previewSmoke, previewCoreSmoke, previewUiSmoke, previewDataHygieneSmoke].every(script =>
     script.includes('<email>')
@@ -732,6 +735,16 @@ assert('prod readiness script is static and release-gated',
     && prodReadinessCheck.includes("!packageJson.scripts?.['webdev:prod:deploy']")
     && prodReadinessCheck.includes('REPLACE_WITH_PROD_D1_ID')
     && prodReadinessCheck.includes('TIMEWHERE_TASK_REPLAY_KILL_SWITCH = \"on\"'));
+assert('prod readiness package script is evidence-only and release-gated',
+  prodReadinessPackage.includes('WebDev Prod Readiness Package Draft')
+    && prodReadinessPackage.includes('readiness-only')
+    && prodReadinessPackage.includes('Gate R: not approved')
+    && prodReadinessPackage.includes('webdev:preview:acceptance')
+    && prodReadinessPackage.includes('webdev:prod:readiness')
+    && prodReadinessPackage.includes('Re-deploy previous Worker commit')
+    && prodReadinessPackage.includes('sanitize(output)')
+    && !prodReadinessPackage.includes('wrangler deploy')
+    && !prodReadinessPackage.includes('pages deploy'));
 assert('root package has webdev integration script', rootPackage.scripts['webdev:integration'] === 'node tests/webdev-integration.test.js');
 assert('root package has WebDev UI walkthrough script', rootPackage.scripts['webdev:ui:walkthrough'] === 'node scripts/webdev/ui-walkthrough.mjs');
 const webdevUiWalkthrough = read('scripts/webdev/ui-walkthrough.mjs');

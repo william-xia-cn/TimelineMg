@@ -240,6 +240,9 @@ Gate R 批准前可运行只读静态门禁：
 
 ```powershell
 npm run webdev:prod:readiness
+npm run webdev:prod:package
 ```
 
 该命令只检查仓库中的 readiness 文档、`workers/wrangler.toml` prod placeholder、env example、Gate R 边界、replay kill switch 和 secret hygiene。它不会创建 Cloudflare prod resource、不会部署 Worker/Pages、不会 tag、不会 release、不会修改远端状态。
+
+`webdev:prod:package` 只把当前分支、commit、Gate 状态、必跑命令、已知限制和回滚摘要输出为审批包草稿。它不读取 `.wrangler/`、不调用 Wrangler、不创建文件、不写入真实 Cloudflare resource id、不执行 prod deploy，也不能替代 Product Owner 的 Gate R 批准。

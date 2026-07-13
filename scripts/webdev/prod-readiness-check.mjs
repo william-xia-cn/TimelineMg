@@ -14,6 +14,7 @@ const requiredFiles = [
   'workers/.dev.vars.example',
   'pages/.env.example',
   'pages/public/_headers',
+  'scripts/webdev/prod-readiness-package.mjs',
   'package.json',
   '.gitignore'
 ];
@@ -68,6 +69,7 @@ const wrangler = exists('workers/wrangler.toml') ? read('workers/wrangler.toml')
 const workerEnvExample = exists('workers/.dev.vars.example') ? read('workers/.dev.vars.example') : '';
 const pagesEnvExample = exists('pages/.env.example') ? read('pages/.env.example') : '';
 const pagesHeaders = exists('pages/public/_headers') ? read('pages/public/_headers') : '';
+const prodReadinessPackage = exists('scripts/webdev/prod-readiness-package.mjs') ? read('scripts/webdev/prod-readiness-package.mjs') : '';
 const packageJson = exists('package.json') ? JSON.parse(read('package.json')) : { scripts: {} };
 const gitignore = exists('.gitignore') ? read('.gitignore') : '';
 
@@ -131,8 +133,19 @@ assert('local and preview scripts exist but prod deploy script is not exposed',
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:core-smoke')
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:data-hygiene-smoke')
     && packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
+    && packageJson.scripts?.['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
     && !packageJson.scripts?.['webdev:prod:deploy']
     && !packageJson.scripts?.['webdev:release']);
+
+assert('prod readiness package is evidence-only and gate-aware',
+  prodReadinessPackage.includes('WebDev Prod Readiness Package Draft')
+    && prodReadinessPackage.includes('readiness-only')
+    && prodReadinessPackage.includes('Gate R: not approved')
+    && prodReadinessPackage.includes('webdev:preview:acceptance')
+    && prodReadinessPackage.includes('webdev:prod:readiness')
+    && prodReadinessPackage.includes('Re-deploy previous Worker commit')
+    && !prodReadinessPackage.includes('wrangler deploy')
+    && !prodReadinessPackage.includes('pages deploy'));
 
 assert('local secret files and generated Cloudflare state stay ignored',
   gitignore.includes('.wrangler/')
@@ -171,6 +184,7 @@ assertNoObviousSecrets('prod readiness scanned files contain no obvious secrets'
     workerEnvExample,
     pagesEnvExample,
     pagesHeaders,
+    prodReadinessPackage,
     gitignore
   ].join('\n'));
 

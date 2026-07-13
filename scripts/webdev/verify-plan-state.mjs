@@ -100,7 +100,10 @@ assert('root package exposes Gate A preview smoke commands',
     && packageJson.scripts?.['webdev:preview:ui-smoke'] === 'node scripts/webdev/preview-ui-smoke.mjs'
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:ui-smoke'));
 assert('root package exposes Gate R readiness-only check',
-  packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs');
+  packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
+    && packageJson.scripts?.['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
+    && prodReadiness.includes('webdev:prod:package')
+    && checklist.includes('webdev:prod:package'));
 assert('webdev:verify runs plan-state check',
   packageJson.scripts?.['webdev:verify']?.includes('npm run webdev:plan:check'));
 assert('webdev:verify runs preview preflight',
