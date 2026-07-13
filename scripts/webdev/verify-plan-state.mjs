@@ -31,6 +31,8 @@ const checklistPath = 'docs/WEBDEV_COMPLETION_CHECKLIST.md';
 assert('completion checklist exists', exists(checklistPath));
 const parityPath = 'docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md';
 assert('business parity checklist exists', exists(parityPath));
+const targetArchitecturePath = 'docs/WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md';
+assert('target architecture status baseline exists', exists(targetArchitecturePath));
 const previewRunbookPath = 'docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md';
 assert('preview acceptance runbook exists', exists(previewRunbookPath));
 const prodReadinessPath = 'docs/WEBDEV_PROD_READINESS_CHECKLIST.md';
@@ -48,6 +50,7 @@ assert('Desktop Runtime Gate E readiness packet exists', exists(desktopRuntimeGa
 
 const checklist = exists(checklistPath) ? read(checklistPath) : '';
 const parityChecklist = exists(parityPath) ? read(parityPath) : '';
+const targetArchitecture = exists(targetArchitecturePath) ? read(targetArchitecturePath) : '';
 const previewRunbook = exists(previewRunbookPath) ? read(previewRunbookPath) : '';
 const prodReadiness = exists(prodReadinessPath) ? read(prodReadinessPath) : '';
 const observabilityRunbook = exists(observabilityRunbookPath) ? read(observabilityRunbookPath) : '';
@@ -64,6 +67,16 @@ for (const gate of ['Gate A', 'Gate B', 'Gate C', 'Gate D', 'Gate E', 'Gate R'])
 for (const capability of ['Tasks CRUD', 'Calendar Events CRUD', 'Daily Settle projection', 'Automatic migration', 'Desktop Runtime']) {
   assert(`${capability} is represented in business parity checklist`, parityChecklist.includes(capability));
 }
+assert('target architecture records current implementation status and remaining gates',
+  targetArchitecture.includes('Active architecture baseline with implementation status')
+    && targetArchitecture.includes('D-048 initial scaffold is complete')
+    && targetArchitecture.includes('D-049 Phase 2-9 is complete')
+    && targetArchitecture.includes('Gate A dev / preview resources and preview smoke are complete')
+    && targetArchitecture.includes('Gate B')
+    && targetArchitecture.includes('Gate C')
+    && targetArchitecture.includes('Gate D')
+    && targetArchitecture.includes('Gate E')
+    && targetArchitecture.includes('Gate R'));
 assert('preview runbook records Gate A evidence boundary',
   previewRunbook.includes('Gate A')
     && previewRunbook.includes('Preview Acceptance Evidence')
