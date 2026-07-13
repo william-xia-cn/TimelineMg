@@ -46,7 +46,25 @@ function run(command, args, options = {}) {
 }
 
 function runWrangler(args, options = {}) {
-  return run(process.execPath, [wranglerBinPath, ...args], options);
+  const attempts = options.allowFailure ? 1 : (options.attempts || 4);
+  let lastResult = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = run(process.execPath, [wranglerBinPath, ...args], { ...options, allowFailure: true });
+    if (result.ok || options.allowFailure) return result;
+    lastResult = result;
+    if (!isRetryableWranglerFailure(result.output) || attempt === attempts) break;
+    console.warn(`  WARN Wrangler transient failure, retrying ${attempt}/${attempts - 1}...`);
+    sleep(1000 * attempt);
+  }
+  throw new Error(`${process.execPath} ${[wranglerBinPath, ...args].join(' ')} failed:\n${lastResult?.sanitizedOutput || ''}`);
+}
+
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function isRetryableWranglerFailure(output) {
+  return /Authentication error\s+\[code:\s*10000\]|A request to the Cloudflare API .* failed|fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN/i.test(String(output || ''));
 }
 
 function assert(condition, message) {

@@ -751,6 +751,11 @@ assert('preview smoke script checks Worker Pages D1 R2 and KV without prod',
     && previewSmoke.includes("'r2'")
     && previewSmoke.includes("'kv'")
     && !previewSmoke.includes('timewhere-api"'));
+assert('preview smoke scripts retry transient Wrangler API failures',
+  [previewSmoke, previewCoreSmoke, previewUiSmoke, previewDataHygieneSmoke].every(script =>
+    script.includes('isRetryableWranglerFailure')
+      && script.includes('Authentication error\\s+\\[code:\\s*10000\\]')
+      && script.includes('Wrangler transient failure')));
 assert('preview core smoke script uses temporary smoke account and cleans up',
   previewCoreSmoke.includes('preview-smoke-')
     && previewCoreSmoke.includes('cleanupSmokeAccounts')

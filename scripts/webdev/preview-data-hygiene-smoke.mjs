@@ -40,18 +40,33 @@ function assert(description, condition, detail = '') {
 }
 
 function runWrangler(args, options = {}) {
-  const result = spawnSync(process.execPath, [wranglerBinPath, ...args], {
-    cwd: root,
-    env: process.env,
-    encoding: 'utf8',
-    shell: false,
-    maxBuffer: 20 * 1024 * 1024
-  });
-  const output = `${result.stdout || ''}${result.stderr || ''}`;
-  if (result.status !== 0 && !options.allowFailure) {
-    throw new Error(`${process.execPath} ${[wranglerBinPath, ...args].join(' ')} failed:\n${sanitize(output)}`);
+  const attempts = options.allowFailure ? 1 : (options.attempts || 4);
+  let lastResult = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = spawnSync(process.execPath, [wranglerBinPath, ...args], {
+      cwd: root,
+      env: process.env,
+      encoding: 'utf8',
+      shell: false,
+      maxBuffer: 20 * 1024 * 1024
+    });
+    const output = `${result.stdout || ''}${result.stderr || ''}`;
+    const wrapped = { ok: result.status === 0, output, sanitizedOutput: sanitize(output) };
+    if (wrapped.ok || options.allowFailure) return wrapped;
+    lastResult = wrapped;
+    if (!isRetryableWranglerFailure(output) || attempt === attempts) break;
+    console.warn(`  WARN Wrangler transient failure, retrying ${attempt}/${attempts - 1}...`);
+    sleep(1000 * attempt);
   }
-  return { ok: result.status === 0, output, sanitizedOutput: sanitize(output) };
+  throw new Error(`${process.execPath} ${[wranglerBinPath, ...args].join(' ')} failed:\n${lastResult?.sanitizedOutput || ''}`);
+}
+
+function sleep(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function isRetryableWranglerFailure(output) {
+  return /Authentication error\s+\[code:\s*10000\]|A request to the Cloudflare API .* failed|fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN/i.test(String(output || ''));
 }
 
 function requireLocalState() {
