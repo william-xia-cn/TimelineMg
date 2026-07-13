@@ -110,7 +110,22 @@ Repository 必须是业务数据唯一入口：
 
 任何扩大离线写入范围都必须停止并走 Product Owner approval。
 
-## 8. Observability Readiness
+## 8. Release Risk Register
+
+Gate R 前必须逐条确认：
+
+| 风险 | Readiness 要求 | 默认结论 |
+|---|---|---|
+| 自动迁移导致重复 canonical rows | preview migration import / idempotent retry / conflict smoke 必须通过；出现静默覆盖即停止。 | 未出现时才可进入 Gate R。 |
+| Google SSO 配置漂移 | preview stable origin、Worker audience、session refresh/logout 需复核；Web App 不保存 Google token。 | 只允许 Google SSO，不纳入 Google Drive Sync。 |
+| Replay 写入过早开放 | Gate B/C 未批准前 `writes_enabled=false`，prod kill switch 保持 on。 | 不作为 v1 prod release 范围。 |
+| Offline pending 与 Cloud canonical 不一致 | v1 只允许 read cache；Task pending 保持本地待处理状态，不等同 Cloud 已同步。 | 作为已知限制进入 release note。 |
+| Desktop Runtime 与 Web App 分支 | Gate E 未批准前 Desktop 不发布新 runtime package。 | 不作为 Gate R 前置发布动作。 |
+| Browser Extension 仍在 legacy 线 | Gate D 未批准前不把 Extension 当 WebDev 主产品入口。 | 作为生态组件后续设计。 |
+| 观测与告警不足 | 至少定义 Worker error mapping、migration run visibility、conflict age visibility、D1/R2 backup plan。 | 未完成则不能 prod。 |
+| 安全头 / CSP 缺失 | `pages/public/_headers` 必须随 Pages build 输出，并通过 readiness check。 | 已纳入静态门禁。 |
+
+## 9. Observability Readiness
 
 正式 prod 前应有：
 
@@ -132,7 +147,7 @@ Repository 必须是业务数据唯一入口：
 - Cloudflare API token；
 - 原始 private snapshot 内容。
 
-## 9. Security / Privacy Readiness
+## 10. Security / Privacy Readiness
 
 必须完成：
 
@@ -147,7 +162,7 @@ Repository 必须是业务数据唯一入口：
 - D1 private-data column review；
 - error message redaction review。
 
-## 10. Desktop Runtime Readiness
+## 11. Desktop Runtime Readiness
 
 Gate E 未批准前只做 readiness：
 
@@ -156,7 +171,7 @@ Gate E 未批准前只做 readiness：
 - Desktop 不承载 Task / Calendar / Daily Settle / Migration / Sync business logic。
 - 内部包、签名、公证、自动更新、分发需单独批准。
 
-## 11. Browser Extension Readiness
+## 12. Browser Extension Readiness
 
 Gate D 未批准前只做方向记录：
 
@@ -165,7 +180,7 @@ Gate D 未批准前只做方向记录：
 - 不实现 Extension replay。
 - 不把 Extension IndexedDB 作为 canonical data source。
 
-## 12. Release Decision Package
+## 13. Release Decision Package
 
 进入 Gate R 审批前，应准备：
 
@@ -195,6 +210,12 @@ Known limitations:
 - Gate E:
 
 Rollback plan:
+- Stop new migration runs:
+- Re-deploy previous Worker commit:
+- Re-deploy previous Pages commit:
+- Preserve R2 migration snapshots:
+- Preserve D1 migration/conflict audit:
+- Disable replay writes / keep kill switch on:
 
 Decision requested:
 - Approve prod resource creation?
@@ -203,7 +224,7 @@ Decision requested:
 - Approve Desktop package/signing/distribution?
 ```
 
-## 13. Stop Conditions
+## 14. Stop Conditions
 
 立即停止并回报 Product Owner：
 
@@ -213,7 +234,7 @@ Decision requested:
 - auth/session logs require recording private identifiers。
 - replay write Cloud needs to be enabled for user traffic。
 
-## 14. Readiness Command
+## 15. Readiness Command
 
 Gate R 批准前可运行只读静态门禁：
 

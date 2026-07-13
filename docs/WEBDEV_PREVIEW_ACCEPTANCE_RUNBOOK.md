@@ -179,7 +179,32 @@ npm run webdev:preview:acceptance
 - 真实 Google SSO 人工 UI 复核可作为后续人工验收补充；当前自动化 preview UI smoke 使用临时 smoke session 覆盖 Pages UI 与 preview Worker 数据路径。
 - Gate B/C/D/E/R 相关动作仍未批准，不得在本验收中顺带启用。
 
-## 9. Evidence Template
+## 9. Preview Risk Register / Known Limitations
+
+| 风险 / 限制 | 当前处理 | 升级条件 |
+|---|---|---|
+| Preview smoke 主要使用临时 smoke session | 自动化覆盖 Worker API 与 Pages UI 数据路径；真实 Google SSO 人工 UI 复核作为补充证据。 | SSO UI、session refresh、logout 任一手工步骤失败。 |
+| Task replay 写 Cloud 未开放 | Gate B 未批准，`writes_enabled=false`，只允许 dry-run / readiness / diagnostics。 | Product Owner 单独批准 Gate B。 |
+| Calendar / Container / Settings replay 未实现 | Gate C 未批准，非 Task replay 继续阻断。 | Product Owner 单独批准 Gate C。 |
+| Desktop Runtime 未打包分发 | Gate E 未批准，只做 local / preview URL smoke，不生成安装包。 | Product Owner 单独批准 Gate E。 |
+| Browser Extension 不作为第一阶段主产品 | Gate D 未批准，不实现 Extension replay 或新发布路径。 | Product Owner 单独批准 Gate D。 |
+| Prod 资源与正式发布未批准 | Gate R 未批准，preview 证据不能直接视为 prod release approval。 | Product Owner 单独批准 Gate R。 |
+| R2 snapshot retention / D1 backup cadence 仍是 prod readiness 项 | Preview 只验证 snapshot write/read/delete 与 migration import；正式保留策略留在 Gate R 评审。 | 进入 prod readiness package 审批。 |
+| Observability 仍是 readiness，不是 production monitoring | 当前只验证结构化状态、错误边界和 smoke；正式告警策略留在 Gate R。 | 出现 preview 5xx、migration failure 或 auth failure 无法解释。 |
+
+## 10. Preview Rollback / Cleanup Plan
+
+Preview 回滚以“不触碰 prod、不丢失调查证据、可停止新写入”为原则：
+
+1. 暂停继续执行 `webdev:preview:deploy`、`webdev:preview:core-smoke`、`webdev:preview:ui-smoke`。
+2. 若 Pages UI 回归失败，回退到上一可用 Git commit 后重新执行 preview deploy；不要改 prod，也不要把 preview hash URL 写入 Google OAuth origin。
+3. 若 Worker API 回归失败，先保留 preview D1 / R2 / KV 状态用于诊断，再用上一可用 commit 重新部署 preview Worker。
+4. 若 migration import 产生重复或静默覆盖迹象，停止迁移测试，保留 R2 snapshot 和 migration run / conflict rows，等待 Product Owner 评审；不得清空证据后继续重试。
+5. 若 smoke 临时数据未清理，使用 smoke 脚本内置 cleanup 路径或按 smoke account/session 前缀清理 preview 数据；清理过程不记录真实 account email。
+6. 若 Google SSO origin 配置错误，只修正 preview stable origin；不得临时改成 prod origin 或公开发布域名。
+7. 所有回滚动作只允许作用于 `dev / preview`，不得创建 prod resource、tag、GitHub Release、CWS 或 Desktop package。
+
+## 11. Evidence Template
 
 ```text
 Preview Acceptance Evidence
@@ -237,7 +262,7 @@ Known limitations:
 - Gate R not approved:
 ```
 
-## 10. Stop Conditions
+## 12. Stop Conditions
 
 立即停止并回报 Product Owner：
 

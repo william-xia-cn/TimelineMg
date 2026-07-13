@@ -158,10 +158,16 @@ assert('WebDev preview runbook records Gate A acceptance evidence and stop condi
     && previewRunbook.includes('Desktop Runtime Preview Smoke')
     && previewRunbook.includes('Stop Conditions')
     && !obviousSecretPattern.test(previewRunbook));
+assert('WebDev preview runbook records risk register and rollback plan',
+  previewRunbook.includes('Preview Risk Register')
+    && previewRunbook.includes('Preview Rollback / Cleanup Plan')
+    && previewRunbook.includes('migration import 产生重复或静默覆盖迹象'));
 assert('WebDev prod readiness checklist records Gate R non-release boundary',
   prodReadinessChecklist.includes('Gate R readiness checklist')
     && prodReadinessChecklist.includes('不等于发布')
     && prodReadinessChecklist.includes('Prod Readiness Package')
+    && prodReadinessChecklist.includes('Release Risk Register')
+    && prodReadinessChecklist.includes('Rollback plan')
     && prodReadinessChecklist.includes('Security / Privacy Readiness')
     && !obviousSecretPattern.test(prodReadinessChecklist));
 

@@ -111,6 +111,14 @@ assert('preview evidence commands are represented before prod readiness',
     && completionChecklist.includes('Migration import / idempotent retry / conflict / resolution')
     && taskBoard.includes('webdev:preview:core-smoke'));
 
+assert('risk register and rollback plan are represented before Gate R',
+  previewRunbook.includes('Preview Risk Register')
+    && previewRunbook.includes('Preview Rollback / Cleanup Plan')
+    && prodChecklist.includes('Release Risk Register')
+    && prodChecklist.includes('Re-deploy previous Worker commit')
+    && prodChecklist.includes('Preserve R2 migration snapshots')
+    && prodChecklist.includes('Disable replay writes / keep kill switch on'));
+
 assert('local and preview scripts exist but prod deploy script is not exposed',
   packageJson.scripts?.['webdev:preview:smoke'] === 'node scripts/webdev/preview-smoke.mjs'
     && packageJson.scripts?.['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs'

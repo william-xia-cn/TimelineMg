@@ -128,6 +128,10 @@ assert('preview runbook records Gate A precondition and stop conditions',
   previewRunbook.includes('Gate A')
     && previewRunbook.includes('Stop Conditions')
     && previewRunbook.includes('Preview Acceptance Evidence'));
+assert('preview runbook records risk register and rollback plan',
+  previewRunbook.includes('Preview Risk Register')
+    && previewRunbook.includes('Preview Rollback / Cleanup Plan')
+    && previewRunbook.includes('migration import 产生重复或静默覆盖迹象'));
 assert('preview runbook keeps Gate E and Gate R out of preview smoke',
   previewRunbook.includes('Gate E')
     && previewRunbook.includes('Gate R')
