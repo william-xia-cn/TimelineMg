@@ -869,6 +869,8 @@ assert('completion audit script classifies readiness without approving gated wor
     && completionAudit.includes('readiness_pending_local_changes_or_unpushed_commits')
     && completionAudit.includes('WebDev HEAD matches origin/WebDev')
     && completionAudit.includes('Upstream synced')
+    && completionAudit.includes('prod-evidence-summary-check.mjs')
+    && completionAudit.includes('webdev:prod:evidence:check')
     && completionAudit.includes('WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md')
     && completionAudit.includes('Target architecture status baseline is current')
     && completionAudit.includes('does not approve prod, replay, desktop distribution, CWS, tag, merge, or release')

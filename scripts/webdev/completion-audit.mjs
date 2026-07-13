@@ -59,6 +59,7 @@ const requiredFiles = [
   'docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md',
   'docs/WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md',
   'scripts/webdev/prod-evidence-runner.mjs',
+  'scripts/webdev/prod-evidence-summary-check.mjs',
   'workers/wrangler.toml',
   'workers/migrations/0001_initial.sql',
   'workers/src/index.ts',
@@ -87,6 +88,7 @@ const gateB = exists('docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md') ? read('docs
 const gateC = exists('docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md') ? read('docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md') : '';
 const gateD = exists('docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md') ? read('docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md') : '';
 const gateE = exists('docs/WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md') ? read('docs/WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md') : '';
+const prodEvidenceSummaryCheck = exists('scripts/webdev/prod-evidence-summary-check.mjs') ? read('scripts/webdev/prod-evidence-summary-check.mjs') : '';
 const wrangler = exists('workers/wrangler.toml') ? read('workers/wrangler.toml') : '';
 const workerIndex = exists('workers/src/index.ts') ? read('workers/src/index.ts') : '';
 const migration = exists('workers/src/migration.ts') ? read('workers/src/migration.ts') : '';
@@ -162,7 +164,10 @@ assert('Prod readiness is explicitly non-release and Gate R only',
   hasAll(prod, ['Gate R readiness checklist', '不等于发布', 'Stop Conditions'])
     && hasAll(observability, ['Gate R readiness runbook', 'Stop Conditions'])
     && packageJson.scripts?.['webdev:prod:evidence'] === 'node scripts/webdev/prod-evidence-runner.mjs'
+    && packageJson.scripts?.['webdev:prod:evidence:check'] === 'node scripts/webdev/prod-evidence-summary-check.mjs'
     && prod.includes('webdev:prod:evidence')
+    && prod.includes('webdev:prod:evidence:check')
+    && prodEvidenceSummaryCheck.includes('Gate R evidence summary matches current WebDev HEAD')
     && projectMaster.includes('Prod deploy/release remains unapproved'));
 
 assert('All approval gates remain explicit',
