@@ -126,19 +126,24 @@ function runCommand(command) {
   const startedAt = new Date();
   const startedMs = Date.now();
   console.log(`\n>>> ${command.display}`);
+  const needsShell = process.platform === 'win32' && /\.cmd$/i.test(command.command);
   const result = spawnSync(command.command, command.args, {
     cwd: root,
     stdio: 'inherit',
-    shell: false
+    shell: needsShell
   });
   const durationMs = Date.now() - startedMs;
-  return {
+  const summary = {
     id: command.id,
     command: command.display,
     started_at: startedAt.toISOString(),
     duration_ms: durationMs,
     exit_code: result.status ?? 1
   };
+  if (result.error?.code) {
+    summary.error_code = result.error.code;
+  }
+  return summary;
 }
 
 assertSafeCommandPlan();

@@ -251,6 +251,8 @@ assert('prod evidence runner is status-only and release-gated',
     && prodEvidenceRunner.includes('webdev-gate-r-evidence-summary.json')
     && prodEvidenceRunner.includes('upstream_synced')
     && prodEvidenceRunner.includes('HEAD does not match upstream')
+    && prodEvidenceRunner.includes('needsShell')
+    && prodEvidenceRunner.includes('error_code')
     && prodEvidenceRunner.includes('Raw command output is not stored')
     && prodEvidenceRunner.includes('release_boundary')
     && prodEvidenceRunner.includes('forbiddenCommandFragments')
