@@ -561,7 +561,7 @@ assert('Web App supports hash/query view routing for Desktop Runtime',
     && app.includes('window.history.pushState'));
 assert('Web App exposes Task-only queued pending while non-Task writes remain blocked',
   app.includes('Queue task locally') && app.includes('Pending sync') && app.includes('offline_write_blocked'));
-assert('Web App includes migration preview', app.includes('Run migration preview'));
+assert('Web App includes migration preview', app.includes('运行迁移预览') && app.includes('runPreviewMigration'));
 assert('Web App exposes Task CRUD controls',
   app.includes('Save to Cloud') && app.includes('Queue task locally') && app.includes('Complete task') && app.includes('Reopen task') && app.includes('Delete task'));
 assert('Dashboard uses Daily Settle projection helper',
@@ -587,8 +587,12 @@ assert('Tasks preserves original planner/sidebar/detail design',
 assert('Calendar and Settings preserve original dense product surfaces',
   app.includes('calendar-layout')
     && app.includes('gcal-container')
-    && app.includes('settings-workspace')
-    && pagesStyles.includes('.settings-layout')
+    && app.includes('main-wrapper settings-main-wrapper')
+    && app.includes('settings-container')
+    && app.includes('setting-row')
+    && pagesStyles.includes('.settings-container')
+    && pagesStyles.includes('.setting-row')
+    && pagesStyles.includes('.google-sync-card')
     && pagesStyles.includes('.calendar-workbench'));
 assert('Web App exposes Task detail first version',
   app.includes('TaskDetailPanel') && app.includes('Save task detail') && app.includes('Checklist') && app.includes('Plan') && app.includes('Bucket'));
@@ -646,18 +650,18 @@ assert('Web App exposes Calendar event recurrence fields without changing D1 sch
 assert('Web App exposes Structure management controls',
   app.includes('Add plan') && app.includes('Add bucket') && app.includes('Add label') && app.includes('Add container') && app.includes('Search buckets and containers') && app.includes('StructureDetailPanel') && app.includes('Save structure detail') && app.includes('Edit plan') && app.includes('Edit container') && app.includes('Enabled') && app.includes('structureRepository.updatePlan') && app.includes('structureRepository.updateContainer') && app.includes('Google SSO session required before creating Cloud plans') && app.includes('Google SSO session required before creating Cloud buckets') && app.includes('Google SSO session required before creating Cloud labels'));
 assert('Web App exposes Cloud settings controls',
-  app.includes('Default duration') && app.includes('Default priority') && app.includes('Start week on') && app.includes('Theme') && app.includes('Background') && app.includes('Avatar') && app.includes('Enable notifications') && app.includes('Reminder before') && app.includes('Arrange trigger') && app.includes('Defensive threshold') && app.includes('Heal time') && app.includes('default_duration') && app.includes('appearance_background') && app.includes('Save settings'));
+  app.includes('默认任务时长') && app.includes('默认优先级') && app.includes('周起始日') && app.includes('显示主题') && app.includes('背景图片') && app.includes('头像图片') && app.includes('开启提醒') && app.includes('提前提醒') && app.includes('排布触发') && app.includes('防御阈值') && app.includes('修复时间') && app.includes('default_duration') && app.includes('appearance_background') && app.includes('保存修改'));
 assert('Web App requires Google SSO session for writes and Task queueing',
   app.includes('Google SSO session required before creating or queueing tasks') && app.includes('Google SSO session required before editing or queueing tasks') && app.includes('Google SSO session required before creating Cloud calendar events'));
 assert('Web App renders real Google SSO account entry',
-  app.includes('renderGoogleSsoButton') && app.includes('googleButtonRef') && app.includes('Disconnect session') && !app.includes('<button disabled>Connect Google SSO</button>'));
+  app.includes('renderGoogleSsoButton') && app.includes('googleButtonRef') && app.includes('断开本机 session') && !app.includes('<button disabled>Connect Google SSO</button>'));
 assert('Web App exposes TimeWhere session refresh control',
-  app.includes('refreshTimeWhereSession') && app.includes('Refresh session') && app.includes('TimeWhere Cloud session refreshed.'));
+  app.includes('refreshTimeWhereSession') && app.includes('刷新 session') && app.includes('TimeWhere Cloud session refreshed.'));
 assert('Web App Settings can refresh real Cloud account and sync status',
-  app.includes('refreshCloudSessionStatus') && app.includes('Refresh account status') && app.includes('apiClient.getSyncStatus') && app.includes('apiClient.getAccountStatus') && apiClient.includes('/sync/status'));
+  app.includes('refreshCloudSessionStatus') && app.includes('刷新状态') && app.includes('apiClient.getSyncStatus') && app.includes('apiClient.getAccountStatus') && apiClient.includes('/sync/status'));
 assert('Web App Settings exposes editable TimeWhere workspace profile and safe gate status',
   app.includes('Workspace profile')
-    && app.includes('Save workspace')
+    && app.includes('保存 Workspace')
     && app.includes('saveAccountProfile')
     && app.includes('task_replay_writes_enabled')
     && app.includes('prod_release_enabled'));
@@ -675,7 +679,7 @@ assert('Web App can refresh read cache from read-only sync changes cursor',
     && app.includes('applyReadOnlyCloudChange')
     && app.includes('apiClient.listSyncChanges')
     && app.includes('Read cache cursor')
-    && app.includes('Refresh changes')
+    && app.includes('刷新变更')
     && app.includes('taskRepository.applyCloudTask')
     && app.includes('taskRepository.removeCloudTask')
     && app.includes('calendarRepository.applyCloudEvent')
@@ -858,7 +862,8 @@ assert('preview UI smoke script covers core Web App views without Google browser
   previewUiSmoke.includes('Today projection')
     && previewUiSmoke.includes('/tasks')
     && previewUiSmoke.includes('/calendar/events')
-    && previewUiSmoke.includes('Automatic migration')
+    && previewUiSmoke.includes('自动迁移')
+    && previewUiSmoke.includes('original centered glass container')
     && previewUiSmoke.includes('Replay safety gate')
     && previewUiSmoke.includes('no Google session, token, account email, or Cloudflare id was printed')
     && !previewUiSmoke.includes('writes_enabled=true'));
@@ -975,7 +980,7 @@ assert('root package has webdev integration script', rootPackage.scripts['webdev
 assert('root package has WebDev UI walkthrough script', rootPackage.scripts['webdev:ui:walkthrough'] === 'node scripts/webdev/ui-walkthrough.mjs');
 const webdevUiWalkthrough = read('scripts/webdev/ui-walkthrough.mjs');
 assert('WebDev UI walkthrough exercises read cache change refresh',
-  /getByRole\('button', \{ name: 'Refresh changes' \}\)\.click/.test(webdevUiWalkthrough)
+  /getByRole\('button', \{ name: '刷新变更' \}\)\.click/.test(webdevUiWalkthrough)
     && webdevUiWalkthrough.includes('Settings refreshes read cache changes by cursor')
     && /Applied \\d\+ updated/.test(webdevUiWalkthrough)
     && webdevUiWalkthrough.includes('requestWorker')

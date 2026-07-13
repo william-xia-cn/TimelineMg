@@ -194,7 +194,10 @@ async function main() {
     await visible(page, 'Calendar event detail opens', page.getByText('Save calendar event detail'));
 
     await page.locator('.sidebar .nav-item[title="设置"]').click();
-    await visible(page, 'Settings uses original card grid surface', page.locator('.settings-workspace .settings-layout'));
+    await visible(page, 'Settings uses original centered glass container', page.locator('.main-wrapper .settings-container'));
+    await visible(page, 'Settings uses original header save action', page.locator('.settings-container .header .save-btn'));
+    await visible(page, 'Settings uses original single-column setting rows', page.locator('.settings-container .content .section .settings-group .setting-row').first());
+    await visible(page, 'Settings renders account Cloud section', page.getByText('账户 / Cloud', { exact: true }));
     await visible(page, 'Settings renders account panel', page.getByText('Cloud session', { exact: true }));
     await visible(page, 'Settings renders read cache cursor', page.getByText(/Read cache cursor:/));
     const incrementalTaskTitle = `UI incremental sync task ${process.pid}`;
@@ -205,16 +208,16 @@ async function main() {
       notes: 'Created by local WebDev UI walkthrough.'
     });
     console.log('  PASS local Worker created Cloud task after Web App bootstrap');
-    await page.getByRole('button', { name: 'Refresh changes' }).click();
+    await page.getByRole('button', { name: '刷新变更' }).click();
     await visible(page, 'Settings refreshes read cache changes by cursor', page.getByText(/Applied \d+ updated, \d+ deleted, \d+ skipped Cloud changes/));
     await page.locator('.sidebar .nav-item[title="任务"]').click();
     await visible(page, 'Tasks view receives incremental Cloud task from sync changes', page.getByText(incrementalTaskTitle));
     await page.locator('.sidebar .nav-item[title="设置"]').click();
-    await visible(page, 'Settings renders expanded preferences', page.getByText('Arrange trigger', { exact: true }));
-    await visible(page, 'Settings renders migration panel', page.getByText('Automatic migration', { exact: true }));
+    await visible(page, 'Settings renders expanded preferences', page.getByText('排布触发', { exact: true }));
+    await visible(page, 'Settings renders migration panel', page.getByText('自动迁移', { exact: true }));
     await visible(page, 'Settings renders pending queue panel', page.getByText('Pending Task queue', { exact: true }));
     await visible(page, 'Settings renders sync conflict panel', page.getByText('Task sync conflicts', { exact: true }));
-    await visible(page, 'Settings renders structure editor', page.getByText('Structure', { exact: true }));
+    await visible(page, 'Settings renders structure editor', page.getByText('结构管理', { exact: true }));
     await page.getByTitle('Edit container').first().click();
     await visible(page, 'Structure detail opens for container', page.getByText('Container detail'));
 

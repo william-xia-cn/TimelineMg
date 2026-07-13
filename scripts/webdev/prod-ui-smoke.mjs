@@ -315,12 +315,14 @@ async function main() {
     await visible(page, 'Prod Calendar receives Cloud event', page.getByText(eventTitle).first());
 
     await page.locator('.sidebar .nav-item[title="设置"]').click();
-    await visible(page, 'Prod Settings uses original card grid surface', page.locator('.settings-workspace .settings-layout'));
+    await visible(page, 'Prod Settings uses original centered glass container', page.locator('.main-wrapper .settings-container'));
+    await visible(page, 'Prod Settings uses original header save action', page.locator('.settings-container .header .save-btn'));
+    await visible(page, 'Prod Settings uses original single-column setting rows', page.locator('.settings-container .content .section .settings-group .setting-row').first());
     await visible(page, 'Prod Settings renders Cloud session panel', page.getByText('Cloud session', { exact: true }));
-    await visible(page, 'Prod Settings renders data authority panel', page.getByText('Data authority', { exact: true }));
-    await visible(page, 'Prod Settings renders migration panel', page.getByText('Automatic migration', { exact: true }));
+    await visible(page, 'Prod Settings renders data authority panel', page.getByText('数据权威', { exact: true }));
+    await visible(page, 'Prod Settings renders migration panel', page.getByText('自动迁移', { exact: true }));
     await visible(page, 'Prod Settings renders replay safety diagnostics', page.getByText('Replay safety gate', { exact: true }));
-    await visible(page, 'Prod Settings renders structure editor', page.getByText('Structure', { exact: true }));
+    await visible(page, 'Prod Settings renders structure editor', page.getByText('结构管理', { exact: true }));
 
     console.log('=======================');
     console.log('All WebDev prod UI smoke checks passed.');
