@@ -88,6 +88,7 @@ const requiredFiles = [
   'scripts/webdev/deploy-cloudflare-preview.mjs',
   'scripts/webdev/preview-smoke.mjs',
   'scripts/webdev/preview-core-smoke.mjs',
+  'scripts/webdev/preview-ui-smoke.mjs',
   'scripts/webdev/prod-readiness-check.mjs',
   'scripts/webdev/ui-walkthrough.mjs',
   'scripts/webdev/desktop-runtime-smoke.mjs'
@@ -600,12 +601,15 @@ assert('root package has Gate A preview smoke script',
   rootPackage.scripts['webdev:preview:smoke'] === 'node scripts/webdev/preview-smoke.mjs');
 assert('root package has Gate A preview core smoke script',
   rootPackage.scripts['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs');
+assert('root package has Gate A preview UI smoke script',
+  rootPackage.scripts['webdev:preview:ui-smoke'] === 'node scripts/webdev/preview-ui-smoke.mjs');
 assert('root package has Gate R readiness-only script',
   rootPackage.scripts['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs');
 const cloudflareProvision = read('scripts/webdev/provision-cloudflare.mjs');
 const previewDeploy = read('scripts/webdev/deploy-cloudflare-preview.mjs');
 const previewSmoke = read('scripts/webdev/preview-smoke.mjs');
 const previewCoreSmoke = read('scripts/webdev/preview-core-smoke.mjs');
+const previewUiSmoke = read('scripts/webdev/preview-ui-smoke.mjs');
 const prodReadinessCheck = read('scripts/webdev/prod-readiness-check.mjs');
 assert('Cloudflare provision script targets dev and preview only',
   cloudflareProvision.includes('timewhere-dev-api')
@@ -652,6 +656,19 @@ assert('preview core smoke script covers core Worker APIs without replay enablem
     && previewCoreSmoke.includes('/migration/conflicts?status=open')
     && previewCoreSmoke.includes('idempotent retry')
     && !previewCoreSmoke.includes('writes_enabled=true'));
+assert('preview UI smoke script uses stable preview Pages and temporary smoke account',
+  previewUiSmoke.includes('timewhere-preview-web.pages.dev')
+    && previewUiSmoke.includes('preview-ui-smoke-')
+    && previewUiSmoke.includes('cleanupSmokeAccounts')
+    && previewUiSmoke.includes('No prod resources were touched'));
+assert('preview UI smoke script covers core Web App views without Google browser session',
+  previewUiSmoke.includes('Today projection')
+    && previewUiSmoke.includes('/tasks')
+    && previewUiSmoke.includes('/calendar/events')
+    && previewUiSmoke.includes('Automatic migration')
+    && previewUiSmoke.includes('Replay safety gate')
+    && previewUiSmoke.includes('no Google session, token, account email, or Cloudflare id was printed')
+    && !previewUiSmoke.includes('writes_enabled=true'));
 assert('prod readiness script is static and release-gated',
   prodReadinessCheck.includes('WebDev prod readiness static check')
     && prodReadinessCheck.includes('No prod resource was created')

@@ -102,14 +102,16 @@ assert('prod replay write switches stay off by default',
 assert('preview evidence commands are represented before prod readiness',
   previewRunbook.includes('npm run webdev:preview:smoke')
     && previewRunbook.includes('npm run webdev:preview:core-smoke')
+    && previewRunbook.includes('npm run webdev:preview:ui-smoke')
     && previewRunbook.includes('Migration import')
-    && completionChecklist.includes('Preview core smoke complete under Gate A')
+    && completionChecklist.includes('Preview UI smoke complete under Gate A')
     && completionChecklist.includes('Migration import / idempotent retry / conflict / resolution')
     && taskBoard.includes('webdev:preview:core-smoke'));
 
 assert('local and preview scripts exist but prod deploy script is not exposed',
   packageJson.scripts?.['webdev:preview:smoke'] === 'node scripts/webdev/preview-smoke.mjs'
     && packageJson.scripts?.['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs'
+    && packageJson.scripts?.['webdev:preview:ui-smoke'] === 'node scripts/webdev/preview-ui-smoke.mjs'
     && packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
     && !packageJson.scripts?.['webdev:prod:deploy']
     && !packageJson.scripts?.['webdev:release']);

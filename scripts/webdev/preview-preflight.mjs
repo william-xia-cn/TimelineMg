@@ -52,6 +52,7 @@ const requiredFiles = [
   'scripts/webdev/deploy-cloudflare-preview.mjs',
   'scripts/webdev/preview-smoke.mjs',
   'scripts/webdev/preview-core-smoke.mjs',
+  'scripts/webdev/preview-ui-smoke.mjs',
   'scripts/webdev/ui-walkthrough.mjs',
   'scripts/webdev/desktop-runtime-smoke.mjs'
 ];
@@ -139,6 +140,8 @@ assert('root package exposes preview smoke script',
   packageJson.scripts?.['webdev:preview:smoke'] === 'node scripts/webdev/preview-smoke.mjs');
 assert('root package exposes preview core smoke script',
   packageJson.scripts?.['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs');
+assert('root package exposes preview UI smoke script',
+  packageJson.scripts?.['webdev:preview:ui-smoke'] === 'node scripts/webdev/preview-ui-smoke.mjs');
 assert('webdev verify runs preview preflight',
   packageJson.scripts?.['webdev:verify']?.includes('npm run webdev:preview:preflight'));
 

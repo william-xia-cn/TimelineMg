@@ -29,7 +29,7 @@ TimeWhere WebDev v1 完成时应满足：
 | Phase 6 | 离线与同步 v1 收敛 | Guarded | Web App 已用只读 bootstrap 初始化本地 read cache，并可按 `/sync/changes` cursor 增量刷新 Task / Calendar / Structure / Settings cache；Task-only pending 已可见且 hydrate / 增量应用都会保留 pending；真正 replay 写 Cloud、非 Task replay、local-over-cloud 均保持 gate。 |
 | Phase 7 | Desktop Runtime 重定位 | Opt-in scaffolded | Electron 增加 `TIMEWHERE_DESKTOP_RUNTIME_MODE=webdev` / `TIMEWHERE_WEB_APP_URL` WebDev runtime mode，可加载 Web App 并保留 native bridge；`npm run webdev:desktop:smoke` 可本地启动 Worker/Pages 并让 Electron smoke 加载 Web App；默认仍是 legacy extension shell。内部包、签名、公证、自动更新和分发仍归 Gate E。 |
 | Phase 8 | Browser Extension 生态化 | Deferred | 第一阶段范围另行批准；不实现 Extension replay。 |
-| Phase 9 | 内部 preview 验收 | Preview core smoke complete under Gate A | `docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md` 已定义 preview 验收步骤和证据模板；preview Worker / Pages / Google SSO smoke 已通过；`npm run webdev:preview:smoke` 可复核 preview Worker / Pages / D1 / R2 / KV 基础资源；`npm run webdev:preview:core-smoke` 通过临时 smoke account/session 走 preview Worker API 验证 Account / Structure / Task / Calendar / Settings / Sync bootstrap / Sync changes / Migration import / idempotent retry / conflict / resolution，并清理测试数据。 |
+| Phase 9 | 内部 preview 验收 | Preview UI smoke complete under Gate A | `docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md` 已定义 preview 验收步骤和证据模板；preview Worker / Pages / Google SSO smoke 已通过；`npm run webdev:preview:smoke` 可复核 preview Worker / Pages / D1 / R2 / KV 基础资源；`npm run webdev:preview:core-smoke` 通过临时 smoke account/session 走 preview Worker API 验证 Account / Structure / Task / Calendar / Settings / Sync bootstrap / Sync changes / Migration import / idempotent retry / conflict / resolution，并清理测试数据；`npm run webdev:preview:ui-smoke` 使用临时 smoke session 打开 stable Pages preview，验证 Dashboard / Tasks / Calendar / Settings UI 能读取 preview Cloud 数据。 |
 | Phase 10 | prod release readiness | Readiness static gate ready; Gate R only | `docs/WEBDEV_PROD_READINESS_CHECKLIST.md` 已定义 prod readiness 输入、资源规划、数据/安全/回滚核查；`npm run webdev:prod:readiness` 提供只读静态门禁，确认 prod 命名模板、placeholder resource id、replay kill switch、secret hygiene 和 Gate R 边界；prod deployment、release、tag、GitHub Release 仍需 Gate R。 |
 
 ## 本地完成校验
@@ -66,9 +66,10 @@ npm run webdev:cloudflare:provision
 npm run webdev:preview:deploy
 npm run webdev:preview:smoke
 npm run webdev:preview:core-smoke
+npm run webdev:preview:ui-smoke
 ```
 
-这些命令只允许操作 `dev / preview`。Cloudflare auth token、Google Web OAuth public client id、真实 Cloudflare resource id 均不得写入仓库；脚本生成的 resource state、deploy config 和 smoke 临时文件位于 ignored 的 `.wrangler/` 目录。`webdev:preview:smoke` 会写入并清理 preview R2 临时对象与 preview KV 临时 key，不触碰 prod。`webdev:preview:core-smoke` 会创建无真实邮箱的临时 smoke account/session，调用 preview Worker API 验证核心 CRUD / sync 读路径和 migration import / idempotent retry / conflict / resolution，随后清理该 smoke account 下的数据与临时迁移 snapshot；它不读取浏览器 session，不打印 token / account email / Cloudflare id。
+这些命令只允许操作 `dev / preview`。Cloudflare auth token、Google Web OAuth public client id、真实 Cloudflare resource id 均不得写入仓库；脚本生成的 resource state、deploy config 和 smoke 临时文件位于 ignored 的 `.wrangler/` 目录。`webdev:preview:smoke` 会写入并清理 preview R2 临时对象与 preview KV 临时 key，不触碰 prod。`webdev:preview:core-smoke` 会创建无真实邮箱的临时 smoke account/session，调用 preview Worker API 验证核心 CRUD / sync 读路径和 migration import / idempotent retry / conflict / resolution，随后清理该 smoke account 下的数据与临时迁移 snapshot；它不读取浏览器 session，不打印 token / account email / Cloudflare id。`webdev:preview:ui-smoke` 会创建无真实邮箱的临时 smoke account/session，打开 stable Pages preview 验证 Dashboard / Tasks / Calendar / Settings UI 与 preview Worker 数据路径，随后清理 smoke account。
 
 ## Gate 边界
 

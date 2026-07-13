@@ -96,7 +96,8 @@ assert('root package exposes Gate A Cloudflare provision/deploy commands',
     && packageJson.scripts?.['webdev:preview:deploy'] === 'node scripts/webdev/deploy-cloudflare-preview.mjs');
 assert('root package exposes Gate A preview smoke commands',
   packageJson.scripts?.['webdev:preview:smoke'] === 'node scripts/webdev/preview-smoke.mjs'
-    && packageJson.scripts?.['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs');
+    && packageJson.scripts?.['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs'
+    && packageJson.scripts?.['webdev:preview:ui-smoke'] === 'node scripts/webdev/preview-ui-smoke.mjs');
 assert('root package exposes Gate R readiness-only check',
   packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs');
 assert('webdev:verify runs plan-state check',
