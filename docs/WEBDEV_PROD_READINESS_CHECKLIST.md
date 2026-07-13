@@ -246,6 +246,7 @@ Gate R 批准前可运行只读静态门禁：
 npm run webdev:prod:readiness
 npm run webdev:observability:readiness
 npm run webdev:prod:package
+npm run webdev:prod:evidence
 ```
 
 该命令只检查仓库中的 readiness 文档、`workers/wrangler.toml` prod placeholder、env example、Gate R 边界、replay kill switch 和 secret hygiene。它不会创建 Cloudflare prod resource、不会部署 Worker/Pages、不会 tag、不会 release、不会修改远端状态。
@@ -253,3 +254,5 @@ npm run webdev:prod:package
 `webdev:observability:readiness` 只检查 Worker error envelope、migration/sync conflict privacy guards、D1/R2/KV prod placeholder、observability/backup runbook 和 Gate R 边界。它不会调用 Wrangler、不会导出 D1、不会读取 R2、不会创建 prod resource、不会部署或发布。
 
 `webdev:prod:package` 只把当前分支、commit、Gate 状态、必跑命令可用性、待附加执行证据、已知限制和回滚摘要输出为审批包草稿。命令清单中的 `[x]` 只表示脚本入口存在，不表示该命令已针对当前 commit 重新执行；Gate R 评审前仍需附加新鲜命令输出。它不读取 `.wrangler/`、不调用 Wrangler、不创建文件、不写入真实 Cloudflare resource id、不执行 prod deploy，也不能替代 Product Owner 的 Gate R 批准。
+
+`webdev:prod:evidence` 默认只输出 Gate R 证据命令计划，不执行命令。需要生成本地执行摘要时使用 `npm run webdev:prod:evidence -- --run`；该模式会顺序运行 Gate R 前需要的新鲜证据命令，并只把命令、退出码、耗时、branch/commit 写入 ignored `.wrangler/webdev-gate-r-evidence-summary.json`，不保存原始命令输出，不创建 prod resource，不部署，不发布，不启用 replay。

@@ -58,6 +58,7 @@ const requiredFiles = [
   'docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md',
   'docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md',
   'docs/WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md',
+  'scripts/webdev/prod-evidence-runner.mjs',
   'workers/wrangler.toml',
   'workers/migrations/0001_initial.sql',
   'workers/src/index.ts',
@@ -158,6 +159,8 @@ assert('Preview acceptance evidence is represented for Gate A',
 assert('Prod readiness is explicitly non-release and Gate R only',
   hasAll(prod, ['Gate R readiness checklist', '不等于发布', 'Stop Conditions'])
     && hasAll(observability, ['Gate R readiness runbook', 'Stop Conditions'])
+    && packageJson.scripts?.['webdev:prod:evidence'] === 'node scripts/webdev/prod-evidence-runner.mjs'
+    && prod.includes('webdev:prod:evidence')
     && projectMaster.includes('Prod deploy/release remains unapproved'));
 
 assert('All approval gates remain explicit',

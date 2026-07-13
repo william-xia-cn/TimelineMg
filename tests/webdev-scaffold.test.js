@@ -99,6 +99,7 @@ const requiredFiles = [
   'scripts/webdev/preview-data-hygiene-smoke.mjs',
   'scripts/webdev/prod-readiness-check.mjs',
   'scripts/webdev/prod-readiness-package.mjs',
+  'scripts/webdev/prod-evidence-runner.mjs',
   'scripts/webdev/completion-audit.mjs',
   'scripts/webdev/ui-walkthrough.mjs',
   'scripts/webdev/browser-extension-readiness-check.mjs',
@@ -699,7 +700,8 @@ assert('root package has Gate A preview acceptance aggregate script',
 assert('root package has Gate R readiness-only script',
   rootPackage.scripts['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
     && rootPackage.scripts['webdev:observability:readiness'] === 'node scripts/webdev/observability-backup-readiness-check.mjs'
-    && rootPackage.scripts['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs');
+    && rootPackage.scripts['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
+    && rootPackage.scripts['webdev:prod:evidence'] === 'node scripts/webdev/prod-evidence-runner.mjs');
 assert('root package has WebDev completion audit script',
   rootPackage.scripts['webdev:completion:audit'] === 'node scripts/webdev/completion-audit.mjs');
 const cloudflareProvision = read('scripts/webdev/provision-cloudflare.mjs');
@@ -711,6 +713,7 @@ const previewUiSmoke = read('scripts/webdev/preview-ui-smoke.mjs');
 const previewDataHygieneSmoke = read('scripts/webdev/preview-data-hygiene-smoke.mjs');
 const prodReadinessCheck = read('scripts/webdev/prod-readiness-check.mjs');
 const prodReadinessPackage = read('scripts/webdev/prod-readiness-package.mjs');
+const prodEvidenceRunner = read('scripts/webdev/prod-evidence-runner.mjs');
 const completionAudit = read('scripts/webdev/completion-audit.mjs');
 const browserExtensionReadinessCheck = read('scripts/webdev/browser-extension-readiness-check.mjs');
 const desktopRuntimeReadinessCheck = read('scripts/webdev/desktop-runtime-readiness-check.mjs');
@@ -817,10 +820,25 @@ assert('prod readiness package script is evidence-only and release-gated',
     && prodReadinessPackage.includes('webdev:desktop:readiness')
     && prodReadinessPackage.includes('webdev:observability:readiness')
     && prodReadinessPackage.includes('webdev:prod:readiness')
+    && prodReadinessPackage.includes('webdev:prod:evidence')
+    && prodReadinessPackage.includes('Default mode is plan-only')
+    && prodReadinessPackage.includes('.wrangler/webdev-gate-r-evidence-summary.json')
     && prodReadinessPackage.includes('Re-deploy previous Worker commit')
     && prodReadinessPackage.includes('sanitize(output)')
     && !prodReadinessPackage.includes('wrangler deploy')
     && !prodReadinessPackage.includes('pages deploy'));
+assert('prod evidence runner is status-only and release-gated',
+  prodEvidenceRunner.includes('WebDev Gate R evidence runner')
+    && prodEvidenceRunner.includes('Default mode is plan-only')
+    && prodEvidenceRunner.includes('webdev-gate-r-evidence-summary.json')
+    && prodEvidenceRunner.includes('Raw command output is not stored')
+    && prodEvidenceRunner.includes('release_boundary')
+    && prodEvidenceRunner.includes('forbiddenCommandFragments')
+    && prodEvidenceRunner.includes('webdev:preview:acceptance')
+    && prodEvidenceRunner.includes('webdev:completion:audit')
+    && !prodEvidenceRunner.includes("display: 'wrangler deploy'")
+    && !prodEvidenceRunner.includes("display: 'pages deploy'")
+    && !prodEvidenceRunner.includes("command: 'git', args: ['push"));
 assert('completion audit script classifies readiness without approving gated work',
   completionAudit.includes('WebDev completion audit')
     && completionAudit.includes('readiness_complete_pending_approval_gates')

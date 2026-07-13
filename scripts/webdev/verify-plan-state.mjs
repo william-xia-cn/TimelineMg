@@ -161,8 +161,11 @@ assert('root package exposes Gate A preview smoke commands',
 assert('root package exposes Gate R readiness-only check',
   packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
     && packageJson.scripts?.['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
+    && packageJson.scripts?.['webdev:prod:evidence'] === 'node scripts/webdev/prod-evidence-runner.mjs'
     && prodReadiness.includes('webdev:prod:package')
-    && checklist.includes('webdev:prod:package'));
+    && prodReadiness.includes('webdev:prod:evidence')
+    && checklist.includes('webdev:prod:package')
+    && checklist.includes('webdev:prod:evidence'));
 assert('root package exposes WebDev completion audit',
   packageJson.scripts?.['webdev:completion:audit'] === 'node scripts/webdev/completion-audit.mjs'
     && checklist.includes('webdev:completion:audit'));

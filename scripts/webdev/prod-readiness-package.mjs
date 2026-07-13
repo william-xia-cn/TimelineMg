@@ -117,6 +117,13 @@ ${readinessEvidence.map(([name, ok]) => `- ${checked(ok)} ${name}`).join('\n')}
 
 ${scriptEvidence.map(([name, ok]) => `- ${checked(ok)} ${name}`).join('\n')}
 
+## Evidence Runner
+
+- ${checked(packageJson.scripts?.['webdev:prod:evidence'] === 'node scripts/webdev/prod-evidence-runner.mjs')} npm run webdev:prod:evidence
+- Default mode is plan-only.
+- Run `npm run webdev:prod:evidence -- --run` only when fresh Gate R evidence should be generated.
+- The runner writes status-only evidence to ignored `.wrangler/webdev-gate-r-evidence-summary.json` and does not store raw command output.
+
 ## Known Limitations For Gate R Review
 
 - Task replay writes are still disabled for user traffic.
