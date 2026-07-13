@@ -95,6 +95,7 @@ const requiredFiles = [
   'scripts/webdev/prod-readiness-check.mjs',
   'scripts/webdev/prod-readiness-package.mjs',
   'scripts/webdev/ui-walkthrough.mjs',
+  'scripts/webdev/browser-extension-readiness-check.mjs',
   'scripts/webdev/desktop-runtime-readiness-check.mjs',
   'scripts/webdev/desktop-runtime-smoke.mjs'
 ];
@@ -652,6 +653,7 @@ const previewUiSmoke = read('scripts/webdev/preview-ui-smoke.mjs');
 const previewDataHygieneSmoke = read('scripts/webdev/preview-data-hygiene-smoke.mjs');
 const prodReadinessCheck = read('scripts/webdev/prod-readiness-check.mjs');
 const prodReadinessPackage = read('scripts/webdev/prod-readiness-package.mjs');
+const browserExtensionReadinessCheck = read('scripts/webdev/browser-extension-readiness-check.mjs');
 const desktopRuntimeReadinessCheck = read('scripts/webdev/desktop-runtime-readiness-check.mjs');
 assert('Cloudflare preview/provision scripts redact emails and local user paths in command output',
   [cloudflareProvision, previewDeploy, previewSmoke, previewCoreSmoke, previewUiSmoke, previewDataHygieneSmoke].every(script =>
@@ -758,14 +760,24 @@ assert('WebDev UI walkthrough exercises read cache change refresh',
     && webdevUiWalkthrough.includes("POST', '/tasks'")
     && webdevUiWalkthrough.includes('Tasks view receives incremental Cloud task from sync changes'));
 const webdevDesktopRuntimeSmoke = read('scripts/webdev/desktop-runtime-smoke.mjs');
+assert('root package has WebDev Browser Extension readiness script',
+  rootPackage.scripts['webdev:extension:readiness'] === 'node scripts/webdev/browser-extension-readiness-check.mjs');
 assert('root package has WebDev Desktop Runtime smoke script', rootPackage.scripts['webdev:desktop:smoke'] === 'node scripts/webdev/desktop-runtime-smoke.mjs');
 assert('root package has WebDev Desktop Runtime readiness script',
   rootPackage.scripts['webdev:desktop:readiness'] === 'node scripts/webdev/desktop-runtime-readiness-check.mjs');
 assert('root package has local WebDev acceptance script',
   rootPackage.scripts['webdev:acceptance:local']?.includes('npm run webdev:verify')
     && rootPackage.scripts['webdev:acceptance:local']?.includes('npm run webdev:ui:walkthrough')
+    && rootPackage.scripts['webdev:acceptance:local']?.includes('npm run webdev:extension:readiness')
     && rootPackage.scripts['webdev:acceptance:local']?.includes('npm run webdev:desktop:readiness')
     && rootPackage.scripts['webdev:acceptance:local']?.includes('npm run webdev:desktop:smoke'));
+assert('WebDev Browser Extension readiness check preserves Gate D boundary',
+  browserExtensionReadinessCheck.includes('WebDev Browser Extension readiness static check')
+    && browserExtensionReadinessCheck.includes('Browser Extension remains explicitly deferred')
+    && browserExtensionReadinessCheck.includes('current Extension runtime has no WebDev replay endpoint integration')
+    && browserExtensionReadinessCheck.includes('Gate D')
+    && browserExtensionReadinessCheck.includes("!packageJson.scripts?.['webdev:extension:deploy']")
+    && browserExtensionReadinessCheck.includes('No Extension replay, CWS submission, release, or deployment was performed'));
 assert('WebDev Desktop Runtime readiness check preserves runtime-only boundary',
   desktopRuntimeReadinessCheck.includes('WebDev Desktop Runtime readiness static check')
     && desktopRuntimeReadinessCheck.includes('business_logic_owner')

@@ -14,6 +14,7 @@ const requiredFiles = [
   'workers/.dev.vars.example',
   'pages/.env.example',
   'pages/public/_headers',
+  'scripts/webdev/browser-extension-readiness-check.mjs',
   'scripts/webdev/desktop-runtime-readiness-check.mjs',
   'scripts/webdev/prod-readiness-package.mjs',
   'package.json',
@@ -70,6 +71,7 @@ const wrangler = exists('workers/wrangler.toml') ? read('workers/wrangler.toml')
 const workerEnvExample = exists('workers/.dev.vars.example') ? read('workers/.dev.vars.example') : '';
 const pagesEnvExample = exists('pages/.env.example') ? read('pages/.env.example') : '';
 const pagesHeaders = exists('pages/public/_headers') ? read('pages/public/_headers') : '';
+const extensionReadinessCheck = exists('scripts/webdev/browser-extension-readiness-check.mjs') ? read('scripts/webdev/browser-extension-readiness-check.mjs') : '';
 const desktopReadinessCheck = exists('scripts/webdev/desktop-runtime-readiness-check.mjs') ? read('scripts/webdev/desktop-runtime-readiness-check.mjs') : '';
 const prodReadinessPackage = exists('scripts/webdev/prod-readiness-package.mjs') ? read('scripts/webdev/prod-readiness-package.mjs') : '';
 const packageJson = exists('package.json') ? JSON.parse(read('package.json')) : { scripts: {} };
@@ -134,12 +136,22 @@ assert('local and preview scripts exist but prod deploy script is not exposed',
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:headers-smoke')
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:core-smoke')
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:data-hygiene-smoke')
+    && packageJson.scripts?.['webdev:extension:readiness'] === 'node scripts/webdev/browser-extension-readiness-check.mjs'
+    && packageJson.scripts?.['webdev:acceptance:local']?.includes('npm run webdev:extension:readiness')
     && packageJson.scripts?.['webdev:desktop:readiness'] === 'node scripts/webdev/desktop-runtime-readiness-check.mjs'
     && packageJson.scripts?.['webdev:acceptance:local']?.includes('npm run webdev:desktop:readiness')
     && packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
     && packageJson.scripts?.['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
     && !packageJson.scripts?.['webdev:prod:deploy']
     && !packageJson.scripts?.['webdev:release']);
+
+assert('Browser Extension readiness stays Gate D only',
+  extensionReadinessCheck.includes('WebDev Browser Extension readiness static check')
+    && extensionReadinessCheck.includes('Gate D')
+    && extensionReadinessCheck.includes('Browser Extension remains explicitly deferred')
+    && extensionReadinessCheck.includes('no WebDev replay endpoint integration')
+    && extensionReadinessCheck.includes('No Extension replay, CWS submission, release, or deployment was performed')
+    && extensionReadinessCheck.includes("!packageJson.scripts?.['webdev:extension:deploy']"));
 
 assert('Desktop Runtime readiness stays Gate E only',
   desktopReadinessCheck.includes('WebDev Desktop Runtime readiness static check')
@@ -196,6 +208,7 @@ assertNoObviousSecrets('prod readiness scanned files contain no obvious secrets'
     workerEnvExample,
     pagesEnvExample,
     pagesHeaders,
+    extensionReadinessCheck,
     desktopReadinessCheck,
     prodReadinessPackage,
     gitignore

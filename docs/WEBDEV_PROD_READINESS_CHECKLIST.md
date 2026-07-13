@@ -177,6 +177,7 @@ Gate E 未批准前只做 readiness：
 Gate D 未批准前只做方向记录：
 
 - Browser Extension 是生态组件，不是主产品。
+- `npm run webdev:extension:readiness` 静态确认 Extension 仍未接入 WebDev replay / Cloudflare endpoint，且没有新增 Extension deploy / CWS / release 入口。
 - 第一阶段范围待 Product Owner 批准。
 - 不实现 Extension replay。
 - 不把 Extension IndexedDB 作为 canonical data source。

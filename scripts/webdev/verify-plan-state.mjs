@@ -104,6 +104,11 @@ assert('root package exposes Gate R readiness-only check',
     && packageJson.scripts?.['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
     && prodReadiness.includes('webdev:prod:package')
     && checklist.includes('webdev:prod:package'));
+assert('root package exposes Gate D Browser Extension readiness-only check',
+  packageJson.scripts?.['webdev:extension:readiness'] === 'node scripts/webdev/browser-extension-readiness-check.mjs'
+    && checklist.includes('webdev:extension:readiness')
+    && prodReadiness.includes('webdev:extension:readiness')
+    && taskBoard.includes('webdev:extension:readiness'));
 assert('webdev:verify runs plan-state check',
   packageJson.scripts?.['webdev:verify']?.includes('npm run webdev:plan:check'));
 assert('webdev:verify runs preview preflight',
@@ -119,6 +124,7 @@ assert('root package exposes local WebDev Desktop Runtime smoke',
 assert('root package exposes local WebDev acceptance command',
   packageJson.scripts?.['webdev:acceptance:local']?.includes('npm run webdev:verify')
     && packageJson.scripts?.['webdev:acceptance:local']?.includes('npm run webdev:ui:walkthrough')
+    && packageJson.scripts?.['webdev:acceptance:local']?.includes('npm run webdev:extension:readiness')
     && packageJson.scripts?.['webdev:acceptance:local']?.includes('npm run webdev:desktop:readiness')
     && packageJson.scripts?.['webdev:acceptance:local']?.includes('npm run webdev:desktop:smoke')
     && checklist.includes('webdev:acceptance:local'));
