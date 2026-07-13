@@ -175,6 +175,19 @@ assert('All approval gates remain explicit',
     && hasAll(projectMaster, ['Task replay', 'non-Task replay remain gated', 'Gate D', 'Gate E'])
     && taskBoard.includes('Await separate Product Owner approval'));
 
+assert('Completion checklist has a durable remaining approval gate register',
+  hasAll(checklist, [
+    'Remaining Approval Gate Register',
+    'Task replay 写 Cloud',
+    'Calendar / Container / Settings replay',
+    'Browser Extension 第一阶段范围',
+    'Desktop Runtime 内部包',
+    'prod Cloudflare resources',
+    'Not approved',
+    'readiness_complete_pending_approval_gates',
+    'separate Product Owner decision'
+  ]));
+
 assert('Completion audit is registered as a first-class script',
   packageJson.scripts?.['webdev:completion:audit'] === 'node scripts/webdev/completion-audit.mjs'
     && checklist.includes('webdev:completion:audit'));

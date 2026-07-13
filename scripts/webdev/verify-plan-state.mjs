@@ -64,6 +64,16 @@ for (const phase of ['Phase 0', 'Phase 1', 'Phase 2', 'Phase 3', 'Phase 4', 'Pha
 for (const gate of ['Gate A', 'Gate B', 'Gate C', 'Gate D', 'Gate E', 'Gate R']) {
   assert(`${gate} boundary is represented in completion checklist`, checklist.includes(gate));
 }
+assert('completion checklist records remaining approval gate register',
+  checklist.includes('Remaining Approval Gate Register')
+    && checklist.includes('Task replay 写 Cloud')
+    && checklist.includes('Calendar / Container / Settings replay')
+    && checklist.includes('Browser Extension 第一阶段范围')
+    && checklist.includes('Desktop Runtime 内部包')
+    && checklist.includes('prod Cloudflare resources')
+    && checklist.includes('Not approved')
+    && checklist.includes('readiness_complete_pending_approval_gates')
+    && checklist.includes('separate Product Owner decision'));
 for (const capability of ['Tasks CRUD', 'Calendar Events CRUD', 'Daily Settle projection', 'Automatic migration', 'Desktop Runtime']) {
   assert(`${capability} is represented in business parity checklist`, parityChecklist.includes(capability));
 }

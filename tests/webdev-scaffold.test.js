@@ -167,6 +167,16 @@ assert('WebDev completion checklist records phases and approval gates',
     && completionChecklist.includes('Gate A')
     && completionChecklist.includes('Gate R')
     && completionChecklist.includes('当前明确未批准'));
+assert('WebDev completion checklist records remaining approval gate register',
+  completionChecklist.includes('Remaining Approval Gate Register')
+    && completionChecklist.includes('Task replay 写 Cloud')
+    && completionChecklist.includes('Calendar / Container / Settings replay')
+    && completionChecklist.includes('Browser Extension 第一阶段范围')
+    && completionChecklist.includes('Desktop Runtime 内部包')
+    && completionChecklist.includes('prod Cloudflare resources')
+    && completionChecklist.includes('Not approved')
+    && completionChecklist.includes('readiness_complete_pending_approval_gates')
+    && completionChecklist.includes('separate Product Owner decision'));
 assert('WebDev business parity checklist records implemented and gated capabilities',
   businessParityChecklist.includes('Tasks CRUD')
     && businessParityChecklist.includes('Daily Settle projection')

@@ -109,6 +109,20 @@ npm run webdev:preview:acceptance
 
 简称 `A` 到 `R` 在执行记录中应写作 `Gate A`、`Gate B`、`Gate C`、`Gate D`、`Gate E`、`Gate R`，避免和普通阶段编号混淆。
 
+## Remaining Approval Gate Register
+
+本登记表只记录剩余审批状态，不构成批准。任何 Gate 从 `Not approved` 变为 `Approved`，都必须有单独 Product Owner 决策（separate Product Owner decision）和对应 scoped implementation plan。
+
+| Gate | 范围 | 当前审批状态 | 当前允许动作 |
+|---|---|---|---|
+| Gate B | Task replay 写 Cloud | Not approved | 仅保留 readiness / dry-run / simulation；用户可见 replay 写 Cloud 仍关闭，Task delete 继续保持用户侧阻断。 |
+| Gate C | Calendar / Container / Settings replay | Not approved | 仅保留 Gate C readiness packet；不实现、不开启、不中转非 Task replay。 |
+| Gate D | Browser Extension 第一阶段范围、Cloud/WebDev replay、CWS 路线 | Not approved | Browser Extension 仍是生态组件规划；不实现 Extension replay、不部署、不提交 CWS。 |
+| Gate E | Desktop Runtime 内部包、签名、公证、自动更新、分发 | Not approved | 仅允许本地 Runtime readiness / smoke；不打包、不签名、不公证、不分发。 |
+| Gate R | prod Cloudflare resources、prod deploy、tag、merge、GitHub Release、public release、CWS、正式发布 | Not approved | 仅允许 prod readiness / package / evidence 静态或只读证据；不创建 prod 资源、不部署、不发布。 |
+
+当前整体分类保持 `readiness_complete_pending_approval_gates`。prod release、Calendar / Container / Settings replay、Browser Extension replay、local-over-cloud overwrite、batch conflict handling、full-entity offline-first 仍需单独批准。
+
 ## 当前明确未批准
 
 - prod release；
