@@ -227,6 +227,43 @@ function localDateKey(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function addDaysToKey(dateKey, delta) {
+  const date = new Date(`${dateKey}T00:00:00`);
+  date.setDate(date.getDate() + delta);
+  return localDateKey(date);
+}
+
+function startOfWeekKey(dateKey) {
+  const date = new Date(`${dateKey}T00:00:00`);
+  const day = date.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + mondayOffset);
+  return localDateKey(date);
+}
+
+function monthKey(dateKey) {
+  return String(dateKey || '').slice(0, 7);
+}
+
+function sortTasksByGroup(tasks, groupBy) {
+  const priorityOrder = { urgent: 0, important: 1, medium: 2, low: 3 };
+  const getDate = task => task.due_date || task.deadline || task.start_date || '9999-12-31';
+  return [...tasks].sort((a, b) => {
+    if (groupBy === 'priority') {
+      const pa = priorityOrder[a.priority] ?? 2;
+      const pb = priorityOrder[b.priority] ?? 2;
+      if (pa !== pb) return pa - pb;
+    }
+    if (groupBy === 'plan') {
+      const planCompare = String(a.plan_id || '').localeCompare(String(b.plan_id || ''));
+      if (planCompare) return planCompare;
+    }
+    const dateCompare = getDate(a).localeCompare(getDate(b));
+    if (dateCompare) return dateCompare;
+    return String(a.title || '').localeCompare(String(b.title || ''));
+  });
+}
+
 function buildReplayReadinessPreviewBody(tasks) {
   const task = tasks.find(item => item && !isCompleted(item)) || tasks[0];
   if (!task) {
@@ -368,7 +405,15 @@ export function App() {
   const [settingsDraft, setSettingsDraft] = useState(() => normalizeSettingsDraft(settingsRepository.getCachedSettings()));
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [taskViewMode, setTaskViewMode] = useState('board');
+  const [taskScope, setTaskScope] = useState('my_day');
+  const [taskGroupBy, setTaskGroupBy] = useState('due_date');
+  const [taskPriorityFilter, setTaskPriorityFilter] = useState('all');
+  const [taskFilterOpen, setTaskFilterOpen] = useState(false);
   const [eventSearch, setEventSearch] = useState('');
+  const [calendarViewMode, setCalendarViewMode] = useState('week');
+  const [calendarSearchOpen, setCalendarSearchOpen] = useState(false);
+  const [calendarComposerOpen, setCalendarComposerOpen] = useState(false);
   const [structureSearch, setStructureSearch] = useState('');
   const [selectedDate, setSelectedDate] = useState(() => localDateKey());
   const [selectedTaskId, setSelectedTaskId] = useState(null);
@@ -1477,13 +1522,26 @@ export function App() {
     }
   }
 
-  const visibleTasks = tasks.filter(task => {
+  const visibleTasks = sortTasksByGroup(tasks.filter(task => {
+    const today = localDateKey();
+    if (taskScope === 'my_day') {
+      const start = task.start_date || null;
+      const due = task.due_date || task.deadline || null;
+      const scheduledToday = Boolean(task.schedule_time && (start === today || due === today));
+      const activeToday = Boolean(start && start <= today) || Boolean(due && due <= today);
+      if (!isCompleted(task) && !scheduledToday && !activeToday) return false;
+    } else if (taskScope === 'my_managebac') {
+      if (!isManageBacSourceTask(task)) return false;
+    } else if (taskScope?.startsWith('plan:')) {
+      if (task.plan_id !== taskScope.slice(5)) return false;
+    }
     if (filter === 'pending' && isCompleted(task)) return false;
     if (filter === 'completed' && !isCompleted(task)) return false;
+    if (taskPriorityFilter !== 'all' && task.priority !== taskPriorityFilter) return false;
     const keyword = search.trim().toLowerCase();
     if (!keyword) return true;
-    return `${task.title || ''} ${task.notes || ''} ${task.description || ''}`.toLowerCase().includes(keyword);
-  });
+    return `${task.title || ''} ${task.notes || ''} ${task.description || ''} ${task.subject || ''}`.toLowerCase().includes(keyword);
+  }), taskGroupBy);
   const visibleEvents = events.filter(event => {
     const keyword = eventSearch.trim().toLowerCase();
     if (!keyword) return true;
@@ -1637,14 +1695,14 @@ export function App() {
             </div>
             <div className="sidebar-content custom-scrollbar">
               <nav className="context-menu">
-                <button className="context-item active" type="button">My day</button>
-                <button className="context-item" type="button">My Tasks</button>
-                <button className="context-item managebac-nav-item" type="button">My ManageBac</button>
+                <button className={`context-item ${taskScope === 'my_day' ? 'active' : ''}`} type="button" onClick={() => setTaskScope('my_day')}><span>☀</span> My day</button>
+                <button className={`context-item ${taskScope === 'my_tasks' ? 'active' : ''}`} type="button" onClick={() => setTaskScope('my_tasks')}><span>▦</span> My Tasks</button>
+                <button className={`context-item managebac-nav-item ${taskScope === 'my_managebac' ? 'active' : ''}`} type="button" onClick={() => setTaskScope('my_managebac')}><span>☷</span><span className="managebac-nav-label">My ManageBac</span><span className="managebac-pending-count">{tasks.filter(isManageBacSourceTask).length}</span></button>
                 <div className="menu-divider" />
                 <div className="section-title">PLANS</div>
               </nav>
               <div className="plans-list">
-                {plans.map(plan => <button className="plan-link" key={plan.id} type="button" onClick={() => setSelectedStructure({ type: 'plan', id: plan.id })}><span className="swatch" style={{ backgroundColor: plan.color || '#cbd7e4' }} />{plan.name}</button>)}
+                {plans.map(plan => <button className={`plan-link ${taskScope === `plan:${plan.id}` ? 'active' : ''}`} key={plan.id} type="button" onClick={() => setTaskScope(`plan:${plan.id}`)}><span className="swatch" style={{ backgroundColor: plan.color || '#cbd7e4' }} />{plan.name}</button>)}
               </div>
             </div>
           </aside>
@@ -1657,19 +1715,41 @@ export function App() {
             </header>
             <nav className="view-tabs">
               <div className="view-tab-buttons">
-                <button className="btn-tab active" type="button">Board</button>
-                <button className="btn-tab" type="button">List</button>
-                <button className="btn-tab" type="button">Calendar</button>
+                <button className={`btn-tab ${taskViewMode === 'board' ? 'active' : ''}`} type="button" onClick={() => setTaskViewMode('board')}>Board</button>
+                <button className={`btn-tab ${taskViewMode === 'list' ? 'active' : ''}`} type="button" onClick={() => setTaskViewMode('list')}>List</button>
+                <button className={`btn-tab ${taskViewMode === 'calendar' ? 'active' : ''}`} type="button" onClick={() => setTaskViewMode('calendar')}>Calendar</button>
               </div>
               <div className="header-actions">
-                <div className="search-bar"><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tasks..." /></div>
-                <select value={filter} onChange={event => setFilter(event.target.value)}>
-                  <option value="all">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="completed">Completed</option>
-                </select>
+                <div className="search-bar"><span>⌕</span><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tasks..." /></div>
+                <button className={`icon-btn ${taskFilterOpen ? 'filter-active' : ''}`} type="button" onClick={() => setTaskFilterOpen(open => !open)}>Filter</button>
+                <button className="icon-btn" type="button" onClick={() => setTaskGroupBy(current => current === 'due_date' ? 'priority' : current === 'priority' ? 'plan' : 'due_date')}>Group by: {taskGroupBy === 'due_date' ? 'Due date' : taskGroupBy === 'priority' ? 'Priority' : 'Plan'}</button>
               </div>
             </nav>
+            {taskFilterOpen && (
+              <div className="filter-panel">
+                <div className="filter-section">
+                  <h4>Status</h4>
+                  <select className="filter-select" value={filter} onChange={event => setFilter(event.target.value)}>
+                    <option value="all">All</option>
+                    <option value="pending">Pending</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+                <div className="filter-section">
+                  <h4>Priority</h4>
+                  <select className="filter-select" value={taskPriorityFilter} onChange={event => setTaskPriorityFilter(event.target.value)}>
+                    <option value="all">All priorities</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="important">Important</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+                <div className="filter-actions">
+                  <button type="button" onClick={() => { setFilter('all'); setTaskPriorityFilter('all'); setSearch(''); }}>Reset filters</button>
+                </div>
+              </div>
+            )}
             <form className="quick-task-compose" onSubmit={addTask}>
               <input value={draft.title} onChange={event => setDraft(current => ({ ...current, title: event.target.value }))} placeholder="Add a task" disabled={!taskCanWrite} />
               <input type="date" value={draft.due_date} onChange={event => setDraft(current => ({ ...current, due_date: event.target.value }))} disabled={!taskCanWrite} />
@@ -1683,29 +1763,9 @@ export function App() {
               <button type="submit" disabled={!taskCanWrite}>{online ? 'Save to Cloud' : 'Queue task locally'}</button>
             </form>
             <TaskPendingBanner mutations={pendingTaskMutations} onOpenQueue={openPendingTaskQueue} />
-            <section id="kanbanBoard" className="kanban-board custom-scrollbar">
-              {taskGroups.map(group => (
-                <div className="kanban-column" key={group.key}>
-                  <div className="kanban-column-header"><h3>{group.title}</h3><span>{group.tasks.length}</span></div>
-                  {group.tasks.length === 0 && <p className="empty-column">No tasks</p>}
-                  {group.tasks.map(task => {
-                    const completed = isCompleted(task);
-                    const pending = task.__sync_status === 'pending';
-                    return (
-                      <article className={`kanban-task-card ${completed ? 'completed' : ''} ${pending ? 'pending-sync' : ''}`} key={task.id} onClick={() => setSelectedTaskId(task.id)} role="button" tabIndex={0} onKeyDown={event => { if (event.key === 'Enter') setSelectedTaskId(task.id); }}>
-                        <strong>{task.title}</strong>
-                        <span>{formatTaskMeta(task)}</span>
-                        {pending && <em className="pending-sync-badge">Pending sync</em>}
-                        <div className="task-actions">
-                          {completed ? <button type="button" disabled={!taskCanWrite || pending} title="Reopen task" onClick={event => { event.stopPropagation(); updateTaskState(task, { progress: 'not_started', completed_at: null }); }}><RotateCcw size={16} /></button> : <button type="button" disabled={!taskCanWrite || pending} title="Complete task" onClick={event => { event.stopPropagation(); updateTaskState(task, { progress: 'completed' }); }}><CheckCircle2 size={16} /></button>}
-                          <button type="button" disabled={!taskDeleteAllowed || pending} title="Delete task" onClick={event => { event.stopPropagation(); deleteTask(task); }}><Trash2 size={16} /></button>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              ))}
-            </section>
+            {taskViewMode === 'board' && <TaskBoardView groups={taskGroups} canWrite={taskCanWrite} canDelete={taskDeleteAllowed} onPatch={updateTaskState} onDelete={deleteTask} onSelect={task => setSelectedTaskId(task.id)} />}
+            {taskViewMode === 'list' && <TaskListTable tasks={visibleTasks} canWrite={taskCanWrite} canDelete={taskDeleteAllowed} onPatch={updateTaskState} onDelete={deleteTask} onSelect={task => setSelectedTaskId(task.id)} />}
+            {taskViewMode === 'calendar' && <TaskCalendarView tasks={visibleTasks} selectedDate={selectedDate} onSelect={task => setSelectedTaskId(task.id)} />}
           </section>
 
           <aside className="planner-detail-rail">
@@ -1715,36 +1775,53 @@ export function App() {
       )}
 
       {activeView === 'calendar' && (
-        <main className="calendar-layout">
-          <aside className="context-sidebar calendar-tools">
-            <div className="sidebar-header"><h2>Create calendar event</h2></div>
-            <form className="calendar-form" onSubmit={addEvent}>
-              <label><span>Title</span><input value={eventDraft.title} onChange={event => setEventDraft(current => ({ ...current, title: event.target.value }))} placeholder="Add an event" disabled={!canWrite} /></label>
-              <label><span>Date</span><input type="date" value={eventDraft.date} onChange={event => setEventDraft(current => ({ ...current, date: event.target.value }))} disabled={!canWrite} /></label>
-              <label><span>Start</span><input type="time" value={eventDraft.time_start} onChange={event => setEventDraft(current => ({ ...current, time_start: event.target.value }))} disabled={!canWrite} /></label>
-              <label><span>End</span><input type="time" value={eventDraft.time_end} onChange={event => setEventDraft(current => ({ ...current, time_end: event.target.value }))} disabled={!canWrite} /></label>
-              <label><span>Repeat</span><select value={eventDraft.repeat} onChange={event => setEventDraft(current => ({ ...current, repeat: event.target.value }))} disabled={!canWrite}><option value="none">None</option><option value="daily">Daily</option><option value="weekday">Weekday</option><option value="weekend">Weekend</option><option value="weekly">Weekly</option><option value="custom">Custom</option></select></label>
-              <label><span>Repeat days</span><input value={eventDraft.repeat_days_text} onChange={event => setEventDraft(current => ({ ...current, repeat_days_text: event.target.value }))} placeholder="0,1,2" disabled={!canWrite || !['weekly', 'custom'].includes(eventDraft.repeat)} /></label>
-              <button type="submit" disabled={!canWrite}>Save event to Cloud</button>
-            </form>
-          </aside>
-          <section className="main-content glass-panel calendar-main">
-            <header className="board-header">
-              <div className="header-breadcrumb"><span>Calendar</span><span>/</span><strong>{selectedDate}</strong></div>
-              <button className="icon-btn" type="button" onClick={refreshEvents} title="Refresh events"><RefreshCw size={18} /></button>
-            </header>
-            <div className="calendar-control-row">
-              <label className="date-picker-row"><span>Date projection</span><input type="date" value={selectedDate} onChange={event => setSelectedDate(event.target.value)} /></label>
-              <input value={eventSearch} onChange={event => setEventSearch(event.target.value)} placeholder="Search calendar events" />
+        <main className="calendar-layout calendar-page main-content rounded-container glass-panel custom-scrollbar">
+          <section className="calendar-section">
+            <div className="calendar-toolbar">
+              <div className="toolbar-left">
+                <button className="btn-today" type="button" onClick={() => setSelectedDate(localDateKey())}>今天</button>
+                <div className="nav-arrows">
+                  <button className="icon-btn btn-arrow" type="button" onClick={() => setSelectedDate(addDaysToKey(selectedDate, calendarViewMode === 'week' ? -7 : -30))}>‹</button>
+                  <button className="icon-btn btn-arrow" type="button" onClick={() => setSelectedDate(addDaysToKey(selectedDate, calendarViewMode === 'week' ? 7 : 30))}>›</button>
+                </div>
+                <h2 className="current-date">{calendarViewMode === 'week' ? `${startOfWeekKey(selectedDate)} - ${addDaysToKey(startOfWeekKey(selectedDate), 6)}` : monthKey(selectedDate)}</h2>
+              </div>
+              <div className="toolbar-right">
+                <button className="icon-btn tb-icon" type="button" onClick={() => setCalendarSearchOpen(open => !open)}>搜索</button>
+                {calendarSearchOpen && <div className="search-bar"><input value={eventSearch} onChange={event => setEventSearch(event.target.value)} placeholder="Search calendar events" aria-label="Search calendar events" /><button className="icon-btn search-close-btn" type="button" onClick={() => { setEventSearch(''); setCalendarSearchOpen(false); }}>×</button></div>}
+                <button className="icon-btn tb-icon" type="button" onClick={refreshEvents}><RefreshCw size={16} /></button>
+                <button className="icon-btn tb-icon" type="button" disabled={!canWrite} onClick={() => setCalendarComposerOpen(true)}>新建</button>
+                <div className="view-selector">
+                  <button className="btn-dropdown" type="button" onClick={() => setCalendarViewMode(mode => mode === 'week' ? 'month' : 'week')}><span>{calendarViewMode === 'week' ? '周' : '月'}</span><span>⌄</span></button>
+                </div>
+              </div>
             </div>
-            <div className="gcal-container calendar-workbench">
-              <CalendarProjectionPanel projection={calendarProjection} onSelectTask={task => setSelectedTaskId(task.id)} />
+            <div className="calendar-container calendar-workbench gcal-container custom-scrollbar">
+              <h2 className="projection-compat-title">Date projection</h2>
+              {calendarViewMode === 'week'
+                ? <CalendarWeekView selectedDate={selectedDate} tasks={tasks} events={visibleEvents} containers={containers} onSelectTask={task => setSelectedTaskId(task.id)} onSelectEvent={event => setSelectedEventId(event.id)} />
+                : <CalendarMonthView selectedDate={selectedDate} tasks={tasks} events={visibleEvents} containers={containers} onSelectTask={task => setSelectedTaskId(task.id)} onSelectEvent={event => setSelectedEventId(event.id)} />}
             </div>
             <CalendarEventList events={visibleEvents} canWrite={canWrite} onSelect={event => setSelectedEventId(event.id)} onDelete={deleteEvent} />
+            {calendarComposerOpen && (
+              <div className="event-modal">
+                <button className="event-modal-backdrop" type="button" aria-label="Close" onClick={() => setCalendarComposerOpen(false)} />
+                <div className="event-modal-content">
+                  <div className="event-modal-header"><h3>创建日程</h3><span className="sr-only">Create calendar event</span><button className="event-modal-close" type="button" onClick={() => setCalendarComposerOpen(false)}>×</button></div>
+                  <form className="calendar-form event-modal-body" onSubmit={event => { addEvent(event); setCalendarComposerOpen(false); }}>
+                    <label><span>Title</span><input value={eventDraft.title} onChange={event => setEventDraft(current => ({ ...current, title: event.target.value }))} placeholder="Add an event" disabled={!canWrite} /></label>
+                    <label><span>Date</span><input type="date" value={eventDraft.date} onChange={event => setEventDraft(current => ({ ...current, date: event.target.value }))} disabled={!canWrite} /></label>
+                    <label><span>Start</span><input type="time" value={eventDraft.time_start} onChange={event => setEventDraft(current => ({ ...current, time_start: event.target.value }))} disabled={!canWrite} /></label>
+                    <label><span>End</span><input type="time" value={eventDraft.time_end} onChange={event => setEventDraft(current => ({ ...current, time_end: event.target.value }))} disabled={!canWrite} /></label>
+                    <label><span>Repeat</span><select value={eventDraft.repeat} onChange={event => setEventDraft(current => ({ ...current, repeat: event.target.value }))} disabled={!canWrite}><option value="none">None</option><option value="daily">Daily</option><option value="weekday">Weekday</option><option value="weekend">Weekend</option><option value="weekly">Weekly</option><option value="custom">Custom</option></select></label>
+                    <label><span>Repeat days</span><input value={eventDraft.repeat_days_text} onChange={event => setEventDraft(current => ({ ...current, repeat_days_text: event.target.value }))} placeholder="0,1,2" disabled={!canWrite || !['weekly', 'custom'].includes(eventDraft.repeat)} /></label>
+                    <div className="event-modal-footer"><button type="button" onClick={() => setCalendarComposerOpen(false)}>取消</button><button type="submit" disabled={!canWrite}>Save event to Cloud</button></div>
+                  </form>
+                </div>
+              </div>
+            )}
+            {selectedEvent && <CalendarEventDetailPanel event={selectedEvent} canWrite={canWrite} onSave={patch => selectedEvent && updateEventState(selectedEvent, patch)} onClose={() => setSelectedEventId(null)} />}
           </section>
-          <aside className="calendar-detail-rail">
-            <CalendarEventDetailPanel event={selectedEvent} canWrite={canWrite} onSave={patch => selectedEvent && updateEventState(selectedEvent, patch)} onClose={() => setSelectedEventId(null)} />
-          </aside>
         </main>
       )}
 
@@ -2103,6 +2180,125 @@ export function App() {
   );
 }
 
+function TaskBoardView({ groups, canWrite, canDelete, onPatch, onDelete, onSelect }) {
+  return (
+    <section id="kanbanBoard" className="kanban-board custom-scrollbar">
+      {groups.map(group => (
+        <div className="kanban-column planner-column" key={group.key}>
+          <div className="kanban-column-header planner-column-header"><h3>{group.title}</h3><span>{group.tasks.length}</span></div>
+          {group.tasks.length === 0 && <p className="empty-column">No tasks</p>}
+          {group.tasks.map(task => <TaskCard key={task.id} task={task} canWrite={canWrite} canDelete={canDelete} onPatch={onPatch} onDelete={onDelete} onSelect={onSelect} />)}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function TaskCard({ task, canWrite, canDelete, onPatch, onDelete, onSelect }) {
+  const completed = isCompleted(task);
+  const pending = task.__sync_status === 'pending';
+  const labels = Array.isArray(task.labels) ? task.labels : [];
+  const checklist = Array.isArray(task.checklist) ? task.checklist : [];
+  const checkedCount = checklist.filter(item => item.checked || item.completed).length;
+  return (
+    <article className={`task-card kanban-task-card ${completed ? 'progress-done completed' : ''} ${pending ? 'pending-sync' : ''}`} onClick={() => onSelect(task)} role="button" tabIndex={0} onKeyDown={event => { if (event.key === 'Enter') onSelect(task); }}>
+      <div className="task-card-header">
+        <strong className="task-title">{task.title}</strong>
+        <button className="task-card-menu-btn" type="button" onClick={event => { event.stopPropagation(); onSelect(task); }}>⋯</button>
+      </div>
+      {labels.length > 0 && <div className="task-card-labels">{labels.slice(0, 3).map(label => <span key={label}>{label}</span>)}</div>}
+      <div className="task-card-footer">
+        <span className="task-card-meta">{formatTaskMeta(task)}</span>
+        <div className="task-status-badges">
+          {task.start_date && <span className="task-start-badge">Start {task.start_date}</span>}
+          {(task.due_date || task.deadline) && <span className="task-due-badge">Due {task.due_date || task.deadline}</span>}
+          {checklist.length > 0 && <span className="task-checklist-badge">{checkedCount}/{checklist.length}</span>}
+          {pending && <span className="pending-sync-badge">Pending</span>}
+        </div>
+      </div>
+      <div className="task-actions">
+        {completed
+          ? <button type="button" disabled={!canWrite || pending} title="Reopen task" onClick={event => { event.stopPropagation(); onPatch(task, { progress: 'not_started', completed_at: null }); }}><RotateCcw size={16} /></button>
+          : <button type="button" disabled={!canWrite || pending} title="Complete task" onClick={event => { event.stopPropagation(); onPatch(task, { progress: 'completed' }); }}><CheckCircle2 size={16} /></button>}
+        <button type="button" disabled={!canDelete || pending} title="Delete task" onClick={event => { event.stopPropagation(); onDelete(task); }}><Trash2 size={16} /></button>
+      </div>
+    </article>
+  );
+}
+
+function TaskListTable({ tasks, canWrite, canDelete, onPatch, onDelete, onSelect }) {
+  return (
+    <section id="taskListView" className="task-list-view custom-scrollbar">
+      <div className="task-list">
+        {tasks.length === 0 && <p className="empty-column">No tasks match this view.</p>}
+        {tasks.map(task => {
+          const completed = isCompleted(task);
+          const pending = task.__sync_status === 'pending';
+          return (
+            <article className={`task-list-row ${completed ? 'completed' : ''}`} key={task.id} onClick={() => onSelect(task)} role="button" tabIndex={0}>
+              <div className="task-list-main">
+                <div className="task-list-title-wrap"><strong className="task-list-title">{task.title}</strong>{pending && <span className="pending-sync-badge">Pending</span>}</div>
+                <div className="task-list-meta">
+                  <span className="task-list-priority">{task.priority || 'medium'}</span>
+                  {task.bucket_id && <span className="task-list-bucket">{task.bucket_id}</span>}
+                  {(task.due_date || task.deadline) && <span className="task-list-due">Due {task.due_date || task.deadline}</span>}
+                  {task.schedule_time && <span>{task.schedule_time}</span>}
+                </div>
+              </div>
+              <div className="task-actions">
+                {completed
+                  ? <button type="button" disabled={!canWrite || pending} onClick={event => { event.stopPropagation(); onPatch(task, { progress: 'not_started', completed_at: null }); }}><RotateCcw size={16} /></button>
+                  : <button type="button" disabled={!canWrite || pending} onClick={event => { event.stopPropagation(); onPatch(task, { progress: 'completed' }); }}><CheckCircle2 size={16} /></button>}
+                <button type="button" disabled={!canDelete || pending} onClick={event => { event.stopPropagation(); onDelete(task); }}><Trash2 size={16} /></button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function TaskCalendarView({ tasks, selectedDate, onSelect }) {
+  const month = monthKey(selectedDate);
+  const [year, monthNumber] = month.split('-').map(Number);
+  const first = new Date(year, monthNumber - 1, 1);
+  const startOffset = (first.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startOffset; i += 1) cells.push(null);
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const dateKey = `${month}-${String(day).padStart(2, '0')}`;
+    cells.push({ day, dateKey, tasks: tasks.filter(task => task.start_date === dateKey || task.due_date === dateKey || task.deadline === dateKey) });
+  }
+  return (
+    <section id="taskCalendarView" className="task-calendar-view custom-scrollbar">
+      <div className="task-calendar-months">
+        <div className="task-calendar-month">
+          <h3 className="task-calendar-month-title">{month}</h3>
+          <div className="task-calendar-weekdays">{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => <span key={day}>{day}</span>)}</div>
+          <div className="task-calendar-grid">
+            {cells.map((cell, index) => cell ? (
+              <div className={`task-calendar-day ${cell.dateKey === selectedDate ? 'today' : ''}`} key={cell.dateKey}>
+                <span className="task-calendar-date">{cell.day}</span>
+                <div className="task-calendar-items">
+                  {cell.tasks.slice(0, 4).map(task => (
+                    <button className={`task-calendar-item ${task.start_date === cell.dateKey ? 'start' : 'due'}`} key={`${cell.dateKey}-${task.id}`} type="button" onClick={() => onSelect(task)}>
+                      <span className="task-calendar-item-title">{task.title}</span>
+                      <span className="task-calendar-item-type">{task.start_date === cell.dateKey ? 'start' : 'due'}</span>
+                    </button>
+                  ))}
+                  {cell.tasks.length > 4 && <span className="task-calendar-more">+{cell.tasks.length - 4} more</span>}
+                </div>
+              </div>
+            ) : <div className="task-calendar-spacer" key={`spacer-${index}`} />)}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function TaskDetailPanel({ task, plans, buckets, labels, canWrite, onSave, onClose }) {
   const [form, setForm] = useState(null);
   const isManageBac = isManageBacSourceTask(task);
@@ -2313,6 +2509,88 @@ function ReminderStatePanel({ state, session, onSessionEvent }) {
   );
 }
 
+function CalendarWeekView({ selectedDate, tasks, events, containers, onSelectTask, onSelectEvent }) {
+  const start = startOfWeekKey(selectedDate);
+  const days = Array.from({ length: 7 }, (_, index) => addDaysToKey(start, index));
+  const hours = Array.from({ length: 16 }, (_, index) => index + 7);
+  return (
+    <div id="weekView" className="view-panel calendar-week-view">
+      <div className="calendar-header-row">
+        <div className="timezone-cell">GMT+08</div>
+        <div className="days-wrapper">
+          {days.map(day => <div className={`day-header ${day === localDateKey() ? 'today' : ''}`} key={day}><span>{new Date(`${day}T00:00:00`).toLocaleDateString('zh-CN', { weekday: 'short' })}</span><strong>{day.slice(5)}</strong></div>)}
+        </div>
+      </div>
+      <div className="allday-row">
+        <div className="allday-spacer" />
+        <div className="allday-grid">
+          {days.map(day => {
+            const projection = computeCalendarDateProjection({ date: day, tasks, events, containers });
+            return <div className="allday-cell" key={day}>{projection.allDayItems?.slice(0, 3).map(item => <CalendarMiniItem key={`${day}-${item.kind}-${item.id}`} item={item} onSelectTask={onSelectTask} onSelectEvent={onSelectEvent} />)}</div>;
+          })}
+        </div>
+      </div>
+      <div className="calendar-body">
+        <div className="time-axis">{hours.map(hour => <div className="time-label" key={hour}>{String(hour).padStart(2, '0')}:00</div>)}</div>
+        <div className="columns-layer">
+          {days.map(day => {
+            const projection = computeCalendarDateProjection({ date: day, tasks, events, containers });
+            return (
+              <div className="day-column" key={day}>
+                {hours.map(hour => <div className="hour-line" key={hour} />)}
+                <div className="day-column-items">
+                  {projection.timedItems.slice(0, 18).map(item => <CalendarMiniItem key={`${day}-${item.kind}-${item.id}`} item={item} onSelectTask={onSelectTask} onSelectEvent={onSelectEvent} />)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CalendarMonthView({ selectedDate, tasks, events, containers, onSelectTask, onSelectEvent }) {
+  const month = monthKey(selectedDate);
+  const [year, monthNumber] = month.split('-').map(Number);
+  const first = new Date(year, monthNumber - 1, 1);
+  const startOffset = (first.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startOffset; i += 1) cells.push(null);
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = `${month}-${String(day).padStart(2, '0')}`;
+    cells.push({ day, date, projection: computeCalendarDateProjection({ date, tasks, events, containers }) });
+  }
+  return (
+    <div id="monthView" className="view-panel calendar-month-view">
+      <div className="month-header-row">{['周一', '周二', '周三', '周四', '周五', '周六', '周日'].map(day => <div className="month-day-header" key={day}>{day}</div>)}</div>
+      <div className="month-grid">
+        {cells.map((cell, index) => cell ? (
+          <div className={`month-cell ${cell.date === localDateKey() ? 'today' : ''}`} key={cell.date}>
+            <span className="month-day-number">{cell.day}</span>
+            {[...cell.projection.timedItems, ...(cell.projection.allDayItems || [])].slice(0, 5).map(item => <CalendarMiniItem key={`${cell.date}-${item.kind}-${item.id}`} item={item} onSelectTask={onSelectTask} onSelectEvent={onSelectEvent} />)}
+          </div>
+        ) : <div className="month-cell other-month" key={`blank-${index}`} />)}
+      </div>
+    </div>
+  );
+}
+
+function CalendarMiniItem({ item, onSelectTask, onSelectEvent }) {
+  const handleClick = () => {
+    if (item.kind === 'task') onSelectTask?.(item.source || item);
+    if (item.kind === 'event') onSelectEvent?.(item.source || item);
+  };
+  return (
+    <button type="button" className={`calendar-mini-item event-card ${item.kind}`} aria-label={`${item.kind === 'event' ? 'Open grid event' : 'Open grid task'} ${item.time_start || item.schedule_time || ''}`} onClick={handleClick}>
+      <span>{item.time_start || item.schedule_time || ''}</span>
+      <strong>{item.title}</strong>
+      <em>{item.kind}</em>
+    </button>
+  );
+}
+
 function CalendarProjectionPanel({ projection, compact = false, title, onSelectTask }) {
   return (
     <div className={`panel calendar-projection ${compact ? 'compact' : ''}`}>
@@ -2391,6 +2669,7 @@ function CalendarEventDetailPanel({ event, canWrite, onSave, onClose }) {
     <div className="panel calendar-event-detail">
       <div className="panel-heading-row">
         <h2>Calendar event detail</h2>
+        <span className="sr-only">Edit event</span>
         <button type="button" onClick={onClose}>Close</button>
       </div>
       <p className="source-boundary-note">Calendar source metadata is read-only in WebDev v1. Edit the title and schedule fields only.</p>
