@@ -140,6 +140,7 @@ Repository 必须是业务数据唯一入口：
 - dependency review；
 - CORS review；
 - CSP review；
+- Cloudflare Pages static headers / cache review：`pages/public/_headers` 已定义 CSP、基础安全响应头、`/assets/*` 长期 cache 和 `/index.html` no-store；
 - auth session expiry review；
 - migration snapshot privacy review；
 - R2 access policy review；

@@ -59,6 +59,7 @@ const requiredFiles = [
   'workers/src/syncReplaySafety.ts',
   'workers/src/taskReplayTransaction.ts',
   'pages/README.md',
+  'pages/public/_headers',
   'pages/.env.example',
   'pages/package.json',
   'pages/package-lock.json',
@@ -110,6 +111,7 @@ assert('wrangler defaults replay kill switch on and local dev replay disabled',
   wrangler.includes('TIMEWHERE_TASK_REPLAY_KILL_SWITCH = "on"') && wrangler.includes('TIMEWHERE_TASK_REPLAY_LOCAL_DEV_ENABLED = "false"'));
 const workerDevVarsExample = read('workers/.dev.vars.example');
 const pagesEnvExample = read('pages/.env.example');
+const pagesHeaders = read('pages/public/_headers');
 const completionChecklist = read('docs/WEBDEV_COMPLETION_CHECKLIST.md');
 const businessParityChecklist = read('docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md');
 const previewRunbook = read('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md');
@@ -127,6 +129,16 @@ assert('Pages env example documents Worker API and Google SSO public client id w
   pagesEnvExample.includes('VITE_WORKER_API_BASE_URL=http://127.0.0.1:8787')
     && pagesEnvExample.includes('VITE_GOOGLE_OIDC_CLIENT_ID=your-web-client-id.apps.googleusercontent.com')
     && !/client_secret|token|cookie/i.test(pagesEnvExample));
+assert('Pages headers define CSP and security headers for preview/prod readiness',
+  pagesHeaders.includes('Content-Security-Policy:')
+    && pagesHeaders.includes("frame-ancestors 'none'")
+    && pagesHeaders.includes('X-Content-Type-Options: nosniff')
+    && pagesHeaders.includes('Referrer-Policy: strict-origin-when-cross-origin')
+    && pagesHeaders.includes('Permissions-Policy:')
+    && pagesHeaders.includes('https://accounts.google.com')
+    && pagesHeaders.includes('https://*.workers.dev')
+    && pagesHeaders.includes('Cache-Control: public, max-age=31536000, immutable')
+    && pagesHeaders.includes('Cache-Control: no-store'));
 assert('WebDev completion checklist records phases and approval gates',
   completionChecklist.includes('Phase 0')
     && completionChecklist.includes('Phase 10')
@@ -563,6 +575,10 @@ assert('Pages README documents Task-only queued pending and non-Task offline wri
   pagesReadme.includes('Task-only queued pending') && pagesReadme.includes('Pending sync') && pagesReadme.includes('offline_write_blocked'));
 assert('Pages README documents Worker proxy',
   pagesReadme.includes('127.0.0.1:4173') && pagesReadme.includes('127.0.0.1:8787'));
+assert('Pages README documents Cloudflare Pages security headers and cache policy',
+  pagesReadme.includes('pages/public/_headers')
+    && pagesReadme.includes('Content-Security-Policy')
+    && pagesReadme.includes('Cache-Control'));
 assert('Pages README documents Google SSO client id configuration',
   pagesReadme.includes('VITE_GOOGLE_OIDC_CLIENT_ID') && pagesReadme.includes('GOOGLE_OIDC_CLIENT_ID') && pagesReadme.includes('不需要也不能配置 client secret'));
 assert('Pages README documents TimeWhere session refresh without Google token',

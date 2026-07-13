@@ -23,6 +23,16 @@
 - Replay readiness 已进入 Phase 9 preview hardening：Settings 可显示 evidence gaps、dependency blockers、cloud validation 数量和 required evidence；仍然不能启用 replay。
 - 旧 Extension/Desktop 业务逻辑尚未迁移到这里；后续迁移必须按 Repository / Platform contracts 分阶段执行。
 
+## Cloudflare Pages 安全头
+
+`pages/public/_headers` 定义 Cloudflare Pages 的 preview/prod 静态响应头，Vite build 时会复制到 `pages/dist/_headers`：
+
+- `Content-Security-Policy`：限制默认资源来源，允许 Google SSO script/frame 和 Cloudflare Workers API 连接。
+- `X-Content-Type-Options` / `X-Frame-Options` / `Referrer-Policy` / `Permissions-Policy`：作为 preview/prod readiness 的基础安全头。
+- `Cache-Control`：`/assets/*` 使用长期 immutable cache，`/index.html` 使用 `no-store`，避免 Web App shell 更新被旧 HTML 卡住。
+
+该文件不包含真实 Cloudflare resource id、OAuth secret、token 或账号信息。
+
 ## 本地命令
 
 ```powershell

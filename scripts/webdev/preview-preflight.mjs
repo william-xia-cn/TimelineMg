@@ -45,6 +45,7 @@ const requiredFiles = [
   'workers/wrangler.toml',
   'workers/.dev.vars.example',
   'pages/.env.example',
+  'pages/public/_headers',
   'docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md',
   'docs/WEBDEV_COMPLETION_CHECKLIST.md',
   'docs/WEBDEV_PROD_READINESS_CHECKLIST.md',
@@ -64,6 +65,7 @@ for (const file of requiredFiles) {
 const wrangler = exists('workers/wrangler.toml') ? read('workers/wrangler.toml') : '';
 const workerEnvExample = exists('workers/.dev.vars.example') ? read('workers/.dev.vars.example') : '';
 const pagesEnvExample = exists('pages/.env.example') ? read('pages/.env.example') : '';
+const pagesHeaders = exists('pages/public/_headers') ? read('pages/public/_headers') : '';
 const previewRunbook = exists('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md')
   ? read('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md')
   : '';
@@ -110,6 +112,13 @@ assert('worker env example documents local dev placeholders only',
 assert('pages env example points local dev at local Worker and public OIDC client placeholder',
   pagesEnvExample.includes('VITE_WORKER_API_BASE_URL=http://127.0.0.1:8787')
     && pagesEnvExample.includes('VITE_GOOGLE_OIDC_CLIENT_ID=your-web-client-id.apps.googleusercontent.com'));
+assert('pages headers provide CSP and cache readiness without embedded secrets',
+  pagesHeaders.includes('Content-Security-Policy:')
+    && pagesHeaders.includes("frame-ancestors 'none'")
+    && pagesHeaders.includes('https://accounts.google.com')
+    && pagesHeaders.includes('https://*.workers.dev')
+    && pagesHeaders.includes('Cache-Control: public, max-age=31536000, immutable')
+    && pagesHeaders.includes('Cache-Control: no-store'));
 assert('local secret-bearing env files are ignored',
   gitignore.includes('workers/.dev.vars')
     && gitignore.includes('pages/.env.local')
@@ -154,6 +163,7 @@ assertNoForbiddenContent('preflight-scanned files do not contain obvious secrets
     wrangler,
     workerEnvExample,
     pagesEnvExample,
+    pagesHeaders,
     previewRunbook,
     completionChecklist,
     prodReadiness

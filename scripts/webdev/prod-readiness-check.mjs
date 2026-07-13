@@ -13,6 +13,7 @@ const requiredFiles = [
   'workers/wrangler.toml',
   'workers/.dev.vars.example',
   'pages/.env.example',
+  'pages/public/_headers',
   'package.json',
   '.gitignore'
 ];
@@ -66,6 +67,7 @@ const taskBoard = exists('TASK_BOARD.md') ? read('TASK_BOARD.md') : '';
 const wrangler = exists('workers/wrangler.toml') ? read('workers/wrangler.toml') : '';
 const workerEnvExample = exists('workers/.dev.vars.example') ? read('workers/.dev.vars.example') : '';
 const pagesEnvExample = exists('pages/.env.example') ? read('pages/.env.example') : '';
+const pagesHeaders = exists('pages/public/_headers') ? read('pages/public/_headers') : '';
 const packageJson = exists('package.json') ? JSON.parse(read('package.json')) : { scripts: {} };
 const gitignore = exists('.gitignore') ? read('.gitignore') : '';
 
@@ -132,6 +134,17 @@ assert('env examples keep placeholders only',
     && !workerEnvExample.includes('client_secret')
     && !pagesEnvExample.includes('client_secret'));
 
+assert('Pages security headers and cache policy are ready for preview/prod',
+  pagesHeaders.includes('Content-Security-Policy:')
+    && pagesHeaders.includes("frame-ancestors 'none'")
+    && pagesHeaders.includes('X-Content-Type-Options: nosniff')
+    && pagesHeaders.includes('Referrer-Policy: strict-origin-when-cross-origin')
+    && pagesHeaders.includes('https://accounts.google.com')
+    && pagesHeaders.includes('https://*.workers.dev')
+    && pagesHeaders.includes('Cache-Control: public, max-age=31536000, immutable')
+    && pagesHeaders.includes('Cache-Control: no-store')
+    && prodChecklist.includes('pages/public/_headers'));
+
 assertNoObviousSecrets('prod readiness scanned files contain no obvious secrets',
   [
     prodChecklist,
@@ -142,6 +155,7 @@ assertNoObviousSecrets('prod readiness scanned files contain no obvious secrets'
     wrangler,
     workerEnvExample,
     pagesEnvExample,
+    pagesHeaders,
     gitignore
   ].join('\n'));
 
