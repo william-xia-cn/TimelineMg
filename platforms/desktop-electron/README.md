@@ -24,10 +24,13 @@ This is not a packaging or release approval. Internal package generation, signin
 npm --prefix platforms/desktop-electron install
 npm run electron:dev
 npm run electron:smoke
+npm run webdev:desktop:readiness
 npm run webdev:desktop:smoke
 npm run electron:package:win
 npm run electron:package:mac
 ```
+
+`npm run webdev:desktop:readiness` is a static WebDev Runtime boundary check: it verifies the opt-in runtime mode, route guards, native preload bridge, and Gate E packaging boundary without launching Electron.
 
 `npm run webdev:desktop:smoke` starts local WebDev Worker / Pages services and launches Electron in `TIMEWHERE_DESKTOP_RUNTIME_MODE=webdev` smoke mode. It is a local runtime check only; it does not create a desktop package, sign, notarize, or distribute anything.
 

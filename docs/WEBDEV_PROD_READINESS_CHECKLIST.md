@@ -167,6 +167,7 @@ Gate R 前必须逐条确认：
 Gate E 未批准前只做 readiness：
 
 - Electron WebDev runtime mode 能加载 Web App。
+- `npm run webdev:desktop:readiness` 静态确认 Runtime 边界、导航 guard、preload native bridge 和 Gate E 禁止打包边界。
 - Desktop native bridge 只承载 window、tray、notification、autostart、secure storage、external link。
 - Desktop 不承载 Task / Calendar / Daily Settle / Migration / Sync business logic。
 - 内部包、签名、公证、自动更新、分发需单独批准。

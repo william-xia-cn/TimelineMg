@@ -109,7 +109,9 @@ assert('webdev:verify runs plan-state check',
 assert('webdev:verify runs preview preflight',
   packageJson.scripts?.['webdev:verify']?.includes('npm run webdev:preview:preflight'));
 assert('root package exposes local WebDev Desktop Runtime smoke',
-  packageJson.scripts?.['webdev:desktop:smoke'] === 'node scripts/webdev/desktop-runtime-smoke.mjs'
+  packageJson.scripts?.['webdev:desktop:readiness'] === 'node scripts/webdev/desktop-runtime-readiness-check.mjs'
+    && packageJson.scripts?.['webdev:desktop:smoke'] === 'node scripts/webdev/desktop-runtime-smoke.mjs'
+    && checklist.includes('webdev:desktop:readiness')
     && checklist.includes('webdev:desktop:smoke')
     && parityChecklist.includes('webdev:desktop:smoke')
     && previewRunbook.includes('webdev:desktop:smoke')
@@ -117,6 +119,7 @@ assert('root package exposes local WebDev Desktop Runtime smoke',
 assert('root package exposes local WebDev acceptance command',
   packageJson.scripts?.['webdev:acceptance:local']?.includes('npm run webdev:verify')
     && packageJson.scripts?.['webdev:acceptance:local']?.includes('npm run webdev:ui:walkthrough')
+    && packageJson.scripts?.['webdev:acceptance:local']?.includes('npm run webdev:desktop:readiness')
     && packageJson.scripts?.['webdev:acceptance:local']?.includes('npm run webdev:desktop:smoke')
     && checklist.includes('webdev:acceptance:local'));
 

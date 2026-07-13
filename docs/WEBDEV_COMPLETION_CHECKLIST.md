@@ -27,7 +27,7 @@ TimeWhere WebDev v1 完成时应满足：
 | Phase 4 | 自动迁移闭环 | Preview smoke backed | legacy IndexedDB snapshot、R2 raw snapshot、D1 import、migration conflict、idempotent retry 均有本地 integration evidence；Gate A preview core smoke 已覆盖 migration import、幂等重试、冲突生成和解决。 |
 | Phase 5 | Web App 完整业务覆盖 | Complete for local preview | Dashboard / Tasks / Calendar / Settings / projection / reminder / migration conflict / structure editing 已有本地实现；`npm run webdev:ui:walkthrough` 提供可重复本地 UI walkthrough。真实 preview cloud evidence 仍归 Phase 9 / Gate A。 |
 | Phase 6 | 离线与同步 v1 收敛 | Guarded | Web App 已用只读 bootstrap 初始化本地 read cache，并可按 `/sync/changes` cursor 增量刷新 Task / Calendar / Structure / Settings cache；Task-only pending 已可见且 hydrate / 增量应用都会保留 pending；真正 replay 写 Cloud、非 Task replay、local-over-cloud 均保持 gate。 |
-| Phase 7 | Desktop Runtime 重定位 | Opt-in scaffolded | Electron 增加 `TIMEWHERE_DESKTOP_RUNTIME_MODE=webdev` / `TIMEWHERE_WEB_APP_URL` WebDev runtime mode，可加载 Web App 并保留 native bridge；`npm run webdev:desktop:smoke` 可本地启动 Worker/Pages 并让 Electron smoke 加载 Web App；默认仍是 legacy extension shell。内部包、签名、公证、自动更新和分发仍归 Gate E。 |
+| Phase 7 | Desktop Runtime 重定位 | Opt-in scaffolded | Electron 增加 `TIMEWHERE_DESKTOP_RUNTIME_MODE=webdev` / `TIMEWHERE_WEB_APP_URL` WebDev runtime mode，可加载 Web App 并保留 native bridge；`npm run webdev:desktop:readiness` 静态验证 Runtime 边界、导航 guard、preload native bridge 和 Gate E 禁止打包边界；`npm run webdev:desktop:smoke` 可本地启动 Worker/Pages 并让 Electron smoke 加载 Web App；默认仍是 legacy extension shell。内部包、签名、公证、自动更新和分发仍归 Gate E。 |
 | Phase 8 | Browser Extension 生态化 | Deferred | 第一阶段范围另行批准；不实现 Extension replay。 |
 | Phase 9 | 内部 preview 验收 | Preview acceptance hardened under Gate A | `docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md` 已定义 preview 验收步骤和证据模板；preview Worker / Pages / Google SSO smoke 已通过；`npm run webdev:preview:headers-smoke` 验证 stable Pages preview CSP / security headers / cache policy；`npm run webdev:preview:smoke` 可复核 preview Worker / Pages / D1 / R2 / KV 基础资源；`npm run webdev:preview:core-smoke` 通过临时 smoke account/session 走 preview Worker API 验证 Account / Structure / Task / Calendar / Settings / Sync bootstrap / Sync changes / Migration import / idempotent retry / conflict / resolution，并清理测试数据；`npm run webdev:preview:ui-smoke` 使用临时 smoke session 打开 stable Pages preview，验证 Dashboard / Tasks / Calendar / Settings UI 能读取 preview Cloud 数据；`npm run webdev:preview:data-hygiene-smoke` 验证 preview smoke 后 D1 / KV / local temp files 无残留。 |
 | Phase 10 | prod release readiness | Readiness static gate ready; Gate R only | `docs/WEBDEV_PROD_READINESS_CHECKLIST.md` 已定义 prod readiness 输入、资源规划、数据/安全/回滚核查；`npm run webdev:prod:readiness` 提供只读静态门禁，确认 prod 命名模板、placeholder resource id、replay kill switch、secret hygiene 和 Gate R 边界；`npm run webdev:prod:package` 可输出 Gate R 审批包草稿，但不创建 prod 资源、不部署、不发布；prod deployment、release、tag、GitHub Release 仍需 Gate R。 |
@@ -40,6 +40,7 @@ TimeWhere WebDev v1 完成时应满足：
 npm run webdev:verify
 npm run webdev:preview:preflight
 npm run webdev:ui:walkthrough
+npm run webdev:desktop:readiness
 npm run webdev:desktop:smoke
 npm run webdev:acceptance:local
 npm run webdev:prod:readiness
@@ -51,6 +52,7 @@ git diff --check
 `npm run webdev:verify` 必须保持只使用本地或占位资源，不创建 Cloudflare 资源、不部署、不写 prod。
 `npm run webdev:preview:preflight` 是 Gate A 前的只读预检：核对 `dev / preview / prod` 命名、占位 resource id、replay kill switch、env example、preview/prod 文档和敏感信息边界；它不创建 Cloudflare 资源、不部署、不执行真实 SSO。
 `npm run webdev:ui:walkthrough` 会启动本地 Worker、Pages dev server 和无头浏览器，只使用本地 D1 / 占位 session，不创建真实 Cloudflare 资源；walkthrough 会覆盖 Dashboard / Tasks / Calendar / Settings，并在 Web App bootstrap 后由本地 Worker 创建一条 Cloud Task，再通过 Settings 的 `/sync/changes` cursor 刷新把它拉入 Tasks UI。
+`npm run webdev:desktop:readiness` 是只读静态门禁：检查 Electron WebDev runtime mode、路由 guard、preload native bridge、Desktop 文档和 Gate E 边界；它不启动 Electron、不生成安装包、不签名、不公证、不分发。
 `npm run webdev:desktop:smoke` 会启动本地 Worker / Pages dev server，再以 `TIMEWHERE_DESKTOP_RUNTIME_MODE=webdev` 和 `TIMEWHERE_ELECTRON_SMOKE=1` 启动 Electron；它只验证本地 Runtime 能加载 Web App，不生成安装包、不签名、不分发。
 `npm run webdev:acceptance:local` 串联 `webdev:verify`、`webdev:ui:walkthrough` 和 `webdev:desktop:smoke`，作为不触发 Gate A/E/R 的本地 acceptance 入口。
 `npm run webdev:prod:readiness` 只做静态 readiness gate：检查 prod 配置仍是占位、Gate R 未批准、replay 写开关仍关闭、env example 不含 secret；它不创建 Cloudflare prod 资源、不部署、不发布。

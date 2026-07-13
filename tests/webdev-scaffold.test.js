@@ -95,6 +95,7 @@ const requiredFiles = [
   'scripts/webdev/prod-readiness-check.mjs',
   'scripts/webdev/prod-readiness-package.mjs',
   'scripts/webdev/ui-walkthrough.mjs',
+  'scripts/webdev/desktop-runtime-readiness-check.mjs',
   'scripts/webdev/desktop-runtime-smoke.mjs'
 ];
 
@@ -651,6 +652,7 @@ const previewUiSmoke = read('scripts/webdev/preview-ui-smoke.mjs');
 const previewDataHygieneSmoke = read('scripts/webdev/preview-data-hygiene-smoke.mjs');
 const prodReadinessCheck = read('scripts/webdev/prod-readiness-check.mjs');
 const prodReadinessPackage = read('scripts/webdev/prod-readiness-package.mjs');
+const desktopRuntimeReadinessCheck = read('scripts/webdev/desktop-runtime-readiness-check.mjs');
 assert('Cloudflare preview/provision scripts redact emails and local user paths in command output',
   [cloudflareProvision, previewDeploy, previewSmoke, previewCoreSmoke, previewUiSmoke, previewDataHygieneSmoke].every(script =>
     script.includes('<email>')
@@ -757,10 +759,22 @@ assert('WebDev UI walkthrough exercises read cache change refresh',
     && webdevUiWalkthrough.includes('Tasks view receives incremental Cloud task from sync changes'));
 const webdevDesktopRuntimeSmoke = read('scripts/webdev/desktop-runtime-smoke.mjs');
 assert('root package has WebDev Desktop Runtime smoke script', rootPackage.scripts['webdev:desktop:smoke'] === 'node scripts/webdev/desktop-runtime-smoke.mjs');
+assert('root package has WebDev Desktop Runtime readiness script',
+  rootPackage.scripts['webdev:desktop:readiness'] === 'node scripts/webdev/desktop-runtime-readiness-check.mjs');
 assert('root package has local WebDev acceptance script',
   rootPackage.scripts['webdev:acceptance:local']?.includes('npm run webdev:verify')
     && rootPackage.scripts['webdev:acceptance:local']?.includes('npm run webdev:ui:walkthrough')
+    && rootPackage.scripts['webdev:acceptance:local']?.includes('npm run webdev:desktop:readiness')
     && rootPackage.scripts['webdev:acceptance:local']?.includes('npm run webdev:desktop:smoke'));
+assert('WebDev Desktop Runtime readiness check preserves runtime-only boundary',
+  desktopRuntimeReadinessCheck.includes('WebDev Desktop Runtime readiness static check')
+    && desktopRuntimeReadinessCheck.includes('business_logic_owner')
+    && desktopRuntimeReadinessCheck.includes('installWebDevNavigationGuards')
+    && desktopRuntimeReadinessCheck.includes('Desktop preload exposes native bridge only')
+    && desktopRuntimeReadinessCheck.includes('Gate E')
+    && desktopRuntimeReadinessCheck.includes('No desktop package was built, signed, notarized, or distributed')
+    && desktopRuntimeReadinessCheck.includes("!desktopSmoke.includes('package:win')")
+    && desktopRuntimeReadinessCheck.includes("!desktopSmoke.includes('electron-builder')"));
 assert('WebDev Desktop Runtime smoke loads local Pages through Electron without packaging',
   webdevDesktopRuntimeSmoke.includes('TIMEWHERE_ELECTRON_SMOKE')
     && webdevDesktopRuntimeSmoke.includes('TIMEWHERE_DESKTOP_RUNTIME_MODE')

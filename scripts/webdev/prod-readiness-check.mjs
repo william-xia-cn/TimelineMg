@@ -14,6 +14,7 @@ const requiredFiles = [
   'workers/.dev.vars.example',
   'pages/.env.example',
   'pages/public/_headers',
+  'scripts/webdev/desktop-runtime-readiness-check.mjs',
   'scripts/webdev/prod-readiness-package.mjs',
   'package.json',
   '.gitignore'
@@ -69,6 +70,7 @@ const wrangler = exists('workers/wrangler.toml') ? read('workers/wrangler.toml')
 const workerEnvExample = exists('workers/.dev.vars.example') ? read('workers/.dev.vars.example') : '';
 const pagesEnvExample = exists('pages/.env.example') ? read('pages/.env.example') : '';
 const pagesHeaders = exists('pages/public/_headers') ? read('pages/public/_headers') : '';
+const desktopReadinessCheck = exists('scripts/webdev/desktop-runtime-readiness-check.mjs') ? read('scripts/webdev/desktop-runtime-readiness-check.mjs') : '';
 const prodReadinessPackage = exists('scripts/webdev/prod-readiness-package.mjs') ? read('scripts/webdev/prod-readiness-package.mjs') : '';
 const packageJson = exists('package.json') ? JSON.parse(read('package.json')) : { scripts: {} };
 const gitignore = exists('.gitignore') ? read('.gitignore') : '';
@@ -132,10 +134,20 @@ assert('local and preview scripts exist but prod deploy script is not exposed',
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:headers-smoke')
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:core-smoke')
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:data-hygiene-smoke')
+    && packageJson.scripts?.['webdev:desktop:readiness'] === 'node scripts/webdev/desktop-runtime-readiness-check.mjs'
+    && packageJson.scripts?.['webdev:acceptance:local']?.includes('npm run webdev:desktop:readiness')
     && packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
     && packageJson.scripts?.['webdev:prod:package'] === 'node scripts/webdev/prod-readiness-package.mjs'
     && !packageJson.scripts?.['webdev:prod:deploy']
     && !packageJson.scripts?.['webdev:release']);
+
+assert('Desktop Runtime readiness stays Gate E only',
+  desktopReadinessCheck.includes('WebDev Desktop Runtime readiness static check')
+    && desktopReadinessCheck.includes('Gate E')
+    && desktopReadinessCheck.includes('No desktop package was built, signed, notarized, or distributed')
+    && desktopReadinessCheck.includes('business_logic_owner')
+    && desktopReadinessCheck.includes('installWebDevNavigationGuards')
+    && desktopReadinessCheck.includes("!desktopSmoke.includes('electron-builder')"));
 
 assert('prod readiness package is evidence-only and gate-aware',
   prodReadinessPackage.includes('WebDev Prod Readiness Package Draft')
@@ -184,6 +196,7 @@ assertNoObviousSecrets('prod readiness scanned files contain no obvious secrets'
     workerEnvExample,
     pagesEnvExample,
     pagesHeaders,
+    desktopReadinessCheck,
     prodReadinessPackage,
     gitignore
   ].join('\n'));
