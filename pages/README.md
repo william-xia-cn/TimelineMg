@@ -29,7 +29,7 @@
 
 - `Content-Security-Policy`：限制默认资源来源，允许 Google SSO script/frame 和 Cloudflare Workers API 连接。
 - `X-Content-Type-Options` / `X-Frame-Options` / `Referrer-Policy` / `Permissions-Policy`：作为 preview/prod readiness 的基础安全头。
-- `Cache-Control`：`/assets/*` 使用长期 immutable cache，`/index.html` 使用 `no-store`，避免 Web App shell 更新被旧 HTML 卡住。
+- `Cache-Control`：`/assets/*` 使用长期 immutable cache，`/` 和 `/index.html` 使用 `no-store`，避免 Web App shell 更新被旧 HTML 卡住。
 
 该文件不包含真实 Cloudflare resource id、OAuth secret、token 或账号信息。
 

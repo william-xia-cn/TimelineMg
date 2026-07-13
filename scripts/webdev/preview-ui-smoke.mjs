@@ -25,6 +25,7 @@ function sanitize(text) {
     .replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '<uuid>')
     .replace(/[a-f0-9]{32,}/gi, '<hex-id>')
     .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '<email>')
+    .replace(/[A-Za-z]:\\Users\\[^\\\r\n"]+/g, '<user-home>')
     .replace(new RegExp(escapedToken || '___NO_TOKEN___', 'g'), '<token>');
 }
 

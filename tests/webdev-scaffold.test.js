@@ -87,6 +87,7 @@ const requiredFiles = [
   'scripts/webdev/preview-preflight.mjs',
   'scripts/webdev/provision-cloudflare.mjs',
   'scripts/webdev/deploy-cloudflare-preview.mjs',
+  'scripts/webdev/preview-headers-smoke.mjs',
   'scripts/webdev/preview-smoke.mjs',
   'scripts/webdev/preview-core-smoke.mjs',
   'scripts/webdev/preview-ui-smoke.mjs',
@@ -138,7 +139,8 @@ assert('Pages headers define CSP and security headers for preview/prod readiness
     && pagesHeaders.includes('https://accounts.google.com')
     && pagesHeaders.includes('https://*.workers.dev')
     && pagesHeaders.includes('Cache-Control: public, max-age=31536000, immutable')
-    && pagesHeaders.includes('Cache-Control: no-store'));
+    && pagesHeaders.includes('/index.html')
+    && pagesHeaders.includes('/\n  Cache-Control: no-store'));
 assert('WebDev completion checklist records phases and approval gates',
   completionChecklist.includes('Phase 0')
     && completionChecklist.includes('Phase 10')
@@ -621,22 +623,31 @@ assert('root package has Gate A Cloudflare provision/deploy scripts',
     && rootPackage.scripts['webdev:preview:deploy'] === 'node scripts/webdev/deploy-cloudflare-preview.mjs');
 assert('root package has Gate A preview smoke script',
   rootPackage.scripts['webdev:preview:smoke'] === 'node scripts/webdev/preview-smoke.mjs');
+assert('root package has Gate A preview headers smoke script',
+  rootPackage.scripts['webdev:preview:headers-smoke'] === 'node scripts/webdev/preview-headers-smoke.mjs');
 assert('root package has Gate A preview core smoke script',
   rootPackage.scripts['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs');
 assert('root package has Gate A preview UI smoke script',
   rootPackage.scripts['webdev:preview:ui-smoke'] === 'node scripts/webdev/preview-ui-smoke.mjs');
 assert('root package has Gate A preview acceptance aggregate script',
-  rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:smoke')
+  rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:headers-smoke')
+    && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:smoke')
     && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:core-smoke')
     && rootPackage.scripts['webdev:preview:acceptance']?.includes('npm run webdev:preview:ui-smoke'));
 assert('root package has Gate R readiness-only script',
   rootPackage.scripts['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs');
 const cloudflareProvision = read('scripts/webdev/provision-cloudflare.mjs');
 const previewDeploy = read('scripts/webdev/deploy-cloudflare-preview.mjs');
+const previewHeadersSmoke = read('scripts/webdev/preview-headers-smoke.mjs');
 const previewSmoke = read('scripts/webdev/preview-smoke.mjs');
 const previewCoreSmoke = read('scripts/webdev/preview-core-smoke.mjs');
 const previewUiSmoke = read('scripts/webdev/preview-ui-smoke.mjs');
 const prodReadinessCheck = read('scripts/webdev/prod-readiness-check.mjs');
+assert('Cloudflare preview/provision scripts redact emails and local user paths in command output',
+  [cloudflareProvision, previewDeploy, previewSmoke, previewCoreSmoke, previewUiSmoke].every(script =>
+    script.includes('<email>')
+      && script.includes('<user-home>')
+      && script.includes('replaceAll(root, \'<workspace>\')')));
 assert('Cloudflare provision script targets dev and preview only',
   cloudflareProvision.includes('timewhere-dev-api')
     && cloudflareProvision.includes('timewhere-preview-api')
@@ -655,6 +666,13 @@ assert('preview deploy script uses generated local config and preview environmen
     && previewDeploy.includes("'--branch',")
     && previewDeploy.includes("'WebDev'")
     && previewDeploy.includes('canonicalPagesUrl'));
+assert('preview headers smoke checks CSP and cache headers without Cloudflare auth',
+  previewHeadersSmoke.includes('content-security-policy')
+    && previewHeadersSmoke.includes("frame-ancestors 'none'")
+    && previewHeadersSmoke.includes('cache-control')
+    && previewHeadersSmoke.includes('no-store')
+    && previewHeadersSmoke.includes('public, max-age=31536000, immutable')
+    && !previewHeadersSmoke.includes('wrangler'));
 assert('preview smoke script is Gate A only and refuses non-preview resources',
   previewSmoke.includes('timewhere-preview-api')
     && previewSmoke.includes('timewhere-preview-web')

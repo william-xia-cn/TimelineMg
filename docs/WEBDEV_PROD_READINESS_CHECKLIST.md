@@ -155,7 +155,7 @@ Gate R 前必须逐条确认：
 - dependency review；
 - CORS review；
 - CSP review；
-- Cloudflare Pages static headers / cache review：`pages/public/_headers` 已定义 CSP、基础安全响应头、`/assets/*` 长期 cache 和 `/index.html` no-store；
+- Cloudflare Pages static headers / cache review：`pages/public/_headers` 已定义 CSP、基础安全响应头、`/assets/*` 长期 cache，以及 `/` / `/index.html` no-store；
 - auth session expiry review；
 - migration snapshot privacy review；
 - R2 access policy review；

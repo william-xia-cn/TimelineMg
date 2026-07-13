@@ -103,6 +103,7 @@ assert('prod replay write switches stay off by default',
 
 assert('preview evidence commands are represented before prod readiness',
   previewRunbook.includes('npm run webdev:preview:smoke')
+    && previewRunbook.includes('npm run webdev:preview:headers-smoke')
     && previewRunbook.includes('npm run webdev:preview:core-smoke')
     && previewRunbook.includes('npm run webdev:preview:ui-smoke')
     && previewRunbook.includes('npm run webdev:preview:acceptance')
@@ -121,8 +122,10 @@ assert('risk register and rollback plan are represented before Gate R',
 
 assert('local and preview scripts exist but prod deploy script is not exposed',
   packageJson.scripts?.['webdev:preview:smoke'] === 'node scripts/webdev/preview-smoke.mjs'
+    && packageJson.scripts?.['webdev:preview:headers-smoke'] === 'node scripts/webdev/preview-headers-smoke.mjs'
     && packageJson.scripts?.['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs'
     && packageJson.scripts?.['webdev:preview:ui-smoke'] === 'node scripts/webdev/preview-ui-smoke.mjs'
+    && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:headers-smoke')
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:core-smoke')
     && packageJson.scripts?.['webdev:prod:readiness'] === 'node scripts/webdev/prod-readiness-check.mjs'
     && !packageJson.scripts?.['webdev:prod:deploy']
@@ -150,7 +153,8 @@ assert('Pages security headers and cache policy are ready for preview/prod',
     && pagesHeaders.includes('https://accounts.google.com')
     && pagesHeaders.includes('https://*.workers.dev')
     && pagesHeaders.includes('Cache-Control: public, max-age=31536000, immutable')
-    && pagesHeaders.includes('Cache-Control: no-store')
+    && pagesHeaders.includes('/index.html')
+    && pagesHeaders.includes('/\n  Cache-Control: no-store')
     && prodChecklist.includes('pages/public/_headers'));
 
 assertNoObviousSecrets('prod readiness scanned files contain no obvious secrets',

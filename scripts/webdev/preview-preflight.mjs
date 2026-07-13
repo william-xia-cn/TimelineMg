@@ -51,6 +51,7 @@ const requiredFiles = [
   'docs/WEBDEV_PROD_READINESS_CHECKLIST.md',
   'scripts/webdev/provision-cloudflare.mjs',
   'scripts/webdev/deploy-cloudflare-preview.mjs',
+  'scripts/webdev/preview-headers-smoke.mjs',
   'scripts/webdev/preview-smoke.mjs',
   'scripts/webdev/preview-core-smoke.mjs',
   'scripts/webdev/preview-ui-smoke.mjs',
@@ -118,7 +119,8 @@ assert('pages headers provide CSP and cache readiness without embedded secrets',
     && pagesHeaders.includes('https://accounts.google.com')
     && pagesHeaders.includes('https://*.workers.dev')
     && pagesHeaders.includes('Cache-Control: public, max-age=31536000, immutable')
-    && pagesHeaders.includes('Cache-Control: no-store'));
+    && pagesHeaders.includes('/index.html')
+    && pagesHeaders.includes('/\n  Cache-Control: no-store'));
 assert('local secret-bearing env files are ignored',
   gitignore.includes('workers/.dev.vars')
     && gitignore.includes('pages/.env.local')
@@ -151,12 +153,15 @@ assert('root package exposes Cloudflare provision and preview deploy scripts',
     && packageJson.scripts?.['webdev:preview:deploy'] === 'node scripts/webdev/deploy-cloudflare-preview.mjs');
 assert('root package exposes preview smoke script',
   packageJson.scripts?.['webdev:preview:smoke'] === 'node scripts/webdev/preview-smoke.mjs');
+assert('root package exposes preview headers smoke script',
+  packageJson.scripts?.['webdev:preview:headers-smoke'] === 'node scripts/webdev/preview-headers-smoke.mjs');
 assert('root package exposes preview core smoke script',
   packageJson.scripts?.['webdev:preview:core-smoke'] === 'node scripts/webdev/preview-core-smoke.mjs');
 assert('root package exposes preview UI smoke script',
   packageJson.scripts?.['webdev:preview:ui-smoke'] === 'node scripts/webdev/preview-ui-smoke.mjs');
 assert('root package exposes preview acceptance aggregate script',
-  packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:smoke')
+  packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:headers-smoke')
+    && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:smoke')
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:core-smoke')
     && packageJson.scripts?.['webdev:preview:acceptance']?.includes('npm run webdev:preview:ui-smoke'));
 assert('webdev verify runs preview preflight',
