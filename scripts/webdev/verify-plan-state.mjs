@@ -41,6 +41,8 @@ const taskReplayGateBPath = 'docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md';
 assert('Task replay Gate B readiness packet exists', exists(taskReplayGateBPath));
 const nonTaskReplayGateCPath = 'docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md';
 assert('non-Task replay Gate C readiness packet exists', exists(nonTaskReplayGateCPath));
+const browserExtensionGateDPath = 'docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md';
+assert('Browser Extension Gate D readiness packet exists', exists(browserExtensionGateDPath));
 
 const checklist = exists(checklistPath) ? read(checklistPath) : '';
 const parityChecklist = exists(parityPath) ? read(parityPath) : '';
@@ -49,6 +51,7 @@ const prodReadiness = exists(prodReadinessPath) ? read(prodReadinessPath) : '';
 const observabilityRunbook = exists(observabilityRunbookPath) ? read(observabilityRunbookPath) : '';
 const taskReplayGateB = exists(taskReplayGateBPath) ? read(taskReplayGateBPath) : '';
 const nonTaskReplayGateC = exists(nonTaskReplayGateCPath) ? read(nonTaskReplayGateCPath) : '';
+const browserExtensionGateD = exists(browserExtensionGateDPath) ? read(browserExtensionGateDPath) : '';
 for (const phase of ['Phase 0', 'Phase 1', 'Phase 2', 'Phase 3', 'Phase 4', 'Phase 5', 'Phase 6', 'Phase 7', 'Phase 8', 'Phase 9', 'Phase 10']) {
   assert(`${phase} is represented in completion checklist`, checklist.includes(phase));
 }
@@ -87,6 +90,12 @@ assert('non-Task replay Gate C packet records readiness-only boundary',
     && nonTaskReplayGateC.includes('C2 Structure')
     && nonTaskReplayGateC.includes('C3 Settings')
     && nonTaskReplayGateC.includes('npm.cmd run webdev:gate-c:readiness'));
+assert('Browser Extension Gate D packet records readiness-only boundary',
+  browserExtensionGateD.includes('Gate D readiness packet')
+    && browserExtensionGateD.includes('不批准、不开启、不实现 Browser Extension WebDev replay')
+    && browserExtensionGateD.includes('不提交 CWS')
+    && browserExtensionGateD.includes('Extension IndexedDB 不作为 canonical data source')
+    && browserExtensionGateD.includes('npm.cmd run webdev:extension:readiness'));
 
 const wrangler = read('workers/wrangler.toml');
 assert('wrangler declares dev preview and prod names',
@@ -135,6 +144,8 @@ assert('root package exposes Gate R readiness-only check',
 assert('root package exposes Gate D Browser Extension readiness-only check',
   packageJson.scripts?.['webdev:extension:readiness'] === 'node scripts/webdev/browser-extension-readiness-check.mjs'
     && checklist.includes('webdev:extension:readiness')
+    && checklist.includes('WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md')
+    && browserExtensionGateD.includes('webdev:extension:readiness')
     && prodReadiness.includes('webdev:extension:readiness')
     && taskBoard.includes('webdev:extension:readiness'));
 assert('root package exposes observability backup readiness-only check',
@@ -190,6 +201,7 @@ const scanned = [
   observabilityRunbook,
   taskReplayGateB,
   nonTaskReplayGateC,
+  browserExtensionGateD,
   workerEnvExample,
   pagesEnvExample,
   wrangler

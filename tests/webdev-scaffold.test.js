@@ -83,6 +83,7 @@ const requiredFiles = [
   'docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md',
   'docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md',
   'docs/WEBDEV_PROD_READINESS_CHECKLIST.md',
+  'docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md',
   'docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md',
   'docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md',
   'docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md',
@@ -127,6 +128,7 @@ const completionChecklist = read('docs/WEBDEV_COMPLETION_CHECKLIST.md');
 const businessParityChecklist = read('docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md');
 const previewRunbook = read('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md');
 const prodReadinessChecklist = read('docs/WEBDEV_PROD_READINESS_CHECKLIST.md');
+const browserExtensionGateDPacket = read('docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md');
 const observabilityBackupRunbook = read('docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md');
 const taskReplayGateBPacket = read('docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md');
 const nonTaskReplayGateCPacket = read('docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md');
@@ -186,6 +188,13 @@ assert('WebDev prod readiness checklist records Gate R non-release boundary',
     && prodReadinessChecklist.includes('Rollback plan')
     && prodReadinessChecklist.includes('Security / Privacy Readiness')
     && !obviousSecretPattern.test(prodReadinessChecklist));
+assert('WebDev Browser Extension Gate D packet records readiness-only boundary',
+  browserExtensionGateDPacket.includes('Gate D readiness packet')
+    && browserExtensionGateDPacket.includes('不批准、不开启、不实现 Browser Extension WebDev replay')
+    && browserExtensionGateDPacket.includes('不提交 CWS')
+    && browserExtensionGateDPacket.includes('Extension IndexedDB 不作为 canonical data source')
+    && browserExtensionGateDPacket.includes('npm.cmd run webdev:extension:readiness')
+    && !obviousSecretPattern.test(browserExtensionGateDPacket));
 assert('WebDev observability backup runbook records Gate R readiness-only boundary',
   observabilityBackupRunbook.includes('Gate R readiness runbook')
     && observabilityBackupRunbook.includes('D1 schema-only export rehearsal')
@@ -823,6 +832,7 @@ assert('root package has local WebDev acceptance script',
 assert('WebDev Browser Extension readiness check preserves Gate D boundary',
   browserExtensionReadinessCheck.includes('WebDev Browser Extension readiness static check')
     && browserExtensionReadinessCheck.includes('Browser Extension remains explicitly deferred')
+    && browserExtensionReadinessCheck.includes('Gate D packet is approval-only')
     && browserExtensionReadinessCheck.includes('current Extension runtime has no WebDev replay endpoint integration')
     && browserExtensionReadinessCheck.includes('Gate D')
     && browserExtensionReadinessCheck.includes("!packageJson.scripts?.['webdev:extension:deploy']")

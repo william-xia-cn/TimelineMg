@@ -8,6 +8,7 @@ const requiredFiles = [
   'docs/WEBDEV_PROD_READINESS_CHECKLIST.md',
   'docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md',
   'docs/WEBDEV_COMPLETION_CHECKLIST.md',
+  'docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md',
   'docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md',
   'docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md',
   'docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md',
@@ -71,6 +72,7 @@ for (const file of requiredFiles) {
 const prodChecklist = exists('docs/WEBDEV_PROD_READINESS_CHECKLIST.md') ? read('docs/WEBDEV_PROD_READINESS_CHECKLIST.md') : '';
 const previewRunbook = exists('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md') ? read('docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md') : '';
 const completionChecklist = exists('docs/WEBDEV_COMPLETION_CHECKLIST.md') ? read('docs/WEBDEV_COMPLETION_CHECKLIST.md') : '';
+const browserExtensionGateD = exists('docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md') ? read('docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md') : '';
 const observabilityRunbook = exists('docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md') ? read('docs/WEBDEV_OBSERVABILITY_BACKUP_RUNBOOK.md') : '';
 const taskReplayGateB = exists('docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md') ? read('docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md') : '';
 const nonTaskReplayGateC = exists('docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md') ? read('docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md') : '';
@@ -165,7 +167,10 @@ assert('local and preview scripts exist but prod deploy script is not exposed',
 assert('Browser Extension readiness stays Gate D only',
   extensionReadinessCheck.includes('WebDev Browser Extension readiness static check')
     && extensionReadinessCheck.includes('Gate D')
+    && browserExtensionGateD.includes('Gate D readiness packet')
+    && browserExtensionGateD.includes('不提交 CWS')
     && extensionReadinessCheck.includes('Browser Extension remains explicitly deferred')
+    && extensionReadinessCheck.includes('Gate D packet is approval-only')
     && extensionReadinessCheck.includes('no WebDev replay endpoint integration')
     && extensionReadinessCheck.includes('No Extension replay, CWS submission, release, or deployment was performed')
     && extensionReadinessCheck.includes("!packageJson.scripts?.['webdev:extension:deploy']"));
@@ -249,6 +254,7 @@ assertNoObviousSecrets('prod readiness scanned files contain no obvious secrets'
     prodChecklist,
     previewRunbook,
     completionChecklist,
+    browserExtensionGateD,
     observabilityRunbook,
     projectMaster,
     taskBoard,

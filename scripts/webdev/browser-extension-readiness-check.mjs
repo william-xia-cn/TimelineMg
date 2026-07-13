@@ -8,6 +8,7 @@ const requiredFiles = [
   'extension/manifest.json',
   'extension/background.js',
   'extension/shared/js/platform.js',
+  'docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md',
   'docs/WEBDEV_COMPLETION_CHECKLIST.md',
   'docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md',
   'docs/WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md',
@@ -53,6 +54,7 @@ for (const file of requiredFiles) {
 const manifest = exists('extension/manifest.json') ? JSON.parse(read('extension/manifest.json')) : {};
 const background = exists('extension/background.js') ? read('extension/background.js') : '';
 const platform = exists('extension/shared/js/platform.js') ? read('extension/shared/js/platform.js') : '';
+const gateDPacket = exists('docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md') ? read('docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md') : '';
 const completionChecklist = exists('docs/WEBDEV_COMPLETION_CHECKLIST.md') ? read('docs/WEBDEV_COMPLETION_CHECKLIST.md') : '';
 const parityChecklist = exists('docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md') ? read('docs/WEBDEV_BUSINESS_PARITY_CHECKLIST.md') : '';
 const targetArchitecture = exists('docs/WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md') ? read('docs/WEBDEV_GAP_ANALYSIS_AND_TARGET_ARCHITECTURE.md') : '';
@@ -68,13 +70,22 @@ assert('root package exposes Browser Extension readiness script',
   packageJson.scripts?.['webdev:extension:readiness'] === 'node scripts/webdev/browser-extension-readiness-check.mjs');
 
 assert('Browser Extension remains explicitly deferred under Gate D',
-  completionChecklist.includes('| Phase 8 | Browser Extension 生态化 | Deferred |')
+  completionChecklist.includes('| Phase 8 | Browser Extension 生态化 |')
+    && completionChecklist.includes('Deferred')
     && completionChecklist.includes('| D | 定义并实现 Browser Extension 第一阶段范围或 replay。')
+    && completionChecklist.includes('WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md')
     && completionChecklist.includes('Browser Extension replay')
     && parityChecklist.includes('Browser Extension ecosystem')
     && parityChecklist.includes('Gate D required before defining first phase')
     && projectMaster.includes('Browser Extension scope deferred')
     && taskBoard.includes('deferred Browser Extension scope'));
+
+assert('Gate D packet is approval-only and does not approve CWS or replay',
+  gateDPacket.includes('Gate D readiness packet')
+    && gateDPacket.includes('不批准、不开启、不实现 Browser Extension WebDev replay')
+    && gateDPacket.includes('不提交 CWS')
+    && gateDPacket.includes('Extension IndexedDB 不作为 canonical data source')
+    && gateDPacket.includes('npm.cmd run webdev:extension:readiness'));
 
 assert('architecture docs position Extension as ecosystem component, not primary product',
   decisions.includes('Browser Extension becomes an ecosystem component')
