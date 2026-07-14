@@ -613,7 +613,7 @@ function renderSettings(root, props) {
               <span>${escapeHtml(cloudSessionStatus)}</span>
               <span>Read cache cursor: ${escapeHtml(props.syncCursor ?? 0)}</span>
               <span>${escapeHtml(props.syncIncrementalStatus || "Not loaded")}</span>
-              <span>${escapeHtml(props.ssoState?.message || "Google SSO ready.")}</span>
+              <span id="legacySsoStatus">${escapeHtml(props.ssoState?.message || "Google SSO ready.")}</span>
             </div>
             <div class="google-sync-card-actions">
               <button class="action-btn" id="legacyRefreshCloudBtn" type="button">刷新 session</button>
@@ -637,6 +637,11 @@ function renderSettings(root, props) {
     root.querySelector('#legacyRunMigrationBtn')?.addEventListener('click', onRunMigration);
     root.querySelector('#legacySignOutBtn')?.addEventListener('click', onSignOut);
   }
+  const legacySsoStatus = root.querySelector('#legacySsoStatus');
+  if (legacySsoStatus) {
+    legacySsoStatus.textContent = props.ssoState?.message || 'Google SSO ready.';
+  }
+
   if (googleButtonRef) {
     const googleSsoMount = root.querySelector('#googleSsoButtonMount');
     if (googleButtonRef.current !== googleSsoMount) {
