@@ -2295,3 +2295,167 @@ textarea:disabled {
     grid-column: auto;
   }
 }
+
+/* WebDev legacy hard parity layer: keep old extension page structure as the UI baseline. */
+.planner-layout {
+  grid-template-columns: 240px minmax(680px, 1fr) 360px;
+  padding: 0;
+  gap: 12px;
+}
+
+.planner-layout .context-sidebar {
+  background: rgba(255,255,255,.35);
+  border-right: 1px solid rgba(255,255,255,.38);
+}
+
+#btnCreatePlan {
+  min-height: 40px;
+  border-radius: 10px;
+  background: #1d8cf8;
+  color: #fff;
+}
+
+#plansList .plan-link,
+.context-menu .context-item {
+  height: 40px;
+  border-radius: 10px;
+}
+
+.header-breadcrumb .bc-parent,
+.header-breadcrumb .bc-sep {
+  color: #64748b;
+}
+
+.header-breadcrumb .bc-current {
+  color: #1e293b;
+}
+
+#searchBar.search-bar {
+  height: 36px;
+  border-radius: 18px;
+  background: rgba(255,255,255,.76);
+  border: 1px solid rgba(203,213,225,.75);
+}
+
+#searchInput {
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+#btnFilter.filter-active,
+#btnGroupBy:focus-visible {
+  border-color: #1d8cf8;
+  color: #1d8cf8;
+  box-shadow: 0 0 0 3px rgba(29,140,248,.12);
+}
+
+.filter-panel {
+  margin: 10px 32px 0;
+  padding: 14px;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  background: rgba(255,255,255,.82);
+  border: 1px solid rgba(203,213,225,.75);
+  border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(15,23,42,.06);
+}
+
+.planner-column {
+  min-width: 230px;
+  border-radius: 14px;
+  background: rgba(248,250,252,.72);
+  border: 1px solid rgba(226,232,240,.78);
+}
+
+.planner-column-header {
+  min-height: 42px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(226,232,240,.76);
+}
+
+.task-card,
+.task-list-row,
+.task-calendar-day {
+  border-radius: 12px;
+  border: 1px solid rgba(226,232,240,.86);
+  background: rgba(255,255,255,.92);
+  box-shadow: 0 4px 12px rgba(15,23,42,.04);
+}
+
+.task-card:hover,
+.task-list-row:hover,
+.task-calendar-item:hover {
+  border-color: rgba(29,140,248,.42);
+  box-shadow: 0 10px 24px rgba(15,23,42,.08);
+}
+
+#taskDetailPanel.task-detail-panel-shell {
+  border-radius: 16px;
+  background: rgba(255,255,255,.44);
+}
+
+#taskDetailPanel .task-detail-panel {
+  border-radius: 16px;
+  background: rgba(255,255,255,.9);
+  border: 1px solid rgba(226,232,240,.85);
+}
+
+#modalOverlay.modal-overlay {
+  display: none;
+}
+
+.calendar-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.calendar-page.main-content {
+  border-radius: 18px;
+  background: rgba(255,255,255,.72);
+}
+
+.calendar-toolbar {
+  min-height: 52px;
+  padding: 0 4px;
+}
+
+#btnToday,
+#btnPrev,
+#btnNext,
+#btnSearch,
+#viewSelector .btn-dropdown {
+  height: 36px;
+  border-radius: 999px;
+}
+
+#currentDate.current-date {
+  min-width: 220px;
+  font-size: 20px;
+  color: #1e293b;
+}
+
+.calendar-container {
+  border-radius: 16px;
+  background: rgba(255,255,255,.9);
+}
+
+#weekView.view-panel,
+#monthView.view-panel {
+  background: #fff;
+}
+
+#weekView .calendar-body,
+#monthView .month-grid {
+  background: #fff;
+}
+
+#calModal.event-modal {
+  z-index: 80;
+}
+
+#calModal .event-modal-content {
+  width: min(560px, calc(100vw - 48px));
+  border-radius: 16px;
+  background: rgba(255,255,255,.96);
+}

@@ -549,6 +549,18 @@ assert('Reminder state helper exposes work reminder session state machine',
 
 const app = read('pages/src/App.jsx');
 const pagesStyles = read('pages/src/styles.css');
+const legacyUiAdapter = read('pages/src/legacyUiAdapter.js');
+assert('WebDev legacy UI adapter maps old page operations to repositories only',
+  app.includes('createLegacyUiAdapter')
+    && legacyUiAdapter.includes('taskRepository')
+    && legacyUiAdapter.includes('calendarRepository')
+    && legacyUiAdapter.includes('structureRepository')
+    && legacyUiAdapter.includes('settingsRepository'));
+assert('WebDev legacy UI adapter does not reintroduce old runtime storage dependencies',
+  !legacyUiAdapter.includes('TimeWhereDB')
+    && !legacyUiAdapter.includes('chrome.')
+    && !legacyUiAdapter.includes('indexedDB')
+    && !legacyUiAdapter.includes('google-sync'));
 const apiClient = read('pages/src/api/client.js');
 for (const label of ['Dashboard', 'Tasks', 'Calendar', 'Settings']) {
   assert(`Web App exposes ${label}`, app.includes(label));
@@ -584,6 +596,35 @@ assert('Tasks preserves original planner/sidebar/detail design',
     && app.includes('kanban-board')
     && app.includes('planner-detail-rail')
     && pagesStyles.includes('.kanban-column'));
+assert('Web App hard-aligns Tasks to legacy DOM ids and controls',
+  app.includes('id="btnCreatePlan"')
+    && app.includes('id="navMyDay"')
+    && app.includes('id="navMyTasks"')
+    && app.includes('id="navMyManageBac"')
+    && app.includes('id="plansList"')
+    && app.includes('id="searchInput"')
+    && app.includes('id="btnFilter"')
+    && app.includes('id="btnGroupBy"')
+    && app.includes('id="kanbanBoard"')
+    && app.includes('id="taskListView"')
+    && app.includes('id="taskCalendarView"')
+    && app.includes('id="taskDetailPanel"')
+    && app.includes('id="modalOverlay"'));
+assert('Web App hard-aligns Calendar to legacy DOM ids and controls',
+  app.includes('id="btnToday"')
+    && app.includes('id="btnPrev"')
+    && app.includes('id="btnNext"')
+    && app.includes('id="currentDate"')
+    && app.includes('id="btnSearch"')
+    && app.includes('id="searchBar"')
+    && app.includes('id="viewSelector"')
+    && app.includes('id="weekView"')
+    && app.includes('id="monthView"')
+    && app.includes('id="calModal"')
+    && app.includes('id="calModalBackdrop"')
+    && app.includes('id="calModalClose"')
+    && app.includes('id="calModalBody"')
+    && app.includes('id="calModalFooter"'));
 assert('Calendar and Settings preserve original dense product surfaces',
   app.includes('calendar-layout')
     && app.includes('gcal-container')
@@ -644,7 +685,7 @@ assert('Pages API client can read and resolve Task sync conflicts',
 assert('Web App uses legacy IndexedDB snapshot adapter for migration preview',
   app.includes('buildLegacyIndexedDbSnapshot') && app.includes("deviceId: 'web-preview'"));
 assert('Web App exposes Calendar event CRUD controls',
-  app.includes('Create calendar event') && app.includes('Save event to Cloud') && app.includes('Search calendar events') && app.includes('CalendarEventDetailPanel') && app.includes('Save calendar event detail') && app.includes('Edit event') && app.includes('calendarRepository.updateEvent') && app.includes('Delete event'));
+  app.includes('Create calendar event') && app.includes('Save event to Cloud') && app.includes('Search calendar events') && app.includes('CalendarEventDetailPanel') && app.includes('Save calendar event detail') && app.includes('Edit event') && app.includes('legacyUiAdapter.calendar.update') && app.includes('Delete event'));
 assert('Web App exposes Calendar event recurrence fields without changing D1 schema',
   app.includes('Repeat days') && app.includes('active_start_date') && app.includes('parseRepeatDaysText') && app.includes('payload: {') && app.includes('repeat_days'));
 assert('Web App exposes Structure management controls',

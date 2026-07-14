@@ -24,6 +24,7 @@ import { createStructureRepository, OfflineStructureWriteBlockedError } from './
 import { createSettingsRepository, OfflineSettingsWriteBlockedError } from './repositories/settingsRepository.js';
 import { createMigrationRepository } from './repositories/migrationRepository.js';
 import { createBrowserPlatform } from './platform/browserPlatform.js';
+import { createLegacyUiAdapter } from './legacyUiAdapter.js';
 import { computeDashboardProjection } from './domain/dailySettleProjection.js';
 import { computeCalendarDateProjection } from './domain/calendarDateProjection.js';
 import { advanceReminderSession, computeReminderState } from './domain/reminderState.js';
@@ -388,6 +389,7 @@ export function App() {
   const structureRepository = useMemo(() => createStructureRepository(apiClient, { isOnline: () => navigator.onLine }), []);
   const settingsRepository = useMemo(() => createSettingsRepository(apiClient, { isOnline: () => navigator.onLine }), []);
   const migrationRepository = useMemo(() => createMigrationRepository(apiClient), []);
+  const legacyUiAdapter = useMemo(() => createLegacyUiAdapter({ taskRepository, calendarRepository, structureRepository, settingsRepository }), [taskRepository, calendarRepository, structureRepository, settingsRepository]);
   const [activeView, setActiveView] = useState(getInitialActiveView);
   const [tasks, setTasks] = useState(() => taskRepository.getCachedTasks().length ? taskRepository.getCachedTasks() : seedTasks);
   const [events, setEvents] = useState(() => calendarRepository.getCachedEvents().length ? calendarRepository.getCachedEvents() : seedEvents);
@@ -909,7 +911,7 @@ export function App() {
     }
     if (!draft.title.trim()) return;
     try {
-      const created = await taskRepository.createTask({
+      const created = await legacyUiAdapter.tasks.create({
         title: draft.title.trim(),
         due_date: draft.due_date || null,
         schedule_time: draft.schedule_time || null,
@@ -933,7 +935,7 @@ export function App() {
       return;
     }
     try {
-      const updated = await taskRepository.updateTask(task.id, nextPatch);
+      const updated = await legacyUiAdapter.tasks.update(task.id, nextPatch);
       setTasks(current => current.map(item => item.id === updated.id ? updated : item));
       setStatus(online ? { phase: 'ready', message: 'Task updated in Cloud canonical store.' } : { phase: 'offline', message: 'Task update queued locally and marked pending sync.' });
     } catch (error) {
@@ -951,7 +953,7 @@ export function App() {
       return;
     }
     try {
-      await taskRepository.deleteTask(task.id);
+      await legacyUiAdapter.tasks.delete(task.id);
       setTasks(current => current.filter(item => item.id !== task.id));
       setStatus({ phase: 'ready', message: 'Task deleted from Cloud canonical store.' });
     } catch (error) {
@@ -973,7 +975,7 @@ export function App() {
     try {
       const repeat = eventDraft.repeat || 'none';
       const repeatDays = parseRepeatDaysText(eventDraft.repeat_days_text);
-      const created = await calendarRepository.createEvent({
+      const created = await legacyUiAdapter.calendar.create({
         title: eventDraft.title.trim(),
         date: eventDraft.date || null,
         time_start: eventDraft.time_start || null,
@@ -1004,7 +1006,7 @@ export function App() {
       return;
     }
     try {
-      await calendarRepository.deleteEvent(event.id);
+      await legacyUiAdapter.calendar.delete(event.id);
       setEvents(current => current.filter(item => item.id !== event.id));
       setSelectedEventId(current => current === event.id ? null : current);
       setStatus({ phase: 'ready', message: 'Calendar event deleted from Cloud canonical store.' });
@@ -1023,7 +1025,7 @@ export function App() {
       return;
     }
     try {
-      const updated = await calendarRepository.updateEvent(event.id, nextPatch);
+      const updated = await legacyUiAdapter.calendar.update(event.id, nextPatch);
       setEvents(current => current.map(item => item.id === updated.id ? updated : item));
       setSelectedEventId(updated.id);
       setStatus({ phase: 'ready', message: 'Calendar event updated in Cloud canonical store.' });
@@ -1691,17 +1693,17 @@ export function App() {
         <main className="planner-layout">
           <aside className="context-sidebar">
             <div className="sidebar-header">
-              <button className="btn-create-plan" type="button" onClick={() => navigateToView('settings')}>+ Create a plan</button>
+              <button id="btnCreatePlan" className="btn-create-plan" type="button" onClick={() => navigateToView('settings')}>+ Create a plan</button>
             </div>
             <div className="sidebar-content custom-scrollbar">
               <nav className="context-menu">
-                <button className={`context-item ${taskScope === 'my_day' ? 'active' : ''}`} type="button" onClick={() => setTaskScope('my_day')}><span>☀</span> My day</button>
-                <button className={`context-item ${taskScope === 'my_tasks' ? 'active' : ''}`} type="button" onClick={() => setTaskScope('my_tasks')}><span>▦</span> My Tasks</button>
-                <button className={`context-item managebac-nav-item ${taskScope === 'my_managebac' ? 'active' : ''}`} type="button" onClick={() => setTaskScope('my_managebac')}><span>☷</span><span className="managebac-nav-label">My ManageBac</span><span className="managebac-pending-count">{tasks.filter(isManageBacSourceTask).length}</span></button>
+                <button id="navMyDay" className={`context-item ${taskScope === 'my_day' ? 'active' : ''}`} type="button" onClick={() => setTaskScope('my_day')}><span>☀</span> My day</button>
+                <button id="navMyTasks" className={`context-item ${taskScope === 'my_tasks' ? 'active' : ''}`} type="button" onClick={() => setTaskScope('my_tasks')}><span>▦</span> My Tasks</button>
+                <button id="navMyManageBac" className={`context-item managebac-nav-item ${taskScope === 'my_managebac' ? 'active' : ''}`} type="button" onClick={() => setTaskScope('my_managebac')}><span>☷</span><span className="managebac-nav-label">My ManageBac</span><span className="managebac-pending-count">{tasks.filter(isManageBacSourceTask).length}</span></button>
                 <div className="menu-divider" />
                 <div className="section-title">PLANS</div>
               </nav>
-              <div className="plans-list">
+              <div id="plansList" className="plans-list">
                 {plans.map(plan => <button className={`plan-link ${taskScope === `plan:${plan.id}` ? 'active' : ''}`} key={plan.id} type="button" onClick={() => setTaskScope(`plan:${plan.id}`)}><span className="swatch" style={{ backgroundColor: plan.color || '#cbd7e4' }} />{plan.name}</button>)}
               </div>
             </div>
@@ -1709,7 +1711,7 @@ export function App() {
 
           <section className="main-content glass-panel">
             <header className="board-header">
-              <div className="header-breadcrumb"><span>My plans</span><span>/</span><strong>Tasks</strong></div>
+              <div className="header-breadcrumb"><span className="bc-parent">My plans</span><span className="bc-sep">/</span><strong className="bc-current">Tasks</strong></div>
               <span className="view-caption">Current work</span>
               <button className="icon-btn" type="button" onClick={refreshTasks} title="Refresh tasks"><RefreshCw size={18} /></button>
             </header>
@@ -1720,9 +1722,9 @@ export function App() {
                 <button className={`btn-tab ${taskViewMode === 'calendar' ? 'active' : ''}`} type="button" onClick={() => setTaskViewMode('calendar')}>Calendar</button>
               </div>
               <div className="header-actions">
-                <div className="search-bar"><span>⌕</span><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tasks..." /></div>
-                <button className={`icon-btn ${taskFilterOpen ? 'filter-active' : ''}`} type="button" onClick={() => setTaskFilterOpen(open => !open)}>Filter</button>
-                <button className="icon-btn" type="button" onClick={() => setTaskGroupBy(current => current === 'due_date' ? 'priority' : current === 'priority' ? 'plan' : 'due_date')}>Group by: {taskGroupBy === 'due_date' ? 'Due date' : taskGroupBy === 'priority' ? 'Priority' : 'Plan'}</button>
+                <div id="searchBar" className="search-bar"><span>⌕</span><input id="searchInput" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tasks..." /></div>
+                <button id="btnFilter" className={`icon-btn ${taskFilterOpen ? 'filter-active' : ''}`} type="button" onClick={() => setTaskFilterOpen(open => !open)}>Filter</button>
+                <button id="btnGroupBy" className="icon-btn" type="button" onClick={() => setTaskGroupBy(current => current === 'due_date' ? 'priority' : current === 'priority' ? 'plan' : 'due_date')}>Group by: {taskGroupBy === 'due_date' ? 'Due date' : taskGroupBy === 'priority' ? 'Priority' : 'Plan'}</button>
               </div>
             </nav>
             {taskFilterOpen && (
@@ -1768,9 +1770,10 @@ export function App() {
             {taskViewMode === 'calendar' && <TaskCalendarView tasks={visibleTasks} selectedDate={selectedDate} onSelect={task => setSelectedTaskId(task.id)} />}
           </section>
 
-          <aside className="planner-detail-rail">
+          <aside id="taskDetailPanel" className="planner-detail-rail task-detail-panel-shell">
             <TaskDetailPanel task={selectedTask} plans={plans} buckets={buckets} labels={labels} canWrite={taskCanWrite && selectedTask?.__sync_status !== 'pending'} onSave={patch => selectedTask && updateTaskState(selectedTask, patch)} onClose={() => setSelectedTaskId(null)} />
           </aside>
+          <div id="modalOverlay" className="modal-overlay" aria-hidden="true" />
         </main>
       )}
 
@@ -1779,19 +1782,19 @@ export function App() {
           <section className="calendar-section">
             <div className="calendar-toolbar">
               <div className="toolbar-left">
-                <button className="btn-today" type="button" onClick={() => setSelectedDate(localDateKey())}>今天</button>
+                <button id="btnToday" className="btn-today" type="button" onClick={() => setSelectedDate(localDateKey())}>今天</button>
                 <div className="nav-arrows">
-                  <button className="icon-btn btn-arrow" type="button" onClick={() => setSelectedDate(addDaysToKey(selectedDate, calendarViewMode === 'week' ? -7 : -30))}>‹</button>
-                  <button className="icon-btn btn-arrow" type="button" onClick={() => setSelectedDate(addDaysToKey(selectedDate, calendarViewMode === 'week' ? 7 : 30))}>›</button>
+                  <button id="btnPrev" className="icon-btn btn-arrow" type="button" onClick={() => setSelectedDate(addDaysToKey(selectedDate, calendarViewMode === 'week' ? -7 : -30))}>‹</button>
+                  <button id="btnNext" className="icon-btn btn-arrow" type="button" onClick={() => setSelectedDate(addDaysToKey(selectedDate, calendarViewMode === 'week' ? 7 : 30))}>›</button>
                 </div>
-                <h2 className="current-date">{calendarViewMode === 'week' ? `${startOfWeekKey(selectedDate)} - ${addDaysToKey(startOfWeekKey(selectedDate), 6)}` : monthKey(selectedDate)}</h2>
+                <h2 id="currentDate" className="current-date">{calendarViewMode === 'week' ? `${startOfWeekKey(selectedDate)} - ${addDaysToKey(startOfWeekKey(selectedDate), 6)}` : monthKey(selectedDate)}</h2>
               </div>
               <div className="toolbar-right">
-                <button className="icon-btn tb-icon" type="button" onClick={() => setCalendarSearchOpen(open => !open)}>搜索</button>
-                {calendarSearchOpen && <div className="search-bar"><input value={eventSearch} onChange={event => setEventSearch(event.target.value)} placeholder="Search calendar events" aria-label="Search calendar events" /><button className="icon-btn search-close-btn" type="button" onClick={() => { setEventSearch(''); setCalendarSearchOpen(false); }}>×</button></div>}
+                <button id="btnSearch" className="icon-btn tb-icon" type="button" onClick={() => setCalendarSearchOpen(open => !open)}>搜索</button>
+                {calendarSearchOpen && <div id="searchBar" className="search-bar"><input id="searchInput" value={eventSearch} onChange={event => setEventSearch(event.target.value)} placeholder="Search calendar events" aria-label="Search calendar events" /><button id="searchClose" className="icon-btn search-close-btn" type="button" onClick={() => { setEventSearch(''); setCalendarSearchOpen(false); }}>×</button></div>}
                 <button className="icon-btn tb-icon" type="button" onClick={refreshEvents}><RefreshCw size={16} /></button>
                 <button className="icon-btn tb-icon" type="button" disabled={!canWrite} onClick={() => setCalendarComposerOpen(true)}>新建</button>
-                <div className="view-selector">
+                <div id="viewSelector" className="view-selector">
                   <button className="btn-dropdown" type="button" onClick={() => setCalendarViewMode(mode => mode === 'week' ? 'month' : 'week')}><span>{calendarViewMode === 'week' ? '周' : '月'}</span><span>⌄</span></button>
                 </div>
               </div>
@@ -1804,18 +1807,18 @@ export function App() {
             </div>
             <CalendarEventList events={visibleEvents} canWrite={canWrite} onSelect={event => setSelectedEventId(event.id)} onDelete={deleteEvent} />
             {calendarComposerOpen && (
-              <div className="event-modal">
-                <button className="event-modal-backdrop" type="button" aria-label="Close" onClick={() => setCalendarComposerOpen(false)} />
+              <div id="calModal" className="event-modal">
+                <button id="calModalBackdrop" className="event-modal-backdrop" type="button" aria-label="Close" onClick={() => setCalendarComposerOpen(false)} />
                 <div className="event-modal-content">
-                  <div className="event-modal-header"><h3>创建日程</h3><span className="sr-only">Create calendar event</span><button className="event-modal-close" type="button" onClick={() => setCalendarComposerOpen(false)}>×</button></div>
-                  <form className="calendar-form event-modal-body" onSubmit={event => { addEvent(event); setCalendarComposerOpen(false); }}>
+                  <div className="event-modal-header"><h3>创建日程</h3><span className="sr-only">Create calendar event</span><button id="calModalClose" className="event-modal-close" type="button" onClick={() => setCalendarComposerOpen(false)}>×</button></div>
+                  <form id="calModalBody" className="calendar-form event-modal-body" onSubmit={event => { addEvent(event); setCalendarComposerOpen(false); }}>
                     <label><span>Title</span><input value={eventDraft.title} onChange={event => setEventDraft(current => ({ ...current, title: event.target.value }))} placeholder="Add an event" disabled={!canWrite} /></label>
                     <label><span>Date</span><input type="date" value={eventDraft.date} onChange={event => setEventDraft(current => ({ ...current, date: event.target.value }))} disabled={!canWrite} /></label>
                     <label><span>Start</span><input type="time" value={eventDraft.time_start} onChange={event => setEventDraft(current => ({ ...current, time_start: event.target.value }))} disabled={!canWrite} /></label>
                     <label><span>End</span><input type="time" value={eventDraft.time_end} onChange={event => setEventDraft(current => ({ ...current, time_end: event.target.value }))} disabled={!canWrite} /></label>
                     <label><span>Repeat</span><select value={eventDraft.repeat} onChange={event => setEventDraft(current => ({ ...current, repeat: event.target.value }))} disabled={!canWrite}><option value="none">None</option><option value="daily">Daily</option><option value="weekday">Weekday</option><option value="weekend">Weekend</option><option value="weekly">Weekly</option><option value="custom">Custom</option></select></label>
                     <label><span>Repeat days</span><input value={eventDraft.repeat_days_text} onChange={event => setEventDraft(current => ({ ...current, repeat_days_text: event.target.value }))} placeholder="0,1,2" disabled={!canWrite || !['weekly', 'custom'].includes(eventDraft.repeat)} /></label>
-                    <div className="event-modal-footer"><button type="button" onClick={() => setCalendarComposerOpen(false)}>取消</button><button type="submit" disabled={!canWrite}>Save event to Cloud</button></div>
+                    <div id="calModalFooter" className="event-modal-footer"><button type="button" onClick={() => setCalendarComposerOpen(false)}>取消</button><button type="submit" disabled={!canWrite}>Save event to Cloud</button></div>
                   </form>
                 </div>
               </div>

@@ -146,7 +146,9 @@ async function main() {
     'dev',
     '--',
     '--host',
-    '127.0.0.1'
+    '127.0.0.1',
+    '--configLoader',
+    'runner'
   ], rootDir);
 
   let browser;
@@ -182,12 +184,32 @@ async function main() {
     await visible(page, 'Tasks uses original context sidebar', page.locator('.planner-layout .context-sidebar'));
     await visible(page, 'Tasks uses original kanban board surface', page.locator('.planner-layout .kanban-board'));
     await visible(page, 'Tasks keeps right detail rail', page.locator('.planner-detail-rail .task-detail-panel'));
+    await visible(page, 'Tasks keeps legacy My Day control', page.locator('#navMyDay'));
+    await visible(page, 'Tasks keeps legacy plan list', page.locator('#plansList'));
+    await page.locator('#btnFilter').click();
+    await visible(page, 'Tasks filter panel opens from legacy filter button', page.locator('.filter-panel'));
+    await page.locator('.view-tabs').getByRole('button', { name: 'List' }).click();
+    await visible(page, 'Tasks legacy List view is available', page.locator('#taskListView'));
+    await page.locator('.view-tabs').getByRole('button', { name: 'Calendar' }).click();
+    await visible(page, 'Tasks legacy Calendar view is available', page.locator('#taskCalendarView'));
+    await page.locator('.view-tabs').getByRole('button', { name: 'Board' }).click();
     await visible(page, 'Tasks view renders task list', page.getByText('Current work'));
     await page.getByText('Read migration design').click();
     await visible(page, 'Task detail opens from task list', page.getByText('Save task detail'));
 
     await page.locator('.sidebar .nav-item[title="日历"]').click();
     await visible(page, 'Calendar uses original workbench layout', page.locator('.calendar-layout .gcal-container'));
+    await visible(page, 'Calendar keeps legacy toolbar date', page.locator('#currentDate'));
+    await visible(page, 'Calendar keeps legacy week view', page.locator('#weekView'));
+    await page.locator('#viewSelector .btn-dropdown').click();
+    await visible(page, 'Calendar legacy month view is available', page.locator('#monthView'));
+    await page.locator('#viewSelector .btn-dropdown').click();
+    await page.locator('#btnSearch').click();
+    await visible(page, 'Calendar legacy search bar opens', page.locator('#searchBar #searchInput'));
+    await page.locator('#searchClose').click();
+    await page.getByRole('button', { name: '新建' }).click();
+    await visible(page, 'Calendar legacy event modal opens', page.locator('#calModal #calModalBody'));
+    await page.locator('#calModalClose').click();
     await visible(page, 'Calendar renders date projection', page.getByRole('heading', { name: 'Date projection' }));
     await visible(page, 'Calendar renders event list', page.getByText('Calendar events', { exact: true }));
     await page.getByRole('button', { name: /Planning block/ }).click();
@@ -229,7 +251,7 @@ async function main() {
   }
 }
 
-main().catch(error => {
+main().then(() => process.exit(0)).catch(error => {
   console.error(error);
   process.exit(1);
 });
