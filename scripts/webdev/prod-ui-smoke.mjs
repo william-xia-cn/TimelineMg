@@ -296,34 +296,49 @@ async function main() {
     }, { token: session.token, expiresAt: session.expiresAt });
     await page.reload({ waitUntil: 'networkidle', timeout: 60000 });
 
-    await visible(page, 'Prod Dashboard renders projection', page.getByRole('heading', { name: 'Today projection' }));
-    await visible(page, 'Prod Dashboard renders reminder state', page.getByText('Reminder state'));
+    await visible(page, 'Prod Dashboard uses original app layout', page.locator('.legacy-page-dashboard .app-layout'));
     await visible(page, 'Prod Dashboard uses original multi-column board layout', page.locator('.board-layout .column-now'));
     await visible(page, 'Prod Dashboard uses original calendar board column', page.locator('.board-layout .column-calendar'));
+    await visible(page, 'Prod Dashboard uses original week column', page.locator('.board-layout .column-week'));
+    await visible(page, 'Prod Dashboard uses original feed column', page.locator('.board-layout .column-feed'));
 
-    await page.locator('.sidebar .nav-item[title="任务"]').click();
-    await visible(page, 'Prod Tasks uses original context sidebar', page.locator('.planner-layout .context-sidebar'));
-    await visible(page, 'Prod Tasks uses original kanban board surface', page.locator('.planner-layout .kanban-board'));
-    await visible(page, 'Prod Tasks keeps right detail rail', page.locator('.planner-detail-rail .task-detail-panel'));
-    await visible(page, 'Prod Tasks view receives Cloud task', page.getByText(taskTitle));
-    await page.getByText(taskTitle).click();
-    await visible(page, 'Prod Task detail opens', page.getByText('Save task detail'));
+    await page.locator('.sidebar .nav-item[title="任务"], .sidebar .nav-item[title="Tasks"]').first().click();
+    await visible(page, 'Prod Tasks uses original context sidebar', page.locator('.legacy-page-tasks .context-sidebar'));
+    await visible(page, 'Prod Tasks uses original kanban board surface', page.locator('#kanbanBoard'));
+    await visible(page, 'Prod Tasks keeps original detail panel node', page.locator('#taskDetailPanel.task-detail-panel'));
+    await visible(page, 'Prod Tasks keeps legacy My Day control', page.locator('#navMyDay'));
+    await visible(page, 'Prod Tasks keeps legacy plan list', page.locator('#plansList'));
+    await visible(page, 'Prod Tasks receives Cloud task', page.locator('#kanbanBoard').getByText(taskTitle).first());
+    await page.locator(".view-tabs .btn-tab[data-view='list']").click();
+    await visible(page, 'Prod Tasks legacy List view is available', page.locator('#taskListView'));
+    await page.locator(".view-tabs .btn-tab[data-view='calendar']").click();
+    await visible(page, 'Prod Tasks legacy Calendar view is available', page.locator('#taskCalendarView'));
+    await page.locator(".view-tabs .btn-tab[data-view='board']").click();
+    await page.locator('#kanbanBoard').getByText(taskTitle).first().click();
+    await visible(page, 'Prod Task detail opens from legacy task card', page.locator('#taskDetailPanel .task-detail-content'));
 
-    await page.locator('.sidebar .nav-item[title="日历"]').click();
-    await visible(page, 'Prod Calendar uses original workbench layout', page.locator('.calendar-layout .gcal-container'));
-    await visible(page, 'Prod Calendar renders date projection', page.getByRole('heading', { name: 'Date projection' }));
+    await page.locator('.sidebar .nav-item[title="日历"], .sidebar .nav-item[title="Calendar"]').first().click();
+    await visible(page, 'Prod Calendar uses original main content shell', page.locator('.legacy-page-calendar .main-content.rounded-container.glass-panel'));
+    await visible(page, 'Prod Calendar keeps legacy toolbar date', page.locator('#currentDate'));
+    await visible(page, 'Prod Calendar keeps legacy week view', page.locator('#weekView'));
     await visible(page, 'Prod Calendar receives Cloud event', page.getByText(eventTitle).first());
+    await page.locator('#viewSelector').click();
+    await visible(page, 'Prod Calendar legacy view dropdown opens', page.locator('#viewDropdown'));
+    await page.locator('#viewDropdown [data-view="month"]').click();
+    await visible(page, 'Prod Calendar legacy month view is available', page.locator('#monthView'));
+    await page.locator('#btnSearch').click();
+    await visible(page, 'Prod Calendar legacy search bar opens', page.locator('#searchBar #searchInput'));
+    await page.locator('#searchClose').click();
 
-    await page.locator('.sidebar .nav-item[title="设置"]').click();
+    await page.locator('.sidebar-bottom .nav-item[title="设置"], .sidebar-bottom .nav-item[title="Settings"]').first().click();
     await visible(page, 'Prod Settings uses original centered glass container', page.locator('.main-wrapper .settings-container'));
     await visible(page, 'Prod Settings uses original header save action', page.locator('.settings-container .header .save-btn'));
     await visible(page, 'Prod Settings uses original single-column setting rows', page.locator('.settings-container .content .section .settings-group .setting-row').first());
-    await visible(page, 'Prod Settings renders Cloud session panel', page.getByText('Cloud session', { exact: true }));
-    await visible(page, 'Prod Settings renders data authority panel', page.getByText('数据权威', { exact: true }));
-    await visible(page, 'Prod Settings renders migration panel', page.getByText('自动迁移', { exact: true }));
-    await visible(page, 'Prod Settings renders replay safety diagnostics', page.getByText('Replay safety gate', { exact: true }));
-    await visible(page, 'Prod Settings renders structure editor', page.getByText('结构管理', { exact: true }));
-
+    await visible(page, 'Prod Settings renders account Cloud section inside legacy settings container', page.locator('#webdevCloudSection'));
+    await visible(page, 'Prod Settings renders read cache cursor', page.getByText(/Read cache cursor:/));
+    await visible(page, 'Prod Settings keeps old General section', page.locator('#settingsView .section').first());
+    await visible(page, 'Prod Settings keeps old Calendar section', page.locator('#calendarSection'));
+    await visible(page, 'Prod Settings keeps old Plan section', page.locator('#planSection'));
     console.log('=======================');
     console.log('All WebDev prod UI smoke checks passed.');
     console.log('Prod internal verification used only temporary prod-ui-smoke data; no Google session, token, account email, or Cloudflare id was printed.');

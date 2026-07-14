@@ -1649,6 +1649,7 @@ export function App() {
       accountName={accountName}
       accountPicture={accountPicture}
       accountProfileName={accountProfileName}
+      ssoState={ssoState}
       googleButtonRef={googleButtonRef}
       hasSession={hasSession}
       syncStateClass={syncStateClass}

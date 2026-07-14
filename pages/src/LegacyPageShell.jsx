@@ -613,6 +613,7 @@ function renderSettings(root, props) {
               <span>${escapeHtml(cloudSessionStatus)}</span>
               <span>Read cache cursor: ${escapeHtml(props.syncCursor ?? 0)}</span>
               <span>${escapeHtml(props.syncIncrementalStatus || "Not loaded")}</span>
+              <span>${escapeHtml(props.ssoState?.message || "Google SSO ready.")}</span>
             </div>
             <div class="google-sync-card-actions">
               <button class="action-btn" id="legacyRefreshCloudBtn" type="button">刷新 session</button>
