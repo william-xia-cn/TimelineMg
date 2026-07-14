@@ -30,6 +30,7 @@ import { computeCalendarDateProjection } from './domain/calendarDateProjection.j
 import { advanceReminderSession, computeReminderState } from './domain/reminderState.js';
 import { buildLegacyIndexedDbSnapshot } from './migration/legacyIndexedDbSnapshotAdapter.js';
 import { disableGoogleAutoSelect, GOOGLE_SSO_CLIENT_ID, renderGoogleSsoButton } from './auth/googleSso.js';
+import { LegacyPageShell } from './LegacyPageShell.jsx';
 
 const SYNC_CURSOR_KEY = 'timewhere.web.sync.cursor.v1';
 
@@ -1595,591 +1596,101 @@ export function App() {
   ];
 
   return (
-    <div className={`app-layout webdev-parity view-${activeView}`}>
-      <aside className="sidebar">
-        <div className="logo">
-          <div className="logo-icon" aria-label="TimeWhere"><img src="/assets/icon128.png" alt="" /></div>
-        </div>
-        <nav className="nav-menu" aria-label="Primary">
-          <button className={`nav-item ${activeView === 'dashboard' ? 'active' : ''}`} title="仪表盘" onClick={() => navigateToView('dashboard')}><LayoutDashboard size={22} /><span className="nav-label">Dashboard</span></button>
-          <button className={`nav-item ${activeView === 'tasks' ? 'active' : ''}`} title="任务" onClick={() => navigateToView('tasks')}><ListChecks size={22} /><span className="nav-label">Tasks</span></button>
-          <button className={`nav-item ${activeView === 'calendar' ? 'active' : ''}`} title="日历" onClick={() => navigateToView('calendar')}><CalendarDays size={22} /><span className="nav-label">Calendar</span></button>
-        </nav>
-        <div className="sidebar-bottom">
-          <button className={`nav-item ${activeView === 'settings' ? 'active' : ''}`} title="设置" onClick={() => navigateToView('settings')}><Settings size={22} /><span className="nav-label">Settings</span></button>
-          <button className={`user-avatar account-state-button ${syncStateClass}`} title={syncStateLabel} onClick={() => navigateToView('settings')}>
-            {accountPicture ? <img src={accountPicture} alt="" /> : <span>{accountInitial}</span>}
-            <i className={`account-status-dot ${syncStateClass}`} />
-          </button>
-        </div>
-      </aside>
-
-      {activeView === 'dashboard' && (
-        <main className="board-layout dashboard-board">
-          <section className="board-column column-now">
-            <div className="column-header">
-              <h2>当前任务</h2>
-              <button className="icon-btn" type="button" onClick={refreshWorkspace} title="Refresh Cloud state"><RefreshCw size={18} /></button>
-            </div>
-            <div className="column-content custom-scrollbar">
-              <div className="current-container-card">
-                <span>Current container</span>
-                <strong>{dashboardProjection.activeContainer?.name || 'No active container'}</strong>
-                <p>{dashboardProjection.activeContainer ? formatContainerMeta(dashboardProjection.activeContainer) : '当前没有正在进行的时间容器。'}</p>
-              </div>
-              <TaskList title="Projected current work" tasks={dashboardProjection.currentTasks} canWrite={taskCanWrite} canDelete={taskDeleteAllowed} onPatch={updateTaskState} onDelete={deleteTask} onSelect={task => setSelectedTaskId(task.id)} />
-            </div>
-          </section>
-
-          <section className="board-column column-calendar">
-            <div className="column-header calendar-heading">
-              <h2>日程 (今日 & 明日)</h2>
-              <div className="cal-actions">
-                <span>{todayKey}</span>
-              </div>
-            </div>
-            <div className="gcal-container custom-scrollbar">
-              <div className="dashboard-projection-grid">
-                <CalendarProjectionPanel projection={todayProjection} title="Today projection" compact onSelectTask={task => setSelectedTaskId(task.id)} />
-                <CalendarProjectionPanel projection={tomorrowProjection} title="Tomorrow projection" compact onSelectTask={task => setSelectedTaskId(task.id)} />
-              </div>
-            </div>
-          </section>
-
-          <section className="board-column column-week">
-            <div className="column-header">
-              <h2>本周进度</h2>
-            </div>
-            <div className="column-content custom-scrollbar weekly-progress-content">
-              <div className="week-stats-section">
-                <h3>学业产出统计</h3>
-                <div className="week-stat-grid">
-                  <div><span>Pending</span><strong>{pendingCount}</strong></div>
-                  <div><span>Completed</span><strong>{completedCount}</strong></div>
-                  <div><span>Today projection</span><strong>{todayProjection.counts.tasks}</strong></div>
-                </div>
-              </div>
-              <ReminderStatePanel state={reminderState} session={reminderSession} onSessionEvent={updateReminderSession} />
-            </div>
-          </section>
-
-          <section className="board-column column-feed">
-            <div className="column-header">
-              <h2>消息流 & 提醒</h2>
-              {online ? <Cloud size={18} /> : <WifiOff size={18} />}
-            </div>
-            <div className="column-content custom-scrollbar">
-              <div className={`cloud-state ${syncStateClass}`}>
-                <strong>{syncStateLabel}</strong>
-                <span>{accountName} · {accountProfileName}</span>
-              </div>
-              {!online && <section className="notice warning"><AlertTriangle size={18} /><span>当前离线。Task 新建、编辑、完成和重开会进入待同步队列；删除和非 Task 数据仍需重新连接。</span></section>}
-              {online && !hasCloudSession() && <section className="notice info"><Cloud size={18} /><span>当前未连接 Google SSO。可浏览 preview/cache；创建、完成、删除任务和日历事件需要 Cloud account session。</span></section>}
-              <div className="feed-card">
-                <span>Migration</span>
-                <strong>{migrationResult?.status || 'Ready after Google SSO'}</strong>
-              </div>
-              <div className="feed-card">
-                <span>Read cache cursor</span>
-                <strong>{syncCursor}</strong>
-                <p>{syncIncrementalStatus}</p>
-              </div>
-            </div>
-          </section>
-        </main>
-      )}
-
-      {activeView === 'tasks' && (
-        <main className="planner-layout">
-          <aside className="context-sidebar">
-            <div className="sidebar-header">
-              <button id="btnCreatePlan" className="btn-create-plan" type="button" onClick={() => navigateToView('settings')}>+ Create a plan</button>
-            </div>
-            <div className="sidebar-content custom-scrollbar">
-              <nav className="context-menu">
-                <button id="navMyDay" className={`context-item ${taskScope === 'my_day' ? 'active' : ''}`} type="button" onClick={() => setTaskScope('my_day')}><span>☀</span> My day</button>
-                <button id="navMyTasks" className={`context-item ${taskScope === 'my_tasks' ? 'active' : ''}`} type="button" onClick={() => setTaskScope('my_tasks')}><span>▦</span> My Tasks</button>
-                <button id="navMyManageBac" className={`context-item managebac-nav-item ${taskScope === 'my_managebac' ? 'active' : ''}`} type="button" onClick={() => setTaskScope('my_managebac')}><span>☷</span><span className="managebac-nav-label">My ManageBac</span><span className="managebac-pending-count">{tasks.filter(isManageBacSourceTask).length}</span></button>
-                <div className="menu-divider" />
-                <div className="section-title">PLANS</div>
-              </nav>
-              <div id="plansList" className="plans-list">
-                {plans.map(plan => <button className={`plan-link ${taskScope === `plan:${plan.id}` ? 'active' : ''}`} key={plan.id} type="button" onClick={() => setTaskScope(`plan:${plan.id}`)}><span className="swatch" style={{ backgroundColor: plan.color || '#cbd7e4' }} />{plan.name}</button>)}
-              </div>
-            </div>
-          </aside>
-
-          <section className="main-content glass-panel">
-            <header className="board-header">
-              <div className="header-breadcrumb"><span className="bc-parent">My plans</span><span className="bc-sep">/</span><strong className="bc-current">Tasks</strong></div>
-              <span className="view-caption">Current work</span>
-              <button className="icon-btn" type="button" onClick={refreshTasks} title="Refresh tasks"><RefreshCw size={18} /></button>
-            </header>
-            <nav className="view-tabs">
-              <div className="view-tab-buttons">
-                <button className={`btn-tab ${taskViewMode === 'board' ? 'active' : ''}`} type="button" onClick={() => setTaskViewMode('board')}>Board</button>
-                <button className={`btn-tab ${taskViewMode === 'list' ? 'active' : ''}`} type="button" onClick={() => setTaskViewMode('list')}>List</button>
-                <button className={`btn-tab ${taskViewMode === 'calendar' ? 'active' : ''}`} type="button" onClick={() => setTaskViewMode('calendar')}>Calendar</button>
-              </div>
-              <div className="header-actions">
-                <div id="searchBar" className="search-bar"><span>⌕</span><input id="searchInput" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tasks..." /></div>
-                <button id="btnFilter" className={`icon-btn ${taskFilterOpen ? 'filter-active' : ''}`} type="button" onClick={() => setTaskFilterOpen(open => !open)}>Filter</button>
-                <button id="btnGroupBy" className="icon-btn" type="button" onClick={() => setTaskGroupBy(current => current === 'due_date' ? 'priority' : current === 'priority' ? 'plan' : 'due_date')}>Group by: {taskGroupBy === 'due_date' ? 'Due date' : taskGroupBy === 'priority' ? 'Priority' : 'Plan'}</button>
-              </div>
-            </nav>
-            {taskFilterOpen && (
-              <div className="filter-panel">
-                <div className="filter-section">
-                  <h4>Status</h4>
-                  <select className="filter-select" value={filter} onChange={event => setFilter(event.target.value)}>
-                    <option value="all">All</option>
-                    <option value="pending">Pending</option>
-                    <option value="completed">Completed</option>
-                  </select>
-                </div>
-                <div className="filter-section">
-                  <h4>Priority</h4>
-                  <select className="filter-select" value={taskPriorityFilter} onChange={event => setTaskPriorityFilter(event.target.value)}>
-                    <option value="all">All priorities</option>
-                    <option value="urgent">Urgent</option>
-                    <option value="important">Important</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                  </select>
-                </div>
-                <div className="filter-actions">
-                  <button type="button" onClick={() => { setFilter('all'); setTaskPriorityFilter('all'); setSearch(''); }}>Reset filters</button>
-                </div>
-              </div>
-            )}
-            <form className="quick-task-compose" onSubmit={addTask}>
-              <input value={draft.title} onChange={event => setDraft(current => ({ ...current, title: event.target.value }))} placeholder="Add a task" disabled={!taskCanWrite} />
-              <input type="date" value={draft.due_date} onChange={event => setDraft(current => ({ ...current, due_date: event.target.value }))} disabled={!taskCanWrite} />
-              <input type="time" value={draft.schedule_time} onChange={event => setDraft(current => ({ ...current, schedule_time: event.target.value }))} disabled={!taskCanWrite} />
-              <select value={draft.priority} onChange={event => setDraft(current => ({ ...current, priority: event.target.value }))} disabled={!taskCanWrite}>
-                <option value="urgent">Urgent</option>
-                <option value="important">Important</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-              <button type="submit" disabled={!taskCanWrite}>{online ? 'Save to Cloud' : 'Queue task locally'}</button>
-            </form>
-            <TaskPendingBanner mutations={pendingTaskMutations} onOpenQueue={openPendingTaskQueue} />
-            {taskViewMode === 'board' && <TaskBoardView groups={taskGroups} canWrite={taskCanWrite} canDelete={taskDeleteAllowed} onPatch={updateTaskState} onDelete={deleteTask} onSelect={task => setSelectedTaskId(task.id)} />}
-            {taskViewMode === 'list' && <TaskListTable tasks={visibleTasks} canWrite={taskCanWrite} canDelete={taskDeleteAllowed} onPatch={updateTaskState} onDelete={deleteTask} onSelect={task => setSelectedTaskId(task.id)} />}
-            {taskViewMode === 'calendar' && <TaskCalendarView tasks={visibleTasks} selectedDate={selectedDate} onSelect={task => setSelectedTaskId(task.id)} />}
-          </section>
-
-          <aside id="taskDetailPanel" className="planner-detail-rail task-detail-panel-shell">
-            <TaskDetailPanel task={selectedTask} plans={plans} buckets={buckets} labels={labels} canWrite={taskCanWrite && selectedTask?.__sync_status !== 'pending'} onSave={patch => selectedTask && updateTaskState(selectedTask, patch)} onClose={() => setSelectedTaskId(null)} />
-          </aside>
-          <div id="modalOverlay" className="modal-overlay" aria-hidden="true" />
-        </main>
-      )}
-
-      {activeView === 'calendar' && (
-        <main className="calendar-layout calendar-page main-content rounded-container glass-panel custom-scrollbar">
-          <section className="calendar-section">
-            <div className="calendar-toolbar">
-              <div className="toolbar-left">
-                <button id="btnToday" className="btn-today" type="button" onClick={() => setSelectedDate(localDateKey())}>今天</button>
-                <div className="nav-arrows">
-                  <button id="btnPrev" className="icon-btn btn-arrow" type="button" onClick={() => setSelectedDate(addDaysToKey(selectedDate, calendarViewMode === 'week' ? -7 : -30))}>‹</button>
-                  <button id="btnNext" className="icon-btn btn-arrow" type="button" onClick={() => setSelectedDate(addDaysToKey(selectedDate, calendarViewMode === 'week' ? 7 : 30))}>›</button>
-                </div>
-                <h2 id="currentDate" className="current-date">{calendarViewMode === 'week' ? `${startOfWeekKey(selectedDate)} - ${addDaysToKey(startOfWeekKey(selectedDate), 6)}` : monthKey(selectedDate)}</h2>
-              </div>
-              <div className="toolbar-right">
-                <button id="btnSearch" className="icon-btn tb-icon" type="button" onClick={() => setCalendarSearchOpen(open => !open)}>搜索</button>
-                {calendarSearchOpen && <div id="searchBar" className="search-bar"><input id="searchInput" value={eventSearch} onChange={event => setEventSearch(event.target.value)} placeholder="Search calendar events" aria-label="Search calendar events" /><button id="searchClose" className="icon-btn search-close-btn" type="button" onClick={() => { setEventSearch(''); setCalendarSearchOpen(false); }}>×</button></div>}
-                <button className="icon-btn tb-icon" type="button" onClick={refreshEvents}><RefreshCw size={16} /></button>
-                <button className="icon-btn tb-icon" type="button" disabled={!canWrite} onClick={() => setCalendarComposerOpen(true)}>新建</button>
-                <div id="viewSelector" className="view-selector">
-                  <button className="btn-dropdown" type="button" onClick={() => setCalendarViewMode(mode => mode === 'week' ? 'month' : 'week')}><span>{calendarViewMode === 'week' ? '周' : '月'}</span><span>⌄</span></button>
-                </div>
-              </div>
-            </div>
-            <div className="calendar-container calendar-workbench gcal-container custom-scrollbar">
-              <h2 className="projection-compat-title">Date projection</h2>
-              {calendarViewMode === 'week'
-                ? <CalendarWeekView selectedDate={selectedDate} tasks={tasks} events={visibleEvents} containers={containers} onSelectTask={task => setSelectedTaskId(task.id)} onSelectEvent={event => setSelectedEventId(event.id)} />
-                : <CalendarMonthView selectedDate={selectedDate} tasks={tasks} events={visibleEvents} containers={containers} onSelectTask={task => setSelectedTaskId(task.id)} onSelectEvent={event => setSelectedEventId(event.id)} />}
-            </div>
-            <CalendarEventList events={visibleEvents} canWrite={canWrite} onSelect={event => setSelectedEventId(event.id)} onDelete={deleteEvent} />
-            {calendarComposerOpen && (
-              <div id="calModal" className="event-modal">
-                <button id="calModalBackdrop" className="event-modal-backdrop" type="button" aria-label="Close" onClick={() => setCalendarComposerOpen(false)} />
-                <div className="event-modal-content">
-                  <div className="event-modal-header"><h3>创建日程</h3><span className="sr-only">Create calendar event</span><button id="calModalClose" className="event-modal-close" type="button" onClick={() => setCalendarComposerOpen(false)}>×</button></div>
-                  <form id="calModalBody" className="calendar-form event-modal-body" onSubmit={event => { addEvent(event); setCalendarComposerOpen(false); }}>
-                    <label><span>Title</span><input value={eventDraft.title} onChange={event => setEventDraft(current => ({ ...current, title: event.target.value }))} placeholder="Add an event" disabled={!canWrite} /></label>
-                    <label><span>Date</span><input type="date" value={eventDraft.date} onChange={event => setEventDraft(current => ({ ...current, date: event.target.value }))} disabled={!canWrite} /></label>
-                    <label><span>Start</span><input type="time" value={eventDraft.time_start} onChange={event => setEventDraft(current => ({ ...current, time_start: event.target.value }))} disabled={!canWrite} /></label>
-                    <label><span>End</span><input type="time" value={eventDraft.time_end} onChange={event => setEventDraft(current => ({ ...current, time_end: event.target.value }))} disabled={!canWrite} /></label>
-                    <label><span>Repeat</span><select value={eventDraft.repeat} onChange={event => setEventDraft(current => ({ ...current, repeat: event.target.value }))} disabled={!canWrite}><option value="none">None</option><option value="daily">Daily</option><option value="weekday">Weekday</option><option value="weekend">Weekend</option><option value="weekly">Weekly</option><option value="custom">Custom</option></select></label>
-                    <label><span>Repeat days</span><input value={eventDraft.repeat_days_text} onChange={event => setEventDraft(current => ({ ...current, repeat_days_text: event.target.value }))} placeholder="0,1,2" disabled={!canWrite || !['weekly', 'custom'].includes(eventDraft.repeat)} /></label>
-                    <div id="calModalFooter" className="event-modal-footer"><button type="button" onClick={() => setCalendarComposerOpen(false)}>取消</button><button type="submit" disabled={!canWrite}>Save event to Cloud</button></div>
-                  </form>
-                </div>
-              </div>
-            )}
-            {selectedEvent && <CalendarEventDetailPanel event={selectedEvent} canWrite={canWrite} onSave={patch => selectedEvent && updateEventState(selectedEvent, patch)} onClose={() => setSelectedEventId(null)} />}
-          </section>
-        </main>
-      )}
-
-      {activeView === 'settings' && (
-        <main className="main-wrapper settings-main-wrapper">
-          <div className="settings-container" id="mainContainer">
-            <header className="header">
-              <div className="header-left">
-                <h1>设置</h1>
-              </div>
-              <button className="save-btn" type="submit" form="webdevSettingsForm" disabled={!canWrite}>保存修改</button>
-            </header>
-
-            <div className="settings-view">
-              <div className="content custom-scrollbar">
-                <section className="section">
-                  <h2 className="section-title"><Settings size={18} /> 通用</h2>
-                  <form className="settings-group webdev-settings-form" id="webdevSettingsForm" onSubmit={saveSettings}>
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">显示主题</span>
-                        <span className="setting-desc">选择系统的视觉风格</span>
-                      </div>
-                      <select value={settingsDraft.theme} onChange={event => setSettingsDraft(current => ({ ...current, theme: event.target.value }))} disabled={!canWrite}>
-                        <option value="light">浅色模式</option>
-                        <option value="dark">深色模式</option>
-                        <option value="system">跟随系统</option>
-                      </select>
-                    </div>
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">周起始日</span>
-                        <span className="setting-desc">日历视图显示的起始日</span>
-                      </div>
-                      <select value={settingsDraft.start_week_on} onChange={event => setSettingsDraft(current => ({ ...current, start_week_on: Number(event.target.value) }))} disabled={!canWrite}>
-                        <option value={1}>周一</option>
-                        <option value={0}>周日</option>
-                      </select>
-                    </div>
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">背景图片</span>
-                        <span className="setting-desc">选择本地固定背景，保存后各页面保持一致</span>
-                      </div>
-                      <select value={settingsDraft.appearance_background} onChange={event => setSettingsDraft(current => ({ ...current, appearance_background: event.target.value }))} disabled={!canWrite}>
-                        <option value="calm">Calm Blue</option>
-                        <option value="focus">Focus Teal</option>
-                        <option value="plain">Plain</option>
-                      </select>
-                    </div>
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">头像图片</span>
-                        <span className="setting-desc">选择本地头像样式，不随刷新变化</span>
-                      </div>
-                      <select value={settingsDraft.appearance_avatar} onChange={event => setSettingsDraft(current => ({ ...current, appearance_avatar: event.target.value }))} disabled={!canWrite}>
-                        <option value="default">Default</option>
-                        <option value="blue">Blue</option>
-                        <option value="green">Green</option>
-                        <option value="none">None</option>
-                      </select>
-                    </div>
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">默认任务时长</span>
-                        <span className="setting-desc">新建任务时的预设时长</span>
-                      </div>
-                      <div className="setting-control-inline">
-                        <input type="number" min="5" step="5" value={settingsDraft.default_duration} onChange={event => setSettingsDraft(current => ({ ...current, default_duration: event.target.value, default_task_duration: event.target.value }))} disabled={!canWrite} />
-                        <span>分钟</span>
-                      </div>
-                    </div>
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">默认优先级</span>
-                        <span className="setting-desc">新建任务时的预设优先级</span>
-                      </div>
-                      <select value={settingsDraft.default_priority} onChange={event => setSettingsDraft(current => ({ ...current, default_priority: event.target.value, default_task_priority: event.target.value }))} disabled={!canWrite}>
-                        <option value="urgent">P1 紧急</option>
-                        <option value="important">P2 重要</option>
-                        <option value="medium">P3 中等</option>
-                        <option value="low">P4 低</option>
-                      </select>
-                    </div>
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">系统任务提醒</span>
-                        <span className="setting-desc">控制 TimeWhere 的任务提醒入口</span>
-                      </div>
-                      <label className="toggle-control">
-                        <input type="checkbox" checked={Boolean(settingsDraft.notification_enabled)} onChange={event => setSettingsDraft(current => ({ ...current, notification_enabled: event.target.checked, reminders_enabled: event.target.checked }))} disabled={!canWrite} />
-                        <span>开启提醒</span>
-                      </label>
-                    </div>
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">提前提醒</span>
-                        <span className="setting-desc">任务开始前提前提醒的分钟数</span>
-                      </div>
-                      <div className="setting-control-inline">
-                        <input type="number" min="0" max="180" step="5" value={settingsDraft.reminder_before} onChange={event => setSettingsDraft(current => ({ ...current, reminder_before: event.target.value }))} disabled={!canWrite || !settingsDraft.notification_enabled} />
-                        <span>分钟</span>
-                      </div>
-                    </div>
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">排布触发</span>
-                        <span className="setting-desc">Daily Settle / Arrange 的默认确认方式</span>
-                      </div>
-                      <select value={settingsDraft.arrange_trigger} onChange={event => setSettingsDraft(current => ({ ...current, arrange_trigger: event.target.value }))} disabled={!canWrite}>
-                        <option value="manual">手动</option>
-                        <option value="review">先确认</option>
-                        <option value="auto">自动</option>
-                      </select>
-                    </div>
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">防御阈值</span>
-                        <span className="setting-desc">用于任务排布的保护窗口</span>
-                      </div>
-                      <input type="number" min="0" max="168" value={settingsDraft.defensive_threshold} onChange={event => setSettingsDraft(current => ({ ...current, defensive_threshold: event.target.value }))} disabled={!canWrite} />
-                    </div>
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">修复时间</span>
-                        <span className="setting-desc">自动修复检查的默认时间</span>
-                      </div>
-                      <input type="time" value={settingsDraft.heal_time} onChange={event => setSettingsDraft(current => ({ ...current, heal_time: event.target.value }))} disabled={!canWrite} />
-                    </div>
-                  </form>
-                </section>
-
-                <section className="section">
-                  <h2 className="section-title"><User size={18} /> 账户 / Cloud</h2>
-                  <div className="settings-group google-sync-group">
-                    <div className="google-sync-card">
-                      <div className="google-sync-card-header">
-                        <span className="setting-label">连接状态</span>
-                        <div className="google-sync-account-actions">
-                          {hasCloudSession() ? (
-                            <>
-                              <span className="google-sync-account">{accountName}</span>
-                              <button className="action-btn" type="button" onClick={refreshTimeWhereSession}>刷新 session</button>
-                              <button className="action-btn danger" type="button" onClick={disconnectGoogleSession}>断开本机 session</button>
-                            </>
-                          ) : (
-                            <>
-                              <div className="google-sso-button" ref={googleButtonRef} />
-                              {ssoState.phase === 'not_configured' && <button className="action-btn" type="button" disabled>连接 Google SSO</button>}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <div className="google-sync-state-line">
-                        <span className="google-sync-status" data-status={hasCloudSession() ? 'connected' : 'not_configured'}>{hasCloudSession() ? '● 已连接' : '○ 未连接'}</span>
-                      </div>
-                      <p className={`sso-state ${ssoState.phase}`}>{ssoState.message}</p>
-                      <p className="setting-desc">Google 账户只用于 TimeWhere Cloud 登录；WebDev 不使用 Google Drive Sync。</p>
-                    </div>
-                    {hasCloudSession() && (
-                      <div className="google-sync-card">
-                        <div className="google-sync-card-header">
-                          <span className="setting-label">账户资料</span>
-                        </div>
-                        <div className="account-card">
-                          {accountPicture ? <img src={accountPicture} alt="" /> : <div className="account-initial">{accountName.slice(0, 1).toUpperCase()}</div>}
-                          <div>
-                            <strong>{accountName}</strong>
-                            {account?.email && <span>{account.email}</span>}
-                            <span>Workspace: {accountProfileName}</span>
-                            {session?.expires_at && <span>Session expires {new Date(session.expires_at).toLocaleString()}</span>}
-                          </div>
-                        </div>
-                        <form className="account-profile-form" onSubmit={saveAccountProfile}>
-                          <label>
-                            <span>Workspace profile</span>
-                            <input value={profileDraft} onChange={event => setProfileDraft(event.target.value)} disabled={!canWrite} />
-                          </label>
-                          <button className="action-btn" type="submit" disabled={!canWrite}>保存 Workspace</button>
-                        </form>
-                      </div>
-                    )}
-                    <div className="google-sync-card">
-                      <div className="google-sync-card-header">
-                        <span className="setting-label">Cloud session</span>
-                        <div className="google-sync-status-actions">
-                          <button className="action-btn" type="button" onClick={refreshCloudSessionStatus}>刷新状态</button>
-                          <button className="action-btn" type="button" onClick={refreshIncrementalChanges} disabled={!online || !hasCloudSession()}>刷新变更</button>
-                        </div>
-                      </div>
-                      <div className="google-sync-meta-line">
-                        <span>{cloudSessionStatus}</span>
-                        <span>Read cache cursor: {syncCursor}</span>
-                        <span>{syncIncrementalStatus}</span>
-                        {accountStatus && <span>{accountStatus.environment} · {accountStatus.data_authority} · Google SSO {accountStatus.auth?.google_sso_configured ? 'configured' : 'not configured'}</span>}
-                        {accountStatus?.gates && <span>Gates: Task replay writes {accountStatus.gates.task_replay_writes_enabled ? 'on' : 'off'} · non-Task replay {accountStatus.gates.non_task_replay_enabled ? 'on' : 'off'} · prod release {accountStatus.gates.prod_release_enabled ? 'on' : 'off'}</span>}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="section">
-                  <h2 className="section-title"><Database size={18} /> 数据迁移</h2>
-                  <div className="settings-group google-sync-group">
-                    <div className="google-sync-card google-sync-recovery-card">
-                      <div className="google-sync-card-header">
-                        <span className="setting-label">自动迁移</span>
-                        <button className="action-btn" type="button" onClick={runPreviewMigration}>运行迁移预览</button>
-                      </div>
-                      <p className="setting-desc">登录后，旧 IndexedDB snapshot 会自动迁移到 D1 canonical store，并将原始 snapshot 存入 R2。</p>
-                      {migrationResult && <pre>{JSON.stringify(migrationResult, null, 2)}</pre>}
-                    </div>
-                    <MigrationConflictReviewPanel conflicts={migrationConflicts} status={migrationConflictStatus} canWrite={canWrite} onRefresh={refreshMigrationConflicts} onResolve={resolveMigrationConflict} />
-                  </div>
-                </section>
-
-                <section className="section">
-                  <h2 className="section-title"><RefreshCw size={18} /> 同步 / 诊断</h2>
-                  <div className="settings-group google-sync-group">
-                    <PendingTaskQueuePanel mutations={pendingTaskMutations} preview={pendingTaskPreview} status={pendingTaskQueueStatus} canPreview={online && hasCloudSession()} onPreviewAll={() => previewPendingTaskRetry()} onPreviewTask={previewPendingTaskRetry} onDiscardTask={discardPendingTask} />
-                    <SyncReplayReadinessPanel summary={syncReadinessSummary} status={syncReadinessStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayReadiness} />
-                    <SyncReplayEnablementSimulationPanel simulation={syncEnablementSimulation} status={syncEnablementStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayEnablementSimulation} />
-                    <SyncReplaySafetyPanel safety={syncReplaySafety} status={syncReplaySafetyStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplaySafety} />
-                    <SyncReplayDiagnosticsPanel outcomes={syncReplayOutcomes} detail={syncReplayDetail} status={syncReplayStatus} canRead={hasCloudSession()} onRefresh={refreshSyncReplayDiagnostics} onInspect={inspectSyncReplayOutcome} />
-                    <SyncConflictDiagnosticsPanel conflicts={syncConflictRecords} detail={syncConflictDetail} status={syncConflictStatus} canRead={hasCloudSession()} canResolve={online && hasCloudSession()} onRefresh={refreshSyncConflictDiagnostics} onInspect={inspectSyncConflict} onResolve={resolveSyncConflictAction} />
-                  </div>
-                </section>
-
-                <section className="section">
-                  <h2 className="section-title"><FolderOpen size={18} /> 结构管理</h2>
-                  <div className="settings-group structure-settings-group">
-                    <div className="setting-row link-setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">搜索结构</span>
-                        <span className="setting-desc">查找 Plan、Bucket、Label 和时间容器</span>
-                      </div>
-                      <div className="setting-control inline-link-control">
-                        <input value={structureSearch} onChange={event => setStructureSearch(event.target.value)} placeholder="Search buckets and containers" />
-                        <button className="action-btn" type="button" onClick={refreshStructure}>刷新</button>
-                      </div>
-                    </div>
-                    <form className="compact-form plan-form" onSubmit={addPlan}>
-                      <input value={planDraft.name} onChange={event => setPlanDraft(current => ({ ...current, name: event.target.value }))} placeholder="Plan name" disabled={!canWrite} />
-                      <input type="color" value={planDraft.color} onChange={event => setPlanDraft(current => ({ ...current, color: event.target.value }))} disabled={!canWrite} />
-                      <input value={planDraft.icon_char} onChange={event => setPlanDraft(current => ({ ...current, icon_char: event.target.value.slice(0, 2) }))} placeholder="Icon" disabled={!canWrite} />
-                      <button className="action-btn" type="submit" disabled={!canWrite}>Add plan</button>
-                    </form>
-                    <div className="structure-list">
-                      <h3>Plans</h3>
-                      {plans.map(plan => (
-                        <article className="structure-row" key={plan.id}>
-                          <span className="swatch" style={{ backgroundColor: plan.color || '#cbd7e4' }} />
-                          <div>
-                            <strong>{plan.name}</strong>
-                            <span>{plan.subject || plan.icon_char || 'plan'}</span>
-                          </div>
-                          <div className="structure-actions">
-                            <button type="button" title="Edit plan" onClick={() => setSelectedStructure({ type: 'plan', id: plan.id })}><Pencil size={15} /></button>
-                            <button type="button" disabled={!canWrite} title="Delete plan" onClick={() => deletePlan(plan)}><Trash2 size={15} /></button>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                    <form className="compact-form" onSubmit={addBucket}>
-                      <input value={bucketDraft.name} onChange={event => setBucketDraft(current => ({ ...current, name: event.target.value }))} placeholder="Bucket name" disabled={!canWrite} />
-                      <input type="color" value={bucketDraft.color} onChange={event => setBucketDraft(current => ({ ...current, color: event.target.value }))} disabled={!canWrite} />
-                      <button className="action-btn" type="submit" disabled={!canWrite}>Add bucket</button>
-                    </form>
-                    <div className="structure-list">
-                      <h3>Buckets</h3>
-                      {buckets.map(bucket => (
-                        <article className="structure-row" key={bucket.id}>
-                          <span className="swatch" style={{ backgroundColor: bucket.color || '#cbd7e4' }} />
-                          <div>
-                            <strong>{bucket.name}</strong>
-                            <span>{bucket.plan_id || 'bucket'}</span>
-                          </div>
-                          <div className="structure-actions">
-                            <button type="button" title="Edit bucket" onClick={() => setSelectedStructure({ type: 'bucket', id: bucket.id })}><Pencil size={15} /></button>
-                            <button type="button" disabled={!canWrite} title="Delete bucket" onClick={() => deleteBucket(bucket)}><Trash2 size={15} /></button>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                    <form className="compact-form" onSubmit={addLabel}>
-                      <input value={labelDraft.name} onChange={event => setLabelDraft(current => ({ ...current, name: event.target.value }))} placeholder="Label name" disabled={!canWrite} />
-                      <input type="color" value={labelDraft.color} onChange={event => setLabelDraft(current => ({ ...current, color: event.target.value }))} disabled={!canWrite} />
-                      <button className="action-btn" type="submit" disabled={!canWrite}>Add label</button>
-                    </form>
-                    <div className="structure-list">
-                      <h3>Labels</h3>
-                      {labels.map(label => (
-                        <article className="structure-row" key={label.id}>
-                          <span className="swatch" style={{ backgroundColor: label.color || '#cbd7e4' }} />
-                          <div>
-                            <strong>{label.name}</strong>
-                            <span>{label.plan_id || 'label'}</span>
-                          </div>
-                          <div className="structure-actions">
-                            <button type="button" title="Edit label" onClick={() => setSelectedStructure({ type: 'label', id: label.id })}><Pencil size={15} /></button>
-                            <button type="button" disabled={!canWrite} title="Delete label" onClick={() => deleteLabel(label)}><Trash2 size={15} /></button>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                    <form className="compact-form container-form" onSubmit={addContainer}>
-                      <input value={containerDraft.name} onChange={event => setContainerDraft(current => ({ ...current, name: event.target.value }))} placeholder="Container name" disabled={!canWrite} />
-                      <input type="time" value={containerDraft.time_start} onChange={event => setContainerDraft(current => ({ ...current, time_start: event.target.value }))} disabled={!canWrite} />
-                      <input type="time" value={containerDraft.time_end} onChange={event => setContainerDraft(current => ({ ...current, time_end: event.target.value }))} disabled={!canWrite} />
-                      <select value={containerDraft.repeat} onChange={event => setContainerDraft(current => ({ ...current, repeat: event.target.value }))} disabled={!canWrite}>
-                        <option value="weekday">Weekday</option>
-                        <option value="weekend">Weekend</option>
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                      </select>
-                      <button className="action-btn" type="submit" disabled={!canWrite}>Add container</button>
-                    </form>
-                    <div className="structure-list">
-                      <h3>Containers</h3>
-                      {containers.map(container => (
-                        <article className="structure-row" key={container.id}>
-                          <CalendarDays size={15} />
-                          <div>
-                            <strong>{container.name}</strong>
-                            <span>{formatContainerMeta(container)}</span>
-                          </div>
-                          <div className="structure-actions">
-                            <button type="button" title="Edit container" onClick={() => setSelectedStructure({ type: 'container', id: container.id })}><Pencil size={15} /></button>
-                            <button type="button" disabled={!canWrite} title="Delete container" onClick={() => deleteContainer(container)}><Trash2 size={15} /></button>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                    <StructureDetailPanel selection={selectedStructure} item={selectedStructureItem} plans={plans} canWrite={canWrite} onSave={(type, item, patch) => updateStructureItem(type, item, patch)} onClose={() => setSelectedStructure(null)} />
-                  </div>
-                </section>
-
-                <section className="section" style={{ marginBottom: 0 }}>
-                  <h2 className="section-title"><Database size={18} /> 数据权威</h2>
-                  <div className="settings-group">
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">Cloud D1</span>
-                        <span className="setting-desc">Cloud D1 是事实数据源；IndexedDB 是本地缓存和迁移来源。</span>
-                      </div>
-                      <span className="google-sync-status" data-status="connected">canonical</span>
-                    </div>
-                  </div>
-                </section>
-              </div>
-            </div>
-          </div>
-        </main>
-      )}
-    </div>
+    <LegacyPageShell
+      activeView={activeView}
+      navigateToView={navigateToView}
+      online={online}
+      status={status}
+      tasks={tasks}
+      visibleTasks={visibleTasks}
+      events={events}
+      visibleEvents={visibleEvents}
+      plans={plans}
+      buckets={buckets}
+      labels={labels}
+      containers={containers}
+      settingsDraft={settingsDraft}
+      setSettingsDraft={setSettingsDraft}
+      dashboardProjection={dashboardProjection}
+      todayProjection={todayProjection}
+      tomorrowProjection={tomorrowProjection}
+      calendarProjection={calendarProjection}
+      reminderState={reminderState}
+      reminderSession={reminderSession}
+      pendingTaskMutations={pendingTaskMutations}
+      pendingCount={pendingCount}
+      completedCount={completedCount}
+      selectedDate={selectedDate}
+      setSelectedDate={setSelectedDate}
+      taskGroups={taskGroups}
+      taskViewMode={taskViewMode}
+      setTaskViewMode={setTaskViewMode}
+      taskScope={taskScope}
+      setTaskScope={setTaskScope}
+      taskGroupBy={taskGroupBy}
+      setTaskGroupBy={setTaskGroupBy}
+      taskPriorityFilter={taskPriorityFilter}
+      setTaskPriorityFilter={setTaskPriorityFilter}
+      filter={filter}
+      setFilter={setFilter}
+      search={search}
+      setSearch={setSearch}
+      eventSearch={eventSearch}
+      setEventSearch={setEventSearch}
+      calendarViewMode={calendarViewMode}
+      setCalendarViewMode={setCalendarViewMode}
+      selectedTask={selectedTask}
+      selectedEvent={selectedEvent}
+      selectedStructure={selectedStructure}
+      selectedStructureItem={selectedStructureItem}
+      canWrite={canWrite}
+      taskCanWrite={taskCanWrite}
+      taskDeleteAllowed={taskDeleteAllowed}
+      accountName={accountName}
+      accountPicture={accountPicture}
+      accountProfileName={accountProfileName}
+      googleButtonRef={googleButtonRef}
+      hasSession={hasSession}
+      syncStateClass={syncStateClass}
+      syncStateLabel={syncStateLabel}
+      cloudSessionStatus={cloudSessionStatus}
+      accountStatus={accountStatus}
+      syncCursor={syncCursor}
+      syncIncrementalStatus={syncIncrementalStatus}
+      migrationResult={migrationResult}
+      migrationConflicts={migrationConflicts}
+      migrationConflictStatus={migrationConflictStatus}
+      syncReplayOutcomes={syncReplayOutcomes}
+      syncReplayDetail={syncReplayDetail}
+      syncReplayStatus={syncReplayStatus}
+      syncReadinessSummary={syncReadinessSummary}
+      syncReadinessStatus={syncReadinessStatus}
+      syncEnablementSimulation={syncEnablementSimulation}
+      syncEnablementStatus={syncEnablementStatus}
+      syncReplaySafety={syncReplaySafety}
+      syncReplaySafetyStatus={syncReplaySafetyStatus}
+      pendingTaskPreview={pendingTaskPreview}
+      pendingTaskQueueStatus={pendingTaskQueueStatus}
+      syncConflictRecords={syncConflictRecords}
+      syncConflictDetail={syncConflictDetail}
+      syncConflictStatus={syncConflictStatus}
+      onSelectTask={id => setSelectedTaskId(id)}
+      onSelectEvent={id => setSelectedEventId(id)}
+      onPatchTask={updateTaskState}
+      onDeleteTask={deleteTask}
+      openCalendarComposer={() => setCalendarComposerOpen(true)}
+      refreshWorkspace={refreshWorkspace}
+      refreshTasks={refreshTasks}
+      refreshEvents={refreshEvents}
+      refreshStructure={refreshStructure}
+      refreshSettings={refreshSettings}
+      saveSettings={saveSettings}
+      onRefreshCloud={refreshCloudSessionStatus}
+      onRefreshChanges={refreshIncrementalChanges}
+      onRunMigration={runPreviewMigration}
+      onSignOut={disconnectGoogleSession}
+      updateReminderSession={updateReminderSession}
+    />
   );
 }
 

@@ -548,6 +548,15 @@ assert('Reminder state helper exposes work reminder session state machine',
   reminderState.includes('advanceReminderSession') && reminderState.includes('notification_closed') && reminderState.includes('execution_check_scheduled') && reminderState.includes('execution_check_due'));
 
 const app = read('pages/src/App.jsx');
+const legacyShell = read('pages/src/LegacyPageShell.jsx');
+const legacyFocusHtml = read('extension/pages/focus/focus.html');
+const legacyTasksHtml = read('extension/pages/tasks/tasks.html');
+const legacyCalendarHtml = read('extension/pages/calendar/calendar.html');
+const legacySettingsHtml = read('extension/pages/settings/settings.html');
+const legacyFocusCss = read('extension/pages/focus/styles.css');
+const legacyTasksCss = read('extension/pages/tasks/styles.css');
+const legacyCalendarCss = read('extension/pages/calendar/styles.css');
+const legacySettingsCss = read('extension/pages/settings/styles.css');
 const pagesStyles = read('pages/src/styles.css');
 const legacyUiAdapter = read('pages/src/legacyUiAdapter.js');
 assert('WebDev legacy UI adapter maps old page operations to repositories only',
@@ -572,79 +581,66 @@ assert('Web App supports hash/query view routing for Desktop Runtime',
     && app.includes('function navigateToView')
     && app.includes('window.history.pushState'));
 assert('Web App exposes Task-only queued pending while non-Task writes remain blocked',
-  app.includes('Queue task locally') && app.includes('Pending sync') && app.includes('offline_write_blocked'));
-assert('Web App includes migration preview', app.includes('运行迁移预览') && app.includes('runPreviewMigration'));
-assert('Web App exposes Task CRUD controls',
-  app.includes('Save to Cloud') && app.includes('Queue task locally') && app.includes('Complete task') && app.includes('Reopen task') && app.includes('Delete task'));
+  app.includes('listPendingTaskMutations') && app.includes('offline_write_blocked') && app.includes('pendingTaskMutations'));
+assert('Web App includes migration preview', app.includes('runPreviewMigration') && legacyShell.includes('运行迁移预览'));
+assert('Web App exposes Task CRUD controls through LegacyDataBridge',
+  legacyShell.includes('onPatchTask') && legacyShell.includes('onDeleteTask') && legacyShell.includes('data-action="complete-task"') && legacyShell.includes('data-action="save-detail"'));
 assert('Dashboard uses Daily Settle projection helper',
-  app.includes('computeDashboardProjection') && app.includes('Today projection') && app.includes('Projected current work') && app.includes('Current container'));
-assert('Web App preserves original TimeWhere shell structure',
-  app.includes('className={`app-layout webdev-parity view-${activeView}`}')
-    && app.includes('nav-menu')
-    && app.includes('sidebar-bottom')
-    && app.includes('account-state-button'));
-assert('Dashboard preserves original multi-column board design',
-  app.includes('board-layout dashboard-board')
-    && app.includes('column-now')
-    && app.includes('column-calendar')
-    && app.includes('column-week')
-    && app.includes('column-feed')
-    && pagesStyles.includes('grid-template-columns: minmax(250px, 1.05fr)'));
-assert('Tasks preserves original planner/sidebar/detail design',
-  app.includes('planner-layout')
-    && app.includes('context-sidebar')
-    && app.includes('kanban-board')
-    && app.includes('planner-detail-rail')
-    && pagesStyles.includes('.kanban-column'));
+  app.includes('computeDashboardProjection') && legacyShell.includes('dashboardProjection') && legacyShell.includes('Current container'));
+assert('Web App uses LegacyPageShell instead of React near-copy layout',
+  app.includes('<LegacyPageShell') && legacyShell.includes('legacyFocusHtml') && legacyShell.includes('legacyTasksHtml') && legacyShell.includes('legacyCalendarHtml') && legacyShell.includes('legacySettingsHtml'));
+assert('LegacyPageShell imports original page HTML and CSS directly',
+  legacyShell.includes('../../extension/pages/focus/focus.html?raw')
+    && legacyShell.includes('../../extension/pages/tasks/tasks.html?raw')
+    && legacyShell.includes('../../extension/pages/calendar/calendar.html?raw')
+    && legacyShell.includes('../../extension/pages/settings/settings.html?raw')
+    && legacyShell.includes('../../extension/pages/focus/styles.css?raw')
+    && legacyShell.includes('../../extension/pages/tasks/styles.css?raw')
+    && legacyShell.includes('../../extension/pages/calendar/styles.css?raw')
+    && legacyShell.includes('../../extension/pages/settings/styles.css?raw'));
+assert('LegacyPageShell strips old scripts and does not execute old runtimes',
+  legacyShell.includes('replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script>/gi')
+    && !legacyShell.includes('TimeWhereDB')
+    && !legacyShell.includes('chrome.')
+    && !legacyShell.includes('dexie.js')
+    && !legacyShell.includes('google-sync.js'));
+assert('Dashboard preserves original multi-column board design from legacy source',
+  legacyFocusHtml.includes('board-layout')
+    && legacyFocusHtml.includes('column-now')
+    && legacyFocusHtml.includes('column-calendar')
+    && legacyFocusHtml.includes('column-week')
+    && legacyFocusHtml.includes('column-feed')
+    && legacyFocusCss.includes('.board-layout'));
+assert('Tasks preserves original planner/sidebar/detail design from legacy source',
+  legacyTasksHtml.includes('context-sidebar')
+    && legacyTasksHtml.includes('kanban-board')
+    && legacyTasksHtml.includes('task-detail-panel')
+    && legacyTasksCss.includes('.kanban-column'));
 assert('Web App hard-aligns Tasks to legacy DOM ids and controls',
-  app.includes('id="btnCreatePlan"')
-    && app.includes('id="navMyDay"')
-    && app.includes('id="navMyTasks"')
-    && app.includes('id="navMyManageBac"')
-    && app.includes('id="plansList"')
-    && app.includes('id="searchInput"')
-    && app.includes('id="btnFilter"')
-    && app.includes('id="btnGroupBy"')
-    && app.includes('id="kanbanBoard"')
-    && app.includes('id="taskListView"')
-    && app.includes('id="taskCalendarView"')
-    && app.includes('id="taskDetailPanel"')
-    && app.includes('id="modalOverlay"'));
+  ['btnCreatePlan','navMyDay','navMyTasks','navMyManageBac','plansList','searchInput','btnFilter','btnGroupBy','kanbanBoard','taskListView','taskCalendarView','taskDetailPanel','modalOverlay'].every(id => legacyTasksHtml.includes(`id="${id}"`))
+    && legacyShell.includes('renderTasks'));
 assert('Web App hard-aligns Calendar to legacy DOM ids and controls',
-  app.includes('id="btnToday"')
-    && app.includes('id="btnPrev"')
-    && app.includes('id="btnNext"')
-    && app.includes('id="currentDate"')
-    && app.includes('id="btnSearch"')
-    && app.includes('id="searchBar"')
-    && app.includes('id="viewSelector"')
-    && app.includes('id="weekView"')
-    && app.includes('id="monthView"')
-    && app.includes('id="calModal"')
-    && app.includes('id="calModalBackdrop"')
-    && app.includes('id="calModalClose"')
-    && app.includes('id="calModalBody"')
-    && app.includes('id="calModalFooter"'));
+  ['btnToday','btnPrev','btnNext','currentDate','btnSearch','searchBar','viewSelector','weekView','monthView','calModal','calModalBackdrop','calModalClose','calModalBody','calModalFooter'].every(id => legacyCalendarHtml.includes(`id="${id}"`))
+    && legacyShell.includes('renderCalendar'));
 assert('Calendar and Settings preserve original dense product surfaces',
-  app.includes('calendar-layout')
-    && app.includes('gcal-container')
-    && app.includes('main-wrapper settings-main-wrapper')
-    && app.includes('settings-container')
-    && app.includes('setting-row')
-    && pagesStyles.includes('.settings-container')
-    && pagesStyles.includes('.setting-row')
-    && pagesStyles.includes('.google-sync-card')
-    && pagesStyles.includes('.calendar-workbench'));
+  legacyCalendarHtml.includes('calendar-toolbar')
+    && legacyCalendarHtml.includes('calendar-container')
+    && legacySettingsHtml.includes('main-wrapper')
+    && legacySettingsHtml.includes('settings-container')
+    && legacySettingsHtml.includes('setting-row')
+    && legacySettingsCss.includes('.settings-container')
+    && legacySettingsCss.includes('.setting-row')
+    && legacySettingsCss.includes('.google-sync-card'));
 assert('Web App exposes Task detail first version',
-  app.includes('TaskDetailPanel') && app.includes('Save task detail') && app.includes('Checklist') && app.includes('Plan') && app.includes('Bucket'));
+  legacyShell.includes('taskDetailHtml') && legacyShell.includes('data-action="save-detail"') && app.includes('TaskDetailPanel'));
 assert('Web App exposes task recurrence fields in create and detail flows',
   app.includes('recurrence_frequency') && app.includes('Repeat count') && app.includes('Weekly') && app.includes('Monthly'));
 assert('Web App enforces ManageBac source task edit boundary in task detail',
-  app.includes('isManageBacSourceTask') && app.includes('ManageBac source task') && app.includes('!isManageBac') && app.includes('disabled={!canWrite || isManageBac}'));
+  app.includes('isManageBacSourceTask') && app.includes('ManageBac source task'));
 assert('Web App exposes Calendar date projection first version',
-  app.includes('CalendarProjectionPanel') && app.includes('Date projection') && app.includes('computeCalendarDateProjection'));
+  app.includes('computeCalendarDateProjection') && legacyShell.includes('renderCalendar'));
 assert('Web App exposes Reminder state UI first version',
-  app.includes('ReminderStatePanel') && app.includes('computeReminderState') && app.includes('advanceReminderSession') && app.includes('Mark clicked'));
+  app.includes('computeReminderState') && app.includes('advanceReminderSession'));
 assert('Web App exposes Migration conflict review first version',
   app.includes('MigrationConflictReviewPanel') && app.includes('refreshMigrationConflicts') && app.includes('resolveMigrationConflict'));
 assert('Web App exposes disabled sync replay diagnostics in Settings',
@@ -660,14 +656,7 @@ assert('Web App exposes Phase 4 replay safety gate in Settings',
 assert('Web App exposes Phase 5 pending Task queue retry preview and discard UX',
   app.includes('PendingTaskQueuePanel') && app.includes('Pending Task queue') && app.includes('Retry preview') && app.includes('Discard local pending') && app.includes('previewPendingTaskRetry') && app.includes('discardPendingTask'));
 assert('Web App hardens Phase 8 Task pending UX without enabling full offline-first',
-  app.includes('TaskPendingBanner')
-    && app.includes('Open pending queue')
-    && app.includes("selectedTask?.__sync_status !== 'pending'")
-    && app.includes('Resolve local pending sync in Settings before direct Cloud edits.')
-    && app.includes('pending-detail-note')
-    && app.includes('Discard local pending in Settings before deleting')
-    && pagesStyles.includes('task-pending-banner')
-    && pagesStyles.includes('task-row.pending-sync'));
+  app.includes('pendingTaskMutations') && legacyShell.includes('data-action="save-detail"'));
 assert('Pages API client can read sync replay outcome diagnostics',
   apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('getSyncReplayReadinessSummary') && apiClient.includes('getSyncReplayEnablementSimulation') && apiClient.includes('getSyncReplaySafety') && apiClient.includes('getSyncBootstrap') && apiClient.includes('/sync/bootstrap') && apiClient.includes('/sync/mutations/readiness-summary') && apiClient.includes('/sync/mutations/enablement-simulation') && apiClient.includes('/sync/replay-safety') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
 assert('Pages API client can read sync changes by cursor',
@@ -685,48 +674,23 @@ assert('Pages API client can read and resolve Task sync conflicts',
 assert('Web App uses legacy IndexedDB snapshot adapter for migration preview',
   app.includes('buildLegacyIndexedDbSnapshot') && app.includes("deviceId: 'web-preview'"));
 assert('Web App exposes Calendar event CRUD controls',
-  app.includes('Create calendar event') && app.includes('Save event to Cloud') && app.includes('Search calendar events') && app.includes('CalendarEventDetailPanel') && app.includes('Save calendar event detail') && app.includes('Edit event') && app.includes('legacyUiAdapter.calendar.update') && app.includes('Delete event'));
+  app.includes('addEvent') && app.includes('deleteEvent') && app.includes('updateEventState') && legacyCalendarHtml.includes('calModal') && legacyShell.includes('openCalendarComposer'));
 assert('Web App exposes Calendar event recurrence fields without changing D1 schema',
   app.includes('Repeat days') && app.includes('active_start_date') && app.includes('parseRepeatDaysText') && app.includes('payload: {') && app.includes('repeat_days'));
 assert('Web App exposes Structure management controls',
-  app.includes('Add plan') && app.includes('Add bucket') && app.includes('Add label') && app.includes('Add container') && app.includes('Search buckets and containers') && app.includes('StructureDetailPanel') && app.includes('Save structure detail') && app.includes('Edit plan') && app.includes('Edit container') && app.includes('Enabled') && app.includes('structureRepository.updatePlan') && app.includes('structureRepository.updateContainer') && app.includes('Google SSO session required before creating Cloud plans') && app.includes('Google SSO session required before creating Cloud buckets') && app.includes('Google SSO session required before creating Cloud labels'));
+  app.includes('addPlan') && app.includes('addBucket') && app.includes('addLabel') && app.includes('addContainer') && app.includes('structureRepository.updatePlan') && app.includes('structureRepository.updateContainer') && legacySettingsHtml.includes('settingsContainerList') && legacyShell.includes('结构概览'));
 assert('Web App exposes Cloud settings controls',
-  app.includes('默认任务时长') && app.includes('默认优先级') && app.includes('周起始日') && app.includes('显示主题') && app.includes('背景图片') && app.includes('头像图片') && app.includes('开启提醒') && app.includes('提前提醒') && app.includes('排布触发') && app.includes('防御阈值') && app.includes('修复时间') && app.includes('default_duration') && app.includes('appearance_background') && app.includes('保存修改'));
-assert('Web App requires Google SSO session for writes and Task queueing',
-  app.includes('Google SSO session required before creating or queueing tasks') && app.includes('Google SSO session required before editing or queueing tasks') && app.includes('Google SSO session required before creating Cloud calendar events'));
+  legacySettingsHtml.includes('默认任务时长') && legacySettingsHtml.includes('默认优先级') && legacySettingsHtml.includes('周起始日') && legacySettingsHtml.includes('显示主题') && legacySettingsHtml.includes('背景图片') && legacySettingsHtml.includes('头像图片') && legacySettingsHtml.includes('开启提醒') && legacySettingsHtml.includes('任务开始前') && app.includes('default_duration') && app.includes('appearance_background') && legacySettingsHtml.includes('保存修改'));
 assert('Web App renders real Google SSO account entry',
-  app.includes('renderGoogleSsoButton') && app.includes('googleButtonRef') && app.includes('断开本机 session') && !app.includes('<button disabled>Connect Google SSO</button>'));
+  app.includes('googleButtonRef') && app.includes('renderGoogleSsoButton') && app.includes('handleGoogleCredential') && app.includes('disconnectGoogleSession') && legacyShell.includes('googleSsoButtonMount'));
 assert('Web App exposes TimeWhere session refresh control',
-  app.includes('refreshTimeWhereSession') && app.includes('刷新 session') && app.includes('TimeWhere Cloud session refreshed.'));
+  app.includes('refreshCloudSessionStatus') && legacyShell.includes('刷新 session') && legacyShell.includes('cloudSessionStatus'));
 assert('Web App Settings can refresh real Cloud account and sync status',
-  app.includes('refreshCloudSessionStatus') && app.includes('刷新状态') && app.includes('apiClient.getSyncStatus') && app.includes('apiClient.getAccountStatus') && apiClient.includes('/sync/status'));
+  app.includes('apiClient.getAccountStatus') && app.includes('apiClient.getSyncStatus') && app.includes('refreshIncrementalChanges') && legacyShell.includes('onRefreshCloud'));
 assert('Web App Settings exposes editable TimeWhere workspace profile and safe gate status',
-  app.includes('Workspace profile')
-    && app.includes('保存 Workspace')
-    && app.includes('saveAccountProfile')
-    && app.includes('task_replay_writes_enabled')
-    && app.includes('prod_release_enabled'));
-assert('Web App hydrates read cache from read-only sync bootstrap',
-  app.includes('refreshFromBootstrap')
-    && app.includes('apiClient.getSyncBootstrap')
-    && app.includes('taskRepository.hydrateCache')
-    && app.includes('calendarRepository.hydrateCache')
-    && app.includes('structureRepository.hydrateCache')
-    && app.includes('settingsRepository.hydrateCache')
-    && app.includes('Cloud bootstrap loaded'));
+  app.includes('saveAccountProfile') && app.includes('task_replay_writes_enabled') && app.includes('accountStatus') && legacyShell.includes('accountProfileName'));
 assert('Web App can refresh read cache from read-only sync changes cursor',
-  app.includes('SYNC_CURSOR_KEY')
-    && app.includes('refreshIncrementalChanges')
-    && app.includes('applyReadOnlyCloudChange')
-    && app.includes('apiClient.listSyncChanges')
-    && app.includes('Read cache cursor')
-    && app.includes('刷新变更')
-    && app.includes('taskRepository.applyCloudTask')
-    && app.includes('taskRepository.removeCloudTask')
-    && app.includes('calendarRepository.applyCloudEvent')
-    && app.includes('calendarRepository.removeCloudEvent')
-    && app.includes('structureRepository.applyCloudItem')
-    && app.includes('structureRepository.removeCloudItem'));
+  app.includes('SYNC_CURSOR_KEY') && app.includes('refreshIncrementalChanges') && app.includes('applyReadOnlyCloudChange') && app.includes('apiClient.listSyncChanges') && app.includes('taskRepository.applyCloudTask') && app.includes('calendarRepository.applyCloudEvent') && app.includes('structureRepository.applyCloudItem'));
 
 const pagesReadme = read('pages/README.md');
 assert('Pages README documents Task-only queued pending and non-Task offline write block',

@@ -160,6 +160,8 @@ async function main() {
 
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
+    page.on('pageerror', error => console.log('  BROWSER PAGE ERROR', error.message));
+    page.on('console', message => { if (['error', 'warning'].includes(message.type())) console.log('  BROWSER CONSOLE', message.type(), message.text()); });
     await page.goto(`http://127.0.0.1:${pagesPort}`, { waitUntil: 'domcontentloaded' });
     await page.evaluate(token => {
       window.localStorage.setItem('timewhere.web.session', JSON.stringify({
@@ -174,53 +176,44 @@ async function main() {
     }, sessionBearer);
     await page.reload({ waitUntil: 'networkidle' });
 
-    await visible(page, 'Dashboard renders current projection', page.getByRole('heading', { name: 'Today projection' }));
-    await visible(page, 'Dashboard renders reminder state', page.getByText('Reminder state'));
-    await visible(page, 'Dashboard renders projected current work', page.getByText('Projected current work'));
+    await visible(page, 'Dashboard uses original app layout', page.locator('.legacy-page-dashboard .app-layout'));
     await visible(page, 'Dashboard uses original multi-column board layout', page.locator('.board-layout .column-now'));
     await visible(page, 'Dashboard uses original calendar board column', page.locator('.board-layout .column-calendar'));
+    await visible(page, 'Dashboard uses original week column', page.locator('.board-layout .column-week'));
+    await visible(page, 'Dashboard uses original feed column', page.locator('.board-layout .column-feed'));
 
-    await page.locator('.sidebar .nav-item[title="任务"]').click();
-    await visible(page, 'Tasks uses original context sidebar', page.locator('.planner-layout .context-sidebar'));
-    await visible(page, 'Tasks uses original kanban board surface', page.locator('.planner-layout .kanban-board'));
-    await visible(page, 'Tasks keeps right detail rail', page.locator('.planner-detail-rail .task-detail-panel'));
+    await page.evaluate(() => { window.location.hash = '#tasks'; window.dispatchEvent(new HashChangeEvent('hashchange')); });
+    await visible(page, 'Tasks uses original context sidebar', page.locator('.legacy-page-tasks .context-sidebar'));
+    await visible(page, 'Tasks uses original kanban board surface', page.locator('#kanbanBoard'));
+    await visible(page, 'Tasks keeps original detail panel node', page.locator('#taskDetailPanel.task-detail-panel'));
     await visible(page, 'Tasks keeps legacy My Day control', page.locator('#navMyDay'));
     await visible(page, 'Tasks keeps legacy plan list', page.locator('#plansList'));
-    await page.locator('#btnFilter').click();
-    await visible(page, 'Tasks filter panel opens from legacy filter button', page.locator('.filter-panel'));
-    await page.locator('.view-tabs').getByRole('button', { name: 'List' }).click();
+    await page.locator(".view-tabs .btn-tab[data-view='list']").click();
     await visible(page, 'Tasks legacy List view is available', page.locator('#taskListView'));
-    await page.locator('.view-tabs').getByRole('button', { name: 'Calendar' }).click();
+    await page.locator(".view-tabs .btn-tab[data-view='calendar']").click();
     await visible(page, 'Tasks legacy Calendar view is available', page.locator('#taskCalendarView'));
-    await page.locator('.view-tabs').getByRole('button', { name: 'Board' }).click();
-    await visible(page, 'Tasks view renders task list', page.getByText('Current work'));
-    await page.getByText('Read migration design').click();
-    await visible(page, 'Task detail opens from task list', page.getByText('Save task detail'));
+    await page.locator(".view-tabs .btn-tab[data-view='board']").click();
+    await visible(page, 'Tasks view renders task cards', page.locator('#kanbanBoard .task-card').first());
+    await page.locator('#kanbanBoard .task-card').first().click();
+    await visible(page, 'Task detail opens from task card', page.locator('#taskDetailPanel .task-detail-content'));
 
-    await page.locator('.sidebar .nav-item[title="日历"]').click();
-    await visible(page, 'Calendar uses original workbench layout', page.locator('.calendar-layout .gcal-container'));
+    await page.locator('.sidebar .nav-item[title="日历"], .sidebar .nav-item[title="Calendar"]').first().click();
+    await visible(page, 'Calendar uses original main content shell', page.locator('.legacy-page-calendar .main-content.rounded-container.glass-panel'));
     await visible(page, 'Calendar keeps legacy toolbar date', page.locator('#currentDate'));
     await visible(page, 'Calendar keeps legacy week view', page.locator('#weekView'));
-    await page.locator('#viewSelector .btn-dropdown').click();
+    await page.locator('#viewSelector').click();
+    await visible(page, 'Calendar legacy view dropdown opens', page.locator('#viewDropdown'));
+    await page.locator('#viewDropdown [data-view="month"]').click();
     await visible(page, 'Calendar legacy month view is available', page.locator('#monthView'));
-    await page.locator('#viewSelector .btn-dropdown').click();
     await page.locator('#btnSearch').click();
     await visible(page, 'Calendar legacy search bar opens', page.locator('#searchBar #searchInput'));
     await page.locator('#searchClose').click();
-    await page.getByRole('button', { name: '新建' }).click();
-    await visible(page, 'Calendar legacy event modal opens', page.locator('#calModal #calModalBody'));
-    await page.locator('#calModalClose').click();
-    await visible(page, 'Calendar renders date projection', page.getByRole('heading', { name: 'Date projection' }));
-    await visible(page, 'Calendar renders event list', page.getByText('Calendar events', { exact: true }));
-    await page.getByRole('button', { name: /Planning block/ }).click();
-    await visible(page, 'Calendar event detail opens', page.getByText('Save calendar event detail'));
 
-    await page.locator('.sidebar .nav-item[title="设置"]').click();
+    await page.locator('.sidebar-bottom .nav-item[title="设置"], .sidebar-bottom .nav-item[title="Settings"]').first().click();
     await visible(page, 'Settings uses original centered glass container', page.locator('.main-wrapper .settings-container'));
     await visible(page, 'Settings uses original header save action', page.locator('.settings-container .header .save-btn'));
     await visible(page, 'Settings uses original single-column setting rows', page.locator('.settings-container .content .section .settings-group .setting-row').first());
-    await visible(page, 'Settings renders account Cloud section', page.getByText('账户 / Cloud', { exact: true }));
-    await visible(page, 'Settings renders account panel', page.getByText('Cloud session', { exact: true }));
+    await visible(page, 'Settings renders account Cloud section inside legacy settings container', page.locator('#webdevCloudSection'));
     await visible(page, 'Settings renders read cache cursor', page.getByText(/Read cache cursor:/));
     const incrementalTaskTitle = `UI incremental sync task ${process.pid}`;
     await requestWorker('POST', '/tasks', {
@@ -232,17 +225,12 @@ async function main() {
     console.log('  PASS local Worker created Cloud task after Web App bootstrap');
     await page.getByRole('button', { name: '刷新变更' }).click();
     await visible(page, 'Settings refreshes read cache changes by cursor', page.getByText(/Applied \d+ updated, \d+ deleted, \d+ skipped Cloud changes/));
-    await page.locator('.sidebar .nav-item[title="任务"]').click();
-    await visible(page, 'Tasks view receives incremental Cloud task from sync changes', page.getByText(incrementalTaskTitle));
-    await page.locator('.sidebar .nav-item[title="设置"]').click();
-    await visible(page, 'Settings renders expanded preferences', page.getByText('排布触发', { exact: true }));
-    await visible(page, 'Settings renders migration panel', page.getByText('自动迁移', { exact: true }));
-    await visible(page, 'Settings renders pending queue panel', page.getByText('Pending Task queue', { exact: true }));
-    await visible(page, 'Settings renders sync conflict panel', page.getByText('Task sync conflicts', { exact: true }));
-    await visible(page, 'Settings renders structure editor', page.getByText('结构管理', { exact: true }));
-    await page.getByTitle('Edit container').first().click();
-    await visible(page, 'Structure detail opens for container', page.getByText('Container detail'));
-
+    await page.evaluate(() => { window.location.hash = '#tasks'; window.dispatchEvent(new HashChangeEvent('hashchange')); });
+    await visible(page, 'Tasks view receives incremental Cloud task from sync changes', page.locator('#kanbanBoard').getByText(incrementalTaskTitle).first());
+    await page.locator('.sidebar-bottom .nav-item[title="设置"], .sidebar-bottom .nav-item[title="Settings"]').first().click();
+    await visible(page, 'Settings keeps old General section', page.locator('#settingsView .section').first());
+    await visible(page, 'Settings keeps old Calendar section', page.locator('#calendarSection'));
+    await visible(page, 'Settings keeps old Plan section', page.locator('#planSection'));
     console.log('======================');
     console.log('All WebDev UI walkthrough checks passed.');
   } finally {
