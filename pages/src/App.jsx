@@ -377,6 +377,7 @@ function writeStoredSyncCursor(cursor) {
 export function App() {
   const platform = useMemo(() => createBrowserPlatform(), []);
   const googleButtonRef = useRef(null);
+  const [googleSsoMountTick, setGoogleSsoMountTick] = useState(0);
   const [online, setOnline] = useState(navigator.onLine);
   const [session, setSession] = useState(() => apiClient.getSession());
   const [account, setAccount] = useState(() => apiClient.getSession()?.account || null);
@@ -524,7 +525,7 @@ export function App() {
       if (!disposed) setSsoState({ phase: 'error', message: formatStatus(error) });
     });
     return () => { disposed = true; };
-  }, [activeView, online, session?.token]);
+  }, [activeView, online, session?.token, googleSsoMountTick]);
 
   function hasCloudSession() {
     return Boolean(session?.token);
@@ -1651,6 +1652,7 @@ export function App() {
       accountProfileName={accountProfileName}
       ssoState={ssoState}
       googleButtonRef={googleButtonRef}
+      onGoogleSsoMount={() => setGoogleSsoMountTick(value => value + 1)}
       hasSession={hasSession}
       syncStateClass={syncStateClass}
       syncStateLabel={syncStateLabel}

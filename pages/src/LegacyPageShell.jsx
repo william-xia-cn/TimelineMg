@@ -638,7 +638,11 @@ function renderSettings(root, props) {
     root.querySelector('#legacySignOutBtn')?.addEventListener('click', onSignOut);
   }
   if (googleButtonRef) {
-    googleButtonRef.current = root.querySelector('#googleSsoButtonMount');
+    const googleSsoMount = root.querySelector('#googleSsoButtonMount');
+    if (googleButtonRef.current !== googleSsoMount) {
+      googleButtonRef.current = googleSsoMount;
+      props.onGoogleSsoMount?.();
+    }
   }
 }
 
