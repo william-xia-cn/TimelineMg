@@ -509,7 +509,7 @@ async function run() {
     assertEqual('source-field update still preserves local labels', JSON.stringify(changedEnglishTask.labels), JSON.stringify([101]));
     assertEqual('source-field update still preserves local bucket', changedEnglishTask.bucket_id, 12);
 
-    const oneEventIcs = icsFixture.replace(/BEGIN:VEVENT\nUID:mb-math-problem-1@example\.invalid[\s\S]*?END:VEVENT\n/, '');
+    const oneEventIcs = icsFixture.replace(/BEGIN:VEVENT\r?\nUID:mb-math-problem-1@example\.invalid[\s\S]*?END:VEVENT\r?\n/, '');
     const missingResult = await ManageBac.syncManageBacIcs(syncDb, oneEventIcs, 'https://example.invalid/calendar.ics');
     assertEqual('missing ManageBac event deletes local source task', missingResult.deleted, 1);
     assert('deleted missing event is gone', !(await syncDb.getAllTasks()).some(task => task.source_uid === 'mb-math-problem-1@example.invalid'));
