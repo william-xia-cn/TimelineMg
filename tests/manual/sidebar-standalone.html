@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeWhere Sidebar Standalone Test Container</title>
+    <link rel="icon" type="image/png" href="../../extension/icons/icon48.png">
+    <link rel="stylesheet" href="../../extension/shared/styles/fonts.css">
+    <link rel="stylesheet" href="../../extension/shared/styles/icons.css">
+    <link rel="stylesheet" href="../../extension/sidebar/sidebar.css">
+    <link rel="stylesheet" href="../../extension/shared/styles/google-sync-status.css">
+    <style>
+        body.sidebar-standalone-shell {
+            width: 420px;
+            height: 760px;
+            margin: 0;
+            border: 1px solid #dbe5f1;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+        }
+
+        .standalone-test-banner {
+            position: fixed;
+            top: 8px;
+            right: 10px;
+            z-index: 20;
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: #0b2a66;
+            color: #fff;
+            font: 700 10px/1.3 "Inter", "Microsoft YaHei UI", sans-serif;
+            letter-spacing: 0;
+        }
+    </style>
+</head>
+<body class="popup-body sidepanel-body sidebar-standalone-shell">
+    <div class="standalone-test-banner">standalone sidebar test</div>
+    <div class="popup-container">
+        <header class="popup-header">
+            <div class="logo-row">
+                <div class="logo-icon"><img src="../../extension/icons/icon128.png" alt="TimeWhere" class="logo-mark"></div>
+                <span class="app-name">TimeWhere</span>
+            </div>
+            <div class="task-summary" id="taskSummary" aria-label="今日任务统计">
+                <span class="summary-chip"><span>今日完成</span><strong id="todayCompletedCount">0</strong></span>
+                <span class="summary-chip"><span>今日待办</span><strong id="todayPendingCount">0</strong></span>
+            </div>
+        </header>
+
+        <section class="current-task-section">
+            <div class="section-label">
+                <span class="material-symbols-outlined">play_circle</span>
+                <span>当前任务</span>
+            </div>
+            <div class="task-list" id="currentTaskList">
+                <div class="task-placeholder">
+                    <span class="material-symbols-outlined">add_circle</span>
+                    <span>暂无待办任务</span>
+                </div>
+            </div>
+            <div class="sidepanel-fixed-actions" id="sidepanelBottomActions" aria-label="临时任务与今日总结"></div>
+        </section>
+
+        <footer class="popup-footer sidepanel-footer">
+            <button class="footer-btn sidepanel-nav-btn" id="btnOpenDashboard">
+                <span class="material-symbols-outlined">grid_view</span>
+                <span>仪表盘</span>
+            </button>
+            <button class="footer-btn sidepanel-nav-btn" id="btnOpenTasks">
+                <span class="material-symbols-outlined">task</span>
+                <span>任务</span>
+            </button>
+            <button class="footer-btn sidepanel-nav-btn" id="btnOpenCalendar">
+                <span class="material-symbols-outlined">calendar_today</span>
+                <span>日历</span>
+            </button>
+            <button class="footer-btn" id="btnSettings">
+                <span class="material-symbols-outlined">settings</span>
+                <span>设置</span>
+            </button>
+        </footer>
+    </div>
+
+    <script src="../../extension/shared/js/icons.js"></script>
+    <script src="../../extension/shared/js/scheduling.js"></script>
+    <script>
+        const today = new Date().toISOString().slice(0, 10);
+        const plans = [
+            { id: 1, name: 'English Week 4', subject: 'English' },
+            { id: 2, name: 'Math Practice', subject: 'Math' },
+            { id: 3, name: 'CAS Evidence', subject: 'CAS' }
+        ];
+        const buckets = [
+            { id: 1, plan_id: 1, name: '作业' },
+            { id: 2, plan_id: 1, name: '复习' },
+            { id: 3, plan_id: 2, name: '练习' },
+            { id: 4, plan_id: 3, name: '材料整理' }
+        ];
+        const labels = [
+            { id: 1, plan_id: 1, name: 'Sidebar' },
+            { id: 2, plan_id: 1, name: 'Today' },
+            { id: 3, plan_id: 2, name: 'School' },
+            { id: 4, plan_id: 3, name: 'CAS' }
+        ];
+        const journals = new Map();
+        let nextTaskId = 6;
+        let tasks = [
+            {
+                id: 1,
+                plan_id: 1,
+                bucket_id: 1,
+                title: 'Draft English paragraph for Week 4',
+                progress: 'in_progress',
+                priority: 'important',
+                start_date: today,
+                due_date: today,
+                schedule_time: null,
+                duration: 35,
+                notes: 'Standalone mock: 当前正在做的 English 写作任务，用于展示进行中状态。',
+                checklist: [
+                    { id: 'ck-1', title: '列出 paragraph topic sentence', checked: true },
+                    { id: 'ck-2', title: '补充两个 evidence points', checked: false },
+                    { id: 'ck-3', title: '最后检查 grammar', checked: false }
+                ]
+            },
+            {
+                id: 2,
+                plan_id: 2,
+                bucket_id: 3,
+                title: 'Math practice: linear equations',
+                progress: 'not_started',
+                priority: 'medium',
+                start_date: today,
+                due_date: today,
+                schedule_time: null,
+                duration: 30,
+                notes: 'Standalone mock: 今日数学练习，展示普通待办任务。',
+                checklist: [
+                    { id: 'ck-4', title: '完成 5 道基础题', checked: false },
+                    { id: 'ck-5', title: '标记不会的题目', checked: false }
+                ]
+            },
+            {
+                id: 3,
+                plan_id: 3,
+                bucket_id: 4,
+                title: 'Organize CAS Week 4 Sidebar evidence',
+                progress: 'not_started',
+                priority: 'urgent',
+                start_date: today,
+                due_date: today,
+                schedule_time: null,
+                duration: 20,
+                notes: 'Standalone mock: 整理 Sidebar 截图说明，不包含真实 CAS reflection。',
+                checklist: [
+                    { id: 'ck-6', title: '确认代码截图来源', checked: true },
+                    { id: 'ck-7', title: '确认运行截图不含私人数据', checked: false }
+                ]
+            },
+            {
+                id: 4,
+                plan_id: 1,
+                bucket_id: 2,
+                title: 'Timed review before class',
+                progress: 'not_started',
+                priority: 'low',
+                start_date: today,
+                due_date: today,
+                schedule_time: '16:30',
+                duration: 15,
+                notes: 'Standalone mock: 带定时时间的复习任务，用于展示时间标签。',
+                checklist: []
+            },
+            {
+                id: 5,
+                plan_id: 1,
+                bucket_id: 1,
+                title: 'ManageBac sample: reading response',
+                progress: 'not_started',
+                priority: 'medium',
+                start_date: today,
+                due_date: today,
+                schedule_time: null,
+                duration: 25,
+                source: 'managebac',
+                external_source: 'managebac',
+                notes: 'Standalone mock: ManageBac 来源样例，用于展示来源任务不可延后。',
+                checklist: [
+                    { id: 'ck-8', title: '阅读提示问题', checked: false },
+                    { id: 'ck-9', title: '写 3 句 response', checked: false }
+                ]
+            }
+        ];
+        function clone(value) {
+            return JSON.parse(JSON.stringify(value));
+        }
+
+        function upsertJournal(date, patch) {
+            const existing = journals.get(date) || { date, status: 'snapshot', snapshot_at: new Date().toISOString() };
+            const next = { ...existing, ...patch, updated_at: new Date().toISOString() };
+            journals.set(date, next);
+            return clone(next);
+        }
+
+        window.TimeWherePlatform = {
+            window: {
+                openMain: async path => console.info('[Sidebar standalone] openMain', path),
+                openSettings: async () => console.info('[Sidebar standalone] openSettings')
+            }
+        };
+        window.TimeWhereGoogleSync = { runPageAutoSync: async () => ({ status: 'mocked' }) };
+        window.TimeWhereGoogleSyncStatusUI = { init() {}, refreshAll() {} };
+        window.TimeWhereExternalLinks = {
+            renderExternalLinkList: () => '',
+            openExternalUrl: async url => console.info('[Sidebar standalone] openExternalUrl', url)
+        };
+        window.TimeWhereDB = {
+            async initDefaultSettings() {},
+            async getAllTasks() { return clone(tasks); },
+            async getContainers() { return []; },
+            async getTodayCompletedCount() { return 1; },
+            async getPlans() { return clone(plans); },
+            async ensureDefaultPlan() { return clone(plans[0]); },
+            async ensureBucketTemplateForPlan() {},
+            async getBucketsByPlan() { return clone(buckets); },
+            async getLabelsByPlan() { return clone(labels); },
+            async addTask(payload) {
+                const task = { id: nextTaskId++, checklist: [], progress: 'not_started', priority: 'medium', ...payload };
+                tasks.push(task);
+                return clone(task);
+            },
+            async addRecurringTaskSeries(payload, options = {}) {
+                return this.addTask({ ...payload, recurrence: options });
+            },
+            async getTaskById(taskId) {
+                return clone(tasks.find(task => String(task.id) === String(taskId)) || null);
+            },
+            async updateTask(taskId, updates) {
+                tasks = tasks.map(task => String(task.id) === String(taskId) ? { ...task, ...updates } : task);
+                return this.getTaskById(taskId);
+            },
+            async updateChecklist(taskId, checklist) {
+                return this.updateTask(taskId, { checklist: clone(checklist) });
+            },
+            isManageBacSourceTask(task) {
+                return task?.source === 'managebac';
+            },
+            async ensureDailyJournalSnapshot(date) {
+                return upsertJournal(date, { status: journals.get(date)?.status || 'snapshot', snapshot_at: new Date().toISOString() });
+            },
+            async getDailyJournal(date) {
+                return clone(journals.get(date) || null);
+            },
+            async buildDailyJournalDraft(date) {
+                return {
+                    date,
+                    planned_task_snapshots: clone(tasks),
+                    extra_done_task_snapshots: [],
+                    reflection: '',
+                    blockers: '',
+                    next_steps: '',
+                    status: journals.get(date)?.status || 'snapshot'
+                };
+            },
+            async saveDailyJournalDraft(date, payload) {
+                return upsertJournal(date, { ...payload, status: 'draft' });
+            },
+            async submitDailyJournal(date, payload) {
+                return upsertJournal(date, { ...payload, status: 'submitted' });
+            }
+        };
+    </script>
+    <script src="../../extension/sidebar/sidebar.js"></script>
+</body>
+</html>
+

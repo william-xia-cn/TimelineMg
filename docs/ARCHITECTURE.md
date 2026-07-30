@@ -102,11 +102,16 @@ extension/
 ├── manifest.json              # 扩展配置 (MV3)
 ├── background.js              # Service Worker
 │
-├── popup/                     # Toolbar quick surfaces
+├── sidebar/                   # Chrome Side Panel primary task surface
+│   ├── sidebar.html
+│   ├── sidebar.css
+│   └── sidebar.js
+│
+├── popup/                     # Compact popup shell / compatibility shims
 │   ├── popup.html
-│   ├── sidepanel.html         # Chrome Side Panel primary toolbar surface
-│   ├── popup.css              # Shared popup/side-panel styles
-│   └── popup.js
+│   ├── popup.css
+│   ├── popup.js
+│   └── sidepanel.html
 │
 ├── pages/                     # 独立页面（每个模块独立目录）
 │   ├── focus/                 # Focus Dashboard（Daily Settle 核心）
@@ -316,7 +321,7 @@ D-019 defines the next Google data sync direction:
   ],
 
   "side_panel": {
-    "default_path": "popup/sidepanel.html"
+    "default_path": "sidebar/sidebar.html"
   },
 
   "action": {

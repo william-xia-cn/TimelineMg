@@ -15,8 +15,8 @@
 | Task Board | `pages/tasks/tasks.html` | Plan/Bucket/Task CRUD、多视图 |
 | Calendar | `pages/calendar/calendar.html` | 周/月视图、容器配置、事件管理 |
 | Settings | `pages/settings/settings.html` | 初始化、本地偏好、容器管理、数据导入/导出 |
-| Side Panel | `popup/sidepanel.html` | 工具栏主入口、当前任务、临时任务、今日总结、快捷导航 |
-| Popup assets | `popup/popup.html` / `popup/popup.js` / `popup/popup.css` | 紧凑弹窗兼容页与 Side Panel 复用运行时 |
+| Sidebar / Side Panel | `sidebar/sidebar.html` | 工具栏主入口、当前任务、临时任务、今日总结、快捷导航 |
+| Popup shell | `popup/popup.html` | 紧凑弹窗兼容页，复用 Sidebar 的当前任务样式和运行时 |
 
 ---
 
@@ -794,9 +794,9 @@ Settings 入口建议：
 
 ### 5.1 定位
 
-Side Panel 是当前基线的**工具栏主入口**。用户点击 Chrome 工具栏图标时，扩展通过 `chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })` 打开 `popup/sidepanel.html`。`popup.html` 仍保留为紧凑弹窗兼容页和共享 runtime/layout 参考，但 manifest 不再声明 `action.default_popup`。
+Side Panel 是当前基线的**工具栏主入口**。用户点击 Chrome 工具栏图标时，扩展通过 `chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })` 打开 `sidebar/sidebar.html`。`popup.html` 仍保留为紧凑弹窗兼容页，并复用 Sidebar 的当前任务 runtime/layout，但 manifest 不再声明 `action.default_popup`。
 
-Side Panel 提供即时信息和小操作：当前任务、临时任务添加、今日总结、Dashboard / Task Board / Calendar / Settings 快捷导航。它复用 `popup.css` / `popup.js`，并用 `body.sidepanel-body` 开启自适应侧边栏布局。
+Side Panel 提供即时信息和小操作：当前任务、临时任务添加、今日总结、Dashboard / Task Board / Calendar / Settings 快捷导航。它由 `extension/sidebar/sidebar.css` 和 `extension/sidebar/sidebar.js` 作为独立代码管理单元承载，并用 `body.sidepanel-body` 开启自适应侧边栏布局。Popup 小窗口反向复用这套 Sidebar 任务界面。
 
 ### 5.2 布局结构
 

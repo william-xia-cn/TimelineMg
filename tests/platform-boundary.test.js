@@ -46,7 +46,7 @@ const taskBoard = read('TASK_BOARD.md');
 const spec = read('docs/specs/FEATURE_SPEC_DUAL_PLATFORM_EVOLUTION.md');
 const boundary = read('docs/PLATFORM_BOUNDARY.md');
 const platformJs = read('extension/shared/js/platform.js');
-const popupJs = read('extension/popup/popup.js');
+const sidebarJs = read('extension/sidebar/sidebar.js');
 const settingsHtml = read('extension/pages/settings/settings.html');
 const settingsScript = read('extension/pages/settings/script.js');
 const cwsPackageScript = read('tools/package-cws.ps1');
@@ -195,7 +195,7 @@ const pagesWithPlatform = [
     'extension/pages/tasks/tasks.html',
     'extension/pages/calendar/calendar.html',
     'extension/popup/popup.html',
-    'extension/popup/sidepanel.html'
+    'extension/sidebar/sidebar.html'
 ];
 assert('Primary pages load platform adapter before page scripts',
     pagesWithPlatform.every(file => read(file).includes('shared/js/platform.js')));
@@ -212,7 +212,7 @@ assert('Primary product pages load shared Google sync account indicator after de
         'extension/pages/tasks/tasks.html',
         'extension/pages/calendar/calendar.html',
         'extension/popup/popup.html',
-        'extension/popup/sidepanel.html'
+        'extension/sidebar/sidebar.html'
     ].every(file => {
         const text = read(file);
         return text.includes('google-sync-status-ui.js')
@@ -240,10 +240,10 @@ assert('Desktop app pages load reminders and desktop reminder bridge',
         'extension/pages/calendar/calendar.html'
     ].every(file => read(file).includes('shared/js/reminders.js') && read(file).includes('shared/js/widget-snapshot.js') && read(file).includes('shared/js/desktop-reminders.js')));
 assert('Popup navigation uses TimeWherePlatform with Chrome fallback',
-    popupJs.includes('TimeWherePlatform?.window?.openMain')
-    && popupJs.includes('TimeWherePlatform?.window?.openSettings')
-    && popupJs.includes('falling back to chrome.tabs')
-    && popupJs.includes('falling back to options page'));
+    sidebarJs.includes('TimeWherePlatform?.window?.openMain')
+    && sidebarJs.includes('TimeWherePlatform?.window?.openSettings')
+    && sidebarJs.includes('falling back to chrome.tabs')
+    && sidebarJs.includes('falling back to options page'));
 
 assert('Root package exposes desktop Electron scripts',
     packageJson.scripts?.['electron:dev'] === 'npm --prefix platforms/desktop-electron start'
@@ -429,7 +429,7 @@ const allowedRemainingChromeFiles = new Set([
     'extension/background.js',
     'extension/shared/js/managebac.js',
     'extension/pages/settings/script.js',
-    'extension/popup/popup.js',
+    'extension/sidebar/sidebar.js',
     'extension/pages/desktop-bridge/bridge.js'
 ]);
 console.log('\nRemaining direct chrome.* calls outside platform adapter:');

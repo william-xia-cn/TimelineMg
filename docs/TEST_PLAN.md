@@ -197,15 +197,15 @@ npm test
 ### TC-A-01 脚本加载顺序
 - [ ] focus.html: icons → dexie → db → scheduling → script
 - [ ] calendar.html: icons → dexie → db → scheduling → script
-- [ ] popup.html: icons → dexie → db → scheduling → popup
-- [ ] popup/sidepanel.html: icons → dexie → db → google-sync → scheduling → popup
+- [ ] popup.html: icons → dexie → db → scheduling → sidebar runtime
+- [ ] sidebar/sidebar.html: icons → dexie → db → google-sync → scheduling → sidebar
 - [ ] settings.html: icons → dexie → db → scheduling → ics → script
 - [ ] tasks.html: dexie → db → state → board → sidebar → detail-panel → dialogs → script
 
 ### TC-A-02 跨文件函数引用
 - [ ] focus/script.js 解构 `TimeWhereScheduling.*` 全部在 scheduling.js 中存在
 - [ ] calendar/script.js 解构 `TimeWhereScheduling.*` 全部存在
-- [ ] popup/popup.js 调用 `TimeWhereScheduling.*` 全部存在
+- [ ] sidebar/sidebar.js 调用 `TimeWhereScheduling.*` 全部存在
 - [ ] settings/script.js 调用 `window.TimeWhereScheduling.getContainerLayer` 存在
 
 ### TC-A-03 db.js addTask 字段完整性
@@ -238,17 +238,18 @@ npm test
 - [ ] `schedule_time` 存在 → status-timed 标签
 - [ ] 已完成任务不显示逾期/今日截止标签
 
-### TC-A-08 popup.js Daily Settle 路径
-- [ ] `loadCurrentTask` 使用 `getAllTasks`（非 `getInProgressTask`）
+### TC-A-08 sidebar.js Daily Settle 路径
+- [ ] `loadCurrentTasks` 使用 `getAllTasks`（非 `getInProgressTask`）
 - [ ] `todayContainers` 过滤逻辑正确（用 containerAppliesToDate）
-- [ ] fallback 逻辑：`currentTasks[0] || sortedPool[0]`
+- [ ] 显示逻辑使用 `settle.displayTasks || settle.currentTasks || []`，不回退到单个任务
 
 ### TC-A-08B Side Panel / toolbar 路径
-- [ ] manifest 包含 `sidePanel` 权限和 `side_panel.default_path = popup/sidepanel.html`
+- [ ] manifest 包含 `sidePanel` 权限和 `side_panel.default_path = sidebar/sidebar.html`
 - [ ] manifest `action` 不再声明 `default_popup`
 - [ ] background 使用 `chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: true })`，并有能力检测/异常保护
-- [ ] `sidepanel.html` 复用 popup assets/runtime，并提供 Dashboard / Task Board / Calendar / Settings 四个底部导航入口
-- [ ] Side Panel 当前任务列表与 Popup/Dashboard 当前任务投影一致
+- [ ] `sidebar/sidebar.html` 加载 `sidebar.css` / `sidebar.js`，并提供 Dashboard / Task Board / Calendar / Settings 四个底部导航入口
+- [ ] `tests/manual/sidebar-standalone.html` 可作为独立运行容器，使用 mock `TimeWhereDB` 和真实 `sidebar.css` / `sidebar.js` 验证 Sidebar 基础运行
+- [ ] Popup 复用 Sidebar 当前任务 runtime；Side Panel 当前任务列表与 Popup/Dashboard 当前任务投影一致
 - [ ] Side Panel 临时添加任务在侧边栏内完成，默认 English Plan / `作业` Bucket，但允许用户编辑完整任务字段
 - [ ] Side Panel 今日总结可在侧边栏内保存草稿或提交
 - [ ] Dashboard 当前任务列显示“未计划的任务添加”卡片，点击后打开任务详情式创建面板，不使用 inline handler

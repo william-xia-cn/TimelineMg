@@ -95,7 +95,7 @@ assert('material icon placeholders hide raw ligature text before SVG replacement
 
 const brandedHtmlPages = [
     'extension/popup/popup.html',
-    'extension/popup/sidepanel.html',
+    'extension/sidebar/sidebar.html',
     'extension/pages/focus/focus.html',
     'extension/pages/calendar/calendar.html',
     'extension/pages/tasks/tasks.html',
@@ -114,7 +114,7 @@ assert('branded TimeWhere pages expose a local favicon',
     brandedHtmlPages.every(file => /<link rel="icon" type="image\/png" href="(?:\.\.\/icons|\.\.\/\.\.\/icons)\/icon48\.png">/.test(read(file))));
 
 const brandCssFiles = [
-    'extension/popup/popup.css',
+    'extension/sidebar/sidebar.css',
     'extension/pages/focus/styles.css',
     'extension/pages/calendar/styles.css',
     'extension/pages/tasks/styles.css',

@@ -978,7 +978,7 @@ async function run() {
             'extension/pages/tasks/tasks.html',
             'extension/pages/settings/settings.html',
             'extension/popup/popup.html',
-            'extension/popup/sidepanel.html'
+            'extension/sidebar/sidebar.html'
         ].every(file => {
             const html = read(file);
             return html.indexOf('sync-runtime-service.js') > html.indexOf('google-sync.js')
@@ -990,7 +990,7 @@ async function run() {
             'extension/pages/focus/script.js',
             'extension/pages/calendar/script.js',
             'extension/pages/tasks/script.js',
-            'extension/popup/popup.js'
+            'extension/sidebar/sidebar.js'
         ].every(file => read(file).includes('runPageAutoSync(TimeWhereDB)')));
     assert('DB write paths mark Google sync dirty metadata', dbScript.includes('markGoogleSyncDirty') && dbScript.includes('markEntityDirty'));
     assert('DB delete paths mark Google sync tombstones', dbScript.includes('markGoogleSyncDeleted') && dbScript.includes('markEntityDeleted'));

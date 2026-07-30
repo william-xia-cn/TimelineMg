@@ -13,9 +13,10 @@ const focusScript = fs.readFileSync(path.join(root, 'extension', 'pages', 'focus
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'extension', 'manifest.json'), 'utf8'));
 const backgroundScript = fs.readFileSync(path.join(root, 'extension', 'background.js'), 'utf8');
 const popupHtml = fs.readFileSync(path.join(root, 'extension', 'popup', 'popup.html'), 'utf8');
-const sidepanelHtml = fs.readFileSync(path.join(root, 'extension', 'popup', 'sidepanel.html'), 'utf8');
-const popupCss = fs.readFileSync(path.join(root, 'extension', 'popup', 'popup.css'), 'utf8');
-const popupScript = fs.readFileSync(path.join(root, 'extension', 'popup', 'popup.js'), 'utf8');
+const sidebarHtml = fs.readFileSync(path.join(root, 'extension', 'sidebar', 'sidebar.html'), 'utf8');
+const sidebarCss = fs.readFileSync(path.join(root, 'extension', 'sidebar', 'sidebar.css'), 'utf8');
+const sidebarScript = fs.readFileSync(path.join(root, 'extension', 'sidebar', 'sidebar.js'), 'utf8');
+const sidebarStandaloneHtml = fs.readFileSync(path.join(root, 'tests', 'manual', 'sidebar-standalone.html'), 'utf8');
 const calendarScript = fs.readFileSync(path.join(root, 'extension', 'pages', 'calendar', 'script.js'), 'utf8');
 const schedulingScript = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'scheduling.js'), 'utf8');
 const externalLinksScript = fs.readFileSync(path.join(root, 'extension', 'shared', 'js', 'external-links.js'), 'utf8');
@@ -40,49 +41,73 @@ console.log('\nTimeWhere Focus Dashboard tests\n' + '='.repeat(44));
 
 assert('Focus dynamic UI does not use inline onclick handlers', !/onclick\s*=/.test(focusScript));
 assert('Focus dynamic UI does not use inline onchange handlers', !/onchange\s*=/.test(focusScript));
-assert('Popup UI does not use inline onclick/onchange handlers', !/onclick\s*=|onchange\s*=/.test(popupHtml + popupScript));
+assert('Popup UI does not use inline onclick/onchange handlers', !/onclick\s*=|onchange\s*=/.test(popupHtml + sidebarScript));
 assert('Extension action opens Side Panel by default, not default popup',
     manifest.permissions.includes('sidePanel')
-    && manifest.side_panel?.default_path === 'popup/sidepanel.html'
+    && manifest.side_panel?.default_path === 'sidebar/sidebar.html'
     && !Object.prototype.hasOwnProperty.call(manifest.action || {}, 'default_popup'));
 assert('Background configures toolbar click to open Side Panel with capability guard',
     backgroundScript.includes('chrome.sidePanel?.setPanelBehavior')
     && backgroundScript.includes('openPanelOnActionClick: true')
     && backgroundScript.includes('configureSidePanel()'));
-assert('Side Panel page reuses Popup assets and runtime dependencies',
-    sidepanelHtml.includes('class="popup-body sidepanel-body"')
-    && sidepanelHtml.includes('<link rel="stylesheet" href="popup.css">')
-    && sidepanelHtml.includes('../shared/js/icons.js')
-    && sidepanelHtml.includes('../shared/js/dexie.js')
-    && sidepanelHtml.includes('../shared/js/db.js')
-    && sidepanelHtml.includes('../shared/js/google-sync.js')
-    && sidepanelHtml.includes('../shared/js/external-links.js')
-    && sidepanelHtml.includes('../shared/js/scheduling.js')
-    && sidepanelHtml.includes('<script src="popup.js"></script>'));
-assert('Dashboard Popup and Side Panel load external link helper after platform adapter',
+assert('Side Panel page owns Sidebar assets and runtime dependencies',
+    sidebarHtml.includes('class="popup-body sidepanel-body"')
+    && sidebarHtml.includes('<link rel="stylesheet" href="sidebar.css">')
+    && sidebarHtml.includes('../shared/js/icons.js')
+    && sidebarHtml.includes('../shared/js/dexie.js')
+    && sidebarHtml.includes('../shared/js/db.js')
+    && sidebarHtml.includes('../shared/js/google-sync.js')
+    && sidebarHtml.includes('../shared/js/external-links.js')
+    && sidebarHtml.includes('../shared/js/scheduling.js')
+        && sidebarHtml.includes('<script src="sidebar.js"></script>'));
+assert('Popup reuses Sidebar task surface instead of owning duplicate popup code',
+    popupHtml.includes('../sidebar/sidebar.css')
+    && popupHtml.includes('../sidebar/sidebar.js')
+    && !popupHtml.includes('href="popup.css"')
+    && !popupHtml.includes('src="popup.js"'));
+assert('Sidebar has a standalone manual test container with richer mocked local data',
+    sidebarStandaloneHtml.includes('../../extension/sidebar/sidebar.css')
+    && sidebarStandaloneHtml.includes('../../extension/shared/js/scheduling.js')
+    && sidebarStandaloneHtml.includes('../../extension/sidebar/sidebar.js')
+    && sidebarStandaloneHtml.indexOf('shared/js/scheduling.js') < sidebarStandaloneHtml.indexOf('extension/sidebar/sidebar.js')
+    && sidebarStandaloneHtml.includes('window.TimeWhereDB')
+    && sidebarStandaloneHtml.includes('async getAllTasks()')
+    && sidebarStandaloneHtml.includes('English Week 4')
+    && sidebarStandaloneHtml.includes('Math Practice')
+    && sidebarStandaloneHtml.includes('CAS Evidence')
+    && sidebarStandaloneHtml.includes('Draft English paragraph for Week 4')
+    && sidebarStandaloneHtml.includes('Math practice: linear equations')
+    && sidebarStandaloneHtml.includes('ManageBac sample: reading response')
+    && sidebarStandaloneHtml.includes("progress: 'in_progress'")
+    && sidebarStandaloneHtml.includes("progress: 'not_started'")
+    && sidebarStandaloneHtml.includes("schedule_time: '16:30'")
+    && sidebarStandaloneHtml.includes("source: 'managebac'")
+    && sidebarStandaloneHtml.includes('window.TimeWherePlatform')
+    && !sidebarStandaloneHtml.includes('../../extension/popup/popup.js'));
+assert('Dashboard Popup and Sidebar load external link helper after platform adapter',
     focusHtml.includes('shared/js/external-links.js')
     && popupHtml.includes('shared/js/external-links.js')
-    && sidepanelHtml.includes('shared/js/external-links.js')
+    && sidebarHtml.includes('shared/js/external-links.js')
     && focusHtml.indexOf('shared/js/platform.js') < focusHtml.indexOf('shared/js/external-links.js')
     && popupHtml.indexOf('shared/js/platform.js') < popupHtml.indexOf('shared/js/external-links.js')
-    && sidepanelHtml.indexOf('shared/js/platform.js') < sidepanelHtml.indexOf('shared/js/external-links.js'));
-assert('Dashboard Popup and Side Panel load shared Google sync status UI',
+    && sidebarHtml.indexOf('shared/js/platform.js') < sidebarHtml.indexOf('shared/js/external-links.js'));
+assert('Dashboard Popup and Sidebar load shared Google sync status UI',
     focusHtml.includes('shared/styles/google-sync-status.css')
     && focusHtml.includes('shared/js/google-sync-status-ui.js')
     && focusHtml.indexOf('shared/js/desktop-sync-service.js') < focusHtml.indexOf('shared/js/google-sync-status-ui.js')
     && popupHtml.includes('shared/styles/google-sync-status.css')
     && popupHtml.includes('shared/js/google-sync-status-ui.js')
-    && sidepanelHtml.includes('shared/styles/google-sync-status.css')
-    && sidepanelHtml.includes('shared/js/google-sync-status-ui.js'));
+    && sidebarHtml.includes('shared/styles/google-sync-status.css')
+    && sidebarHtml.includes('shared/js/google-sync-status-ui.js'));
 assert('Dashboard initializes Google sync status from existing avatar account entry',
     focusHtml.includes('class="user-avatar"')
     && focusScript.includes('TimeWhereGoogleSyncStatusUI?.init?.()')
     && focusScript.includes('TimeWhereGoogleSyncStatusUI?.refreshAll?.()')
     && !focusScript.includes('setTransientStatus'));
-assert('Popup and Side Panel use Settings button as compact sync status entry',
+assert('Popup and Sidebar use Settings button as compact sync status entry',
     popupHtml.includes('id="btnSettings"')
-    && sidepanelHtml.includes('id="btnSettings"')
-    && popupScript.includes('TimeWhereGoogleSyncStatusUI?.init?.()')
+    && sidebarHtml.includes('id="btnSettings"')
+    && sidebarScript.includes('TimeWhereGoogleSyncStatusUI?.init?.()')
     && googleSyncStatusUi.includes('attachSettingsButton')
     && googleSyncStatusCss.includes('.google-sync-settings-status-button'));
 assert('Shared Google sync status UI defines avatar dot states and popover actions',
@@ -101,100 +126,100 @@ assert('Shared Google sync status UI defines avatar dot states and popover actio
     && googleSyncStatusCss.includes('.google-sync-account-popover')
     && googleSyncStatusCss.includes('.google-sync-status-dot.syncing')
     && googleSyncStatusCss.includes('.google-sync-status-dot.queued'));
-assert('Side Panel keeps Popup menu content and exposes four bottom navigation entries',
-    sidepanelHtml.includes('id="taskSummary"')
-    && sidepanelHtml.includes('id="currentTaskList"')
-    && sidepanelHtml.includes('id="sidepanelBottomActions"')
-    && sidepanelHtml.includes('id="btnOpenDashboard"')
-    && sidepanelHtml.includes('仪表盘')
-    && sidepanelHtml.includes('id="btnOpenTasks"')
-    && sidepanelHtml.includes('任务')
-    && sidepanelHtml.includes('id="btnOpenCalendar"')
-    && sidepanelHtml.includes('日历')
-    && sidepanelHtml.includes('id="btnSettings"')
-    && sidepanelHtml.includes('设置')
-    && !sidepanelHtml.includes('btnOpenPopup')
-    && !sidepanelHtml.includes('打开浮窗')
-    && !sidepanelHtml.includes('btnOpenFull')
-    && popupScript.includes('function openExtensionPage')
-    && popupScript.includes("openExtensionPage('pages/focus/focus.html')")
-    && popupScript.includes("openExtensionPage('pages/tasks/tasks.html')")
-    && popupScript.includes("openExtensionPage('pages/calendar/calendar.html')")
-    && popupScript.includes('chrome.runtime.openOptionsPage()'));
+assert('Sidebar owns menu content and exposes four bottom navigation entries',
+    sidebarHtml.includes('id="taskSummary"')
+    && sidebarHtml.includes('id="currentTaskList"')
+    && sidebarHtml.includes('id="sidepanelBottomActions"')
+    && sidebarHtml.includes('id="btnOpenDashboard"')
+    && sidebarHtml.includes('仪表盘')
+    && sidebarHtml.includes('id="btnOpenTasks"')
+    && sidebarHtml.includes('任务')
+    && sidebarHtml.includes('id="btnOpenCalendar"')
+    && sidebarHtml.includes('日历')
+    && sidebarHtml.includes('id="btnSettings"')
+    && sidebarHtml.includes('设置')
+    && !sidebarHtml.includes('btnOpenPopup')
+    && !sidebarHtml.includes('打开浮窗')
+    && !sidebarHtml.includes('btnOpenFull')
+    && sidebarScript.includes('function openExtensionPage')
+    && sidebarScript.includes("openExtensionPage('pages/focus/focus.html')")
+    && sidebarScript.includes("openExtensionPage('pages/tasks/tasks.html')")
+    && sidebarScript.includes("openExtensionPage('pages/calendar/calendar.html')")
+    && sidebarScript.includes('chrome.runtime.openOptionsPage()'));
 assert('Side Panel renders Dashboard-style temporary task and journal entries before footer only in sidepanel',
-    /id="currentTaskList"[\s\S]*id="sidepanelBottomActions"[\s\S]*<footer class="popup-footer sidepanel-footer"/.test(sidepanelHtml)
+    /id="currentTaskList"[\s\S]*id="sidepanelBottomActions"[\s\S]*<footer class="popup-footer sidepanel-footer"/.test(sidebarHtml)
     && !popupHtml.includes('sidepanelBottomActions')
-    && popupScript.includes('function renderSidepanelBottomActions')
-    && popupScript.includes('未计划的任务添加')
-    && popupScript.includes('比如课后作业及其他临时任务')
-    && popupScript.includes('临时添加任务')
-    && popupScript.includes('今日总结')
-    && popupScript.includes('整理今日总结')
-    && popupScript.includes('查看今日总结'));
+    && sidebarScript.includes('function renderSidepanelBottomActions')
+    && sidebarScript.includes('未计划的任务添加')
+    && sidebarScript.includes('比如课后作业及其他临时任务')
+    && sidebarScript.includes('临时添加任务')
+    && sidebarScript.includes('今日总结')
+    && sidebarScript.includes('整理今日总结')
+    && sidebarScript.includes('查看今日总结'));
 assert('Side Panel temporary task add runs in place with English homework defaults',
-    popupScript.includes("const SIDEPANEL_QUICK_ADD_DEFAULT_PLAN_KEYWORD = 'English'")
-    && popupScript.includes("const SIDEPANEL_QUICK_ADD_BUCKET_NAME = '作业'")
-    && popupScript.includes("actionEl.dataset.action === 'quick-add-current-task'")
-    && popupScript.includes('openSidepanelQuickAddTaskModal')
-    && popupScript.includes('saveSidepanelQuickAddTask')
-    && popupScript.includes('TimeWhereDB.ensureBucketTemplateForPlan(plan.id, getSidepanelQuickAddBucketTemplateForPlan(plan))')
-    && /const payload|await TimeWhereDB\.addTask\(\{[\s\S]*plan_id:\s*planId[\s\S]*bucket_id:\s*bucketValue \? parseInt\(bucketValue, 10\) : null[\s\S]*start_date:\s*document\.getElementById\('sidepanelQuickAddStartDate'\)\?\.value \|\| todayStr[\s\S]*due_date:\s*document\.getElementById\('sidepanelQuickAddDueDate'\)\?\.value \|\| todayStr[\s\S]*duration:\s*parseInt\(document\.getElementById\('sidepanelQuickAddDuration'\)\?\.value \|\| '30', 10\) \|\| 30/.test(popupScript));
-assert('Side Panel today journal opens and saves in place', popupScript.includes("actionEl.dataset.action === 'open-today-journal'")
-    && popupScript.includes('openDailyJournalModal')
-    && popupScript.includes('buildDailyJournalDraft')
-    && popupScript.includes('data-action="save-daily-journal-draft"')
-    && popupScript.includes('data-action="submit-daily-journal"')
-    && popupScript.includes('TimeWhereDB.saveDailyJournalDraft')
-    && popupScript.includes('TimeWhereDB.submitDailyJournal'));
-assert('Popup and Side Panel current task cards use expandable partial complete panels',
-    popupScript.includes('const partialCompleteBtn = `<button class="btn-micro" data-action="toggle-partial-complete-menu"')
-    && popupScript.includes('data-action="toggle-partial-complete-menu"')
-    && popupScript.includes('data-partial-complete-menu-for')
-    && popupScript.includes('popup-partial-complete-panel')
-    && popupScript.includes("actionEl.dataset.action === 'toggle-partial-complete-menu'")
-    && popupScript.includes('togglePopupTaskPartialCompleteMenu(actionEl.dataset.taskId)')
-    && popupScript.includes("actionEl.dataset.action === 'partial-complete-ratio'")
-    && popupScript.includes('savePopupTaskPartialCompleteRatio')
-    && popupScript.includes('data-action="toggle-partial-complete-checklist"')
-    && popupScript.includes('savePopupTaskPartialCompleteChecklistItem')
-    && popupScript.includes('const checklistActionEl = event.target.closest(\'[data-action="toggle-partial-complete-checklist"]\')')
-    && popupScript.includes('checklistActionEl.checked'));
+    sidebarScript.includes("const SIDEPANEL_QUICK_ADD_DEFAULT_PLAN_KEYWORD = 'English'")
+    && sidebarScript.includes("const SIDEPANEL_QUICK_ADD_BUCKET_NAME = '作业'")
+    && sidebarScript.includes("actionEl.dataset.action === 'quick-add-current-task'")
+    && sidebarScript.includes('openSidepanelQuickAddTaskModal')
+    && sidebarScript.includes('saveSidepanelQuickAddTask')
+    && sidebarScript.includes('TimeWhereDB.ensureBucketTemplateForPlan(plan.id, getSidepanelQuickAddBucketTemplateForPlan(plan))')
+    && /const payload|await TimeWhereDB\.addTask\(\{[\s\S]*plan_id:\s*planId[\s\S]*bucket_id:\s*bucketValue \? parseInt\(bucketValue, 10\) : null[\s\S]*start_date:\s*document\.getElementById\('sidepanelQuickAddStartDate'\)\?\.value \|\| todayStr[\s\S]*due_date:\s*document\.getElementById\('sidepanelQuickAddDueDate'\)\?\.value \|\| todayStr[\s\S]*duration:\s*parseInt\(document\.getElementById\('sidepanelQuickAddDuration'\)\?\.value \|\| '30', 10\) \|\| 30/.test(sidebarScript));
+assert('Side Panel today journal opens and saves in place', sidebarScript.includes("actionEl.dataset.action === 'open-today-journal'")
+    && sidebarScript.includes('openDailyJournalModal')
+    && sidebarScript.includes('buildDailyJournalDraft')
+    && sidebarScript.includes('data-action="save-daily-journal-draft"')
+    && sidebarScript.includes('data-action="submit-daily-journal"')
+    && sidebarScript.includes('TimeWhereDB.saveDailyJournalDraft')
+    && sidebarScript.includes('TimeWhereDB.submitDailyJournal'));
+assert('Popup and Sidebar current task cards use expandable partial complete panels',
+    sidebarScript.includes('const partialCompleteBtn = `<button class="btn-micro" data-action="toggle-partial-complete-menu"')
+    && sidebarScript.includes('data-action="toggle-partial-complete-menu"')
+    && sidebarScript.includes('data-partial-complete-menu-for')
+    && sidebarScript.includes('popup-partial-complete-panel')
+    && sidebarScript.includes("actionEl.dataset.action === 'toggle-partial-complete-menu'")
+    && sidebarScript.includes('toggleSidebarTaskPartialCompleteMenu(actionEl.dataset.taskId)')
+    && sidebarScript.includes("actionEl.dataset.action === 'partial-complete-ratio'")
+    && sidebarScript.includes('saveSidebarTaskPartialCompleteRatio')
+    && sidebarScript.includes('data-action="toggle-partial-complete-checklist"')
+    && sidebarScript.includes('saveSidebarTaskPartialCompleteChecklistItem')
+    && sidebarScript.includes('const checklistActionEl = event.target.closest(\'[data-action="toggle-partial-complete-checklist"]\')')
+    && sidebarScript.includes('checklistActionEl.checked'));
 assert('Popup partial complete uses checklist metadata and updateChecklist',
-    popupScript.includes('const PARTIAL_COMPLETION_RATIOS = [10, 20, 30, 50, 70, 80, 90]')
-    && popupScript.includes("type: 'partial_completion'")
-    && popupScript.includes('partial_group_id')
-    && popupScript.includes("partial_role: 'done'")
-    && popupScript.includes("partial_role: 'remaining'")
-    && popupScript.includes('partial_percent: safePercent')
-    && popupScript.includes('replacePartialCompletionChecklistGroup')
-    && popupScript.includes('TimeWhereDB.updateChecklist(taskId, nextChecklist)')
-    && !popupScript.includes("showToast('ManageBac 来源任务不能使用部分完成', 'error')"));
+    sidebarScript.includes('const PARTIAL_COMPLETION_RATIOS = [10, 20, 30, 50, 70, 80, 90]')
+    && sidebarScript.includes("type: 'partial_completion'")
+    && sidebarScript.includes('partial_group_id')
+    && sidebarScript.includes("partial_role: 'done'")
+    && sidebarScript.includes("partial_role: 'remaining'")
+    && sidebarScript.includes('partial_percent: safePercent')
+    && sidebarScript.includes('replacePartialCompletionChecklistGroup')
+    && sidebarScript.includes('TimeWhereDB.updateChecklist(taskId, nextChecklist)')
+    && !sidebarScript.includes("showToast('ManageBac 来源任务不能使用部分完成', 'error')"));
 assert('Popup partial complete checklist saves only from change with current checked state',
-    popupScript.includes("if (actionEl.dataset.action === 'toggle-partial-complete-checklist')")
-    && !/actionEl\.dataset\.action === 'toggle-partial-complete-checklist'[\s\S]{0,240}savePopupTaskPartialCompleteChecklistItem/.test(popupScript)
-    && !popupScript.includes('!actionEl.checked')
-    && /const checklistActionEl = event\.target\.closest\('\[data-action="toggle-partial-complete-checklist"\]'\)[\s\S]*savePopupTaskPartialCompleteChecklistItem\([\s\S]*checklistActionEl\.checked/.test(popupScript));
-assert('Popup CSS keeps fixed popup size and adds Side Panel adaptive layout',
-    /body\s*\{[\s\S]*width:\s*360px;[\s\S]*height:\s*560px;/.test(popupCss)
-    && popupCss.includes('body.sidepanel-body')
-    && popupCss.includes('width: 100vw')
-    && popupCss.includes('height: 100vh')
-    && popupCss.includes('min-width: 320px')
-    && popupCss.includes('.sidepanel-body .popup-container')
-    && popupCss.includes('grid-template-columns: repeat(4, minmax(0, 1fr))')
-    && popupCss.includes('.sidepanel-body .footer-btn')
-    && popupCss.includes('flex-direction: row')
-    && popupCss.includes('background: rgba(29, 140, 248, 0.08)')
-    && popupCss.includes('.sidepanel-fixed-actions')
-    && popupCss.includes('.sidepanel-body .current-task-quick-add')
-    && popupCss.includes('.sidepanel-body .daily-journal-entry')
-    && popupCss.includes('.sidepanel-daily-journal-modal')
-    && /sidepanel-daily-journal-modal[\s\S]*height:\s*calc\(100vh - 24px\)/.test(popupCss)
-    && /sidepanel-journal-body[\s\S]*flex:\s*1 1 auto[\s\S]*min-height:\s*0[\s\S]*overflow-y:\s*auto/.test(popupCss)
-    && /sidepanel-daily-journal-modal \.popup-modal-footer[\s\S]*position:\s*sticky[\s\S]*bottom:\s*0/.test(popupCss)
-    && popupCss.includes('.sidepanel-body .popup-task-detail-modal')
-    && popupCss.includes('.popup-partial-complete-panel')
-    && popupCss.includes('.partial-complete-ratio-grid'));
+    sidebarScript.includes("if (actionEl.dataset.action === 'toggle-partial-complete-checklist')")
+    && !/actionEl\.dataset\.action === 'toggle-partial-complete-checklist'[\s\S]{0,240}saveSidebarTaskPartialCompleteChecklistItem/.test(sidebarScript)
+    && !sidebarScript.includes('!actionEl.checked')
+    && /const checklistActionEl = event\.target\.closest\('\[data-action="toggle-partial-complete-checklist"\]'\)[\s\S]*saveSidebarTaskPartialCompleteChecklistItem\([\s\S]*checklistActionEl\.checked/.test(sidebarScript));
+assert('Sidebar CSS keeps fixed popup size and adds Side Panel adaptive layout',
+    /body\s*\{[\s\S]*width:\s*360px;[\s\S]*height:\s*560px;/.test(sidebarCss)
+    && sidebarCss.includes('body.sidepanel-body')
+    && sidebarCss.includes('width: 100vw')
+    && sidebarCss.includes('height: 100vh')
+    && sidebarCss.includes('min-width: 320px')
+    && sidebarCss.includes('.sidepanel-body .popup-container')
+    && sidebarCss.includes('grid-template-columns: repeat(4, minmax(0, 1fr))')
+    && sidebarCss.includes('.sidepanel-body .footer-btn')
+    && sidebarCss.includes('flex-direction: row')
+    && sidebarCss.includes('background: rgba(29, 140, 248, 0.08)')
+    && sidebarCss.includes('.sidepanel-fixed-actions')
+    && sidebarCss.includes('.sidepanel-body .current-task-quick-add')
+    && sidebarCss.includes('.sidepanel-body .daily-journal-entry')
+    && sidebarCss.includes('.sidepanel-daily-journal-modal')
+    && /sidepanel-daily-journal-modal[\s\S]*height:\s*calc\(100vh - 24px\)/.test(sidebarCss)
+    && /sidepanel-journal-body[\s\S]*flex:\s*1 1 auto[\s\S]*min-height:\s*0[\s\S]*overflow-y:\s*auto/.test(sidebarCss)
+    && /sidepanel-daily-journal-modal \.popup-modal-footer[\s\S]*position:\s*sticky[\s\S]*bottom:\s*0/.test(sidebarCss)
+    && sidebarCss.includes('.sidepanel-body .popup-task-detail-modal')
+    && sidebarCss.includes('.popup-partial-complete-panel')
+    && sidebarCss.includes('.partial-complete-ratio-grid'));
 assert('Dashboard title uses 当前任务 and not 当下任务', focusHtml.includes('<h2>当前任务</h2>')
     && !/当下任务/.test(focusHtml + focusScript));
 assert('Focus pomodoro widget and init path are removed', !/pomodoroWidget|pomo|Pomodoro|initPomodoro|renderPomodoro|togglePomodoro/.test(focusHtml + focusScript + focusCss));
@@ -206,16 +231,16 @@ assert('current task card actions use data-action', /data-action="start"/.test(f
 assert('Current task action buttons are neutral by default and only busy/pressed turns dark',
     !focusScript.includes('btn-micro primary" data-action="start"')
     && !focusScript.includes('btn-micro primary" data-action="complete"')
-    && !popupScript.includes('btn-micro primary" data-action="start"')
-    && !popupScript.includes('btn-micro primary" data-action="complete"')
+    && !sidebarScript.includes('btn-micro primary" data-action="start"')
+    && !sidebarScript.includes('btn-micro primary" data-action="complete"')
     && focusCss.includes('.task-action-controls .btn-micro[data-busy="true"]')
     && focusCss.includes('.task-action-controls .btn-micro:active')
-    && popupCss.includes('.task-action-controls .btn-micro[data-busy="true"]')
-    && popupCss.includes('.task-action-controls .btn-micro:active')
+    && sidebarCss.includes('.task-action-controls .btn-micro[data-busy="true"]')
+    && sidebarCss.includes('.task-action-controls .btn-micro:active')
     && focusScript.includes('dashboard-top-action')
-    && popupScript.includes('btn-micro primary current-task-quick-add-action')
+    && sidebarScript.includes('btn-micro primary current-task-quick-add-action')
     && focusScript.includes('data-action="open-today-journal"')
-    && popupScript.includes('btn-micro primary" data-action="open-today-journal"'));
+    && sidebarScript.includes('btn-micro primary" data-action="open-today-journal"'));
 assert('Dashboard current task cards expose partial complete for ManageBac tasks too',
     focusScript.includes('data-action="toggle-partial-complete-menu"')
     && focusScript.includes('data-partial-complete-menu-for')
@@ -244,11 +269,11 @@ assert('Current task partial complete preserves expanded task while reloading',
     && focusScript.includes('dashboardCurrentTaskExpandedTaskId = String(taskId)')
     && focusScript.includes('reopenCurrentTaskPartialCompleteMenu(taskId)')
     && focusScript.includes('ensureDashboardCurrentTaskVisible(taskId)')
-    && popupScript.includes('let popupCurrentTaskExpandedTaskId = null')
-    && popupScript.includes('const anchoredIndex = popupCurrentTaskExpandedTaskId')
-    && popupScript.includes('const expandedIndex = anchoredIndex >= 0 ? anchoredIndex : (inProgressIndex >= 0 ? inProgressIndex : 0)')
-    && popupScript.includes('popupCurrentTaskExpandedTaskId = String(taskId)')
-    && popupScript.includes('popupPartialCompleteReopenTaskId = String(taskId)'));
+    && sidebarScript.includes('let sidebarCurrentTaskExpandedTaskId = null')
+    && sidebarScript.includes('const anchoredIndex = sidebarCurrentTaskExpandedTaskId')
+    && sidebarScript.includes('const expandedIndex = anchoredIndex >= 0 ? anchoredIndex : (inProgressIndex >= 0 ? inProgressIndex : 0)')
+    && sidebarScript.includes('sidebarCurrentTaskExpandedTaskId = String(taskId)')
+    && sidebarScript.includes('sidebarPartialCompleteReopenTaskId = String(taskId)'));
 assert('Dashboard current task defer uses expandable menu with dated options', focusScript.includes('data-action="toggle-defer-menu"')
     && focusScript.includes('aria-expanded="false"')
     && focusScript.includes('data-defer-menu-for')
@@ -399,9 +424,9 @@ assert('Dashboard Task Arrange Review modal marks unread records viewed', focusS
     && focusScript.includes('record.viewed_at')
     && focusScript.includes('TimeWhereTaskArrangeAuto.saveTaskArrangeReviewLog')
     && focusScript.includes('data-action="close-task-arrange-review"'));
-assert('Popup does not run automatic Arrange on open', !popupScript.includes('maybeRunTaskArrange')
-    && !popupScript.includes('runTaskArrangeInBackground')
-    && !popupScript.includes('runTaskArrangeInBackground'));
+assert('Popup does not run automatic Arrange on open', !sidebarScript.includes('maybeRunTaskArrange')
+    && !sidebarScript.includes('runTaskArrangeInBackground')
+    && !sidebarScript.includes('runTaskArrangeInBackground'));
 assert('Calendar opening triggers automatic Arrange review logging only', calendarScript.includes('runCalendarArrangeCheck()')
     && calendarScript.includes('TimeWhereTaskArrangeAuto.runTaskArrangeAutoReview')
     && calendarScript.includes("source: 'calendar_auto'")
@@ -489,15 +514,15 @@ assert('Popup header includes completion and pending summary target', popupHtml.
     && popupHtml.includes('todayCompletedCount')
     && popupHtml.includes('今日待办')
     && popupHtml.includes('todayPendingCount'));
-assert('Popup header pending count uses today Daily Settle task pool', popupScript.includes('buildDailyTaskPool(allTasks, now)')
-    && popupScript.includes('const todayPendingCount = taskPool.length')
-    && !popupScript.includes('getPendingCount('));
+assert('Popup header pending count uses today Daily Settle task pool', sidebarScript.includes('buildDailyTaskPool(allTasks, now)')
+    && sidebarScript.includes('const todayPendingCount = taskPool.length')
+    && !sidebarScript.includes('getPendingCount('));
 assert('Popup no-task copy uses 暂无待办任务 only', popupHtml.includes('暂无待办任务')
-    && popupScript.includes('暂无待办任务')
-    && !/暂无进行中的任务/.test(popupHtml + popupScript));
-assert('Popup renders Daily Settle displayTasks list', popupScript.includes('settle.displayTasks || settle.currentTasks || []')
-    && popupScript.includes('renderCurrentTaskList(displayTasks)')
-    && popupScript.includes('tasks.map((task, index) => renderCurrentTaskCard(task, index, expandedIndex))'));
+    && sidebarScript.includes('暂无待办任务')
+    && !/暂无进行中的任务/.test(popupHtml + sidebarScript));
+assert('Popup renders Daily Settle displayTasks list', sidebarScript.includes('settle.displayTasks || settle.currentTasks || []')
+    && sidebarScript.includes('renderCurrentTaskList(displayTasks)')
+    && sidebarScript.includes('tasks.map((task, index) => renderCurrentTaskCard(task, index, expandedIndex))'));
 assert('Dashboard current task column renders Daily Settle displayTasks list',
     focusScript.includes('const displayTasks = settle.displayTasks || settle.currentTasks || []')
     && focusScript.includes('displayTasks.forEach((task, index)')
@@ -516,22 +541,22 @@ assert('Dashboard current task column marks unassigned tasks without hiding acti
     && focusScript.includes('data-action="complete"')
     && focusScript.includes('data-action="defer"'));
 assert('Popup current task list marks unassigned tasks from Daily Settle display model',
-    popupScript.includes("assignment.status === 'unassigned'")
-    && popupScript.includes('task-tag unassigned')
-    && popupScript.includes('popup-task-card${assignment.status')
-    && popupScript.includes('当前未分配'));
-assert('Popup does not fallback to one current task or sorted pool', !popupScript.includes('currentTasks[0] || sortedPool[0]')
-    && !popupScript.includes('sortedPool[0]'));
-assert('Popup current task list expands only one task, preferring current anchor then in-progress task', popupScript.includes('const anchoredIndex = popupCurrentTaskExpandedTaskId')
-    && popupScript.includes('const inProgressIndex = tasks.findIndex')
-    && popupScript.includes('const expandedIndex = anchoredIndex >= 0 ? anchoredIndex : (inProgressIndex >= 0 ? inProgressIndex : 0)')
-    && popupScript.includes('const isExpanded = index === expandedIndex')
-    && popupScript.includes('class="task-card popup-task-card${assignment.status'));
-assert('Popup expanding one task collapses other tasks and auto-scrolls it into view', popupScript.includes("taskList.addEventListener('toggle', handleTaskCardToggle, true)")
-    && popupScript.includes("querySelectorAll('.popup-task-card[open]')")
-    && popupScript.includes('if (other !== card) other.open = false')
-    && popupScript.includes('ensureExpandedTaskVisible')
-    && popupScript.includes("scrollIntoView({ block: 'nearest'"));
+    sidebarScript.includes("assignment.status === 'unassigned'")
+    && sidebarScript.includes('task-tag unassigned')
+    && sidebarScript.includes('popup-task-card${assignment.status')
+    && sidebarScript.includes('当前未分配'));
+assert('Popup does not fallback to one current task or sorted pool', !sidebarScript.includes('currentTasks[0] || sortedPool[0]')
+    && !sidebarScript.includes('sortedPool[0]'));
+assert('Popup current task list expands only one task, preferring current anchor then in-progress task', sidebarScript.includes('const anchoredIndex = sidebarCurrentTaskExpandedTaskId')
+    && sidebarScript.includes('const inProgressIndex = tasks.findIndex')
+    && sidebarScript.includes('const expandedIndex = anchoredIndex >= 0 ? anchoredIndex : (inProgressIndex >= 0 ? inProgressIndex : 0)')
+    && sidebarScript.includes('const isExpanded = index === expandedIndex')
+    && sidebarScript.includes('class="task-card popup-task-card${assignment.status'));
+assert('Popup expanding one task collapses other tasks and auto-scrolls it into view', sidebarScript.includes("taskList.addEventListener('toggle', handleTaskCardToggle, true)")
+    && sidebarScript.includes("querySelectorAll('.popup-task-card[open]')")
+    && sidebarScript.includes('if (other !== card) other.open = false')
+    && sidebarScript.includes('ensureExpandedTaskVisible')
+    && sidebarScript.includes("scrollIntoView({ block: 'nearest'"));
 assert('Dashboard task_id URL opens matching current task card', focusScript.includes("new URLSearchParams(window.location.search).get('task_id')")
     && focusScript.includes('data-task-card-id')
     && focusScript.includes("scrollIntoView({ block: 'center'"));
@@ -677,10 +702,10 @@ assert('Dashboard today journal modal uses aligned review layout', focusScript.i
     && focusScript.includes('placeholder="补充说明..."')
     && focusScript.includes('计划延误说明')
     && focusScript.includes('计划外任务说明')
-    && popupScript.includes('计划外任务说明')
-    && popupScript.includes('没有计划外任务。')
+    && sidebarScript.includes('计划外任务说明')
+    && sidebarScript.includes('没有计划外任务。')
     && !focusScript.includes('计划外完成说明')
-    && !popupScript.includes('计划外完成说明')
+    && !sidebarScript.includes('计划外完成说明')
     && focusCss.includes('grid-template-columns: repeat(2, minmax(0, 1fr))')
     && /journal-section[\s\S]*height:\s*100%/.test(focusCss)
     && /journal-note-card[\s\S]*display:\s*flex[\s\S]*flex-direction:\s*column[\s\S]*min-height:\s*120px[\s\S]*height:\s*100%/.test(focusCss)
@@ -690,7 +715,7 @@ assert('Dashboard today journal modal uses aligned review layout', focusScript.i
     && /@media \(max-width:\s*720px\)[\s\S]*journal-review-layout[\s\S]*grid-template-columns:\s*1fr/.test(focusCss));
 assert('Dashboard today journal task statuses use bordered completed partial and incomplete markers',
     focusScript.includes('renderJournalStatusTaskList')
-    && popupScript.includes('renderJournalStatusTaskList')
+    && sidebarScript.includes('renderJournalStatusTaskList')
     && focusScript.includes("statusClass: 'completed'")
     && focusScript.includes("statusIcon: 'check_circle'")
     && focusScript.includes("statusClass: 'partial'")
@@ -704,8 +729,8 @@ assert('Dashboard today journal task statuses use bordered completed partial and
     && focusCss.includes('color: #047857')
     && focusCss.includes('color: #2563eb')
     && focusCss.includes('color: #dc2626')
-    && popupCss.includes('.journal-task-status.partial')
-    && popupCss.includes('border: 1px solid var(--border)'));
+    && sidebarCss.includes('.journal-task-status.partial')
+    && sidebarCss.includes('border: 1px solid var(--border)'));
 assert('Dashboard week progress includes weekly journal summary area', focusHtml.includes('weekly-journal-section')
     && focusHtml.includes('本周总结')
     && focusHtml.includes('weekly-journal-grid'));
@@ -728,107 +753,107 @@ assert('Dashboard summary entries stay fixed while middle content scrolls', /col
     && /current-task-scroll-body,[\s\S]*weekly-progress-scroll-body[\s\S]*overflow-y:\s*auto/.test(focusCss)
     && /dashboard-top-actions[\s\S]*flex-shrink:\s*0/.test(focusCss)
     && /weekly-journal-section[\s\S]*flex-shrink:\s*0/.test(focusCss));
-assert('Popup expanded task cards do not clip core task content', popupCss.includes('.task-list')
-    && /task-list[\s\S]*overflow-y:\s*auto/.test(popupCss)
-    && /task-list[\s\S]*scroll-behavior:\s*smooth/.test(popupCss)
-    && /popup-task-card[\s\S]*overflow:\s*visible/.test(popupCss)
-    && /task-card-summary \.task-title[\s\S]*white-space:\s*normal/.test(popupCss)
-    && /task-notes[\s\S]*max-height:\s*none/.test(popupCss)
-    && /task-notes[\s\S]*overflow:\s*visible/.test(popupCss));
-assert('Popup current task render includes Dashboard-like card semantics', popupScript.includes('task-title-row')
-    && popupScript.includes('task-notes')
-    && popupScript.includes('priority-badge')
-    && popupScript.includes('duration')
-    && popupScript.includes('deadline')
-    && popupScript.includes('task-tags')
-    && popupScript.includes('task-actions')
-    && popupScript.includes('task-action-controls'));
+assert('Popup expanded task cards do not clip core task content', sidebarCss.includes('.task-list')
+    && /task-list[\s\S]*overflow-y:\s*auto/.test(sidebarCss)
+    && /task-list[\s\S]*scroll-behavior:\s*smooth/.test(sidebarCss)
+    && /popup-task-card[\s\S]*overflow:\s*visible/.test(sidebarCss)
+    && /task-card-summary \.task-title[\s\S]*white-space:\s*normal/.test(sidebarCss)
+    && /task-notes[\s\S]*max-height:\s*none/.test(sidebarCss)
+    && /task-notes[\s\S]*overflow:\s*visible/.test(sidebarCss));
+assert('Popup current task render includes Dashboard-like card semantics', sidebarScript.includes('task-title-row')
+    && sidebarScript.includes('task-notes')
+    && sidebarScript.includes('priority-badge')
+    && sidebarScript.includes('duration')
+    && sidebarScript.includes('deadline')
+    && sidebarScript.includes('task-tags')
+    && sidebarScript.includes('task-actions')
+    && sidebarScript.includes('task-action-controls'));
 assert('Popup current task card renders status labels for all progress states',
-    popupScript.includes('function getPopupTaskStatusLabel')
-    && popupScript.includes("text: '未开始', className: 'not-started'")
-    && popupScript.includes("text: '进行中', className: 'in-progress'")
-    && popupScript.includes("text: '已完成', className: 'completed'")
-    && popupScript.includes('popup-task-status-label'));
+    sidebarScript.includes('function getSidebarTaskStatusLabel')
+    && sidebarScript.includes("text: '未开始', className: 'not-started'")
+    && sidebarScript.includes("text: '进行中', className: 'in-progress'")
+    && sidebarScript.includes("text: '已完成', className: 'completed'")
+    && sidebarScript.includes('popup-task-status-label'));
 assert('Popup current task card renders existing checklist only',
-    popupScript.includes('function renderPopupTaskChecklist')
-    && popupScript.includes('if (checklist.length === 0) return')
-    && popupScript.includes('popup-task-checklist-item')
-    && popupScript.includes('data-action="toggle-popup-checklist"'));
+    sidebarScript.includes('function renderSidebarTaskChecklist')
+    && sidebarScript.includes('if (checklist.length === 0) return')
+    && sidebarScript.includes('popup-task-checklist-item')
+    && sidebarScript.includes('data-action="toggle-popup-checklist"'));
 assert('Popup checklist toggle uses delegated action and updateChecklist',
-    popupScript.includes("action === 'toggle-popup-checklist'")
-    && popupScript.includes('togglePopupTaskChecklist')
-    && popupScript.includes('TimeWhereDB.updateChecklist(taskId, checklist)'));
-assert('Popup normal task actions and expandable defer menu are inside card', popupScript.includes('data-action="start"')
-    && popupScript.includes('data-action="pause"')
-    && popupScript.includes('data-action="complete"')
-    && popupScript.includes('data-action="toggle-partial-complete-menu"')
-    && popupScript.includes('data-action="toggle-defer-menu"')
-    && popupScript.includes('aria-expanded="false"')
-    && popupScript.includes('popup-defer-panel')
-    && popupScript.includes('延后会向后修改任务截止日期')
-    && popupScript.includes('defer-options')
-    && popupScript.includes('togglePopupTaskDeferMenu')
-    && popupScript.includes('data-action="defer"')
-    && popupScript.includes('data-days="1"')
-    && popupScript.includes('data-days="3"')
-    && popupScript.includes('data-days="7"'));
+    sidebarScript.includes("action === 'toggle-popup-checklist'")
+    && sidebarScript.includes('toggleSidebarTaskChecklist')
+    && sidebarScript.includes('TimeWhereDB.updateChecklist(taskId, checklist)'));
+assert('Popup normal task actions and expandable defer menu are inside card', sidebarScript.includes('data-action="start"')
+    && sidebarScript.includes('data-action="pause"')
+    && sidebarScript.includes('data-action="complete"')
+    && sidebarScript.includes('data-action="toggle-partial-complete-menu"')
+    && sidebarScript.includes('data-action="toggle-defer-menu"')
+    && sidebarScript.includes('aria-expanded="false"')
+    && sidebarScript.includes('popup-defer-panel')
+    && sidebarScript.includes('延后会向后修改任务截止日期')
+    && sidebarScript.includes('defer-options')
+    && sidebarScript.includes('toggleSidebarTaskDeferMenu')
+    && sidebarScript.includes('data-action="defer"')
+    && sidebarScript.includes('data-days="1"')
+    && sidebarScript.includes('data-days="3"')
+    && sidebarScript.includes('data-days="7"'));
 assert('Popup current task card opens local detail modal from content area',
-    popupScript.includes('task-detail-open-zone')
-    && popupScript.includes('data-action="open-current-task-detail"')
-    && /<div class="task-title-row" data-task-id="\$\{taskId\}">/.test(popupScript)
-    && !/<div class="task-title-row"[^>]*data-action="open-current-task-detail"/.test(popupScript)
-    && popupScript.includes("const detailZone = actionEl.closest('.task-detail-open-zone')")
-    && popupScript.includes("const taskDetails = actionEl.closest('details')")
-    && popupScript.includes('if (!detailZone || !taskDetails?.open) return')
-    && popupScript.includes('openCurrentTaskDetailModal')
-    && popupScript.includes('saveCurrentTaskDetailModal')
-    && popupScript.includes('currentTaskDetailModal')
-    && popupCss.includes('.popup-task-detail-modal')
-    && !popupScript.includes('btn-task-detail')
-    && !popupScript.includes('openTaskDetailInPlanner')
-    && !popupScript.includes('pages/tasks/tasks.html?task_id='));
+    sidebarScript.includes('task-detail-open-zone')
+    && sidebarScript.includes('data-action="open-current-task-detail"')
+    && /<div class="task-title-row" data-task-id="\$\{taskId\}">/.test(sidebarScript)
+    && !/<div class="task-title-row"[^>]*data-action="open-current-task-detail"/.test(sidebarScript)
+    && sidebarScript.includes("const detailZone = actionEl.closest('.task-detail-open-zone')")
+    && sidebarScript.includes("const taskDetails = actionEl.closest('details')")
+    && sidebarScript.includes('if (!detailZone || !taskDetails?.open) return')
+    && sidebarScript.includes('openCurrentTaskDetailModal')
+    && sidebarScript.includes('saveCurrentTaskDetailModal')
+    && sidebarScript.includes('currentTaskDetailModal')
+    && sidebarCss.includes('.popup-task-detail-modal')
+    && !sidebarScript.includes('btn-task-detail')
+    && !sidebarScript.includes('openTaskDetailInPlanner')
+    && !sidebarScript.includes('pages/tasks/tasks.html?task_id='));
 assert('Popup detail modal allows ManageBac local execution fields only',
-    popupScript.includes('ManageBac 来源标题和截止日期只读；可修改本地状态、优先级、开始日期、定时时间、时长和笔记。')
-    && /id="detailTaskTitle"[\s\S]{0,140}\$\{isManageBacSource \? 'readonly' : ''\}/.test(popupScript)
-    && /id="detailTaskDueDate"[\s\S]{0,180}\$\{isManageBacSource \? 'disabled' : ''\}/.test(popupScript)
-    && /id="detailTaskScheduleTime"[\s\S]{0,100}>/.test(popupScript)
-    && /id="detailTaskDuration"[\s\S]{0,140}>/.test(popupScript)
-    && /id="detailTaskNotes"[\s\S]{0,80}>/.test(popupScript)
-    && /const updates = \{[\s\S]*schedule_time:[\s\S]*duration:[\s\S]*notes:[\s\S]*completed_at/.test(popupScript)
-    && /if \(!isManageBacSource\) \{[\s\S]*updates\.title[\s\S]*updates\.due_date/.test(popupScript));
+    sidebarScript.includes('ManageBac 来源标题和截止日期只读；可修改本地状态、优先级、开始日期、定时时间、时长和笔记。')
+    && /id="detailTaskTitle"[\s\S]{0,140}\$\{isManageBacSource \? 'readonly' : ''\}/.test(sidebarScript)
+    && /id="detailTaskDueDate"[\s\S]{0,180}\$\{isManageBacSource \? 'disabled' : ''\}/.test(sidebarScript)
+    && /id="detailTaskScheduleTime"[\s\S]{0,100}>/.test(sidebarScript)
+    && /id="detailTaskDuration"[\s\S]{0,140}>/.test(sidebarScript)
+    && /id="detailTaskNotes"[\s\S]{0,80}>/.test(sidebarScript)
+    && /const updates = \{[\s\S]*schedule_time:[\s\S]*duration:[\s\S]*notes:[\s\S]*completed_at/.test(sidebarScript)
+    && /if \(!isManageBacSource\) \{[\s\S]*updates\.title[\s\S]*updates\.due_date/.test(sidebarScript));
 assert('Popup and Side Panel detail notes render safe external HTTP link preview',
-    popupScript.includes('data-notes-link-preview')
-    && popupScript.includes('renderTaskNotesExternalLinks(task.notes || task.description || \'\')')
-    && popupScript.includes('refreshTaskNotesExternalLinks(modal, event.target.value)')
-    && popupScript.includes("actionEl.dataset.action === 'open-external-link'")
-    && popupScript.includes('openTaskNotesExternalLink(actionEl)')
-    && popupCss.includes('.external-link-item')
+    sidebarScript.includes('data-notes-link-preview')
+    && sidebarScript.includes('renderTaskNotesExternalLinks(task.notes || task.description || \'\')')
+    && sidebarScript.includes('refreshTaskNotesExternalLinks(modal, event.target.value)')
+    && sidebarScript.includes("actionEl.dataset.action === 'open-external-link'")
+    && sidebarScript.includes('openTaskNotesExternalLink(actionEl)')
+    && sidebarCss.includes('.external-link-item')
     && externalLinksScript.includes('data-action="open-external-link"'));
-assert('Popup defer updates due_date instead of start_date', /async function deferTask[\s\S]*baseDate = task\?\.due_date \|\| task\?\.deadline \|\| formatDateISO\(today\)/.test(popupScript)
-    && /async function deferTask[\s\S]*updateTask\(taskId, \{ due_date: formatDateISO\(target\) \}\)/.test(popupScript)
-    && !/async function deferTask[\s\S]*updateTask\(taskId, \{ start_date: nextStartDate \}\)/.test(popupScript));
-assert('Popup ManageBac branch renders blocked defer text and no defer buttons', popupScript.includes('isManageBacSourceTask')
-    && popupScript.includes('defer-blocked-text')
-    && /const deferBlockedHtml = isManageBacSource[\s\S]*defer-blocked-text/.test(popupScript)
-    && /const deferToggleHtml = !isManageBacSource[\s\S]*data-action="toggle-defer-menu"/.test(popupScript)
-    && /const deferMenuHtml = !isManageBacSource[\s\S]*data-action="defer"/.test(popupScript));
+assert('Popup defer updates due_date instead of start_date', /async function deferTask[\s\S]*baseDate = task\?\.due_date \|\| task\?\.deadline \|\| formatDateISO\(today\)/.test(sidebarScript)
+    && /async function deferTask[\s\S]*updateTask\(taskId, \{ due_date: formatDateISO\(target\) \}\)/.test(sidebarScript)
+    && !/async function deferTask[\s\S]*updateTask\(taskId, \{ start_date: nextStartDate \}\)/.test(sidebarScript));
+assert('Popup ManageBac branch renders blocked defer text and no defer buttons', sidebarScript.includes('isManageBacSourceTask')
+    && sidebarScript.includes('defer-blocked-text')
+    && /const deferBlockedHtml = isManageBacSource[\s\S]*defer-blocked-text/.test(sidebarScript)
+    && /const deferToggleHtml = !isManageBacSource[\s\S]*data-action="toggle-defer-menu"/.test(sidebarScript)
+    && /const deferMenuHtml = !isManageBacSource[\s\S]*data-action="defer"/.test(sidebarScript));
 assert('Popup CSS defines status checklist and compact action controls',
-    popupCss.includes('.popup-task-status-label.not-started')
-    && popupCss.includes('.popup-task-status-label.in-progress')
-    && popupCss.includes('.popup-task-status-label.completed')
-    && popupCss.includes('.popup-task-checklist')
-    && popupCss.includes('.task-action-controls')
-    && popupCss.includes('.task-action-stack')
-    && popupCss.includes('.popup-defer-panel')
-    && popupCss.includes('.popup-partial-complete-panel')
-    && popupCss.includes('.defer-hint')
-    && popupCss.includes('.defer-options')
-    && /\.popup-defer-panel\s*\{[\s\S]*border: 1px solid/.test(popupCss)
-    && /\.popup-defer-panel\[hidden\]\s*\{[\s\S]*display:\s*none/.test(popupCss)
-    && popupCss.includes('min-height: 32px'));
-assert('Popup action success reloads task and header counts', popupScript.includes('await reloadPopup()'));
-assert('Popup action failure shows toast', popupScript.includes('showToast(`操作失败：${error.message}`'));
-assert('Popup CSS no longer contains quick action or stat card styles', !/quick-actions|stats-section|stat-card|action-btn/.test(popupCss));
+    sidebarCss.includes('.popup-task-status-label.not-started')
+    && sidebarCss.includes('.popup-task-status-label.in-progress')
+    && sidebarCss.includes('.popup-task-status-label.completed')
+    && sidebarCss.includes('.popup-task-checklist')
+    && sidebarCss.includes('.task-action-controls')
+    && sidebarCss.includes('.task-action-stack')
+    && sidebarCss.includes('.popup-defer-panel')
+    && sidebarCss.includes('.popup-partial-complete-panel')
+    && sidebarCss.includes('.defer-hint')
+    && sidebarCss.includes('.defer-options')
+    && /\.popup-defer-panel\s*\{[\s\S]*border: 1px solid/.test(sidebarCss)
+    && /\.popup-defer-panel\[hidden\]\s*\{[\s\S]*display:\s*none/.test(sidebarCss)
+    && sidebarCss.includes('min-height: 32px'));
+assert('Popup action success reloads task and header counts', sidebarScript.includes('await reloadSidebar()'));
+assert('Popup action failure shows toast', sidebarScript.includes('showToast(`操作失败：${error.message}`'));
+assert('Popup CSS no longer contains quick action or stat card styles', !/quick-actions|stats-section|stat-card|action-btn/.test(sidebarCss));
 
 console.log('\n' + '='.repeat(44));
 console.log(`Total: ${passed + failed} checks   PASS ${passed}   ${failed > 0 ? 'FAIL' : 'PASS'} ${failed}`);
