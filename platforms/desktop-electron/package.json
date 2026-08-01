@@ -7,6 +7,7 @@
   "scripts": {
     "start": "electron .",
     "smoke": "electron .",
+    "mcp:stdio": "node mcp-stdio-server.js",
     "prepackage:win": "powershell -ExecutionPolicy Bypass -File ../../tools/prepare-desktop-oauth-secret.ps1",
     "package:win": "electron-builder --win portable --x64",
     "prepackage:mac": "pwsh -ExecutionPolicy Bypass -File ../../tools/prepare-desktop-oauth-secret.ps1",
@@ -39,6 +40,7 @@
       "desktop-auth.js",
       "desktop-oauth-secrets.js",
       "chrome-bridge.js",
+      "mcp-stdio-server.js",
       "package.json"
     ],
     "extraResources": [

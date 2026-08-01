@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const fsp = fs.promises;
 const os = require('node:os');
 const crypto = require('node:crypto');
+const net = require('node:net');
 const { pathToFileURL } = require('url');
 const { createDesktopAuth } = require('./desktop-auth');
 const { createChromeBridge } = require('./chrome-bridge');
@@ -69,8 +70,18 @@ const desktopProfileDefaults = {
 let desktopProfileState = JSON.parse(JSON.stringify(desktopProfileDefaults));
 let switchingDesktopProfile = false;
 const pendingGoogleAccountSwitches = new Map();
+const pendingMcpRequests = new Map();
+let mcpBridgeServer = null;
+let mcpRendererReady = false;
 const desktopSettingsPath = () => path.join(app.getPath('userData'), 'timewhere-desktop-settings.json');
 const desktopProfilePath = () => path.join(app.getPath('userData'), 'timewhere-desktop-profile.json');
+function mcpBridgePath() {
+  if (process.env.TIMEWHERE_MCP_BRIDGE_PATH) return process.env.TIMEWHERE_MCP_BRIDGE_PATH;
+  const seed = process.env.TIMEWHERE_MCP_BRIDGE_SEED || repoRoot;
+  const hash = crypto.createHash('sha256').update(seed).digest('hex').slice(0, 16);
+  if (process.platform === 'win32') return String.raw`\\.\pipe\timewhere-mcp-` + hash;
+  return path.join(os.tmpdir(), 'timewhere-mcp-' + hash + '.sock');
+}
 
 function appGroupWidgetSnapshotPath() {
   if (process.platform !== 'darwin') return null;
@@ -662,6 +673,7 @@ function createMainWindow(route = defaultRoute) {
     webPreferences
   });
   mainWindow = win;
+  mcpRendererReady = false;
 
   loadRoute(mainWindow, route).catch(error => {
     console.error(`TimeWhere desktop route failed: ${error.message}`);
@@ -859,6 +871,96 @@ function rescheduleAllReminders(reminders = []) {
   return { status: 'scheduled', count: scheduled.length, scheduled };
 }
 
+function mcpErrorPayload(code, message, data = null) {
+  return { error: { code, message, data } };
+}
+
+function sendSocketJson(socket, payload) {
+  socket.write(`${JSON.stringify(payload)}\n`);
+}
+
+function requestMcpRenderer(tool, args = {}, profileId = null) {
+  const profile = getDesktopProfileSnapshot();
+  if (profileId && profile.profile_id !== profileId) {
+    return Promise.resolve(mcpErrorPayload('profile_changed', 'TimeWhere Desktop active profile changed', {
+      expected_profile_id: profileId,
+      current_profile_id: profile.profile_id
+    }));
+  }
+  if (!mainWindow || mainWindow.isDestroyed() || !mcpRendererReady) {
+    return Promise.resolve(mcpErrorPayload('desktop_not_ready', 'TimeWhere Desktop renderer is not ready'));
+  }
+  const requestId = crypto.randomBytes(16).toString('hex');
+  return new Promise(resolve => {
+    const timer = setTimeout(() => {
+      pendingMcpRequests.delete(requestId);
+      resolve(mcpErrorPayload('desktop_not_ready', 'TimeWhere Desktop renderer did not answer MCP request'));
+    }, 15000);
+    pendingMcpRequests.set(requestId, payload => {
+      clearTimeout(timer);
+      resolve(payload.error ? { error: payload.error } : { result: payload.result });
+    });
+    mainWindow.webContents.send('timewhere-platform:mcp-request', {
+      request_id: requestId,
+      tool,
+      arguments: args,
+      profile_id: profile.profile_id
+    });
+  });
+}
+
+function handleMcpBridgeMessage(message = {}) {
+  if (message.type === 'profile') {
+    return Promise.resolve({ result: getDesktopProfileSnapshot() });
+  }
+  if (message.type === 'tool_call') {
+    return requestMcpRenderer(message.tool, message.arguments || {}, message.profile_id || null);
+  }
+  return Promise.resolve(mcpErrorPayload('unsupported_mcp_bridge_message', `Unsupported MCP bridge message: ${message.type || 'unknown'}`));
+}
+
+function startMcpBridgeServer() {
+  if (mcpBridgeServer) return { status: 'already_started', path: mcpBridgePath() };
+  const target = mcpBridgePath();
+  if (process.platform !== 'win32' && fs.existsSync(target)) {
+    try { fs.unlinkSync(target); } catch (_) {}
+  }
+  mcpBridgeServer = net.createServer(socket => {
+    let buffer = '';
+    socket.on('data', chunk => {
+      buffer += chunk.toString('utf8');
+      let index;
+      while ((index = buffer.indexOf('\n')) >= 0) {
+        const raw = buffer.slice(0, index).trim();
+        buffer = buffer.slice(index + 1);
+        if (!raw) continue;
+        let message;
+        try {
+          message = JSON.parse(raw);
+        } catch (error) {
+          sendSocketJson(socket, mcpErrorPayload('invalid_json', error.message));
+          continue;
+        }
+        handleMcpBridgeMessage(message)
+          .then(response => sendSocketJson(socket, response))
+          .catch(error => sendSocketJson(socket, mcpErrorPayload(error.code || 'mcp_bridge_failed', error.message || 'MCP bridge failed', error.data || null)));
+      }
+    });
+  });
+  mcpBridgeServer.on('error', error => {
+    console.warn(`[Desktop] MCP bridge failed: ${error.message}`);
+  });
+  mcpBridgeServer.listen(target, () => {
+    console.log(`[Desktop] MCP bridge listening at ${target}`);
+  });
+  return { status: 'started', path: target };
+}
+
+function closeMcpBridgeServer() {
+  if (!mcpBridgeServer) return;
+  mcpBridgeServer.close();
+  mcpBridgeServer = null;
+}
 function serializeAuthError(error) {
   return {
     status: 'failed',
@@ -985,6 +1087,21 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
   if (method === 'system.confirmGoogleAccountSwitch') {
     return await confirmGoogleAccountSwitch(payload);
   }
+  if (method === 'mcp.rendererReady') {
+    mcpRendererReady = true;
+    return { status: 'ready', profile: getDesktopProfileSnapshot() };
+  }
+  if (method === 'mcp.rendererResponse') {
+    const requestId = payload.request_id;
+    const resolve = pendingMcpRequests.get(requestId);
+    if (!resolve) return { status: 'missing', request_id: requestId || null };
+    pendingMcpRequests.delete(requestId);
+    resolve(payload);
+    return { status: 'ok', request_id: requestId };
+  }
+  if (method === 'mcp.bridgeStatus') {
+    return { status: mcpBridgeServer ? 'listening' : 'stopped', path: mcpBridgePath(), renderer_ready: mcpRendererReady, profile: getDesktopProfileSnapshot() };
+  }
   return { status: 'not_supported', method };
 });
 
@@ -1001,6 +1118,7 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
       createMainWindow(pendingProtocolRoute || defaultRoute);
       pendingProtocolRoute = null;
       createTray();
+      startMcpBridgeServer();
       syncTrayMenuLabels();
     })
     .catch(error => {
@@ -1008,6 +1126,7 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
       buildMenu();
       createMainWindow();
       createTray();
+      startMcpBridgeServer();
       syncTrayMenuLabels();
     });
   app.on('activate', () => {
@@ -1037,11 +1156,13 @@ function syncTrayMenuLabels() {
 app.on('window-all-closed', () => {
   if (switchingDesktopProfile) return;
   chromeBridge.closeActiveServer();
+  closeMcpBridgeServer();
   for (const id of reminderTimers.keys()) cancelReminder(id);
   app.quit();
 });
 
 app.on('will-quit', () => {
+  closeMcpBridgeServer();
   destroyTray();
 });
 

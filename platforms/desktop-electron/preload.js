@@ -33,5 +33,23 @@ contextBridge.exposeInMainWorld('TimeWhereElectronPlatform', {
       method: 'notification.consumePendingCloses',
       payload: {}
     });
+  },
+  onMcpRequest(callback) {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('timewhere-platform:mcp-request', listener);
+    return () => ipcRenderer.removeListener('timewhere-platform:mcp-request', listener);
+  },
+  replyMcpRequest(payload = {}) {
+    return ipcRenderer.invoke('timewhere-platform', {
+      method: 'mcp.rendererResponse',
+      payload
+    });
+  },
+  markMcpRendererReady() {
+    return ipcRenderer.invoke('timewhere-platform', {
+      method: 'mcp.rendererReady',
+      payload: {}
+    });
   }
 });
