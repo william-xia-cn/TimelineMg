@@ -52,7 +52,7 @@ Desktop 未打开、renderer 未 ready 或 active profile 已变化时，tool ca
 
 ## 标准注册方式
 
-TimeWhere 的标准 MCP server 名称是 `timewhere-desktop-mcp`。本机 Codex 全局注册由仓库脚本维护：
+TimeWhere 的标准 MCP server 显示名是 `timewhere-desktop-mcp`。Codex 全局配置 key 使用 `timewhere_desktop_mcp`，以匹配 Codex 工具命名空间规则；本机注册由仓库脚本维护：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/register-timewhere-mcp.ps1
@@ -61,7 +61,7 @@ powershell -ExecutionPolicy Bypass -File tools/register-timewhere-mcp.ps1
 标准 Codex 配置块如下：
 
 ```toml
-[mcp_servers.timewhere-desktop-mcp]
+[mcp_servers.timewhere_desktop_mcp]
 command = 'C:\Program Files\nodejs\node.exe'
 args = ['platforms/desktop-electron/mcp-stdio-server.js']
 cwd = 'D:\Codex\ThmeWhere-Master'
