@@ -99,7 +99,8 @@ assert('Internal macOS installer remains limited to the approved self-signed lan
     && decisions.includes('one-click DMG installer')
     && decisions.includes('System Keychain')
     && decisions.includes('must not contain a private key')
-    && projectMaster.includes('D-043/D-046 approve a limited self-signed macOS lane'));
+    && decisions.includes('D-047')
+    && projectMaster.includes('D-043/D-046/D-047 approve a limited self-signed macOS lane'));
 assert('Dual-platform spec covers desktop OAuth, notifications, portable exe, and bridge as optional',
     spec.includes('standalone Windows Electron app')
     && spec.includes('configured Google Desktop OAuth client ID')
@@ -365,7 +366,7 @@ assert('Desktop profile store isolates Google accounts by Electron partition',
     && electronMain.includes('pendingGoogleAccountSwitches'));
 assert('Desktop package bundles generated OAuth secret module from ignored packaging input',
     electronPackage.scripts['prepackage:win'].includes('prepare-desktop-oauth-secret.ps1')
-    && electronPackage.scripts['prepackage:mac'].includes('prepare-desktop-oauth-secret.ps1')
+    && electronPackage.scripts['prepackage:mac'].includes('prepare-desktop-oauth-secret.js')
     && electronPackage.build.files.includes('desktop-oauth-secrets.js')
     && gitignore.includes('platforms/desktop-electron/desktop-oauth-secrets.js'));
 assert('Chrome bridge is localhost nonce verified and one-shot',

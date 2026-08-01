@@ -863,7 +863,7 @@ async function run() {
         && desktopAuthScript.includes('await clearState()'));
     assert('Desktop packaging prepares and bundles generated OAuth secret module without tracking it',
         desktopPackage.scripts['prepackage:win'].includes('prepare-desktop-oauth-secret.ps1')
-        && desktopPackage.scripts['prepackage:mac'].includes('prepare-desktop-oauth-secret.ps1')
+        && desktopPackage.scripts['prepackage:mac'].includes('prepare-desktop-oauth-secret.js')
         && desktopPackage.build.files.includes('desktop-oauth-secrets.js')
         && gitignore.includes('platforms/desktop-electron/desktop-oauth-secrets.js'));
     assert('Settings surfaces actionable desktop OAuth failure reasons',

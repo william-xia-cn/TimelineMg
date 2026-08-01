@@ -13,6 +13,7 @@ It does not use Developer ID, does not notarize, and does not staple.
 
 Optional:
   TIMEWHERE_CODESIGN_EXTRA_ARGS="--options runtime"   Extra codesign args.
+  TIMEWHERE_CODESIGN_KEYCHAIN=/path/to/keychain        Signing keychain.
   TIMEWHERE_ALLOW_UNTRUSTED_SIGNING_IDENTITY=1         Allow an imported
                                                        self-signed identity on
                                                        an ephemeral CI runner.
@@ -35,10 +36,12 @@ fi
 
 target="${1:-}"
 identity="${TIMEWHERE_CODESIGN_IDENTITY:-}"
+keychain="${TIMEWHERE_CODESIGN_KEYCHAIN:-}"
 
 [[ -n "$target" ]] || { usage >&2; fail "Missing target app or binary path."; }
 [[ -e "$target" ]] || fail "Target does not exist: $target"
 [[ -n "$identity" ]] || fail "TIMEWHERE_CODESIGN_IDENTITY is required."
+[[ -z "$keychain" || -f "$keychain" ]] || fail "Signing keychain was not found: $keychain"
 
 case "$identity" in
   *"Developer ID"*)
@@ -50,12 +53,19 @@ if ! command -v codesign >/dev/null 2>&1; then
   fail "codesign was not found."
 fi
 
+identity_keychain_args=()
+codesign_keychain_args=()
+if [[ -n "$keychain" ]]; then
+  identity_keychain_args=("$keychain")
+  codesign_keychain_args=(--keychain "$keychain")
+fi
+
 if [[ "${TIMEWHERE_ALLOW_UNTRUSTED_SIGNING_IDENTITY:-0}" == "1" ]]; then
-  if ! security find-identity -p codesigning | grep -F "$identity" >/dev/null 2>&1; then
+  if ! security find-identity -p codesigning "${identity_keychain_args[@]}" | grep -F "$identity" >/dev/null 2>&1; then
     fail "Signing identity was not found in the current keychains: $identity"
   fi
 else
-  if ! security find-identity -v -p codesigning | grep -F "$identity" >/dev/null 2>&1; then
+  if ! security find-identity -v -p codesigning "${identity_keychain_args[@]}" | grep -F "$identity" >/dev/null 2>&1; then
     fail "Valid signing identity was not found in the current keychains: $identity"
   fi
 fi
@@ -70,9 +80,9 @@ echo "  target: $target"
 echo "  identity: $identity"
 
 if [[ -n "${TIMEWHERE_CODESIGN_EXTRA_ARGS:-}" ]]; then
-  codesign --force --deep --sign "$identity" "${extra_args[@]}" "$target"
+  codesign --force --deep --sign "$identity" "${codesign_keychain_args[@]}" "${extra_args[@]}" "$target"
 else
-  codesign --force --deep --sign "$identity" "$target"
+  codesign --force --deep --sign "$identity" "${codesign_keychain_args[@]}" "$target"
 fi
 codesign --verify --deep --strict --verbose=2 "$target"
 codesign -dv --verbose=4 "$target" 2>&1 | sed -n '/Authority=/p;/Identifier=/p;/TeamIdentifier=/p'

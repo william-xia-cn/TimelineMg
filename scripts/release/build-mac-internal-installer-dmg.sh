@@ -40,12 +40,14 @@ app_path="${1:-}"
 cert_path="${2:-}"
 output_dmg="${3:-}"
 identity="${TIMEWHERE_CODESIGN_IDENTITY:-}"
+keychain="${TIMEWHERE_CODESIGN_KEYCHAIN:-}"
 dmg_format="${TIMEWHERE_DMG_FORMAT:-UDZO}"
 
 [[ -d "$app_path" && -f "$app_path/Contents/Info.plist" ]] || fail "Invalid TimeWhere.app path."
 [[ -f "$cert_path" ]] || fail "Public certificate was not found."
 [[ -n "$output_dmg" ]] || { usage >&2; fail "Missing output DMG path."; }
 [[ -n "$identity" ]] || fail "TIMEWHERE_CODESIGN_IDENTITY is required."
+[[ -z "$keychain" || -f "$keychain" ]] || fail "Signing keychain was not found: $keychain"
 [[ "$identity" != *"Developer ID"* ]] || fail "Developer ID is blocked in this internal lane."
 [[ "$dmg_format" == "UDZO" || "$dmg_format" == "UDRO" ]] \
   || fail "TIMEWHERE_DMG_FORMAT must be UDZO or UDRO."
@@ -104,7 +106,11 @@ TimeWhere $version 内部安装器
 仅供管理员批准的内部 Mac。不是 Developer ID 或 Apple 公证版本。
 EOF
 
-codesign --force --sign "$identity" "$installer_app"
+codesign_keychain_args=()
+if [[ -n "$keychain" ]]; then
+  codesign_keychain_args=(--keychain "$keychain")
+fi
+codesign --force --sign "$identity" "${codesign_keychain_args[@]}" "$installer_app"
 codesign --verify --strict --verbose=2 "$installer_app"
 
 mkdir -p "$(dirname "$output_dmg")"

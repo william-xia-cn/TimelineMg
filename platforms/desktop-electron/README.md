@@ -26,112 +26,47 @@ Mac package output:
 platforms/desktop-electron/dist/TimeWhere-0.3.4-mac-universal.zip
 ```
 
-The internal GitHub Actions lane additionally produces
+The local internal build lane additionally produces
 `TimeWhere-0.3.4-mac-internal-installer.dmg` and its SHA256 sidecar. This DMG is
 the default installation path for administrator-managed internal Macs; the
 signed Universal zip remains the manual recovery artifact.
 
 Note: mac 打包通常需要在 macOS 上执行 `npm run electron:package:mac`。当前 macOS artifact 目标是 Universal zip，覆盖 Intel Mac 和 Apple Silicon。如果在 Windows 上尝试该命令，可能会因平台能力限制而失败。
 
-## macOS GitHub Actions Packaging SOP
+## macOS Local Internal Packaging SOP
 
-Use this SOP when producing an internally self-signed macOS Universal zip with
-GitHub Actions. The workflow imports a password-protected internal signing
-certificate into an ephemeral runner keychain, signs and verifies
-`TimeWhere.app`, creates a final zip and SHA256 sidecar, and uploads a private
-Actions artifact. It is not Developer ID signing, notarization, a GitHub
-Release, auto-update publication, or external distribution approval.
+The approved administrator Mac is the default compiler and signing machine.
+The existing GitHub Actions workflow is retained only as an inactive fallback;
+do not trigger it for normal internal macOS builds.
 
 Prerequisites:
 
-- `gh` CLI is installed and logged in.
-- Current account has repository `workflow` permission.
-- The package candidate commit has been committed and pushed to `MacRelease`.
-- Product Owner has explicitly approved triggering the workflow with the
-  repository secret `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET`.
-- The repository Actions secrets below have been configured:
-  - `MACOS_CERTIFICATE_P12_BASE64`: one-line Base64 of the password-protected
-    internal code-signing `.p12`.
-  - `MACOS_CERTIFICATE_PASSWORD`: password used when exporting that `.p12`.
-  - `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET`: existing internal desktop OAuth
-    packaging input.
+- Node.js 22 and npm are installed.
+- `TimeWhere Internal Code Signing` and its private key exist in
+  `~/Library/Keychains/TimeWhere-Internal-Signing.keychain-db`.
+- The Desktop OAuth packaging input is available. It may be supplied at the
+  command's secure Terminal prompt, through `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET`,
+  or through ignored `platforms/desktop-electron/desktop-oauth.local.json` as
+  `{"client_secret":"..."}`. Never commit or print this value.
 
-Prepare the signing secrets on the approved administrator Mac:
-
-1. Create the `TimeWhere Internal Code Signing` self-signed Code Signing
-   identity in Keychain Access as described in
-   `docs/release/MACOS_INTERNAL_SELF_SIGNED_RELEASE.md`.
-2. Export the identity and private key as a password-protected `.p12` outside
-   the repository.
-3. Convert it to a one-line value without printing it to release evidence:
+From a clean, current `MacRelease` checkout, run:
 
 ```bash
-openssl base64 -A -in /secure/path/TimeWhere-Internal-Code-Signing.p12 \
-  | pbcopy
+npm run electron:package:mac:internal
 ```
 
-Paste the clipboard value into `MACOS_CERTIFICATE_P12_BASE64`, and store the
-export password separately in `MACOS_CERTIFICATE_PASSWORD`. Delete unnecessary
-export copies after the GitHub secret is confirmed; retain the authoritative
-identity in the administrator-controlled Keychain.
+If the dedicated signing keychain is locked, enter its password at the secure
+Terminal prompt. On this approved Mac, the command may reuse the existing
+`TimeWhere Internal Signing Keychain Password` login-keychain item without
+printing its value. The command installs the Electron package's locked dependencies with `npm ci`, builds
+the Universal app, exports only the public `.cer` to a temporary directory,
+signs and verifies the app, then creates the signed recovery zip, installer DMG,
+and both SHA256 sidecars under `artifacts/mac/local/<version>/`.
 
-1. Verify GitHub CLI login:
-
-```powershell
-gh auth status
-```
-
-2. Trigger the macOS workflow:
-
-```powershell
-gh workflow run timewhere-desktop-mac.yml --ref MacRelease \
-  -f signing_mode=internal-self-signed
-```
-
-The command returns a run URL. Record the numeric run id from the URL.
-
-3. Wait for completion:
-
-```powershell
-gh run watch <run_id> --exit-status
-```
-
-4. Download the artifact:
-
-```powershell
-New-Item -ItemType Directory -Force -Path artifacts/mac/<run_id> | Out-Null
-gh run download <run_id> --name TimeWhere-mac-internal-self-signed --dir artifacts/mac/<run_id>
-```
-
-5. Record package evidence:
-
-```powershell
-Get-ChildItem -LiteralPath artifacts/mac/<run_id> -Filter *.zip | Select-Object Name,Length,LastWriteTime
-Get-ChildItem -LiteralPath artifacts/mac/<run_id> -Filter *.zip | Get-FileHash -Algorithm SHA256
-git rev-parse HEAD
-git status --branch --short
-```
-
-Evidence to report:
-
-- commit SHA and branch
-- workflow run id
-- artifact name: `TimeWhere-mac-internal-self-signed`
-- zip file name, local path, byte size, and SHA256
-- signature identity and leaf-certificate SHA256 from the workflow log
-
-Secret and sharing boundary:
-
-- The workflow generates `desktop-oauth-secrets.js` from
-  `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET` and bundles the generated metadata
-  into the desktop artifact.
-- Do not write the raw secret value in docs, logs, release reports, commits, or
-  user-facing diagnostics.
-- The `.p12`, its password, and runner keychain must never be committed or
-  uploaded as workflow artifacts. The Actions artifact is retained for 7 days.
-- Uploading the macOS zip to a shared Google Drive folder or any external
-  destination requires separate explicit Product Owner approval acknowledging
-  that the artifact contains the internal Desktop OAuth client metadata secret.
+Existing same-version outputs are not overwritten by default. For an intentional
+rebuild, use `TIMEWHERE_OVERWRITE=1 npm run electron:package:mac:internal`.
+The private key, keychain, OAuth metadata input, and passwords are never copied
+into the output directory.
 ## Google Sync
 
 Desktop Google Drive `appDataFolder` sync uses an installed-app OAuth flow with PKCE and a localhost callback. The desktop OAuth client ID is tracked in source, and the Desktop client metadata secret is generated into `desktop-oauth-secrets.js` from ignored local/CI packaging input before building internal desktop artifacts. `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_ID` is only an optional override for testing or client rotation.

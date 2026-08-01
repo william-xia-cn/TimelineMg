@@ -23,7 +23,7 @@ const rootInstaller = read('scripts/release/install-mac-internal-root.sh');
 const terminalInstaller = read('scripts/release/install-mac-internal-terminal.command');
 const dmgBuilder = read('scripts/release/build-mac-internal-installer-dmg.sh');
 const installerApp = read('scripts/release/Install TimeWhere.js');
-const workflow = read('.github/workflows/timewhere-desktop-mac.yml');
+const localBuilder = read('scripts/release/build-mac-internal-local.sh');
 
 check('installer pins the approved certificate SHA256',
   rootInstaller.includes('9dd8abe0acc893bf30495f494cea8cf7b404b90120d5f986e3551ee47fdf96bf'));
@@ -52,8 +52,12 @@ check('native installer uses one interactive sudo authorization in Terminal',
     && terminalInstaller.includes('/usr/bin/sudo --')
     && !installerApp.includes("Application('Terminal')")
     && !installerApp.includes('administratorPrivileges: true'));
-check('workflow builds the internal installer DMG',
-  workflow.includes('build-mac-internal-installer-dmg.sh'));
+check('local Mac entrypoint builds and signs the internal installer DMG',
+  localBuilder.includes('npm run electron:package:mac')
+    && localBuilder.includes('sign-mac-self-signed.sh')
+    && localBuilder.includes('build-mac-internal-installer-dmg.sh')
+    && localBuilder.includes('read -r -s')
+    && localBuilder.includes('artifacts/mac/local'));
 
 console.log(`\nTotal: ${passed + failed} checks   PASS ${passed}   FAIL ${failed}`);
 if (failed > 0) process.exit(1);

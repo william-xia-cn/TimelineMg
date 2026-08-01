@@ -11,7 +11,7 @@
     "electron:smoke": "powershell -ExecutionPolicy Bypass -Command \"$env:TIMEWHERE_ELECTRON_SMOKE='1'; npm --prefix platforms/desktop-electron start\"",
     "electron:package:win": "npm --prefix platforms/desktop-electron run package:win",
     "electron:package:mac": "npm --prefix platforms/desktop-electron run package:mac",
-    "electron:package:mac:remote": "gh workflow run timewhere-desktop-mac.yml",
+    "electron:package:mac:internal": "bash scripts/release/build-mac-internal-local.sh",
     "macos:widget:build": "xcodebuild -project platforms/macos-widget/TimeWhereWidget.xcodeproj -scheme TimeWhereWidget -configuration Debug CODE_SIGNING_ALLOWED=NO",
     "package:local": "powershell -ExecutionPolicy Bypass -File tools/package-local-unpacked.ps1",
     "package:cws": "powershell -ExecutionPolicy Bypass -File tools/package-cws.ps1",

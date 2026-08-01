@@ -29,36 +29,31 @@ Approved installation paths:
 The installer may add only the pinned public certificate to the System Keychain with Code Signing trust and may remove quarantine only from the fully verified `/Applications/TimeWhere.app`. It must not disable Gatekeeper or carry any private key or certificate password.
 
 Public macOS release remains a separate future lane requiring Apple Developer Program, Developer ID Application certificate, hardened runtime, notarization, stapling, and Gatekeeper verification.
-## GitHub Actions Internal Self-Signed Package SOP
+## Local Mac Internal Self-Signed Package SOP
 
-For the workflow that triggers the macOS Universal build, signs it with the
-internal identity, downloads the GitHub Actions artifact, and records SHA256
-evidence, use
-`platforms/desktop-electron/README.md` -> `macOS GitHub Actions Packaging SOP`.
+The approved signing Mac now performs the macOS Universal build, self-signing,
+verification, zip packaging, DMG creation, and checksum generation locally. Use
+`npm run electron:package:mac:internal` as documented in
+`platforms/desktop-electron/README.md` -> `macOS Local Internal Packaging SOP`.
 
 Boundary rules:
 
-- Triggering `timewhere-desktop-mac.yml` requires explicit Product Owner approval
-  because the workflow uses `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET` to generate
-  the internal desktop OAuth metadata module.
+- The ignored local OAuth packaging input is used only to generate the bundled
+  desktop metadata module and must never be committed or printed.
 - The generated macOS zip contains artifact-bundled Desktop OAuth client metadata.
 - Uploading that zip to a shared Google Drive folder or any external destination
   requires separate explicit Product Owner approval for that sharing action.
 - This SOP still does not approve Developer ID signing, notarization, GitHub
   Release creation, public distribution, or auto-update publication.
 
-GitHub Actions internal signing uses three repository secrets:
-
-- `MACOS_CERTIFICATE_P12_BASE64`
-- `MACOS_CERTIFICATE_PASSWORD`
-- `TIMEWHERE_GOOGLE_DESKTOP_CLIENT_SECRET`
-
-The workflow imports the `.p12` into an ephemeral keychain, blocks Developer ID
-identities in this lane, signs and verifies the generated `TimeWhere.app`, then
-packages the final signed app with a SHA256 sidecar. The private certificate,
-password, temporary keychain, and generated OAuth metadata module are never
-uploaded as artifacts. Use the `MacRelease` branch for this packaging lane and
-do not make product-code edits on that branch.
+The build uses the existing dedicated local signing keychain and exports only
+the public certificate into a temporary directory. It blocks Developer ID
+identities, verifies the signed Universal app, and writes only final packages
+and sidecars under `artifacts/mac/local/<version>/`. The private key, passwords,
+keychain, and ignored OAuth input are never included in the artifacts. Use the
+`MacRelease` branch for this packaging lane and do not make product-code edits
+on that branch. The GitHub Actions workflow is retained only as an inactive
+fallback and is not the default build path.
 
 ## Usage Agent Boundary
 

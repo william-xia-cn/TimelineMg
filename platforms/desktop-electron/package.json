@@ -9,7 +9,7 @@
     "smoke": "electron .",
     "prepackage:win": "powershell -ExecutionPolicy Bypass -File ../../tools/prepare-desktop-oauth-secret.ps1",
     "package:win": "electron-builder --win portable --x64",
-    "prepackage:mac": "pwsh -ExecutionPolicy Bypass -File ../../tools/prepare-desktop-oauth-secret.ps1",
+    "prepackage:mac": "node ../../tools/prepare-desktop-oauth-secret.js",
     "package:mac": "electron-builder --mac zip --universal"
   },
   "dependencies": {
