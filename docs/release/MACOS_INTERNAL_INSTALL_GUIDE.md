@@ -21,10 +21,10 @@ npm run electron:package:mac:internal
 DMG 与 `.sha256` sidecar。2026-08-01 本机验证基线：
 
 - 构建分支：`MacRelease`（基于 `58401f941d242c4b7e40cb7f31b713bc3a9c22b5` 加本机发布流程改动）
-- DMG 文件大小：`222684779` bytes
-- DMG SHA256：`c4249228cfd91505dd32b08d504e560e0d4d9ef1b01e61d07590cb2350bcb25a`
-- 签名 ZIP 文件大小：`200572474` bytes
-- 签名 ZIP SHA256：`86dcfe1d70f4c8edec56030fade07f78a25337ce0fb8c14630108fd28b667e08`
+- DMG 文件大小：`222684795` bytes
+- DMG SHA256：`4f42ae03b2cc28f2fed7e15f83302293ab9363c17c7fb8256fc3111dd8d5a1b9`
+- 签名 ZIP 文件大小：`200572491` bytes
+- 签名 ZIP SHA256：`51723b7b875ba13d3b7fae8bee7f0ffa29d36023c2331a1c93bda937511f373c`
 - 公钥证书 SHA256：`9dd8abe0acc893bf30495f494cea8cf7b404b90120d5f986e3551ee47fdf96bf`
 - 安装器与 payload 签名身份：`TimeWhere Internal Code Signing`
 - Payload Bundle ID：`cn.williamxia.timewhere`
