@@ -50,15 +50,35 @@ Desktop 未打开、renderer 未 ready 或 active profile 已变化时，tool ca
 - MCP 不接受任意 `user_id` 参数，不跨 profile 操作数据。
 - MCP 不返回 OAuth token、cookies、Google account key、raw import source URL 或 Google sync metadata。
 
-## 调用方式
+## 标准注册方式
 
-Desktop package 提供：
+TimeWhere 的标准 MCP server 名称是 `timewhere-desktop-mcp`。本机 Codex 全局注册由仓库脚本维护：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/register-timewhere-mcp.ps1
+```
+
+标准 Codex 配置块如下：
+
+```toml
+[mcp_servers.timewhere-desktop-mcp]
+command = 'C:\Program Files\nodejs\node.exe'
+args = ['platforms/desktop-electron/mcp-stdio-server.js']
+cwd = 'D:\Codex\ThmeWhere-Master'
+startup_timeout_sec = 30.0
+tool_timeout_sec = 60.0
+default_tools_approval_mode = "writes"
+```
+
+注册后，新开的 Codex 会话应能发现 `timewhere-desktop-mcp`。使用前必须打开 TimeWhere Desktop，并等待页面加载完成；Desktop 未打开或 renderer 未 ready 时返回 `desktop_not_ready`。底层手动启动命令仍是：
 
 ```bash
 npm --prefix platforms/desktop-electron run mcp:stdio
 ```
 
 如果 MCP client 与 Desktop 进程不在同一默认路径规则下启动，可通过 `TIMEWHERE_MCP_BRIDGE_PATH` 或 `TIMEWHERE_MCP_BRIDGE_SEED` 显式指定同一个本机 bridge path。
+
+标准只读调用示例：先调用 `timewhere_tasks_list`，参数 `{ "progress": "in_progress", "limit": 10 }` 读取当前 active profile 的进行中任务摘要；需要完整字段时再对目标 `task_id` 调用 `timewhere_task_get`。
 
 ## 测试
 

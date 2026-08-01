@@ -57,11 +57,17 @@ assert('bridge path is local pipe or unix socket', /timewhere-mcp/.test(McpServe
 const electronMain = read('platforms/desktop-electron/main.js');
 const preload = read('platforms/desktop-electron/preload.js');
 const electronPackage = JSON.parse(read('platforms/desktop-electron/package.json'));
+const registerScript = read('tools/register-timewhere-mcp.ps1');
+const mdpDoc = read('docs/MDP_AGENT_INTERFACE.md');
+const desktopReadme = read('platforms/desktop-electron/README.md');
 assert('Electron main starts a local MCP bridge socket', electronMain.includes('startMcpBridgeServer()') && electronMain.includes('net.createServer'));
 assert('Electron main routes MCP tool calls to renderer and checks profile changes', electronMain.includes("message.type === 'tool_call'") && electronMain.includes('profile_changed'));
 assert('Electron main returns desktop_not_ready when renderer bridge is unavailable', electronMain.includes('desktop_not_ready') && electronMain.includes('mcpRendererReady'));
 assert('Electron preload exposes MCP request response bridge only through contextBridge', preload.includes('onMcpRequest(callback)') && preload.includes('replyMcpRequest(payload') && preload.includes('markMcpRendererReady'));
 assert('Electron package ships stdio MCP server and script', electronPackage.scripts['mcp:stdio'] === 'node mcp-stdio-server.js' && electronPackage.build.files.includes('mcp-stdio-server.js'));
+assert('Codex registration script registers standard TimeWhere MCP server', registerScript.includes('[mcp_servers.timewhere-desktop-mcp]') && registerScript.includes('D:\\Codex\\ThmeWhere-Master') && registerScript.includes('platforms/desktop-electron/mcp-stdio-server.js'));
+assert('MCP documentation explains global registration and standard read call', mdpDoc.includes('timewhere-desktop-mcp') && mdpDoc.includes('tools/register-timewhere-mcp.ps1') && mdpDoc.includes('timewhere_tasks_list'));
+assert('Desktop README points agent access to registered MCP server', desktopReadme.includes('register the Desktop MCP server once') && desktopReadme.includes('timewhere-desktop-mcp'));
 
 for (const html of [
     'extension/pages/focus/focus.html',

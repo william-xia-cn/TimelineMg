@@ -13,6 +13,8 @@ npm run electron:smoke
 npm run electron:package:win
 npm run electron:package:mac
 ```
+For agent access, register the Desktop MCP server once with `tools/register-timewhere-mcp.ps1`; daily MCP clients should use the registered `timewhere-desktop-mcp` server instead of hand-running the stdio command.
+
 
 Windows package output:
 
