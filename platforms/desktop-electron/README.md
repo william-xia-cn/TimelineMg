@@ -17,7 +17,7 @@ npm run electron:package:mac
 Windows package output:
 
 ```text
-platforms/desktop-electron/dist/TimeWhere-0.3.2-win-portable.exe
+platforms/desktop-electron/dist/TimeWhere-0.3.4-win-portable.exe
 ```
 
 Mac package output:
@@ -27,6 +27,16 @@ platforms/desktop-electron/dist/TimeWhere-0.3.4-mac-universal.zip
 ```
 
 Note: mac 打包通常需要在 macOS 上执行 `npm run electron:package:mac`。当前 macOS artifact 目标是 Universal zip，覆盖 Intel Mac 和 Apple Silicon。如果在 Windows 上尝试该命令，可能会因平台能力限制而失败。
+
+## Windows Artifact Handoff Standard
+
+- User-facing project directory is `D:\Codex\ThmeWhere-Master`; Codex worktrees are build environments only.
+- After `npm run electron:package:win`, copy the portable exe back to `D:\Codex\ThmeWhere-Master\platforms\desktop-electron\dist\`.
+- Also copy the same portable exe to `D:\OneDrive\应用\` for direct user access.
+- If the project `dist` directory is missing, create it before copying.
+- Verify source, project directory, and OneDrive copies with SHA256; report only the two user-facing artifact paths, byte sizes, and SHA256 values.
+- Do not copy, print, commit, or publish Desktop OAuth secret files.
+
 
 ## macOS GitHub Actions Packaging SOP
 
