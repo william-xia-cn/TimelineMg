@@ -26,6 +26,8 @@ MCP client
 
 Desktop 未打开、renderer 未 ready 或 active profile 已变化时，tool call 返回错误，不直接读 IndexedDB 文件，也不修改 Google Drive sync document 或 IndexedDB schema。
 
+stdio MCP server 同时兼容 Content-Length 消息帧和 newline-delimited JSON-RPC；回复会沿用请求的 framing，以兼容不同 Codex 客户端版本。
+
 ## MCP tools
 
 | Tool | 用途 | 写入要求 |

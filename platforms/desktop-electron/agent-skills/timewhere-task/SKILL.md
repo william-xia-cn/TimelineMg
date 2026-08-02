@@ -11,11 +11,11 @@ Use the local TimeWhere Desktop MCP server as the standard task interface. Do no
 
 - MCP server id: `timewhere_desktop_mcp` when registered as a global Codex MCP server.
 - MCP display/serverInfo name: `timewhere-desktop-mcp`.
-- Standard server script: `D:\Codex\ThmeWhere-Master\platforms\desktop-electron\mcp-stdio-server.js`.
+- Standard server command: `<TimeWhere portable exe> --timewhere-mcp-stdio`; source-tree `mcp-stdio-server.js` is only a developer fallback.
 - TimeWhere Desktop must be open and renderer ready before task calls can succeed.
 - Tools operate only on the current TimeWhere Desktop active profile.
 
-If MCP tools are not available in the current Codex session, say that the TimeWhere MCP registration is not exposed to this session and verify with `codex mcp list --json`; do not fall back to editing local database files.
+If MCP tools are not available in the current Codex session, say that the TimeWhere MCP registration is not exposed to this session and verify with `codex mcp list --json`; the registered command should point to the portable exe with `--timewhere-mcp-stdio`. Do not fall back to editing local database files.
 
 ## Tool Map
 

@@ -49,11 +49,15 @@ const deleteTool = McpServer.TOOLS.find(tool => tool.name === 'timewhere_task_de
 assert('create tool requires title due_date and idempotency', ['title', 'due_date', 'idempotency_key'].every(key => createTool.inputSchema.required.includes(key)));
 assert('delete tool requires confirmation and idempotency', ['task_id', 'user_confirmed', 'idempotency_key'].every(key => deleteTool.inputSchema.required.includes(key)));
 assert('stdio adapter uses Content-Length framing', McpServer.encodeMessage({ jsonrpc: '2.0', id: 1, result: {} }).toString('utf8').startsWith('Content-Length:'));
+assert('stdio adapter exports newline framing helper', typeof McpServer.encodeLineMessage === 'function');
 
 const parser = McpServer.parseFrames();
 const encoded = McpServer.encodeMessage({ jsonrpc: '2.0', id: 7, method: 'tools/list' });
 assertEqual('stdio parser decodes one framed message', parser(encoded)[0].id, 7);
-assert('bridge path is local pipe or unix socket', /timewhere-mcp/.test(McpServer.defaultBridgePath()));
+const lineParser = McpServer.parseFrames();
+const lineEncoded = McpServer.encodeLineMessage({ jsonrpc: '2.0', id: 8, method: 'tools/list' });
+assertEqual('stdio parser decodes one newline-delimited message', lineParser(lineEncoded)[0].id, 8);
+assert('stdio adapter can encode newline-delimited JSON-RPC', lineEncoded.toString('utf8').endsWith('\n') && !lineEncoded.toString('utf8').startsWith('Content-Length:'));assert('bridge path is local pipe or unix socket', /timewhere-mcp/.test(McpServer.defaultBridgePath()));
 const stableBridgeHash = crypto.createHash('sha256').update('cn.williamxia.timewhere').digest('hex').slice(0, 16);
 assert('bridge path uses stable app id seed for portable builds', McpServer.defaultBridgePath().includes(stableBridgeHash));
 
@@ -71,6 +75,7 @@ assert('Electron main returns desktop_not_ready when renderer bridge is unavaila
 assert('Electron preload exposes MCP request response bridge only through contextBridge', preload.includes('onMcpRequest(callback)') && preload.includes('replyMcpRequest(payload') && preload.includes('markMcpRendererReady'));
 assert('Electron package ships stdio MCP server and script', electronPackage.scripts['mcp:stdio'] === 'node mcp-stdio-server.js' && electronPackage.build.files.includes('mcp-stdio-server.js'));
 assert('Electron package bundles TimeWhere Task skill resources', electronPackage.build.extraResources.some(resource => resource.from === 'agent-skills' && resource.to === 'agent-skills') && bundledSkill.includes('name: timewhere-task'));
+assert('Bundled TimeWhere Task skill documents portable MCP command as standard', bundledSkill.includes('<TimeWhere portable exe> --timewhere-mcp-stdio') && bundledSkill.includes('developer fallback'));
 assert('Electron main installs bundled TimeWhere Task skill on startup', electronMain.includes('installBundledAgentSkillInBackground()') && electronMain.includes('agentSkill.installTimeWhereTask') && electronMain.includes('agentSkill.timewhereTaskStatus'));
 assert('Electron main self-registers portable exe as the Codex MCP command', electronMain.includes('--timewhere-mcp-stdio') && electronMain.includes('PORTABLE_EXECUTABLE_FILE') && electronMain.includes('agentMcp.registerTimeWhereDesktop') && electronMain.includes('codexMcpServerName'));
 assert('Platform bridge exposes TimeWhere Task skill and MCP registration helpers', platformJs.includes('getAgentSkillStatus') && platformJs.includes('installTimeWhereTaskSkill') && platformJs.includes('getAgentMcpRegistrationStatus') && platformJs.includes('registerTimeWhereDesktopMcp'));

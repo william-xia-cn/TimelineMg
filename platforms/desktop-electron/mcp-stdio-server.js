@@ -116,13 +116,35 @@ const TOOLS = [
 
 let boundProfileId = null;
 
+const FRAMING = {
+  CONTENT_LENGTH: 'content-length',
+  JSON_LINE: 'json-line'
+};
+
+function markFraming(message, framing) {
+  Object.defineProperty(message, '__timewhere_framing', {
+    value: framing,
+    enumerable: false,
+    configurable: true
+  });
+  return message;
+}
+
+function messageFraming(message) {
+  return message?.__timewhere_framing || FRAMING.CONTENT_LENGTH;
+}
+
 function encodeMessage(message) {
   const body = Buffer.from(JSON.stringify(message), 'utf8');
   return Buffer.concat([Buffer.from(`Content-Length: ${body.length}\r\n\r\n`, 'ascii'), body]);
 }
 
-function writeMessage(message) {
-  process.stdout.write(encodeMessage(message));
+function encodeLineMessage(message) {
+  return Buffer.from(`${JSON.stringify(message)}\n`, 'utf8');
+}
+
+function writeMessage(message, framing = FRAMING.CONTENT_LENGTH) {
+  process.stdout.write(framing === FRAMING.JSON_LINE ? encodeLineMessage(message) : encodeMessage(message));
 }
 
 function parseFrames() {
@@ -130,18 +152,28 @@ function parseFrames() {
   return chunk => {
     buffer = Buffer.concat([buffer, chunk]);
     const messages = [];
-    while (true) {
-      const headerEnd = buffer.indexOf('\r\n\r\n');
-      if (headerEnd < 0) break;
-      const header = buffer.slice(0, headerEnd).toString('ascii');
-      const match = header.match(/Content-Length:\s*(\d+)/i);
-      if (!match) throw new Error('Missing Content-Length header');
-      const length = Number(match[1]);
-      const bodyStart = headerEnd + 4;
-      const bodyEnd = bodyStart + length;
-      if (buffer.length < bodyEnd) break;
-      messages.push(JSON.parse(buffer.slice(bodyStart, bodyEnd).toString('utf8')));
-      buffer = buffer.slice(bodyEnd);
+    while (buffer.length > 0) {
+      if (/^Content-Length:/i.test(buffer.slice(0, Math.min(buffer.length, 32)).toString('ascii'))) {
+        const headerEnd = buffer.indexOf('\r\n\r\n');
+        if (headerEnd < 0) break;
+        const header = buffer.slice(0, headerEnd).toString('ascii');
+        const match = header.match(/Content-Length:\s*(\d+)/i);
+        if (!match) throw new Error('Missing Content-Length header');
+        const length = Number(match[1]);
+        const bodyStart = headerEnd + 4;
+        const bodyEnd = bodyStart + length;
+        if (buffer.length < bodyEnd) break;
+        messages.push(markFraming(JSON.parse(buffer.slice(bodyStart, bodyEnd).toString('utf8')), FRAMING.CONTENT_LENGTH));
+        buffer = buffer.slice(bodyEnd);
+        continue;
+      }
+
+      const lineEnd = buffer.indexOf('\n');
+      if (lineEnd < 0) break;
+      const line = buffer.slice(0, lineEnd).toString('utf8').trim();
+      buffer = buffer.slice(lineEnd + 1);
+      if (!line) continue;
+      messages.push(markFraming(JSON.parse(line), FRAMING.JSON_LINE));
     }
     return messages;
   };
@@ -229,8 +261,9 @@ function startStdioServer() {
       return;
     }
     for (const message of messages) {
+      const framing = messageFraming(message);
       handleRequest(message)
-        .then(response => { if (response) writeMessage(response); })
+        .then(response => { if (response) writeMessage(response, framing); })
         .catch(error => writeMessage({
           jsonrpc: '2.0',
           id: message.id ?? null,
@@ -242,13 +275,12 @@ function startStdioServer() {
               ...(error.data || {})
             }
           }
-        }));
+        }, framing));
     }
   });
 }
-
 if (require.main === module) {
   startStdioServer();
 }
 
-module.exports = { TOOLS, TASK_SUMMARY_SCHEMA, defaultBridgePath, encodeMessage, parseFrames, startStdioServer };
+module.exports = { TOOLS, TASK_SUMMARY_SCHEMA, defaultBridgePath, encodeMessage, encodeLineMessage, parseFrames, startStdioServer };
