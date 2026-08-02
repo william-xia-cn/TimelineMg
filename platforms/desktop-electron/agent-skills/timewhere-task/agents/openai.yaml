@@ -1,0 +1,3 @@
+display_name: TimeWhere Task
+short_description: Use TimeWhere Desktop MCP to manage tasks.
+default_prompt: Read and manage my TimeWhere tasks.

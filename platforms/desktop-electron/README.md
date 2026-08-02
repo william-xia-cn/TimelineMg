@@ -15,6 +15,8 @@ npm run electron:package:mac
 ```
 For agent access, register the Desktop MCP server once with `tools/register-timewhere-mcp.ps1`; daily MCP clients should use the registered `timewhere-desktop-mcp` server instead of hand-running the stdio command. The MCP bridge uses a stable app-id pipe by default, so Windows portable exe launches from a temporary extraction directory remain reachable without setting `TIMEWHERE_MCP_BRIDGE_PATH`.
 
+The portable package bundles gent-skills/timewhere-task and installs or updates it to the user's Codex skill directory on startup. This keeps the Agent task CRUD instructions shipped with the app instead of relying on a repository checkout.
+
 
 Windows package output:
 

@@ -63,11 +63,16 @@ const electronPackage = JSON.parse(read('platforms/desktop-electron/package.json
 const registerScript = read('tools/register-timewhere-mcp.ps1');
 const mdpDoc = read('docs/MDP_AGENT_INTERFACE.md');
 const desktopReadme = read('platforms/desktop-electron/README.md');
+const platformJs = read('extension/shared/js/platform.js');
+const bundledSkill = read('platforms/desktop-electron/agent-skills/timewhere-task/SKILL.md');
 assert('Electron main starts a local MCP bridge socket', electronMain.includes('startMcpBridgeServer()') && electronMain.includes('net.createServer'));
 assert('Electron main routes MCP tool calls to renderer and checks profile changes', electronMain.includes("message.type === 'tool_call'") && electronMain.includes('profile_changed'));
 assert('Electron main returns desktop_not_ready when renderer bridge is unavailable', electronMain.includes('desktop_not_ready') && electronMain.includes('mcpRendererReady'));
 assert('Electron preload exposes MCP request response bridge only through contextBridge', preload.includes('onMcpRequest(callback)') && preload.includes('replyMcpRequest(payload') && preload.includes('markMcpRendererReady'));
 assert('Electron package ships stdio MCP server and script', electronPackage.scripts['mcp:stdio'] === 'node mcp-stdio-server.js' && electronPackage.build.files.includes('mcp-stdio-server.js'));
+assert('Electron package bundles TimeWhere Task skill resources', electronPackage.build.extraResources.some(resource => resource.from === 'agent-skills' && resource.to === 'agent-skills') && bundledSkill.includes('name: timewhere-task'));
+assert('Electron main installs bundled TimeWhere Task skill on startup', electronMain.includes('installBundledAgentSkillInBackground()') && electronMain.includes('agentSkill.installTimeWhereTask') && electronMain.includes('agentSkill.timewhereTaskStatus'));
+assert('Platform bridge exposes TimeWhere Task skill install helpers', platformJs.includes('getAgentSkillStatus') && platformJs.includes('installTimeWhereTaskSkill'));
 assert('Codex registration script registers standard TimeWhere MCP server', registerScript.includes('mcp add') && registerScript.includes('timewhere_desktop_mcp') && registerScript.includes('D:\\Codex\\ThmeWhere-Master') && registerScript.includes('mcp-stdio-server.js'));
 assert('MCP documentation explains global registration and standard read call', mdpDoc.includes('timewhere-desktop-mcp') && mdpDoc.includes('timewhere_desktop_mcp') && mdpDoc.includes('tools/register-timewhere-mcp.ps1') && mdpDoc.includes('timewhere_tasks_list'));
 assert('Desktop README points agent access to registered MCP server', desktopReadme.includes('register the Desktop MCP server once') && desktopReadme.includes('timewhere-desktop-mcp'));

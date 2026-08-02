@@ -644,6 +644,90 @@ async function writeWidgetSnapshot(snapshot = {}) {
   }
 }
 
+const bundledAgentSkillName = 'timewhere-task';
+
+function bundledAgentSkillRoot() {
+  const packagedRoot = process.resourcesPath
+    ? path.join(process.resourcesPath, 'agent-skills', bundledAgentSkillName)
+    : null;
+  if (packagedRoot && fs.existsSync(path.join(packagedRoot, 'SKILL.md'))) return packagedRoot;
+  return path.join(__dirname, 'agent-skills', bundledAgentSkillName);
+}
+
+function codexAgentSkillRoot() {
+  const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+  return path.join(codexHome, 'skills', bundledAgentSkillName);
+}
+
+async function sha256File(filePath) {
+  const bytes = await fsp.readFile(filePath);
+  return crypto.createHash('sha256').update(bytes).digest('hex');
+}
+
+async function getBundledAgentSkillStatus() {
+  const sourceRoot = bundledAgentSkillRoot();
+  const targetRoot = codexAgentSkillRoot();
+  const sourceSkill = path.join(sourceRoot, 'SKILL.md');
+  const targetSkill = path.join(targetRoot, 'SKILL.md');
+  const sourceExists = fs.existsSync(sourceSkill);
+  const installed = fs.existsSync(targetSkill);
+  const status = {
+    status: 'ok',
+    skill: bundledAgentSkillName,
+    source_path: sourceRoot,
+    target_path: targetRoot,
+    source_exists: sourceExists,
+    installed,
+    source_sha256: null,
+    installed_sha256: null,
+    up_to_date: false
+  };
+  if (sourceExists) status.source_sha256 = await sha256File(sourceSkill);
+  if (installed) status.installed_sha256 = await sha256File(targetSkill);
+  status.up_to_date = Boolean(status.source_sha256 && status.source_sha256 === status.installed_sha256);
+  return status;
+}
+
+async function installBundledAgentSkill(options = {}) {
+  const sourceRoot = bundledAgentSkillRoot();
+  const targetRoot = codexAgentSkillRoot();
+  const sourceSkill = path.join(sourceRoot, 'SKILL.md');
+  const sourceMetadata = path.join(sourceRoot, 'agents', 'openai.yaml');
+  if (!fs.existsSync(sourceSkill)) {
+    return {
+      status: 'failed',
+      reason: 'bundled_skill_missing',
+      skill: bundledAgentSkillName,
+      source_path: sourceRoot
+    };
+  }
+
+  await fsp.mkdir(path.join(targetRoot, 'agents'), { recursive: true });
+  await fsp.copyFile(sourceSkill, path.join(targetRoot, 'SKILL.md'));
+  if (fs.existsSync(sourceMetadata)) {
+    await fsp.copyFile(sourceMetadata, path.join(targetRoot, 'agents', 'openai.yaml'));
+  }
+  const status = await getBundledAgentSkillStatus();
+  return {
+    ...status,
+    status: status.up_to_date ? 'installed' : 'failed',
+    reason: status.up_to_date ? null : 'installed_skill_hash_mismatch',
+    automatic: options.automatic === true,
+    requires_new_codex_session: true
+  };
+}
+
+function installBundledAgentSkillInBackground() {
+  installBundledAgentSkill({ automatic: true })
+    .then(result => {
+      if (result.status === 'installed') {
+        console.log(`[Desktop] Agent skill installed: ${result.skill}`);
+      } else {
+        console.warn(`[Desktop] Agent skill install skipped: ${result.reason || result.status}`);
+      }
+    })
+    .catch(error => console.warn(`[Desktop] Agent skill install failed: ${error.message}`));
+}
 async function loadRoute(win, route = defaultRoute) {
   const resolved = resolveExtensionRoute(route);
   const url = `${pathToFileURL(resolved.filePath).toString()}${resolved.search}${resolved.hash}`;
@@ -1082,6 +1166,12 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
   if (method === 'system.writeWidgetSnapshot') {
     return await writeWidgetSnapshot(payload);
   }
+  if (method === 'agentSkill.timewhereTaskStatus') {
+    return await getBundledAgentSkillStatus();
+  }
+  if (method === 'agentSkill.installTimeWhereTask') {
+    return await installBundledAgentSkill({ automatic: false });
+  }
   if (method === 'system.getDesktopProfile') {
     return getDesktopProfileSnapshot();
   }
@@ -1120,6 +1210,7 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
       pendingProtocolRoute = null;
       createTray();
       startMcpBridgeServer();
+      installBundledAgentSkillInBackground();
       syncTrayMenuLabels();
     })
     .catch(error => {
@@ -1128,6 +1219,7 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
       createMainWindow();
       createTray();
       startMcpBridgeServer();
+      installBundledAgentSkillInBackground();
       syncTrayMenuLabels();
     });
   app.on('activate', () => {

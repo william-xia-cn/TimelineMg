@@ -117,7 +117,7 @@ assert('TimeWherePlatform exposes desktop-capable contract',
     && platformJs.includes("chromeBridge: ['connectExtension', 'getStatus']")
     && platformJs.includes("sync: ['getStatus', 'requestRun', 'pause', 'resume']")
     && platformJs.includes("external: ['openUrl']")
-    && platformJs.includes("system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'confirmGoogleAccountSwitch']"));
+    && platformJs.includes("system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'confirmGoogleAccountSwitch', 'getAgentSkillStatus', 'installTimeWhereTaskSkill']"));
 assert('Chrome adapter wraps expected platform APIs',
     platformJs.includes("name: 'chrome-extension'")
     && platformJs.includes('chromeRef.tabs.create')

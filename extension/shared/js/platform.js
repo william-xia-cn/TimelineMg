@@ -460,6 +460,12 @@
                 },
                 confirmGoogleAccountSwitch(payload = {}) {
                     return call('system.confirmGoogleAccountSwitch', payload);
+                },
+                getAgentSkillStatus() {
+                    return call('agentSkill.timewhereTaskStatus');
+                },
+                installTimeWhereTaskSkill() {
+                    return call('agentSkill.installTimeWhereTask');
                 }
             }
         };
@@ -517,7 +523,9 @@
                 setDesktopSettings: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
                 writeWidgetSnapshot: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
                 getDesktopProfile: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
-                confirmGoogleAccountSwitch: () => ({ status: 'not_supported', reason: 'platform_unavailable' })
+                confirmGoogleAccountSwitch: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
+                getAgentSkillStatus: () => ({ status: 'not_supported', reason: 'platform_unavailable' }),
+                installTimeWhereTaskSkill: () => ({ status: 'not_supported', reason: 'platform_unavailable' })
             }
         };
     }
@@ -537,7 +545,6 @@
         chromeBridge: ['connectExtension', 'getStatus'],
         sync: ['getStatus', 'requestRun', 'pause', 'resume'],
         external: ['openUrl'],
-        system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'confirmGoogleAccountSwitch']
+        system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'confirmGoogleAccountSwitch', 'getAgentSkillStatus', 'installTimeWhereTaskSkill']
     };
 })(typeof globalThis !== 'undefined' ? globalThis : window);
-
