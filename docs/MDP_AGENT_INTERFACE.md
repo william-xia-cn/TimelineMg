@@ -70,6 +70,15 @@ codex mcp add timewhere_desktop_mcp -- "C:\Program Files\nodejs\node.exe" "D:\Co
 codex mcp list --json
 ```
 
+注册 MCP 只负责让工具进入 Codex 可调用工具集。Agent 的日常调用规范由用户级 skill `timewhere-task` 维护，位置为：
+
+```text
+C:\Users\William\.codex\skills\timewhere-task\SKILL.md
+```
+
+该 skill 的显示名是 `TimeWhere Task`，用于读取 Dashboard 当前任务、任务增删改查、start/complete/reopen 等请求。它规定优先调用 TimeWhere MCP，不使用 Chrome 控件，不直接读 IndexedDB，写入必须带 `idempotency_key`，删除必须有显式确认。
+
+Plugin 不是 TimeWhere MCP 的主标准入口；只有在需要分发一组 MCP/skills/apps 能力时才考虑使用 plugin。
 注册后，新开的 Codex 会话应能发现 `timewhere-desktop-mcp`。使用前必须打开 TimeWhere Desktop，并等待页面加载完成；Desktop 未打开或 renderer 未 ready 时返回 `desktop_not_ready`。底层手动启动命令仍是：
 
 ```bash
