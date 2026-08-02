@@ -1,15 +1,38 @@
 param(
-    [string]$CodexConfigPath = (Join-Path $env:USERPROFILE '.codex\config.toml'),
+    [string]$CodexCliPath = '',
     [string]$ProjectRoot = 'D:\Codex\ThmeWhere-Master',
-    [string]$NodePath = 'C:\Program Files\nodejs\node.exe'
+    [string]$NodePath = 'C:\Program Files\nodejs\node.exe',
+    [string]$ServerName = 'timewhere_desktop_mcp'
 )
 
 $ErrorActionPreference = 'Stop'
 
-$serverName = 'timewhere_desktop_mcp'
 $serverDisplayName = 'timewhere-desktop-mcp'
-$scriptRelativePath = 'platforms/desktop-electron/mcp-stdio-server.js'
-$serverScriptPath = Join-Path $ProjectRoot $scriptRelativePath
+$serverScriptPath = Join-Path $ProjectRoot 'platforms\desktop-electron\mcp-stdio-server.js'
+$configPath = Join-Path $env:USERPROFILE '.codex\config.toml'
+
+function Resolve-CodexCliPath {
+    param([string]$ExplicitPath)
+
+    if ($ExplicitPath -and (Test-Path -LiteralPath $ExplicitPath)) {
+        return $ExplicitPath
+    }
+
+    if (Test-Path -LiteralPath $configPath) {
+        $configText = Get-Content -Raw -LiteralPath $configPath
+        $match = [regex]::Match($configText, "CODEX_CLI_PATH\s*=\s*(['""'])(?<path>.+?)\1")
+        if ($match.Success -and (Test-Path -LiteralPath $match.Groups['path'].Value)) {
+            return $match.Groups['path'].Value
+        }
+    }
+
+    $command = Get-Command codex -ErrorAction SilentlyContinue
+    if ($command -and (Test-Path -LiteralPath $command.Source)) {
+        return $command.Source
+    }
+
+    throw 'Codex CLI executable not found. Pass -CodexCliPath explicitly.'
+}
 
 if (-not (Test-Path -LiteralPath $NodePath)) {
     throw "Node executable not found: $NodePath"
@@ -19,39 +42,13 @@ if (-not (Test-Path -LiteralPath $serverScriptPath)) {
     throw "TimeWhere MCP stdio server not found: $serverScriptPath"
 }
 
-$configDir = Split-Path -Parent $CodexConfigPath
-if (-not (Test-Path -LiteralPath $configDir)) {
-    New-Item -ItemType Directory -Force -Path $configDir | Out-Null
-}
+$resolvedCodexCli = Resolve-CodexCliPath $CodexCliPath
 
-$content = ''
-if (Test-Path -LiteralPath $CodexConfigPath) {
-    $content = Get-Content -Raw -LiteralPath $CodexConfigPath
-}
+& $resolvedCodexCli mcp remove $ServerName | Out-Null
+& $resolvedCodexCli mcp add $ServerName -- $NodePath $serverScriptPath | Out-Null
 
-$block = @"
-[mcp_servers.timewhere_desktop_mcp]
-command = '$NodePath'
-args = ['$scriptRelativePath']
-cwd = '$ProjectRoot'
-startup_timeout_sec = 30.0
-tool_timeout_sec = 60.0
-default_tools_approval_mode = "writes"
-"@
-
-$pattern = '(?ms)^\[mcp_servers\.timewhere[-_]desktop[-_]mcp\]\r?\n.*?(?=^\[|\z)'
-$hadExisting = [regex]::IsMatch($content, $pattern)
-$content = [regex]::Replace($content, $pattern, '')
-$content = $content.TrimEnd() + "`r`n`r`n" + $block.TrimEnd() + "`r`n"
-
-Set-Content -LiteralPath $CodexConfigPath -Value $content -NoNewline -Encoding UTF8
-
-if ($hadExisting) {
-    Write-Output "Updated MCP server registration: $serverDisplayName ($serverName)"
-} else {
-    Write-Output "Added MCP server registration: $serverDisplayName ($serverName)"
-}
-Write-Output "Config: $CodexConfigPath"
+Write-Output "Registered MCP server: $serverDisplayName ($ServerName)"
+Write-Output "Codex CLI: $resolvedCodexCli"
 Write-Output "Command: $NodePath"
-Write-Output "Cwd: $ProjectRoot"
-Write-Output "Args: $scriptRelativePath"
+Write-Output "Args: $serverScriptPath"
+Write-Output "Verify: codex mcp list --json"

@@ -58,16 +58,16 @@ TimeWhere 的标准 MCP server 显示名是 `timewhere-desktop-mcp`。Codex 全�
 powershell -ExecutionPolicy Bypass -File tools/register-timewhere-mcp.ps1
 ```
 
-标准 Codex 配置块如下：
+脚本通过官方 Codex CLI 注册，等价于：
 
-```toml
-[mcp_servers.timewhere_desktop_mcp]
-command = 'C:\Program Files\nodejs\node.exe'
-args = ['platforms/desktop-electron/mcp-stdio-server.js']
-cwd = 'D:\Codex\ThmeWhere-Master'
-startup_timeout_sec = 30.0
-tool_timeout_sec = 60.0
-default_tools_approval_mode = "writes"
+```powershell
+codex mcp add timewhere_desktop_mcp -- "C:\Program Files\nodejs\node.exe" "D:\Codex\ThmeWhere-Master\platforms\desktop-electron\mcp-stdio-server.js"
+```
+
+注册后用官方 CLI 验证：
+
+```powershell
+codex mcp list --json
 ```
 
 注册后，新开的 Codex 会话应能发现 `timewhere-desktop-mcp`。使用前必须打开 TimeWhere Desktop，并等待页面加载完成；Desktop 未打开或 renderer 未 ready 时返回 `desktop_not_ready`。底层手动启动命令仍是：
