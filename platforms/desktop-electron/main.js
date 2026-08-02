@@ -19,6 +19,7 @@ const widgetSnapshotFileName = 'timewhere-widget-v1.json';
 const widgetAppGroupIdentifier = 'group.cn.williamxia.timewhere';
 const protocolScheme = 'timewhere';
 const desktopAppId = 'cn.williamxia.timewhere';
+const defaultMcpBridgeSeed = desktopAppId;
 const smokeMode = process.env.TIMEWHERE_ELECTRON_SMOKE === '1';
 const smokeRuntimeRoot = path.join(
   process.env.TMP || process.env.TEMP || repoRoot,
@@ -77,7 +78,7 @@ const desktopSettingsPath = () => path.join(app.getPath('userData'), 'timewhere-
 const desktopProfilePath = () => path.join(app.getPath('userData'), 'timewhere-desktop-profile.json');
 function mcpBridgePath() {
   if (process.env.TIMEWHERE_MCP_BRIDGE_PATH) return process.env.TIMEWHERE_MCP_BRIDGE_PATH;
-  const seed = process.env.TIMEWHERE_MCP_BRIDGE_SEED || repoRoot;
+  const seed = process.env.TIMEWHERE_MCP_BRIDGE_SEED || defaultMcpBridgeSeed;
   const hash = crypto.createHash('sha256').update(seed).digest('hex').slice(0, 16);
   if (process.platform === 'win32') return String.raw`\\.\pipe\timewhere-mcp-` + hash;
   return path.join(os.tmpdir(), 'timewhere-mcp-' + hash + '.sock');

@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const McpServer = require('../platforms/desktop-electron/mcp-stdio-server.js');
 
 const root = path.join(__dirname, '..');
@@ -53,6 +54,8 @@ const parser = McpServer.parseFrames();
 const encoded = McpServer.encodeMessage({ jsonrpc: '2.0', id: 7, method: 'tools/list' });
 assertEqual('stdio parser decodes one framed message', parser(encoded)[0].id, 7);
 assert('bridge path is local pipe or unix socket', /timewhere-mcp/.test(McpServer.defaultBridgePath()));
+const stableBridgeHash = crypto.createHash('sha256').update('cn.williamxia.timewhere').digest('hex').slice(0, 16);
+assert('bridge path uses stable app id seed for portable builds', McpServer.defaultBridgePath().includes(stableBridgeHash));
 
 const electronMain = read('platforms/desktop-electron/main.js');
 const preload = read('platforms/desktop-electron/preload.js');

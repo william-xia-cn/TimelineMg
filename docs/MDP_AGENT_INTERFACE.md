@@ -79,13 +79,14 @@ C:\Users\William\.codex\skills\timewhere-task\SKILL.md
 该 skill 的显示名是 `TimeWhere Task`，用于读取 Dashboard 当前任务、任务增删改查、start/complete/reopen 等请求。它规定优先调用 TimeWhere MCP，不使用 Chrome 控件，不直接读 IndexedDB，写入必须带 `idempotency_key`，删除必须有显式确认。
 
 Plugin 不是 TimeWhere MCP 的主标准入口；只有在需要分发一组 MCP/skills/apps 能力时才考虑使用 plugin。
+
 注册后，新开的 Codex 会话应能发现 `timewhere-desktop-mcp`。使用前必须打开 TimeWhere Desktop，并等待页面加载完成；Desktop 未打开或 renderer 未 ready 时返回 `desktop_not_ready`。底层手动启动命令仍是：
 
 ```bash
 npm --prefix platforms/desktop-electron run mcp:stdio
 ```
 
-如果 MCP client 与 Desktop 进程不在同一默认路径规则下启动，可通过 `TIMEWHERE_MCP_BRIDGE_PATH` 或 `TIMEWHERE_MCP_BRIDGE_SEED` 显式指定同一个本机 bridge path。
+Desktop main process 和 stdio MCP server 默认使用稳定 app id `cn.williamxia.timewhere` 计算本机 bridge path，因此 Windows portable exe 解包到临时目录时不需要手动指定 pipe。`TIMEWHERE_MCP_BRIDGE_PATH` 和 `TIMEWHERE_MCP_BRIDGE_SEED` 仅作为高级覆盖，用于 smoke test 或特殊部署。
 
 标准只读调用示例：先调用 `timewhere_tasks_list`，参数 `{ "progress": "in_progress", "limit": 10 }` 读取当前 active profile 的进行中任务摘要；需要完整字段时再对目标 `task_id` 调用 `timewhere_task_get`。
 

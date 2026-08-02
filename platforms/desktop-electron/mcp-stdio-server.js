@@ -6,10 +6,11 @@ const crypto = require('node:crypto');
 
 const PROTOCOL_VERSION = '2025-11-25';
 const SERVER_INFO = { name: 'timewhere-desktop-mcp', version: '0.1.0' };
+const DEFAULT_BRIDGE_SEED = 'cn.williamxia.timewhere';
 
 function defaultBridgePath() {
   if (process.env.TIMEWHERE_MCP_BRIDGE_PATH) return process.env.TIMEWHERE_MCP_BRIDGE_PATH;
-  const seed = process.env.TIMEWHERE_MCP_BRIDGE_SEED || path.resolve(__dirname, '..', '..');
+  const seed = process.env.TIMEWHERE_MCP_BRIDGE_SEED || DEFAULT_BRIDGE_SEED;
   const hash = crypto.createHash('sha256').update(seed).digest('hex').slice(0, 16);
   if (process.platform === 'win32') return `\\\\.\\pipe\\timewhere-mcp-${hash}`;
   return path.join(os.tmpdir(), `timewhere-mcp-${hash}.sock`);

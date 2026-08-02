@@ -13,7 +13,7 @@ npm run electron:smoke
 npm run electron:package:win
 npm run electron:package:mac
 ```
-For agent access, register the Desktop MCP server once with `tools/register-timewhere-mcp.ps1`; daily MCP clients should use the registered `timewhere-desktop-mcp` server instead of hand-running the stdio command.
+For agent access, register the Desktop MCP server once with `tools/register-timewhere-mcp.ps1`; daily MCP clients should use the registered `timewhere-desktop-mcp` server instead of hand-running the stdio command. The MCP bridge uses a stable app-id pipe by default, so Windows portable exe launches from a temporary extraction directory remain reachable without setting `TIMEWHERE_MCP_BRIDGE_PATH`.
 
 
 Windows package output:
