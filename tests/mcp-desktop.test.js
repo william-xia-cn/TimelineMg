@@ -72,10 +72,11 @@ assert('Electron preload exposes MCP request response bridge only through contex
 assert('Electron package ships stdio MCP server and script', electronPackage.scripts['mcp:stdio'] === 'node mcp-stdio-server.js' && electronPackage.build.files.includes('mcp-stdio-server.js'));
 assert('Electron package bundles TimeWhere Task skill resources', electronPackage.build.extraResources.some(resource => resource.from === 'agent-skills' && resource.to === 'agent-skills') && bundledSkill.includes('name: timewhere-task'));
 assert('Electron main installs bundled TimeWhere Task skill on startup', electronMain.includes('installBundledAgentSkillInBackground()') && electronMain.includes('agentSkill.installTimeWhereTask') && electronMain.includes('agentSkill.timewhereTaskStatus'));
-assert('Platform bridge exposes TimeWhere Task skill install helpers', platformJs.includes('getAgentSkillStatus') && platformJs.includes('installTimeWhereTaskSkill'));
-assert('Codex registration script registers standard TimeWhere MCP server', registerScript.includes('mcp add') && registerScript.includes('timewhere_desktop_mcp') && registerScript.includes('D:\\Codex\\ThmeWhere-Master') && registerScript.includes('mcp-stdio-server.js'));
-assert('MCP documentation explains global registration and standard read call', mdpDoc.includes('timewhere-desktop-mcp') && mdpDoc.includes('timewhere_desktop_mcp') && mdpDoc.includes('tools/register-timewhere-mcp.ps1') && mdpDoc.includes('timewhere_tasks_list'));
-assert('Desktop README points agent access to registered MCP server', desktopReadme.includes('register the Desktop MCP server once') && desktopReadme.includes('timewhere-desktop-mcp'));
+assert('Electron main self-registers portable exe as the Codex MCP command', electronMain.includes('--timewhere-mcp-stdio') && electronMain.includes('PORTABLE_EXECUTABLE_FILE') && electronMain.includes('agentMcp.registerTimeWhereDesktop') && electronMain.includes('codexMcpServerName'));
+assert('Platform bridge exposes TimeWhere Task skill and MCP registration helpers', platformJs.includes('getAgentSkillStatus') && platformJs.includes('installTimeWhereTaskSkill') && platformJs.includes('getAgentMcpRegistrationStatus') && platformJs.includes('registerTimeWhereDesktopMcp'));
+assert('Codex registration script remains a developer fallback for the standard TimeWhere MCP server', registerScript.includes('mcp add') && registerScript.includes('timewhere_desktop_mcp') && registerScript.includes('D:\\Codex\\ThmeWhere-Master') && registerScript.includes('mcp-stdio-server.js'));
+assert('MCP documentation explains portable self-registration and standard read call', mdpDoc.includes('timewhere-desktop-mcp') && mdpDoc.includes('timewhere_desktop_mcp') && mdpDoc.includes('--timewhere-mcp-stdio') && mdpDoc.includes('目标机器不需要') && mdpDoc.includes('timewhere_tasks_list'));
+assert('Desktop README points agent access to portable self-registration', desktopReadme.includes('portable exe') && desktopReadme.includes('--timewhere-mcp-stdio') && desktopReadme.includes('timewhere-desktop-mcp'));
 
 for (const html of [
     'extension/pages/focus/focus.html',

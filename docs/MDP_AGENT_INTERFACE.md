@@ -52,17 +52,20 @@ Desktop 未打开、renderer 未 ready 或 active profile 已变化时，tool ca
 
 ## 标准注册方式
 
-TimeWhere 的标准 MCP server 显示名是 `timewhere-desktop-mcp`。Codex 全局配置 key 使用 `timewhere_desktop_mcp`，以匹配 Codex 工具命名空间规则；本机注册由仓库脚本维护：
+TimeWhere 的标准 MCP server 显示名是 `timewhere-desktop-mcp`。Codex 全局配置 key 使用 `timewhere_desktop_mcp`，以匹配 Codex 工具命名空间规则。
+
+正常发布和目标机器使用路径是 portable 自注册：用户只需要复制并启动 `TimeWhere-0.3.4-win-portable.exe`。Desktop 启动时会 best-effort 完成两件事：
+
+- 安装或更新随包携带的 `timewhere-task` skill 到用户 Codex skill 目录。
+- 如果能找到本机 Codex CLI，把 `timewhere_desktop_mcp` 注册为当前 portable exe 自己：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools/register-timewhere-mcp.ps1
+codex mcp add timewhere_desktop_mcp -- "<TimeWhere portable exe>" --timewhere-mcp-stdio
 ```
 
-脚本通过官方 Codex CLI 注册，等价于：
+因此目标机器不需要 `D:\Codex\ThmeWhere-Master` 仓库、不需要 Node、不需要手动运行仓库里的 stdio 脚本。注册后通常需要新开 Codex 会话，Codex 才会加载新增或更新后的 MCP server / skill metadata。
 
-```powershell
-codex mcp add timewhere_desktop_mcp -- "C:\Program Files\nodejs\node.exe" "D:\Codex\ThmeWhere-Master\platforms\desktop-electron\mcp-stdio-server.js"
-```
+仓库脚本 `tools/register-timewhere-mcp.ps1` 仅保留为开发兜底，用于本机源码仓库调试。它会注册到固定开发目录 `D:\Codex\ThmeWhere-Master` 下的 `platforms/desktop-electron/mcp-stdio-server.js`，不是发布包在目标机器上的标准依赖。
 
 注册后用官方 CLI 验证：
 
@@ -70,26 +73,11 @@ codex mcp add timewhere_desktop_mcp -- "C:\Program Files\nodejs\node.exe" "D:\Co
 codex mcp list --json
 ```
 
-注册 MCP 只负责让工具进入 Codex 可调用工具集。Agent 的日常调用规范由 `timewhere-task` skill 维护。该 skill 随 TimeWhere Desktop 发布包携带，portable 启动时会 best-effort 安装/更新到用户 Codex skill 目录，安装目标为：
+Agent 的日常调用规范由 `timewhere-task` skill 维护。该 skill 的显示名是 `TimeWhere Task`，源文件随 Desktop package 位于 `agent-skills/timewhere-task`。它用于读取 Dashboard 当前任务、任务增删改查、start/complete/reopen 等请求，并规定优先调用 TimeWhere MCP，不使用 Chrome 控件，不直接读 IndexedDB，写入必须带 `idempotency_key`，删除必须有显式确认。
 
-```text
-C:\Users\William\.codex\skills\timewhere-task\SKILL.md
-```
-
-该 skill 的显示名是 `TimeWhere Task`，源文件随 Desktop package 位于 `agent-skills/timewhere-task`。它用于读取 Dashboard 当前任务、任务增删改查、start/complete/reopen 等请求，并规定优先调用 TimeWhere MCP，不使用 Chrome 控件，不直接读 IndexedDB，写入必须带 `idempotency_key`，删除必须有显式确认。安装或更新后，需要新开 Codex 会话才会加载新 skill metadata。
-
-Plugin 不是 TimeWhere MCP 的主标准入口；只有在需要分发一组 MCP/skills/apps 能力时才考虑使用 plugin。
-
-注册后，新开的 Codex 会话应能发现 `timewhere-desktop-mcp`。使用前必须打开 TimeWhere Desktop，并等待页面加载完成；Desktop 未打开或 renderer 未 ready 时返回 `desktop_not_ready`。底层手动启动命令仍是：
-
-```bash
-npm --prefix platforms/desktop-electron run mcp:stdio
-```
-
-Desktop main process 和 stdio MCP server 默认使用稳定 app id `cn.williamxia.timewhere` 计算本机 bridge path，因此 Windows portable exe 解包到临时目录时不需要手动指定 pipe。`TIMEWHERE_MCP_BRIDGE_PATH` 和 `TIMEWHERE_MCP_BRIDGE_SEED` 仅作为高级覆盖，用于 smoke test 或特殊部署。
+使用前必须打开 TimeWhere Desktop，并等待页面加载完成；Desktop 未打开或 renderer 未 ready 时返回 `desktop_not_ready`。Desktop main process 和 stdio MCP server 默认使用稳定 app id `cn.williamxia.timewhere` 计算本机 bridge path，因此 Windows portable exe 解包到临时目录时不需要手动指定 pipe。`TIMEWHERE_MCP_BRIDGE_PATH` 和 `TIMEWHERE_MCP_BRIDGE_SEED` 仅作为高级覆盖，用于 smoke test 或特殊部署。
 
 标准只读调用示例：先调用 `timewhere_tasks_list`，参数 `{ "progress": "in_progress", "limit": 10 }` 读取当前 active profile 的进行中任务摘要；需要完整字段时再对目标 `task_id` 调用 `timewhere_task_get`。
-
 ## 测试
 
 - `node tests/mdp-agent-interface.test.js`

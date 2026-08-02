@@ -20,17 +20,21 @@ const widgetAppGroupIdentifier = 'group.cn.williamxia.timewhere';
 const protocolScheme = 'timewhere';
 const desktopAppId = 'cn.williamxia.timewhere';
 const defaultMcpBridgeSeed = desktopAppId;
-const smokeMode = process.env.TIMEWHERE_ELECTRON_SMOKE === '1';
+const mcpStdioMode = process.argv.includes('--timewhere-mcp-stdio');
+if (mcpStdioMode) {
+  require('./mcp-stdio-server').startStdioServer();
+}
+const smokeMode = !mcpStdioMode && process.env.TIMEWHERE_ELECTRON_SMOKE === '1';
 const smokeRuntimeRoot = path.join(
   process.env.TMP || process.env.TEMP || repoRoot,
   `timewhere-electron-smoke-${process.pid}`
 );
 
-if (process.platform === 'win32') {
+if (!mcpStdioMode && process.platform === 'win32') {
   app.setAppUserModelId(desktopAppId);
 }
 
-if (smokeMode) {
+if (!mcpStdioMode && smokeMode) {
   app.setPath('userData', path.join(smokeRuntimeRoot, 'user-data'));
   app.disableHardwareAcceleration();
   app.commandLine.appendSwitch('disable-gpu');
@@ -728,6 +732,133 @@ function installBundledAgentSkillInBackground() {
     })
     .catch(error => console.warn(`[Desktop] Agent skill install failed: ${error.message}`));
 }
+
+const codexMcpServerName = 'timewhere_desktop_mcp';
+let lastAgentMcpRegistration = null;
+
+function portableExecutablePath() {
+  return process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
+}
+
+function codexConfigPath() {
+  return path.join(os.homedir(), '.codex', 'config.toml');
+}
+
+async function pathExists(filePath) {
+  try {
+    await fsp.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function resolveCodexCliPath() {
+  if (process.env.CODEX_CLI_PATH && await pathExists(process.env.CODEX_CLI_PATH)) {
+    return process.env.CODEX_CLI_PATH;
+  }
+
+  const configPath = codexConfigPath();
+  if (await pathExists(configPath)) {
+    const configText = await fsp.readFile(configPath, 'utf8');
+    const match = configText.match(/CODEX_CLI_PATH\s*=\s*['"]([^'"]+)['"]/);
+    if (match?.[1] && await pathExists(match[1])) return match[1];
+  }
+
+  const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+  const codexBinRoot = path.join(localAppData, 'OpenAI', 'Codex', 'bin');
+  if (await pathExists(codexBinRoot)) {
+    const entries = await fsp.readdir(codexBinRoot, { withFileTypes: true });
+    const candidates = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const candidate = path.join(codexBinRoot, entry.name, 'codex.exe');
+      if (await pathExists(candidate)) candidates.push(candidate);
+    }
+    candidates.sort().reverse();
+    if (candidates[0]) return candidates[0];
+  }
+
+  return null;
+}
+
+function execFileAsync(command, args = []) {
+  return new Promise(resolve => {
+    execFile(command, args, { windowsHide: true }, (error, stdout, stderr) => {
+      resolve({
+        status: error ? 'failed' : 'ok',
+        code: error?.code ?? 0,
+        message: error?.message || null,
+        stdout: String(stdout || '').trim(),
+        stderr: String(stderr || '').trim()
+      });
+    });
+  });
+}
+
+async function getAgentMcpRegistrationStatus() {
+  const codexCli = await resolveCodexCliPath();
+  const command = portableExecutablePath();
+  return {
+    status: codexCli ? 'ok' : 'not_configured',
+    server: codexMcpServerName,
+    codex_cli: codexCli,
+    command,
+    args: ['--timewhere-mcp-stdio'],
+    last_registration: lastAgentMcpRegistration
+  };
+}
+
+async function registerAgentMcpServer(options = {}) {
+  const codexCli = await resolveCodexCliPath();
+  const command = portableExecutablePath();
+  if (!codexCli) {
+    lastAgentMcpRegistration = {
+      status: 'failed',
+      reason: 'codex_cli_not_found',
+      automatic: options.automatic === true,
+      command
+    };
+    return lastAgentMcpRegistration;
+  }
+  if (!command || !await pathExists(command)) {
+    lastAgentMcpRegistration = {
+      status: 'failed',
+      reason: 'portable_executable_not_found',
+      automatic: options.automatic === true,
+      codex_cli: codexCli,
+      command
+    };
+    return lastAgentMcpRegistration;
+  }
+
+  const remove = await execFileAsync(codexCli, ['mcp', 'remove', codexMcpServerName]);
+  const add = await execFileAsync(codexCli, ['mcp', 'add', codexMcpServerName, '--', command, '--timewhere-mcp-stdio']);
+  lastAgentMcpRegistration = {
+    status: add.status === 'ok' ? 'registered' : 'failed',
+    reason: add.status === 'ok' ? null : 'codex_mcp_add_failed',
+    automatic: options.automatic === true,
+    codex_cli: codexCli,
+    command,
+    args: ['--timewhere-mcp-stdio'],
+    remove,
+    add,
+    requires_new_codex_session: true
+  };
+  return lastAgentMcpRegistration;
+}
+
+function registerAgentMcpServerInBackground() {
+  registerAgentMcpServer({ automatic: true })
+    .then(result => {
+      if (result.status === 'registered') {
+        console.log(`[Desktop] Codex MCP registered: ${codexMcpServerName}`);
+      } else {
+        console.warn(`[Desktop] Codex MCP registration skipped: ${result.reason || result.status}`);
+      }
+    })
+    .catch(error => console.warn(`[Desktop] Codex MCP registration failed: ${error.message}`));
+}
 async function loadRoute(win, route = defaultRoute) {
   const resolved = resolveExtensionRoute(route);
   const url = `${pathToFileURL(resolved.filePath).toString()}${resolved.search}${resolved.hash}`;
@@ -1172,6 +1303,12 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
   if (method === 'agentSkill.installTimeWhereTask') {
     return await installBundledAgentSkill({ automatic: false });
   }
+  if (method === 'agentMcp.registrationStatus') {
+    return await getAgentMcpRegistrationStatus();
+  }
+  if (method === 'agentMcp.registerTimeWhereDesktop') {
+    return await registerAgentMcpServer({ automatic: false });
+  }
   if (method === 'system.getDesktopProfile') {
     return getDesktopProfileSnapshot();
   }
@@ -1196,69 +1333,73 @@ ipcMain.handle('timewhere-platform', async (_event, request = {}) => {
   return { status: 'not_supported', method };
 });
 
+if (!mcpStdioMode) {
   app.whenReady().then(() => {
-  if (!smokeMode) app.setAsDefaultProtocolClient(protocolScheme);
-  loadDesktopSettings()
-    .then(() => loadDesktopProfileState())
-    .then(() => {
-      applyLoginItemSettings(desktopSettings.startAtLogin);
-      return syncLoginItemStateFromOS();
-    })
-    .then(() => {
-      buildMenu();
-      createMainWindow(pendingProtocolRoute || defaultRoute);
-      pendingProtocolRoute = null;
-      createTray();
-      startMcpBridgeServer();
-      installBundledAgentSkillInBackground();
-      syncTrayMenuLabels();
-    })
-    .catch(error => {
-      console.error(`[Desktop] init failed: ${error.message}`);
-      buildMenu();
-      createMainWindow();
-      createTray();
-      startMcpBridgeServer();
-      installBundledAgentSkillInBackground();
-      syncTrayMenuLabels();
+    if (!smokeMode) app.setAsDefaultProtocolClient(protocolScheme);
+    loadDesktopSettings()
+      .then(() => loadDesktopProfileState())
+      .then(() => {
+        applyLoginItemSettings(desktopSettings.startAtLogin);
+        return syncLoginItemStateFromOS();
+      })
+      .then(() => {
+        buildMenu();
+        createMainWindow(pendingProtocolRoute || defaultRoute);
+        pendingProtocolRoute = null;
+        createTray();
+        startMcpBridgeServer();
+        installBundledAgentSkillInBackground();
+        registerAgentMcpServerInBackground();
+        syncTrayMenuLabels();
+      })
+      .catch(error => {
+        console.error(`[Desktop] init failed: ${error.message}`);
+        buildMenu();
+        createMainWindow();
+        createTray();
+        startMcpBridgeServer();
+        installBundledAgentSkillInBackground();
+        registerAgentMcpServerInBackground();
+        syncTrayMenuLabels();
+      });
+    app.on('activate', () => {
+      openWindow();
     });
-  app.on('activate', () => {
-    openWindow();
   });
-});
 
-app.on('open-url', (event, rawUrl) => {
-  event.preventDefault();
-  openProtocolUrl(rawUrl);
-});
+  app.on('open-url', (event, rawUrl) => {
+    event.preventDefault();
+    openProtocolUrl(rawUrl);
+  });
 
-function syncLoginItemStateFromOS() {
-  if (!app.getLoginItemSettings) return Promise.resolve(desktopSettings);
-  const state = app.getLoginItemSettings();
-  if (typeof state?.openAtLogin === 'boolean' && state.openAtLogin !== desktopSettings.startAtLogin) {
-    return persistDesktopSettings({ startAtLogin: state.openAtLogin }).then(() => ({ settings: { ...desktopSettings } }));
+  function syncLoginItemStateFromOS() {
+    if (!app.getLoginItemSettings) return Promise.resolve(desktopSettings);
+    const state = app.getLoginItemSettings();
+    if (typeof state?.openAtLogin === 'boolean' && state.openAtLogin !== desktopSettings.startAtLogin) {
+      return persistDesktopSettings({ startAtLogin: state.openAtLogin }).then(() => ({ settings: { ...desktopSettings } }));
+    }
+    return Promise.resolve({ settings: { ...desktopSettings } });
   }
-  return Promise.resolve({ settings: { ...desktopSettings } });
+
+  function syncTrayMenuLabels() {
+    if (!tray) return;
+    createTrayMenu();
+  }
+
+  app.on('window-all-closed', () => {
+    if (switchingDesktopProfile) return;
+    chromeBridge.closeActiveServer();
+    closeMcpBridgeServer();
+    for (const id of reminderTimers.keys()) cancelReminder(id);
+    app.quit();
+  });
+
+  app.on('will-quit', () => {
+    closeMcpBridgeServer();
+    destroyTray();
+  });
+
+  app.on('before-quit', () => {
+    isQuitting = true;
+  });
 }
-
-function syncTrayMenuLabels() {
-  if (!tray) return;
-  createTrayMenu();
-}
-
-app.on('window-all-closed', () => {
-  if (switchingDesktopProfile) return;
-  chromeBridge.closeActiveServer();
-  closeMcpBridgeServer();
-  for (const id of reminderTimers.keys()) cancelReminder(id);
-  app.quit();
-});
-
-app.on('will-quit', () => {
-  closeMcpBridgeServer();
-  destroyTray();
-});
-
-app.on('before-quit', () => {
-  isQuitting = true;
-});

@@ -117,7 +117,7 @@ assert('TimeWherePlatform exposes desktop-capable contract',
     && platformJs.includes("chromeBridge: ['connectExtension', 'getStatus']")
     && platformJs.includes("sync: ['getStatus', 'requestRun', 'pause', 'resume']")
     && platformJs.includes("external: ['openUrl']")
-    && platformJs.includes("system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'confirmGoogleAccountSwitch', 'getAgentSkillStatus', 'installTimeWhereTaskSkill']"));
+    && platformJs.includes("system: ['getDesktopSettings', 'setDesktopSettings', 'writeWidgetSnapshot', 'getDesktopProfile', 'confirmGoogleAccountSwitch', 'getAgentSkillStatus', 'installTimeWhereTaskSkill', 'getAgentMcpRegistrationStatus', 'registerTimeWhereDesktopMcp']"));
 assert('Chrome adapter wraps expected platform APIs',
     platformJs.includes("name: 'chrome-extension'")
     && platformJs.includes('chromeRef.tabs.create')
@@ -143,6 +143,8 @@ assert('Desktop adapter delegates auth, reminders, and Chrome bridge to Electron
     && platformJs.includes("call('system.writeWidgetSnapshot'")
     && platformJs.includes("call('system.getDesktopProfile'")
     && platformJs.includes("call('system.confirmGoogleAccountSwitch'")
+    && platformJs.includes("call('agentMcp.registrationStatus'")
+    && platformJs.includes("call('agentMcp.registerTimeWhereDesktop'")
     && platformJs.includes('bridge.onWindowActivated')
     && platformJs.includes('bridge.onNotificationClose')
     && platformJs.includes('consumePendingNotificationCloses')
@@ -155,7 +157,9 @@ assert('Fallback platform returns desktop system settings capability as not_supp
     && platformJs.includes("writeWidgetSnapshot: () => ({ status: 'not_supported'")
     && platformJs.includes("getDesktopProfile: () => ({ status: 'not_supported'")
     && platformJs.includes('sync: { getStatus: notSupported, requestRun: notSupported, pause: notSupported, resume: notSupported }')
-    && platformJs.includes("confirmGoogleAccountSwitch: () => ({ status: 'not_supported'"));
+    && platformJs.includes("confirmGoogleAccountSwitch: () => ({ status: 'not_supported'")
+    && platformJs.includes("getAgentMcpRegistrationStatus: () => ({ status: 'not_supported'")
+    && platformJs.includes("registerTimeWhereDesktopMcp: () => ({ status: 'not_supported'"));
 assert('Shared sync runtime keeps Chrome and Desktop sync aligned with serialized jobs and conflict pause',
     syncRuntimeService.includes('createSyncRuntimeService')
     && syncRuntimeService.includes('DEFAULT_INTERVAL_MS = 3 * 60 * 1000')
