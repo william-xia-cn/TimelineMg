@@ -1,8 +1,24 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      input: {
+        index: path.resolve(root, 'index.html'),
+        diagnostics: path.resolve(root, 'diagnostics.html'),
+        dashboard: path.resolve(root, 'legacy-v032/pages/focus/focus.html'),
+        tasks: path.resolve(root, 'legacy-v032/pages/tasks/tasks.html'),
+        calendar: path.resolve(root, 'legacy-v032/pages/calendar/calendar.html'),
+        settings: path.resolve(root, 'legacy-v032/pages/settings/settings.html')
+      }
+    }
+  },
   server: {
     port: 4173,
     strictPort: true,

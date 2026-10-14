@@ -1,4 +1,5 @@
 export const LEGACY_INDEXEDDB_SNAPSHOT_SCHEMA = 'timewhere-legacy-indexeddb-snapshot-v1';
+export const EXTENSION_BACKUP_MAX_BYTES = 20 * 1024 * 1024;
 
 const TABLES = ['plans', 'buckets', 'labels', 'tasks', 'containers', 'events'];
 const PRIVATE_KEY_PATTERN = /token|cookie|secret|password|private_path|local_path|credential/i;
@@ -19,6 +20,54 @@ const LOCAL_ONLY_SETTING_KEYS = new Set([
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function validateExtensionBackup(backup) {
+  if (!isRecord(backup)) throw new Error('备份文件必须是 JSON 对象');
+  if (!isRecord(backup._meta) || backup._meta.app !== 'TimeWhere' || Number(backup._meta.version) !== 1) {
+    throw new Error('不是受支持的 TimeWhere Extension v1 备份');
+  }
+  const expectedTables = [...TABLES, 'habits', 'daily_journals', 'settings'];
+  for (const table of expectedTables) {
+    if (backup[table] !== undefined && !Array.isArray(backup[table])) {
+      throw new Error('备份字段 ' + table + ' 必须是数组');
+    }
+  }
+  return backup;
+}
+
+export function summarizeExtensionBackup(backup) {
+  validateExtensionBackup(backup);
+  const counts = Object.fromEntries(TABLES.map(table => [table, backup[table]?.length || 0]));
+  counts.settings = backup.settings?.length || 0;
+  return {
+    counts,
+    skipped: {
+      habits: backup.habits?.length || 0,
+      daily_journals: backup.daily_journals?.length || 0
+    }
+  };
+}
+
+export async function parseExtensionBackupFile(file) {
+  if (!file || typeof file.text !== 'function') throw new Error('请选择 JSON 备份文件');
+  if (Number(file.size || 0) > EXTENSION_BACKUP_MAX_BYTES) throw new Error('备份文件不能超过 20 MB');
+  let backup;
+  try {
+    backup = JSON.parse(await file.text());
+  } catch {
+    throw new Error('备份文件不是有效的 JSON');
+  }
+  validateExtensionBackup(backup);
+  return backup;
+}
+
+export async function buildExtensionBackupSnapshot(backup) {
+  validateExtensionBackup(backup);
+  return buildLegacyIndexedDbSnapshot(backup, {
+    deviceId: 'extension-json-export-v1',
+    exportedAt: backup._meta.exported_at || new Date().toISOString()
+  });
 }
 
 function toIsoIfDate(value) {

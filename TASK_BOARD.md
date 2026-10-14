@@ -4,6 +4,8 @@
 
 - WebDev architecture direction planning is now active under D-046. The Product Owner direction is Cloud-first / Web-first: Cloud becomes canonical data authority, Web Application becomes the primary business implementation, Desktop becomes a Runtime, and Browser Extension becomes an ecosystem component. This is not an implementation migration approval.
 - D-047 records WebDev v1 architecture defaults: Cloudflare Workers / D1 / R2 / KV / Pages, Google SSO account identity, full Web App implementation, retained offline read cache with offline edits blocked in v1, automatic migration after Google SSO, deferred Browser Extension scope, and Electron as default Desktop Runtime.
+- D-050 records that WebDev uses a dedicated Google Cloud project for SSO/OIDC identity only. Google Drive / Calendar / Tasks permissions remain disabled; any future Google synchronization requires a separate Product Owner approval before project permissions change.
+- D-052 records the approved manual Extension JSON complete-replacement boundary: account/session/audit data is preserved, canonical business data replacement is atomic, and sanitized rollback snapshots remain available for 30 days.
 - Baseline Stabilized; package / extension version is moving to `0.3.2` for desktop artifact preparation. The historical `0.2.3` CWS Private testing OAuth correction remains submitted to CWS review after Google sync failed with a bad OAuth client ID.
 - D-031/D-032 Windows desktop portable implementation is active for local testing and now uses a bundled Desktop OAuth client ID plus artifact-bundled Desktop client metadata secret generated from ignored packaging input. Current desktop artifact target is `0.3.2` Windows portable exe plus macOS Universal zip using existing unsigned package targets.
 - Internal MVP acceptance, Phase 1 corrective work, Phase 2A safety hardening, documentation baseline cleanup, TimeWhere `0.2.0` CWS Private testing material preparation, the accepted `0.2.1` Purple Potassium Private testing publication, `0.2.2` Side Panel CWS submission, `0.2.3` OAuth correction CWS submission, and D-031 Windows desktop portable implementation are complete. Product Owner approved the `v0.3.0` desktop artifact candidate tag and moving that tag for the macOS Universal artifact correction only. Public listing expansion / CWS bridge submission / desktop signing or installer / deploy remain unapproved.
@@ -28,6 +30,10 @@
   - Not daily scheduler or routine implementation manager.
 
 ## NOW
+
+- [x] Build&Test completed D-051 WebDev `v0.3.2` direct-reuse MPA: Dashboard/Tasks/Calendar/Settings use frozen original HTML/CSS/icons/assets/controllers, the verifier confirms byte-identical source and preserved static controls, `LegacyCloudDataFacade` / `LegacyWebPlatformFacade` map supported operations to Cloud repositories, and the 2048x1210 probe, functional walkthrough, full preview acceptance, full internal prod acceptance, data-hygiene cleanup, and `npm test` pass. React is diagnostics-only; unsupported runtime-only controls remain visible and disabled.
+
+- [x] Created and configured the dedicated TimeWhere Web SSO Google Cloud project under the developer account, created its Web OAuth client for the approved prod/preview Pages origins, kept Google data API scopes disabled, added the developer account as a test user, and redeployed preview/prod with the new public client metadata. No project id, client id, account email, token, or secret is recorded in the repository.
 
 - [x] Import governance template into new project documents.
 - [x] Product Owner confirms governance mode, active release target, version naming, and current scope.
@@ -169,7 +175,7 @@
 - [x] Build&Test added a developer-facing Settings preview card for replay enablement simulation results; it runs Gate A-E preview but still cannot enable replay writes.
 - [x] Build&Test drafted the Task-only replay implementation plan for Product Owner review in `docs/WEBDEV_OFFLINE_MUTATION_CONFLICT_DESIGN.md`; it remains plan-only and does not enable offline writes.
 - [x] Product Owner approved Phase 1 Task-only test replay server write implementation; Build&Test implemented internal test-only apply/conflict/reject/idempotency coverage while keeping user-facing offline writes blocked.
-- [x] Product Owner approved WebDev offline/replay Phase 2-9 recommended boundary in D-049; separate approval remains required for prod release, Calendar/Container/Settings replay implementation, Browser Extension replay, local-over-cloud overwrite, batch conflict handling, and full-entity offline-first.
+- [x] Product Owner approved WebDev offline/replay Phase 2-9 recommended boundary in D-049; separate approval remains required for prod release, Calendar/Container/Settings replay implementation, Browser Extension replay, general local-over-cloud overwrite outside the D-052 manual JSON restore flow, batch conflict handling, and full-entity offline-first.
 - [x] Build&Test implemented Phase 2 Task-only queued pending for create/update/complete/reopen while keeping Task delete and non-Task offline writes blocked.
 - [x] Build&Test implemented Phase 3 Settings-based single Task conflict review UI with keep-cloud / discard-local / later actions only, without local-over-cloud writes.
 - [x] Build&Test implemented Phase 4 local/dev replay production-gate preparation with kill switch and safety evidence; prod replay remains disabled.
@@ -178,7 +184,7 @@
 - [x] Build&Test implemented Phase 7 read-only cross-entity dependency analysis inside replay readiness, detecting same-batch satisfied dependencies and ordering blockers without enabling replay writes.
 - [x] Build&Test implemented Phase 8 Task-scope offline UX hardening: Tasks page pending banner, pending row operation/timestamp display, and direct Cloud edit/delete blocking for pending Tasks.
 - [x] Build&Test implemented Phase 9 preview readiness hardening: readiness summary now exposes evidence gaps, approval blockers, required evidence, and dependency blocker counts without enabling replay writes.
-- [x] D-049 Phase 2-9 batch is complete. Await separate Product Owner approval before prod release, Calendar/Container/Settings replay implementation, Browser Extension replay, local-over-cloud overwrite, batch conflict handling, or full-entity offline-first.
+- [x] D-049 Phase 2-9 batch is complete. Await separate Product Owner approval before prod release, Calendar/Container/Settings replay implementation, Browser Extension replay, general local-over-cloud overwrite outside the D-052 manual JSON restore flow, batch conflict handling, or full-entity offline-first.
 
 ## LATER
 

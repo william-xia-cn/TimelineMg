@@ -170,9 +170,14 @@ function main() {
       const pagesResponse = await fetchWithRetry(pagesUrl);
       const pagesHtml = await pagesResponse.text();
       assert(pagesResponse.ok, `Preview Pages returned HTTP ${pagesResponse.status}.`);
-      assert(pagesHtml.includes('<div id="root"'), 'Preview Pages did not contain the React root.');
-      assert(pagesHtml.includes('TimeWhere'), 'Preview Pages did not contain TimeWhere app marker.');
-      console.log('  PASS stable preview Pages load');
+      assert(pagesHtml.includes('/legacy-v032/pages/focus/focus.html'), 'Preview Pages root did not point to the frozen Dashboard MPA.');
+      const dashboardResponse = await fetchWithRetry(`${pagesUrl}/legacy-v032/pages/focus/focus`);
+      const dashboardHtml = await dashboardResponse.text();
+      assert(dashboardResponse.ok, `Preview Dashboard returned HTTP ${dashboardResponse.status}.`);
+      assert(dashboardHtml.includes('class="app-layout"'), 'Preview Dashboard did not contain the original app layout.');
+      assert(dashboardHtml.includes('column-now') && dashboardHtml.includes('column-calendar') && dashboardHtml.includes('column-week') && dashboardHtml.includes('column-feed'), 'Preview Dashboard did not contain all four frozen columns.');
+      assert(dashboardHtml.includes('TimeWhere'), 'Preview Dashboard did not contain TimeWhere app marker.');
+      console.log('  PASS stable preview Pages frozen Dashboard load');
     })
     .then(() => {
       const tableCheck = runWrangler([

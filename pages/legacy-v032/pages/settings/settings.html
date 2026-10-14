@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TimeWhere - Settings</title>
+    <link rel="icon" type="image/png" href="/legacy-v032/icons/icon48.png">
+    <!-- Local Fonts -->
+    <link rel="stylesheet" href="/legacy-v032/shared/styles/fonts.css">
+    <!-- Local Icons -->
+    <link rel="stylesheet" href="/legacy-v032/shared/styles/icons.css">
+    <!-- Page Styles -->
+    <link rel="stylesheet" href="/legacy-v032/pages/settings/styles.css">
+    <style>
+        .settings-view { display: block; transition: var(--transition); }
+        .container-item {
+            background: rgba(255, 255, 255, 0.4);
+            border: 1px solid white;
+            border-radius: var(--radius-md);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            text-align: left;
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.05); border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.2); border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.3); }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <!-- 导航栏 -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon"><img src="/legacy-v032/icons/icon128.png" alt="TimeWhere" class="logo-mark"></div>
+            </div>
+            <nav class="nav-menu">
+                <a href="../focus/focus.html" class="nav-item" title="仪表盘"><span class="material-symbols-outlined">grid_view</span></a>
+                <a href="../tasks/tasks.html" class="nav-item" title="任务"><span class="material-symbols-outlined">task</span></a>
+                <a href="../calendar/calendar.html" class="nav-item" title="日历"><span class="material-symbols-outlined">calendar_today</span></a>
+                <a href="#" class="nav-item" title="更多"><span class="material-symbols-outlined">apps</span></a>
+            </nav>
+            <div class="sidebar-bottom">
+                <a href="settings.html" class="nav-item active" title="设置"><span class="material-symbols-outlined">settings</span></a>
+                <img src="/legacy-v032/shared/images/avatar-default.png" alt="Avatar" class="user-avatar">
+            </div>
+        </aside>
+
+        <!-- 主体结构 -->
+        <main class="main-wrapper">
+            <div class="settings-container" id="mainContainer">
+                <!-- Unified Header -->
+                <header class="header">
+                    <div class="header-left">
+                        <h1 id="pageTitle">设置</h1>
+                    </div>
+                    <button class="save-btn" id="saveBtn">保存修改</button>
+                </header>
+
+                <!-- Settings View Content -->
+                <div id="settingsView" class="settings-view">
+                    <div class="content custom-scrollbar">
+                        <!-- 通用设置 -->
+                        <section class="section">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">settings</span> 通用
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">显示主题</span>
+                                        <span class="setting-desc">选择系统的视觉风格</span>
+                                    </div>
+                                    <select id="theme">
+                                        <option value="light">浅色模式</option>
+                                        <option value="dark">深色模式</option>
+                                        <option value="system">跟随系统</option>
+                                    </select>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">周起始日</span>
+                                        <span class="setting-desc">日历视图显示的起始日</span>
+                                    </div>
+                                    <select id="weekStartsOn">
+                                        <option value="1">周一</option>
+                                        <option value="0">周日</option>
+                                    </select>
+                                </div>
+                                <div class="setting-row link-setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">番茄钟时长</span>
+                                        <span class="setting-desc">工作阶段的默认时长（分钟）</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="number" id="tomatoDuration" value="25" min="1" max="120" style="width: 80px;">
+                                        <span style="font-size: 13px; color: var(--text-sub);">分钟</span>
+                                    </div>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">背景图片</span>
+                                        <span class="setting-desc">选择本地固定背景，保存后各页面保持一致</span>
+                                    </div>
+                                    <select id="appearanceBackground">
+                                        <option value="calm">Calm Blue</option>
+                                        <option value="focus">Focus Teal</option>
+                                        <option value="morning">Morning Light</option>
+                                        <option value="evening">Evening Violet</option>
+                                    </select>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">头像图片</span>
+                                        <span class="setting-desc">选择本地头像样式，不随刷新变化</span>
+                                    </div>
+                                    <select id="appearanceAvatar">
+                                        <option value="default">Default</option>
+                                        <option value="student">Student</option>
+                                        <option value="school">School</option>
+                                        <option value="focus">Focus</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 日历设置 -->
+                        <section class="section" id="calendarSection">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">calendar_today</span> 日历
+                            </h2>
+                            <div class="settings-group">
+                                <!-- 导入课表 -->
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">导入课表</span>
+                                        <span class="setting-desc">从本地 ICS 文件导入课程安排</span>
+                                    </div>
+                                    <button class="action-btn" id="importCalendarBtn">导入</button>
+                                </div>
+                                <!-- 导入区域 (默认隐藏) -->
+                                <div class="import-area" id="importArea" style="display: none;">
+                                    <div class="import-option">
+                                        <span id="timetableStatus" style="font-size: 12px; color: var(--text-sub);">尚未导入课表</span>
+                                        <span style="font-size: 12px; color: var(--text-sub);">· 重新导入将替换现有课表，不影响手动添加的日程</span>
+                                    </div>
+                                    <div class="import-option">
+                                        <span class="import-label">从您的计算机中选择文件</span>
+                                        <button class="action-btn" id="selectFileBtn">选择</button>
+                                        <input type="file" id="icsFileInput" accept=".ics" style="display: none;">
+                                        <span class="file-name" id="selectedFileName"></span>
+                                    </div>
+                                    <button class="import-btn" id="importBtn" disabled>导入</button>
+                                    <p class="import-hint">导入的课表将作为日程事件添加到日历（不影响时间容器）</p>
+                                </div>
+                                <!-- 配置时间容器 -->
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">配置时间容器</span>
+                                        <span class="setting-desc">管理每日时间块</span>
+                                    </div>
+                                    <button class="action-btn" id="manageContainersBtn">管理</button>
+                                </div>
+                                <!-- 容器管理区域 (默认隐藏) -->
+                                <div class="container-manage-area" id="containerManageArea" style="display: none;">
+                                    <div id="settingsContainerList"></div>
+                                    <div class="empty-state" id="containerEmptyState">
+                                        <span class="material-symbols-outlined">inbox</span>
+                                        <p>暂无时间容器</p>
+                                    </div>
+                                    <button class="action-btn" id="addContainerBtn">
+                                        <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle;">add</span> 添加容器
+                                    </button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Plan 设置 -->
+                        <section class="section" id="planSection">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">folder</span> Plan
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">导入 MatrixView 课表</span>
+                                        <span class="setting-desc">从本地 PowerSchool MatrixView MHTML/HTML 初始化学科 Plan</span>
+                                    </div>
+                                    <button class="action-btn" id="importMatrixViewBtn">导入</button>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">ManageBac 链接</span>
+                                        <span class="setting-desc">保存 webcal/ICS 订阅链接；同步后确认新增事件所属 Plan 再添加任务</span>
+                                    </div>
+                                    <div class="setting-control inline-link-control">
+                                        <input type="url" id="settingsManageBacIcsLinkInput" placeholder="webcal:// 或 https://">
+                                        <button class="action-btn" id="settingsSaveManageBacIcsLinkBtn" type="button">保存</button>
+                                        <button class="action-btn" id="settingsSyncManageBacBtn" type="button">同步</button>
+                                    </div>
+                                </div>
+                                <div class="setting-row compact-status-row">
+                                    <div class="setting-info">
+                                        <span class="setting-desc" id="settingsManageBacSyncStatus">未配置 ManageBac 链接</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 任务默认值 -->
+                        <section class="section">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">tune</span> 任务默认值
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">默认任务时长</span>
+                                        <span class="setting-desc">新建任务时的预设时长</span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <input type="number" id="defaultDuration" value="45" min="5" max="480" step="5" style="width: 80px;">
+                                        <span style="font-size: 13px; color: var(--text-sub);">分钟</span>
+                                    </div>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">默认优先级</span>
+                                        <span class="setting-desc">新建任务时的预设优先级</span>
+                                    </div>
+                                    <select id="defaultPriority">
+                                        <option value="urgent">P1 紧急</option>
+                                        <option value="important">P2 重要</option>
+                                        <option value="medium" selected>P3 中等</option>
+                                        <option value="low">P4 低</option>
+                                    </select>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">系统任务提醒</span>
+                                        <span class="setting-desc">任务开始前 1 分钟提醒；任务时间内未完成则每 15 分钟提醒</span>
+                                    </div>
+                                    <div class="setting-inline-actions">
+                                        <label class="toggle-control">
+                                            <input type="checkbox" id="notificationEnabled">
+                                            <span>开启提醒</span>
+                                        </label>
+                                        <button class="action-btn" id="testNotificationBtn" type="button">发送测试提醒</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Google 数据同步 -->
+                        <section class="section" id="googleSyncSection">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">sync</span> Google 数据同步
+                            </h2>
+                            <div class="settings-group google-sync-group">
+                                <div class="google-sync-card">
+                                    <div class="google-sync-card-header">
+                                        <span class="setting-label">连接状态</span>
+                                        <div class="google-sync-account-actions">
+                                            <span class="google-sync-account" id="googleSyncAccountEmail" hidden></span>
+                                            <button class="action-btn" id="connectGoogleSyncBtn" type="button">连接 Google 账户同步</button>
+                                            <button class="action-btn" id="switchGoogleSyncAccountBtn" type="button" hidden>切换账户</button>
+                                            <button class="action-btn danger" id="disconnectGoogleSyncBtn" type="button" hidden>断开连接</button>
+                                            <button class="action-btn danger" id="revokeGoogleSyncBtn" type="button" hidden>撤销授权</button>
+                                        </div>
+                                    </div>
+                                    <div class="google-sync-state-line">
+                                        <span class="google-sync-status" id="googleSyncStatus" data-status="not_configured">○ 未连接</span>
+                                    </div>
+                                    <p class="setting-desc">TimeWhere 可离线完整使用；Google 仅用于跨设备同步。</p>
+                                </div>
+
+                                <div class="google-sync-card google-sync-recovery-card" id="googleSyncRecoveryHint" hidden>
+                                    <div class="google-sync-card-header">
+                                        <span class="setting-label">重装恢复</span>
+                                        <button class="action-btn" id="connectAndRestoreGoogleSyncBtn" type="button">连接 Google 并从云端恢复</button>
+                                    </div>
+                                    <p class="setting-desc">检测到本地暂无任务、日程、习惯或每日总结。若云端已有 TimeWhere 同步副本，可先连接 Google，再确认是否下载到本地。</p>
+                                    <p class="setting-desc">恢复前会要求再次确认，不会静默覆盖本地数据。</p>
+                                </div>
+
+                                <div class="google-sync-card">
+                                    <div class="google-sync-card-header">
+                                        <span class="setting-label">同步状态</span>
+                                        <div class="google-sync-status-actions">
+                                            <button class="action-btn" id="toggleGoogleSyncHistoryBtn" type="button">同步记录</button>
+                                            <button class="action-btn" id="syncGoogleNowBtn" type="button">手动同步</button>
+                                        </div>
+                                    </div>
+                                    <div class="google-sync-meta-line">
+                                        <span id="googleSyncAutoStatus">自动同步：已开启</span>
+                                        <span id="googleSyncLastSyncAt">最近同步：暂无</span>
+                                    </div>
+                                    <p class="setting-desc">打开主要页面和保存数据后会自动同步；有冲突时不会静默覆盖。</p>
+                                    <div class="google-sync-danger-actions">
+                                        <span class="google-sync-danger-label">高级覆盖操作</span>
+                                        <button class="action-btn danger" id="uploadGoogleSyncBtn" type="button">↑ 上传到云端</button>
+                                        <button class="action-btn danger" id="restoreGoogleSyncBtn" type="button">↓ 下载到本地</button>
+                                    </div>
+                                    <button class="action-btn google-sync-conflict-btn" id="processGoogleConflictsBtn" type="button" hidden>处理冲突</button>
+                                </div>
+                                <div class="google-sync-card google-sync-history-card" id="googleSyncHistoryPanel" hidden>
+                                    <div class="google-sync-card-header">
+                                        <span class="setting-label">同步记录</span>
+                                        <button class="action-btn danger" id="clearGoogleSyncHistoryBtn" type="button">清空记录</button>
+                                    </div>
+                                    <p class="setting-desc">仅保存本机最近同步摘要，用于排查同步中、失败、冲突和等待重试，不上传到 Google Drive。</p>
+                                    <div class="google-sync-history-list" id="googleSyncHistoryList"></div>
+                                </div>
+                                <div class="google-sync-preview" id="googleSyncPreview" hidden></div>
+                            </div>
+                        </section>
+
+                        <!-- 桌面集成 -->
+                        <section class="section" id="desktopIntegrationSection" hidden>
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">desktop_windows</span> 桌面集成
+                            </h2>
+                            <div class="settings-group desktop-integration-group">
+                                <div class="desktop-bridge-card">
+                                    <div class="desktop-bridge-card-header">
+                                        <span class="setting-label">连接 Chrome 控件</span>
+                                        <button class="action-btn" id="connectDesktopBridgeBtn" type="button">连接控件</button>
+                                    </div>
+                                    <div class="desktop-bridge-controls">
+                                        <label class="desktop-bridge-field">
+                                            <span>控件 ID</span>
+                                            <select id="desktopBridgeExtensionPreset">
+                                                <option value="ogdjmelmfkfahppahhkkggdejjainbnd">开发固定 ID</option>
+                                                <option value="bokjekfjghliieopghopibmhjokgkjkb">Chrome Web Store ID</option>
+                                                <option value="custom">自定义 ID</option>
+                                            </select>
+                                        </label>
+                                        <label class="desktop-bridge-field" id="desktopBridgeCustomField" hidden>
+                                            <span>自定义控件 ID</span>
+                                            <input type="text" id="desktopBridgeCustomExtensionId" maxlength="32" autocomplete="off" placeholder="32 位 Chrome Extension ID">
+                                        </label>
+                                    </div>
+                                    <div class="desktop-bridge-state-line">
+                                        <span class="desktop-bridge-status" id="desktopBridgeStatus" data-status="idle">○ 未连接</span>
+                                        <span class="desktop-bridge-version" id="desktopBridgeVersion"></span>
+                                    </div>
+                                    <div class="setting-row" style="margin-top: 12px;">
+                                        <div class="setting-info">
+                                            <span class="setting-label">关闭到托盘 / 菜单栏</span>
+                                            <span class="setting-desc">关闭按钮不退出应用，改为后台驻留。</span>
+                                        </div>
+                                        <label class="toggle-switch">
+                                            <input id="desktopCloseToTray" type="checkbox">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="setting-row" style="margin-top: 8px;">
+                                        <div class="setting-info">
+                                            <span class="setting-label">开机自动运行</span>
+                                            <span class="setting-desc">系统启动时自动打开 TimeWhere。</span>
+                                        </div>
+                                        <label class="toggle-switch">
+                                            <input id="desktopStartAtLogin" type="checkbox">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                    </div>
+                                    <p class="setting-desc">Windows 版不依赖 Chrome 控件；连接只用于检测和打开已安装控件，不传输任务数据。</p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- 数据管理 -->
+                        <section class="section" style="margin-bottom: 0;">
+                            <h2 class="section-title">
+                                <span class="material-symbols-outlined">database</span> 数据管理
+                            </h2>
+                            <div class="settings-group">
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">导出数据</span>
+                                        <span class="setting-desc">将您的备份导出为 JSON 格式</span>
+                                    </div>
+                                    <button class="action-btn" id="exportBtn">导出</button>
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">导入数据</span>
+                                        <span class="setting-desc">从 JSON 备份恢复所有数据</span>
+                                    </div>
+                                    <button class="action-btn" id="importJsonBtn">选择文件</button>
+                                    <input type="file" id="importJsonInput" accept=".json" style="display:none">
+                                </div>
+                                <div class="setting-row">
+                                    <div class="setting-info">
+                                        <span class="setting-label">重置配置</span>
+                                        <span class="setting-desc">恢复所有设置为默认值</span>
+                                    </div>
+                                    <button class="action-btn danger" id="resetSettingsBtn">重置</button>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- 添加容器弹窗 -->
+                <div id="addContainerModal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>添加时间容器</h3>
+                            <button class="modal-close" id="closeContainerModal">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="form-group">
+                                <label>容器名称</label>
+                                <input type="text" id="newContainerName" placeholder="例如：早晨学习">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>开始时间</label>
+                                    <input type="time" id="newContainerStart" value="18:30">
+                                </div>
+                                <div class="form-group">
+                                    <label>结束时间</label>
+                                    <input type="time" id="newContainerEnd" value="21:30">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>重复</label>
+                                <select id="newContainerRepeat">
+                                    <option value="daily">每天</option>
+                                    <option value="weekday" selected>工作日</option>
+                                    <option value="weekend">周末</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>颜色</label>
+                                <div class="color-picker" id="newContainerColorPicker">
+                                    <button class="color-option active" data-color="#4A90D9" style="background: #4A90D9;"></button>
+                                    <button class="color-option" data-color="#7B68EE" style="background: #7B68EE;"></button>
+                                    <button class="color-option" data-color="#2E8B57" style="background: #2E8B57;"></button>
+                                    <button class="color-option" data-color="#E74C3C" style="background: #E74C3C;"></button>
+                                    <button class="color-option" data-color="#F39C12" style="background: #F39C12;"></button>
+                                    <button class="color-option" data-color="#1ABC9C" style="background: #1ABC9C;"></button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>类型</label>
+                                <div class="layer-toggle" id="newContainerLayerToggle">
+                                    <button class="layer-btn active" data-layer="1">学习时间</button>
+                                    <button class="layer-btn" data-layer="2">自由时间</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="action-btn" id="cancelContainerBtn">取消</button>
+                            <button class="action-btn" id="confirmAddContainer">添加</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="googleSyncDangerModal" class="modal" style="display: none;">
+                    <div class="modal-content google-sync-danger-modal">
+                        <div class="modal-header">
+                            <h3 id="googleSyncDangerTitle">上传到云端</h3>
+                            <button class="modal-close" id="closeGoogleSyncDangerModal">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="google-sync-danger-message" id="googleSyncDangerMessage"></p>
+                            <div class="google-sync-risk-block">
+                                <span class="setting-label">风险</span>
+                                <ul id="googleSyncDangerRisks"></ul>
+                            </div>
+                            <label class="google-sync-confirm-label" for="googleSyncDangerConfirmInput">
+                                <span id="googleSyncDangerPrompt">请输入确认短语：</span>
+                            </label>
+                            <input type="text" id="googleSyncDangerConfirmInput" autocomplete="off">
+                        </div>
+                        <div class="modal-footer">
+                            <button class="action-btn" id="cancelGoogleSyncDangerBtn" type="button">取消</button>
+                            <button class="action-btn danger" id="confirmGoogleSyncDangerBtn" type="button" disabled>确认</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <!-- Icons Library -->
+    
+    <!-- Dexie.js -->
+    
+    <!-- Database -->
+    
+    
+    
+    <!-- Scheduling -->
+    
+    
+    
+    
+    
+    
+    
+    <!-- Settings Script -->
+    
+    
+    
+    
+    <script type="module" src="/src/legacy-v032/entry.js" data-timewhere-page="settings"></script>
+</body>
+</html>
+

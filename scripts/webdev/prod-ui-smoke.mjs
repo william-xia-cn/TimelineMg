@@ -212,6 +212,64 @@ async function visible(page, label, locator) {
   console.log(`  PASS ${label}`);
 }
 
+async function waitForTaskState(page, title, label) {
+  try {
+    await page.waitForFunction(
+      expectedTitle => globalThis.TaskApp?.currentPlanTasks?.some(task => task.title === expectedTitle),
+      title,
+      { timeout: 60000 }
+    );
+  } catch (error) {
+    const report = await page.evaluate(() => ({
+      href: location.href,
+      ready: document.documentElement.dataset.timewhereWebReady || null,
+      view_mode: globalThis.TaskApp?.viewMode || null,
+      task_count: globalThis.TaskApp?.currentPlanTasks?.length ?? null,
+      task_titles: (globalThis.TaskApp?.currentPlanTasks || []).slice(0, 10).map(task => task.title),
+      board_text: document.getElementById('kanbanBoard')?.textContent?.trim().slice(0, 500) || null
+    }));
+    throw new Error(label + ' did not enter the frozen controller state: ' + JSON.stringify(report), { cause: error });
+  }
+  console.log('  PASS ' + label);
+}
+
+async function assertMoreStaysOnPage(page, label) {
+  const beforeHash = await page.evaluate(() => window.location.hash);
+  const moreLink = page.locator('.sidebar .nav-item[aria-label="更多功能暂未开放"]').first();
+  await moreLink.click();
+  const toast = page.locator('.toast');
+  await toast.waitFor({ state: 'visible', timeout: 5000 });
+  const afterHash = await page.evaluate(() => window.location.hash);
+  if (afterHash !== beforeHash) throw new Error(`${label} changed route from ${beforeHash} to ${afterHash}.`);
+  if ((await toast.textContent())?.trim() !== '更多功能暂未开放') throw new Error(`${label} did not show the expected notice.`);
+  await toast.evaluate(element => element.remove());
+  console.log(`  PASS ${label}`);
+}
+
+async function assertSettingsButtonsReadable(page, label) {
+  const report = await page.evaluate(() => {
+    const root = document.body;
+    const isVisible = element => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+    };
+    const buttons = [...root.querySelectorAll('button')].filter(isVisible);
+    const blank = buttons.filter(button => !button.textContent.trim() && !button.querySelector('svg')).map(button => button.id || button.className || 'button');
+    const contrastIds = ['manageContainersBtn', 'importMatrixViewBtn', 'uploadGoogleSyncBtn', 'legacySignOutBtn'];
+    const noContrast = contrastIds.filter(id => {
+      const button = root.querySelector(`#${id}`);
+      if (!button || !isVisible(button)) return false;
+      const style = getComputedStyle(button);
+      return style.color === style.backgroundColor;
+    });
+    return { blank, noContrast };
+  });
+  if (report.blank.length) throw new Error(`${label} has blank buttons: ${report.blank.join(', ')}`);
+  if (report.noContrast.length) throw new Error(`${label} has unreadable button colors: ${report.noContrast.join(', ')}`);
+  console.log(`  PASS ${label}`);
+}
+
 async function main() {
   console.log('WebDev prod UI smoke');
   console.log('=======================');
@@ -261,7 +319,7 @@ async function main() {
       days: [],
       enabled: true
     })).container;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
     const taskTitle = `Prod UI Smoke Task ${Date.now()}`;
     await requestJson(workerUrl, session.token, 'POST', '/tasks', {
       plan_id: plan.id,
@@ -284,9 +342,12 @@ async function main() {
     console.log('  PASS prod UI smoke data seeded through Worker API');
 
     browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
-    await page.goto(pagesUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.evaluate(({ token, expiresAt }) => {
+    const context = await browser.newContext({
+      viewport: { width: 2048, height: 1210 },
+      locale: 'zh-CN',
+      timezoneId: 'Asia/Shanghai'
+    });
+    await context.addInitScript(({ token, expiresAt }) => {
       window.localStorage.setItem('timewhere.web.session', JSON.stringify({
         token,
         expires_at: expiresAt,
@@ -294,33 +355,48 @@ async function main() {
         profile: { name: 'Prod UI Smoke Workspace' }
       }));
     }, { token: session.token, expiresAt: session.expiresAt });
-    await page.reload({ waitUntil: 'networkidle', timeout: 60000 });
+    const page = await context.newPage();
+    page.on('pageerror', error => console.warn('  WARN browser page error: ' + sanitize(error.message)));
+    page.on('console', message => {
+      if (message.type() === 'error') console.warn('  WARN browser console error: ' + sanitize(message.text()));
+    });
+    await page.goto(pagesUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000
+    });
+    await page.waitForURL(url => /\/legacy-v032\/pages\/focus\/focus(?:\.html)?$/.test(url.pathname), { timeout: 30000 });
+    await page.locator('html[data-timewhere-web-ready="true"]').waitFor({ timeout: 30000 });
 
-    await visible(page, 'Prod Dashboard uses original app layout', page.locator('.legacy-page-dashboard .app-layout'));
+    await visible(page, 'Prod Dashboard uses original app layout', page.locator('.app-layout'));
     await visible(page, 'Prod Dashboard uses original multi-column board layout', page.locator('.board-layout .column-now'));
     await visible(page, 'Prod Dashboard uses original calendar board column', page.locator('.board-layout .column-calendar'));
     await visible(page, 'Prod Dashboard uses original week column', page.locator('.board-layout .column-week'));
     await visible(page, 'Prod Dashboard uses original feed column', page.locator('.board-layout .column-feed'));
+    await assertMoreStaysOnPage(page, 'Prod Dashboard More stays on Dashboard and shows notice');
 
     await page.locator('.sidebar .nav-item[title="任务"], .sidebar .nav-item[title="Tasks"]').first().click();
-    await visible(page, 'Prod Tasks uses original context sidebar', page.locator('.legacy-page-tasks .context-sidebar'));
+    await visible(page, 'Prod Tasks uses original context sidebar', page.locator('.context-sidebar'));
     await visible(page, 'Prod Tasks uses original kanban board surface', page.locator('#kanbanBoard'));
     await visible(page, 'Prod Tasks keeps original detail panel node', page.locator('#taskDetailPanel.task-detail-panel'));
     await visible(page, 'Prod Tasks keeps legacy My Day control', page.locator('#navMyDay'));
-    await visible(page, 'Prod Tasks keeps legacy plan list', page.locator('#plansList'));
-    await visible(page, 'Prod Tasks receives Cloud task', page.locator('#kanbanBoard').getByText(taskTitle).first());
+    await page.locator('#plansList').waitFor({ state: 'attached', timeout: 15000 });
+    console.log('  PASS Prod Tasks keeps legacy plan list node');
+    await assertMoreStaysOnPage(page, 'Prod Tasks More stays on Tasks and shows notice');
+    await waitForTaskState(page, taskTitle, 'Prod Tasks receives Cloud task in controller state');
+    await visible(page, 'Prod Tasks renders Cloud task', page.locator('#kanbanBoard').getByText(taskTitle).first());
     await page.locator(".view-tabs .btn-tab[data-view='list']").click();
     await visible(page, 'Prod Tasks legacy List view is available', page.locator('#taskListView'));
     await page.locator(".view-tabs .btn-tab[data-view='calendar']").click();
     await visible(page, 'Prod Tasks legacy Calendar view is available', page.locator('#taskCalendarView'));
     await page.locator(".view-tabs .btn-tab[data-view='board']").click();
     await page.locator('#kanbanBoard').getByText(taskTitle).first().click();
-    await visible(page, 'Prod Task detail opens from legacy task card', page.locator('#taskDetailPanel .task-detail-content'));
+    await visible(page, 'Prod Task detail opens from legacy task card', page.locator('#taskDetailPanel .detail-header'));
 
     await page.locator('.sidebar .nav-item[title="日历"], .sidebar .nav-item[title="Calendar"]').first().click();
-    await visible(page, 'Prod Calendar uses original main content shell', page.locator('.legacy-page-calendar .main-content.rounded-container.glass-panel'));
+    await visible(page, 'Prod Calendar uses original main content shell', page.locator('.main-content.rounded-container.glass-panel'));
     await visible(page, 'Prod Calendar keeps legacy toolbar date', page.locator('#currentDate'));
     await visible(page, 'Prod Calendar keeps legacy week view', page.locator('#weekView'));
+    await assertMoreStaysOnPage(page, 'Prod Calendar More stays on Calendar and shows notice');
     await visible(page, 'Prod Calendar receives Cloud event', page.getByText(eventTitle).first());
     await page.locator('#viewSelector').click();
     await visible(page, 'Prod Calendar legacy view dropdown opens', page.locator('#viewDropdown'));
@@ -334,8 +410,10 @@ async function main() {
     await visible(page, 'Prod Settings uses original centered glass container', page.locator('.main-wrapper .settings-container'));
     await visible(page, 'Prod Settings uses original header save action', page.locator('.settings-container .header .save-btn'));
     await visible(page, 'Prod Settings uses original single-column setting rows', page.locator('.settings-container .content .section .settings-group .setting-row').first());
-    await visible(page, 'Prod Settings renders account Cloud section inside legacy settings container', page.locator('#webdevCloudSection'));
-    await visible(page, 'Prod Settings renders read cache cursor', page.getByText(/Read cache cursor:/));
+    await visible(page, 'Prod Settings renders account Cloud section inside legacy settings container', page.locator('#googleSyncSection'));
+    await visible(page, 'Prod Settings renders read cache cursor', page.locator('#googleSyncLastSyncAt'));
+    await assertMoreStaysOnPage(page, 'Prod Settings More stays on Settings and shows notice');
+    await assertSettingsButtonsReadable(page, 'Prod Settings visible buttons keep readable text and contrast');
     await visible(page, 'Prod Settings keeps old General section', page.locator('#settingsView .section').first());
     await visible(page, 'Prod Settings keeps old Calendar section', page.locator('#calendarSection'));
     await visible(page, 'Prod Settings keeps old Plan section', page.locator('#planSection'));

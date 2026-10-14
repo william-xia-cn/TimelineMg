@@ -297,15 +297,64 @@ async function upsertEvents(env: Env, accountId: string, events: Record<string, 
   return count;
 }
 
-async function upsertSettings(env: Env, accountId: string, settings: unknown, now: string): Promise<number> {
-  const entries = Array.isArray(settings)
+function settingEntries(settings: unknown): Array<readonly [string | null, unknown]> {
+  return Array.isArray(settings)
     ? settings.filter(isObjectRecord).map(row => [asText(row.key), row.value] as const)
     : isObjectRecord(settings)
       ? Object.entries(settings)
       : [];
+}
+
+async function detectSettingConflicts(
+  env: Env,
+  accountId: string,
+  runId: string,
+  settings: unknown,
+  now: string
+): Promise<Set<string>> {
+  const skipped = new Set<string>();
+  for (const [key, value] of settingEntries(settings)) {
+    if (!key || FORBIDDEN_KEYS.test(key)) continue;
+    const existing = await env.DB.prepare(
+      'SELECT value_json, updated_at, revision FROM product_settings WHERE account_id = ? AND key = ?'
+    ).bind(accountId, key).first<Record<string, unknown>>();
+    if (!existing) continue;
+    const incomingJson = sanitizeJsonValue(value);
+    if (incomingJson === String(existing.value_json ?? 'null')) continue;
+    skipped.add(key);
+    let cloudValue: unknown = null;
+    try {
+      cloudValue = JSON.parse(String(existing.value_json ?? 'null'));
+    } catch {
+      cloudValue = null;
+    }
+    await env.DB.prepare(
+      'INSERT INTO migration_conflicts (id, account_id, migration_run_id, entity_type, entity_id, reason, local_json, cloud_json, status, created_at) ' +
+      "VALUES (?, ?, ?, 'setting', ?, 'cloud_setting_differs_from_import', ?, ?, 'open', ?)"
+    ).bind(
+      newId('conflict'),
+      accountId,
+      runId,
+      key,
+      sanitizeJsonValue({ key, value }),
+      sanitizeJsonValue({ key, value: cloudValue, updated_at: existing.updated_at, revision: existing.revision }),
+      now
+    ).run();
+  }
+  return skipped;
+}
+
+async function upsertSettings(
+  env: Env,
+  accountId: string,
+  settings: unknown,
+  now: string,
+  skipKeys: Set<string> = new Set()
+): Promise<number> {
+  const entries = settingEntries(settings);
   let count = 0;
   for (const [key, value] of entries) {
-    if (!key || FORBIDDEN_KEYS.test(key)) continue;
+    if (!key || FORBIDDEN_KEYS.test(key) || skipKeys.has(key)) continue;
     await env.DB.prepare(
       `INSERT INTO product_settings (account_id, key, value_json, updated_at)
        VALUES (?, ?, ?, ?)
@@ -358,6 +407,12 @@ async function applyLocalConflict(env: Env, accountId: string, conflict: Record<
   }
   if (entityType === 'event') {
     await upsertEvents(env, accountId, [local], now);
+    return true;
+  }
+  if (entityType === 'setting') {
+    const key = asText(local.key);
+    if (!key) return false;
+    await upsertSettings(env, accountId, { [key]: local.value }, now);
     return true;
   }
   return false;
@@ -422,16 +477,24 @@ export async function importSnapshot(env: Env, accountId: string, snapshot: Loca
   const taskConflicts = await detectMigrationConflicts(env, accountId, runId, 'task', 'tasks', taskRows, now);
   const containerConflicts = await detectMigrationConflicts(env, accountId, runId, 'container', 'containers', containerRows, now);
   const eventConflicts = await detectMigrationConflicts(env, accountId, runId, 'event', 'calendar_events', eventRows, now);
+  const settingConflicts = await detectSettingConflicts(env, accountId, runId, snapshot.data.settings, now);
 
   const counts: Record<string, number> = {};
-  counts.conflicts = planConflicts.size + bucketConflicts.size + labelConflicts.size + taskConflicts.size + containerConflicts.size + eventConflicts.size;
+  counts.conflicts = planConflicts.size + bucketConflicts.size + labelConflicts.size + taskConflicts.size + containerConflicts.size + eventConflicts.size + settingConflicts.size;
+  counts.plan_conflicts = planConflicts.size;
+  counts.bucket_conflicts = bucketConflicts.size;
+  counts.label_conflicts = labelConflicts.size;
+  counts.task_conflicts = taskConflicts.size;
+  counts.container_conflicts = containerConflicts.size;
+  counts.event_conflicts = eventConflicts.size;
+  counts.setting_conflicts = settingConflicts.size;
   counts.plans = await upsertPlans(env, accountId, planRows, now, planConflicts);
   counts.buckets = await upsertSimpleOwnedTable(env, accountId, 'buckets', 'bucket', bucketRows, now, bucketConflicts);
   counts.labels = await upsertSimpleOwnedTable(env, accountId, 'labels', 'label', labelRows, now, labelConflicts);
   counts.tasks = await upsertTasks(env, accountId, taskRows, now, taskConflicts);
   counts.containers = await upsertContainers(env, accountId, containerRows, now, containerConflicts);
   counts.events = await upsertEvents(env, accountId, eventRows, now, eventConflicts);
-  counts.settings = await upsertSettings(env, accountId, snapshot.data.settings, now);
+  counts.settings = await upsertSettings(env, accountId, snapshot.data.settings, now, settingConflicts);
   const finalStatus = counts.conflicts > 0 ? 'conflict' : 'completed';
 
   await env.DB.prepare(

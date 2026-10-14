@@ -32,7 +32,7 @@ async function main() {
     settings: {
       theme: 'blue',
       google_sync_history: [{ result: 'failed' }],
-      google_sync_account_email: 'person@example.invalid',
+      google_sync_account_email: 'redacted-account-id',
       [runtimeKey]: 'private-value',
       [privateKey]: 'private-value'
     }
@@ -71,8 +71,55 @@ async function main() {
 
   const serialized = JSON.stringify(snapshot);
   assert(!serialized.includes('private-value'));
-  assert(!serialized.includes('person@example.invalid'));
+  assert(!serialized.includes('redacted-account-id'));
   pass('strips private nested fields from exported snapshot');
+
+  const extensionBackup = {
+    _meta: { version: 1, app: 'TimeWhere', exported_at: '2026-07-12T00:00:00.000Z' },
+    plans: Array.from({ length: 9 }, (_, index) => ({ id: 11 + index, name: 'Imported Plan ' + (index + 1) })),
+    buckets: [],
+    labels: [],
+    tasks: Array.from({ length: 6 }, (_, index) => ({ id: 'task-' + (index + 1), plan_id: 11 + index, title: 'Imported Task ' + (index + 1), deadline: '2026-07-20', status: 'not_started' })),
+    containers: [],
+    habits: [{ id: 13, name: 'Keep in original backup' }],
+    events: [],
+    daily_journals: [{ date: '2026-07-11', summary: 'Keep in original backup' }],
+    settings: [{ key: 'default_duration', value: 50 }, { key: 'google_sync_state', value: { status: 'connected' } }]
+  };
+  const parsedBackup = await adapter.parseExtensionBackupFile({
+    size: Buffer.byteLength(JSON.stringify(extensionBackup)),
+    text: async () => JSON.stringify(extensionBackup)
+  });
+  const extensionSummary = adapter.summarizeExtensionBackup(parsedBackup);
+  const extensionSnapshot = await adapter.buildExtensionBackupSnapshot(parsedBackup);
+  assert.equal(extensionSummary.counts.plans, 9);
+  assert.equal(extensionSummary.counts.tasks, 6);
+  assert.equal(extensionSummary.skipped.habits, 1);
+  assert.equal(extensionSummary.skipped.daily_journals, 1);
+  assert.equal(extensionSnapshot.device_id, 'extension-json-export-v1');
+  assert.equal(extensionSnapshot.data.plans.length, 9);
+  assert.equal(extensionSnapshot.data.tasks.length, 6);
+  assert.equal(extensionSnapshot.data.tasks[0].plan_id, 11);
+  assert.equal(extensionSnapshot.data.tasks[0].due_date, '2026-07-20');
+  assert.equal(extensionSnapshot.data.settings.default_duration, 50);
+  assert(!Object.prototype.hasOwnProperty.call(extensionSnapshot.data.settings, 'google_sync_state'));
+  assert(!Object.prototype.hasOwnProperty.call(extensionSnapshot.data, 'habits'));
+  assert(!Object.prototype.hasOwnProperty.call(extensionSnapshot.data, 'daily_journals'));
+  pass('parses Extension v1 JSON and reports unsupported entity counts without uploading them');
+
+  await assert.rejects(
+    adapter.parseExtensionBackupFile({ size: 10, text: async () => '{not-json' }),
+    /不是有效的 JSON/
+  );
+  await assert.rejects(
+    adapter.parseExtensionBackupFile({ size: adapter.EXTENSION_BACKUP_MAX_BYTES + 1, text: async () => '{}' }),
+    /不能超过 20 MB/
+  );
+  await assert.rejects(
+    adapter.parseExtensionBackupFile({ size: 20, text: async () => JSON.stringify({ _meta: { app: 'Other', version: 1 } }) }),
+    /不是受支持/
+  );
+  pass('rejects malformed, oversized, and non-TimeWhere backup files');
 
   const tableLikeSource = {
     db: {

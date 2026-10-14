@@ -35,6 +35,15 @@ import {
   updateTask
 } from './repositories';
 import { importSnapshot, listMigrationConflicts, resolveMigrationConflict } from './migration';
+import {
+  assertAccountMutationUnlocked,
+  cleanupExpiredReplacementArtifacts,
+  commitReplacement,
+  commitRollback,
+  createReplacementPreview,
+  createRollbackPreview,
+  listReplacements
+} from './replacements';
 import { validateOfflineMutationReplay } from './offlineMutations';
 import { getLatestSyncCursor, listSyncChanges } from './sync';
 import { getSyncConflict, listSyncConflicts, resolveSyncConflict } from './syncConflicts';
@@ -93,6 +102,11 @@ const routes: Array<{ method: string; pattern: RegExp; handler: Handler }> = [
   { method: 'POST', pattern: /^\/migration\/runs$/, handler: handleCreateMigrationRun },
   { method: 'GET', pattern: /^\/migration\/conflicts$/, handler: handleListMigrationConflicts },
   { method: 'PATCH', pattern: /^\/migration\/conflicts\/([^/]+)$/, handler: handleResolveMigrationConflict },
+  { method: 'POST', pattern: /^\/migration\/replacements\/preview$/, handler: handleCreateReplacementPreview },
+  { method: 'GET', pattern: /^\/migration\/replacements$/, handler: handleListReplacements },
+  { method: 'POST', pattern: /^\/migration\/replacements\/([^/]+)\/commit$/, handler: handleCommitReplacement },
+  { method: 'POST', pattern: /^\/migration\/replacements\/([^/]+)\/rollback-preview$/, handler: handleCreateRollbackPreview },
+  { method: 'POST', pattern: /^\/migration\/replacements\/([^/]+)\/rollback$/, handler: handleCommitRollback },
   { method: 'GET', pattern: /^\/sync\/bootstrap$/, handler: handleSyncBootstrap },
   { method: 'GET', pattern: /^\/sync\/changes$/, handler: handleListSyncChanges },
   { method: 'GET', pattern: /^\/sync\/mutations$/, handler: handleListSyncMutationOutcomes },
@@ -400,6 +414,44 @@ async function handleResolveMigrationConflict(request: Request, env: Env, url: U
   return jsonResponse({ conflict: await resolveMigrationConflict(env, session.accountId, id, body.resolution || 'resolved') });
 }
 
+async function handleCreateReplacementPreview(request: Request, env: Env): Promise<Response> {
+  const session = await requireSession(env, request);
+  const body = await readJson<{ snapshot?: unknown; source_runtime?: string }>(request);
+  return jsonResponse({
+    replacement: await createReplacementPreview(
+      env,
+      session.accountId,
+      body.snapshot || {},
+      body.source_runtime || 'extension_json_export_v1'
+    )
+  }, { status: 201 });
+}
+
+async function handleListReplacements(request: Request, env: Env): Promise<Response> {
+  const session = await requireSession(env, request);
+  return jsonResponse({ replacements: await listReplacements(env, session.accountId) });
+}
+
+async function handleCommitReplacement(request: Request, env: Env, url: URL): Promise<Response> {
+  const session = await requireSession(env, request);
+  const id = url.pathname.split('/').at(-2) || '';
+  const body = await readJson<{ confirmation?: string }>(request);
+  return jsonResponse({ replacement: await commitReplacement(env, session.accountId, id, body.confirmation || '') });
+}
+
+async function handleCreateRollbackPreview(request: Request, env: Env, url: URL): Promise<Response> {
+  const session = await requireSession(env, request);
+  const id = url.pathname.split('/').at(-2) || '';
+  return jsonResponse({ replacement: await createRollbackPreview(env, session.accountId, id) }, { status: 201 });
+}
+
+async function handleCommitRollback(request: Request, env: Env, url: URL): Promise<Response> {
+  const session = await requireSession(env, request);
+  const id = url.pathname.split('/').at(-2) || '';
+  const body = await readJson<{ confirmation?: string }>(request);
+  return jsonResponse({ replacement: await commitRollback(env, session.accountId, id, body.confirmation || '') });
+}
+
 async function handleSyncStatus(request: Request, env: Env): Promise<Response> {
   await requireSession(env, request);
   const replaySafety = buildSyncReplaySafetyGate(env);
@@ -586,9 +638,22 @@ export default {
       return handleError(new HttpError(404, 'route_not_found', 'Route not found'));
     }
     try {
+      if (isWorkspaceMutationRequest(request, url)) {
+        const session = await requireSession(env, request);
+        await assertAccountMutationUnlocked(env, session.accountId);
+      }
       return await route.handler(request, env, url);
     } catch (error) {
       return handleError(error);
     }
+  },
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(cleanupExpiredReplacementArtifacts(env));
   }
 };
+
+function isWorkspaceMutationRequest(request: Request, url: URL): boolean {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) return false;
+  if (url.pathname.startsWith('/migration/replacements')) return false;
+  return /^\/(tasks|calendar\/events|plans|buckets|labels|containers|settings|migration\/(runs|conflicts)|sync\/(mutations|conflicts))/.test(url.pathname);
+}

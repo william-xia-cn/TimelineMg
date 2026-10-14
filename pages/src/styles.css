@@ -1770,8 +1770,7 @@ textarea:disabled {
   font-weight: 700;
 }
 
-.save-btn,
-.action-btn {
+.save-btn {
   padding: 10px 20px;
   background: var(--accent);
   color: white;
@@ -1783,16 +1782,11 @@ textarea:disabled {
   transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.save-btn:hover,
-.action-btn:hover {
+.save-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 12px var(--accent-glow);
 }
 
-.action-btn.danger {
-  background: var(--red);
-  box-shadow: 0 4px 6px rgba(239, 68, 68, 0.24);
-}
 
 .settings-view {
   min-height: 0;
@@ -2296,166 +2290,139 @@ textarea:disabled {
   }
 }
 
-/* WebDev legacy hard parity layer: keep old extension page structure as the UI baseline. */
-.planner-layout {
-  grid-template-columns: 240px minmax(680px, 1fr) 360px;
-  padding: 0;
-  gap: 12px;
+.auth-gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background:
+    linear-gradient(135deg, rgba(241, 245, 249, 0.9) 0%, rgba(226, 232, 240, 0.82) 100%),
+    url('/assets/bg.jpg') center / cover no-repeat fixed,
+    var(--color-bg);
 }
 
-.planner-layout .context-sidebar {
-  background: rgba(255,255,255,.35);
-  border-right: 1px solid rgba(255,255,255,.38);
+.auth-gate-panel {
+  width: min(760px, calc(100vw - 48px));
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xl);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.14);
+  padding: 42px;
+  backdrop-filter: blur(18px);
 }
 
-#btnCreatePlan {
-  min-height: 40px;
-  border-radius: 10px;
-  background: #1d8cf8;
-  color: #fff;
-}
-
-#plansList .plan-link,
-.context-menu .context-item {
-  height: 40px;
-  border-radius: 10px;
-}
-
-.header-breadcrumb .bc-parent,
-.header-breadcrumb .bc-sep {
-  color: #64748b;
-}
-
-.header-breadcrumb .bc-current {
-  color: #1e293b;
-}
-
-#searchBar.search-bar {
-  height: 36px;
-  border-radius: 18px;
-  background: rgba(255,255,255,.76);
-  border: 1px solid rgba(203,213,225,.75);
-}
-
-#searchInput {
-  background: transparent;
-  border: 0;
-  outline: none;
-}
-
-#btnFilter.filter-active,
-#btnGroupBy:focus-visible {
-  border-color: #1d8cf8;
-  color: #1d8cf8;
-  box-shadow: 0 0 0 3px rgba(29,140,248,.12);
-}
-
-.filter-panel {
-  margin: 10px 32px 0;
-  padding: 14px;
+.auth-gate-brand {
   display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  background: rgba(255,255,255,.82);
-  border: 1px solid rgba(203,213,225,.75);
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.auth-gate-logo {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--color-sidebar);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0;
+  box-shadow: var(--shadow-soft);
+}
+
+.auth-gate-kicker {
+  margin: 0 0 4px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.auth-gate h1 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 32px;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.auth-gate-copy {
+  margin: 0 0 28px;
+  max-width: 620px;
+  color: var(--text-sub);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.auth-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.auth-google-button {
+  min-width: 280px;
+  min-height: 44px;
+}
+
+.auth-demo-button {
+  height: 44px;
+  padding: 0 20px;
+  border: 1px solid var(--color-border);
   border-radius: 12px;
-  box-shadow: 0 8px 22px rgba(15,23,42,.06);
-}
-
-.planner-column {
-  min-width: 230px;
-  border-radius: 14px;
-  background: rgba(248,250,252,.72);
-  border: 1px solid rgba(226,232,240,.78);
-}
-
-.planner-column-header {
-  min-height: 42px;
-  padding: 0 12px;
-  border-bottom: 1px solid rgba(226,232,240,.76);
-}
-
-.task-card,
-.task-list-row,
-.task-calendar-day {
-  border-radius: 12px;
-  border: 1px solid rgba(226,232,240,.86);
-  background: rgba(255,255,255,.92);
-  box-shadow: 0 4px 12px rgba(15,23,42,.04);
-}
-
-.task-card:hover,
-.task-list-row:hover,
-.task-calendar-item:hover {
-  border-color: rgba(29,140,248,.42);
-  box-shadow: 0 10px 24px rgba(15,23,42,.08);
-}
-
-#taskDetailPanel.task-detail-panel-shell {
-  border-radius: 16px;
-  background: rgba(255,255,255,.44);
-}
-
-#taskDetailPanel .task-detail-panel {
-  border-radius: 16px;
-  background: rgba(255,255,255,.9);
-  border: 1px solid rgba(226,232,240,.85);
-}
-
-#modalOverlay.modal-overlay {
-  display: none;
-}
-
-.calendar-layout {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.calendar-page.main-content {
-  border-radius: 18px;
-  background: rgba(255,255,255,.72);
-}
-
-.calendar-toolbar {
-  min-height: 52px;
-  padding: 0 4px;
-}
-
-#btnToday,
-#btnPrev,
-#btnNext,
-#btnSearch,
-#viewSelector .btn-dropdown {
-  height: 36px;
-  border-radius: 999px;
-}
-
-#currentDate.current-date {
-  min-width: 220px;
-  font-size: 20px;
-  color: #1e293b;
-}
-
-.calendar-container {
-  border-radius: 16px;
-  background: rgba(255,255,255,.9);
-}
-
-#weekView.view-panel,
-#monthView.view-panel {
   background: #fff;
+  color: var(--color-sidebar);
+  font-weight: 700;
+  box-shadow: var(--shadow-soft);
 }
 
-#weekView .calendar-body,
-#monthView .month-grid {
-  background: #fff;
+.auth-gate-status {
+  margin: 0 0 18px;
+  color: var(--text-sub);
+  font-size: 14px;
 }
 
-#calModal.event-modal {
-  z-index: 80;
+.auth-gate-status.error,
+.auth-gate-warning {
+  color: var(--red);
 }
 
-#calModal .event-modal-content {
-  width: min(560px, calc(100vw - 48px));
-  border-radius: 16px;
-  background: rgba(255,255,255,.96);
+.auth-gate-warning {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.auth-gate-notes {
+  display: grid;
+  gap: 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--color-border);
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .auth-gate {
+    padding: 18px;
+  }
+
+  .auth-gate-panel {
+    padding: 26px;
+  }
+
+  .auth-gate-brand {
+    align-items: flex-start;
+  }
+
+  .auth-gate h1 {
+    font-size: 25px;
+  }
+
+  .auth-google-button,
+  .auth-demo-button {
+    width: 100%;
+  }
 }

@@ -52,12 +52,14 @@ function assertSafeCommandPlan() {
 }
 
 function runSensitivePatternScan() {
+  const ignoredChangedFileExtensions = /\.(woff2?|ttf|otf|eot|png|jpe?g|gif|webp|ico|svg|pdf|zip|exe|dmg)$/i;
   const changed = [
     ...git(['diff', '--name-only']).split(/\r?\n/),
     ...git(['ls-files', '--others', '--exclude-standard']).split(/\r?\n/)
   ]
     .map(file => file.trim())
     .filter(Boolean)
+    .filter(file => !ignoredChangedFileExtensions.test(file))
     .filter(file => fs.existsSync(path.join(root, file)));
 
   if (changed.length === 0) {
@@ -84,7 +86,14 @@ function runSensitivePatternScan() {
     '--glob', '!dist/**',
     '--glob', '!platforms/desktop-electron/dist/**',
     '--glob', '!*.local.json',
-    '--glob', '!*.log'
+    '--glob', '!*.log',
+    '--glob', '!*.woff2',
+    '--glob', '!*.woff',
+    '--glob', '!*.ttf',
+    '--glob', '!*.png',
+    '--glob', '!*.jpg',
+    '--glob', '!*.jpeg',
+    '--glob', '!*.ico'
   ];
 
   for (const pattern of patterns) {

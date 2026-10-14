@@ -25,8 +25,8 @@ TimeWhere WebDev v1 完成时应满足：
 | Phase 2 | Google SSO 与账户会话 | Preview SSO smoke complete | Worker 支持 `POST /auth/google`、`POST /auth/session/refresh`、`DELETE /auth/session`、`GET /account/me`、`GET/PATCH /account/profile`、`GET /account/status`；Web App 只保存 TimeWhere session 与 workspace/profile，不保存 Google secret。Stable preview origin Google SSO smoke 已通过。 |
 | Phase 3 | Cloud canonical schema 与 API 完整化 | Local preview complete | D1 schema 与核心实体 CRUD、revision、change feed、只读 bootstrap snapshot、统一错误 envelope、安全 runtime/gate 状态均有测试覆盖。 |
 | Phase 4 | 自动迁移闭环 | Preview smoke backed | legacy IndexedDB snapshot、R2 raw snapshot、D1 import、migration conflict、idempotent retry 均有本地 integration evidence；Gate A preview core smoke 已覆盖 migration import、幂等重试、冲突生成和解决。 |
-| Phase 5 | Web App 完整业务覆盖 | Complete for local preview | Dashboard / Tasks / Calendar / Settings / projection / reminder / migration conflict / structure editing 已有本地实现；`npm run webdev:ui:walkthrough` 提供可重复本地 UI walkthrough。真实 preview cloud evidence 仍归 Phase 9 / Gate A。 |
-| Phase 6 | 离线与同步 v1 收敛 | Guarded with Gate B/C packets | Web App 已用只读 bootstrap 初始化本地 read cache，并可按 `/sync/changes` cursor 增量刷新 Task / Calendar / Structure / Settings cache；Task-only pending 已可见且 hydrate / 增量应用都会保留 pending；`docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md` / `npm run webdev:gate-b:readiness` 和 `docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md` / `npm run webdev:gate-c:readiness` 提供 Gate B/C 审批前证据；真正 replay 写 Cloud、非 Task replay、local-over-cloud 均保持 gate。 |
+| Phase 5 | Web App 完整业务覆盖 | Internal prod UI verified within approved scope | Dashboard / Tasks / Calendar / Settings 直接复用旧页面 HTML/CSS 骨架，由 `LegacyDataBridge` 映射 Cloud repositories；本地 walkthrough 验证主要 CRUD 和控件交互，preview/prod UI smoke 验证线上旧版 DOM 与 Cloud 数据路径。旧 runtime 专属能力保留原控件并明确 disabled，不视为已迁入。 |
+| Phase 6 | 离线与同步 v1 收敛 | Guarded with Gate B/C packets | Web App 已用只读 bootstrap 初始化本地 read cache，并可按 `/sync/changes` cursor 增量刷新 Task / Calendar / Structure / Settings cache；Task-only pending 已可见且 hydrate / 增量应用都会保留 pending；`docs/WEBDEV_TASK_REPLAY_GATE_B_READINESS.md` / `npm run webdev:gate-b:readiness` 和 `docs/WEBDEV_NON_TASK_REPLAY_GATE_C_READINESS.md` / `npm run webdev:gate-c:readiness` 提供 Gate B/C 审批前证据；真正 replay 写 Cloud、非 Task replay、D-052 手动 JSON 恢复以外的 local-over-cloud 均保持 gate。 |
 | Phase 7 | Desktop Runtime 重定位 | Opt-in scaffolded with Gate E packet | Electron 增加 `TIMEWHERE_DESKTOP_RUNTIME_MODE=webdev` / `TIMEWHERE_WEB_APP_URL` WebDev runtime mode，可加载 Web App 并保留 native bridge；`docs/WEBDEV_DESKTOP_RUNTIME_GATE_E_READINESS.md` 和 `npm run webdev:desktop:readiness` 静态验证 Runtime 边界、导航 guard、preload native bridge 和 Gate E 禁止打包边界；`npm run webdev:desktop:smoke` 可本地启动 Worker/Pages 并让 Electron smoke 加载 Web App；默认仍是 legacy extension shell。内部包、签名、公证、自动更新和分发仍归 Gate E。 |
 | Phase 8 | Browser Extension 生态化 | Deferred with Gate D packet | 第一阶段范围另行批准；不实现 Extension replay。`docs/WEBDEV_BROWSER_EXTENSION_GATE_D_READINESS.md` 和 `npm run webdev:extension:readiness` 静态验证 Extension 仍是 Gate D 后续生态组件，当前 legacy MV3 shell 未接入 WebDev replay / Cloudflare endpoint，也不新增 CWS/release 动作。 |
 | Phase 9 | 内部 preview 验收 | Preview acceptance hardened under Gate A | `docs/WEBDEV_PREVIEW_ACCEPTANCE_RUNBOOK.md` 已定义 preview 验收步骤和证据模板；preview Worker / Pages / Google SSO smoke 已通过；`npm run webdev:preview:headers-smoke` 验证 stable Pages preview CSP / security headers / cache policy；`npm run webdev:preview:smoke` 可复核 preview Worker / Pages / D1 / R2 / KV 基础资源；`npm run webdev:preview:core-smoke` 通过临时 smoke account/session 走 preview Worker API 验证 Account / Structure / Task / Calendar / Settings / Sync bootstrap / Sync changes / Migration import / idempotent retry / conflict / resolution，并清理测试数据；`npm run webdev:preview:ui-smoke` 使用临时 smoke session 打开 stable Pages preview，验证 Dashboard / Tasks / Calendar / Settings UI 能读取 preview Cloud 数据；`npm run webdev:preview:data-hygiene-smoke` 验证 preview smoke 后 D1 / KV / local temp files 无残留。 |
@@ -134,14 +134,14 @@ npm run webdev:prod:evidence:check
 | Gate E | Desktop Runtime 内部包、签名、公证、自动更新、分发 | Not approved | 仅允许本地 Runtime readiness / smoke；不打包、不签名、不公证、不分发。 |
 | Gate R | prod Cloudflare resources、prod deploy、tag、merge、GitHub Release、public release、CWS、正式发布 | Partially approved | 允许创建/确认 prod Cloudflare resources、部署 prod Worker / Pages、运行内部 smoke/evidence；不允许 public release、GitHub Release、tag、merge、CWS、Desktop 分发或正式发布。 |
 
-当前整体分类保持 `readiness_complete_pending_approval_gates`。prod release、Calendar / Container / Settings replay、Browser Extension replay、local-over-cloud overwrite、batch conflict handling、full-entity offline-first 仍需单独批准。
+当前整体分类保持 `readiness_complete_pending_approval_gates`。prod release、Calendar / Container / Settings replay、Browser Extension replay、general local-over-cloud overwrite outside the D-052 manual JSON restore flow、batch conflict handling、full-entity offline-first 仍需单独批准。
 
 ## 当前明确未批准
 
 - prod release；
 - Calendar / Container / Settings replay implementation；
 - Browser Extension replay；
-- local-over-cloud overwrite；
+- general local-over-cloud overwrite outside the D-052 manual JSON restore flow；
 - batch conflict handling；
 - full-entity offline-first；
 - Google Drive Sync / Google Tasks / Google Calendar 作为新架构数据同步方案。

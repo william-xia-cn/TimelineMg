@@ -31,8 +31,9 @@ console.log('WebDev prod headers smoke');
 console.log('============================');
 
 try {
-  const { response: indexGet, text: html } = await fetchText(`${prodPagesUrl}/`);
+  const { response: indexGet, text: indexHtml } = await fetchText(`${prodPagesUrl}/`);
   assert('stable prod Pages HTML is reachable', indexGet.ok, `HTTP ${indexGet.status}`);
+  assert('prod root redirects into the frozen Dashboard MPA', indexHtml.includes('/legacy-v032/pages/focus/focus.html'));
 
   const csp = header(indexGet, 'content-security-policy');
   assert('root response has CSP for Google SSO and prod Worker API',
@@ -46,8 +47,10 @@ try {
       && header(indexGet, 'permissions-policy').includes('camera=()'));
   assert('root HTML is no-store', header(indexGet, 'cache-control') === 'no-store');
 
+  const { response: appGet, text: html } = await fetchText(`${prodPagesUrl}/legacy-v032/pages/focus/focus.html`);
+  assert('prod frozen Dashboard HTML is reachable', appGet.ok, `HTTP ${appGet.status}`);
   const assetPath = html.match(/\/assets\/[^"']+\.js/)?.[0];
-  assert('prod HTML references a hashed JS asset', Boolean(assetPath));
+  assert('prod Dashboard HTML references a hashed JS asset', Boolean(assetPath));
   if (assetPath) {
     const assetHead = await fetchHead(new URL(assetPath, prodPagesUrl).href);
     assert('hashed JS asset is reachable', assetHead.ok, `HTTP ${assetHead.status}`);

@@ -102,6 +102,8 @@ function d1(command) {
 function cleanupSmokeAccounts() {
   const smokeAccountWhere = "account_id IN (SELECT id FROM accounts WHERE google_sub LIKE 'preview-smoke-%')";
   const statements = [
+    `DELETE FROM account_mutation_locks WHERE ${smokeAccountWhere};`,
+    `DELETE FROM migration_replacements WHERE ${smokeAccountWhere};`,
     `DELETE FROM sync_mutation_outcomes WHERE ${smokeAccountWhere};`,
     `DELETE FROM sync_conflicts WHERE ${smokeAccountWhere};`,
     `DELETE FROM sync_changes WHERE ${smokeAccountWhere};`,
@@ -126,6 +128,12 @@ function deleteSmokeSnapshot(preview, accountId, runId) {
   runWrangler(['r2', 'object', 'delete', `${preview.r2_bucket_name}/${accountId}/${runId}/snapshot.json`], { allowFailure: true });
 }
 
+function deleteSmokeReplacementSnapshots(preview, accountId, replacementId) {
+  if (!preview?.r2_bucket_name || !accountId || !replacementId) return;
+  for (const name of ['incoming.json', 'rollback.json']) {
+    runWrangler(['r2', 'object', 'delete', `${preview.r2_bucket_name}/${accountId}/replacements/${replacementId}/${name}`], { allowFailure: true });
+  }
+}
 function createSmokeSession() {
   const now = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60).toISOString();
@@ -164,7 +172,7 @@ async function fetchWithPowerShell(url, { method = 'GET', token, body } = {}) {
       '$headers = @{}',
       "if ($env:TIMEWHERE_PREVIEW_AUTH) { $headers['Authorization'] = ('Bearer ' + $env:TIMEWHERE_PREVIEW_AUTH) }",
       "$params = @{ Uri = $env:TIMEWHERE_PREVIEW_URL; Method = $env:TIMEWHERE_PREVIEW_METHOD; Headers = $headers; UseBasicParsing = $true; TimeoutSec = 45 }",
-      "if ($env:TIMEWHERE_PREVIEW_BODY) { $headers['Content-Type'] = 'application/json'; $params['Body'] = $env:TIMEWHERE_PREVIEW_BODY }",
+      "if ($env:TIMEWHERE_PREVIEW_BODY) { $headers['Content-Type'] = 'application/json'; $params['Body'] = [Text.Encoding]::UTF8.GetBytes($env:TIMEWHERE_PREVIEW_BODY) }",
       '$r = Invoke-WebRequest @params',
       '[pscustomobject]@{ status = [int]$r.StatusCode; content = [string]$r.Content } | ConvertTo-Json -Compress'
     ].join('; ')
@@ -238,6 +246,7 @@ async function main() {
 
   let session = null;
   const migrationRunIds = new Set();
+  const replacementRunIds = new Set();
   try {
     cleanupSmokeAccounts();
     session = createSmokeSession();
@@ -368,7 +377,7 @@ async function main() {
           updated_at: '2026-01-01T00:00:00.000Z'
         }],
         settings: {
-          default_duration: 20
+          default_duration: 30
         }
       }
     };
@@ -401,7 +410,10 @@ async function main() {
           title: 'Preview Smoke Local Conflict Task',
           due_date: '2026-07-15',
           updated_at: '2026-01-01T00:00:00.000Z'
-        }]
+        }],
+        settings: {
+          default_duration: 40
+        }
       }
     };
     const conflictMigration = (await requestJson(workerUrl, session.token, 'POST', '/migration/runs', {
@@ -409,15 +421,57 @@ async function main() {
       snapshot: conflictSnapshot
     })).migration;
     migrationRunIds.add(conflictMigration.run_id);
-    assert(conflictMigration?.status === 'conflict' && conflictMigration?.counts?.conflicts === 1, 'Migration conflict smoke did not create one conflict.');
+    assert(conflictMigration?.status === 'conflict' && conflictMigration?.counts?.conflicts === 2, 'Migration conflict smoke did not create task and setting conflicts.');
     const migrationConflicts = await requestJson(workerUrl, session.token, 'GET', '/migration/conflicts?status=open');
-    const migrationConflict = migrationConflicts?.conflicts?.find(conflict => conflict.migration_run_id === conflictMigration.run_id);
-    assert(migrationConflict?.id, 'Migration conflict list did not include preview smoke conflict.');
-    const resolvedMigrationConflict = (await requestJson(workerUrl, session.token, 'PATCH', `/migration/conflicts/${encodeURIComponent(migrationConflict.id)}`, {
-      resolution: 'use_cloud'
-    })).conflict;
-    assert(resolvedMigrationConflict?.status === 'use_cloud', 'Migration conflict did not resolve with use_cloud.');
-    console.log('  PASS Migration API import, idempotent retry, conflict, and resolution');
+    const runConflicts = migrationConflicts?.conflicts?.filter(conflict => conflict.migration_run_id === conflictMigration.run_id) || [];
+    const taskMigrationConflict = runConflicts.find(conflict => conflict.entity_type === 'task');
+    const settingMigrationConflict = runConflicts.find(conflict => conflict.entity_type === 'setting' && conflict.entity_id === 'default_duration');
+    assert(taskMigrationConflict?.id && settingMigrationConflict?.id, 'Migration conflict list did not include task and setting conflicts.');
+    for (const conflict of [taskMigrationConflict, settingMigrationConflict]) {
+      const resolvedMigrationConflict = (await requestJson(workerUrl, session.token, 'PATCH', `/migration/conflicts/${encodeURIComponent(conflict.id)}`, {
+        resolution: 'use_cloud'
+      })).conflict;
+      assert(resolvedMigrationConflict?.status === 'use_cloud', 'Migration conflict did not resolve with use_cloud.');
+    }
+    const settingsAfterConflict = await requestJson(workerUrl, session.token, 'GET', '/settings');
+    assert(settingsAfterConflict?.settings?.default_duration === 30, 'Migration setting conflict silently overwrote Cloud settings.');
+    console.log('  PASS Extension JSON migration import, idempotent retry, task/settings conflict, and resolution');
+    const replacementSnapshot = {
+      schema: 'timewhere-legacy-indexeddb-snapshot-v1',
+      exported_at: '2026-07-17T00:00:00.000Z',
+      data: {
+        plans: [{ id: 'preview-replacement-plan', name: 'Preview Replacement Plan' }],
+        buckets: [], labels: [], containers: [], events: [],
+        tasks: [{ id: 'preview-replacement-task', plan_id: 'preview-replacement-plan', title: 'Preview Replacement Task' }],
+        settings: { default_duration: 25 }
+      }
+    };
+    const replacementPreview = (await requestJson(workerUrl, session.token, 'POST', '/migration/replacements/preview', {
+      source_runtime: 'extension_json_export_v1', snapshot: replacementSnapshot
+    })).replacement;
+    replacementRunIds.add(replacementPreview.replacement_id);
+    assert(replacementPreview?.counts?.tasks?.create === 1 && replacementPreview?.counts?.tasks?.delete >= 1, 'Replacement preview counts did not include create/delete changes.');
+    const replacement = (await requestJson(workerUrl, session.token, 'POST', `/migration/replacements/${encodeURIComponent(replacementPreview.replacement_id)}/commit`, {
+      confirmation: '覆盖导入'
+    })).replacement;
+    assert(replacement?.status === 'completed', 'Complete replacement did not finish.');
+    const replacedBootstrap = await requestJson(workerUrl, session.token, 'GET', '/sync/bootstrap');
+    const replacedTaskIds = (replacedBootstrap?.entities?.tasks || []).map(item => item.id).join(',');
+    const replacedPlanIds = (replacedBootstrap?.entities?.plans || []).map(item => item.id).join(',');
+    const replacementTask = replacedBootstrap?.entities?.tasks?.[0];
+    const replacementPlan = replacedBootstrap?.entities?.plans?.[0];
+    assert(replacedBootstrap?.entities?.tasks?.length === 1 && replacementTask?.id === 'task_preview-replacement-task' && replacementTask?.legacy_id === 'preview-replacement-task' && replacementTask?.plan_id === 'plan_preview-replacement-plan', `Complete replacement did not exactly adopt backup tasks: ${replacedTaskIds || '<none>'}.`);
+    assert(replacedBootstrap?.entities?.plans?.length === 1 && replacementPlan?.id === 'plan_preview-replacement-plan' && replacementPlan?.legacy_id === 'preview-replacement-plan', `Complete replacement did not exactly adopt backup plans: ${replacedPlanIds || '<none>'}.`);
+    const rollbackPreview = (await requestJson(workerUrl, session.token, 'POST', `/migration/replacements/${encodeURIComponent(replacementPreview.replacement_id)}/rollback-preview`, {})).replacement;
+    replacementRunIds.add(rollbackPreview.replacement_id);
+    const rollback = (await requestJson(workerUrl, session.token, 'POST', `/migration/replacements/${encodeURIComponent(rollbackPreview.replacement_id)}/rollback`, {
+      confirmation: '撤销覆盖'
+    })).replacement;
+    assert(rollback?.status === 'completed', 'Replacement rollback did not finish.');
+    const restoredBootstrap = await requestJson(workerUrl, session.token, 'GET', '/sync/bootstrap');
+    assert(restoredBootstrap?.entities?.tasks?.some(item => item.id === task.id), 'Rollback did not restore pre-replacement task data.');
+    assert(!restoredBootstrap?.entities?.tasks?.some(item => item.id === 'task_preview-replacement-task' || item.legacy_id === 'preview-replacement-task'), 'Rollback retained replacement-only task data.');
+    console.log('  PASS complete replacement and 30-day rollback flow');
 
     await requestJson(workerUrl, session.token, 'DELETE', `/tasks/${encodeURIComponent(task.id)}`);
     await requestJson(workerUrl, session.token, 'DELETE', `/calendar/events/${encodeURIComponent(event.id)}`);
@@ -430,6 +484,9 @@ async function main() {
     if (session?.accountId) {
       for (const runId of migrationRunIds) {
         deleteSmokeSnapshot(preview, session.accountId, runId);
+      }
+      for (const replacementId of replacementRunIds) {
+        deleteSmokeReplacementSnapshots(preview, session.accountId, replacementId);
       }
     }
     cleanupSmokeAccounts();

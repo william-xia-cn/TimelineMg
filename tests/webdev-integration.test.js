@@ -955,6 +955,8 @@ async function main() {
     });
     assert.equal(migration.migration.status, 'conflict');
     assert.equal(migration.migration.counts.conflicts, 1);
+    assert.equal(migration.migration.counts.task_conflicts, 1);
+    assert.equal(migration.migration.counts.plan_conflicts, 0);
     console.log('  PASS created migration conflict from changed cloud record');
 
     const repeatedMigration = await request(baseUrl, 'POST', '/migration/runs', {
@@ -978,6 +980,224 @@ async function main() {
     const taskAfterResolve = await request(baseUrl, 'GET', `/tasks/${encodeURIComponent(cloudTask.task.id)}`);
     assert.equal(taskAfterResolve.task.title, 'Local conflict winner');
     console.log('  PASS resolved migration conflict with local data');
+
+    const settingsSnapshot = await buildLegacyIndexedDbSnapshot({
+      settings: {
+        default_duration: 75,
+        default_priority: 'urgent',
+        appearance_background: 'calm'
+      }
+    }, {
+      deviceId: 'extension-json-settings-' + Date.now(),
+      exportedAt: '2026-07-12T00:00:00.000Z'
+    });
+    const settingsMigration = await request(baseUrl, 'POST', '/migration/runs', {
+      source_runtime: 'extension_json_export_v1',
+      snapshot: settingsSnapshot
+    });
+    assert.equal(settingsMigration.migration.status, 'conflict');
+    assert.equal(settingsMigration.migration.counts.conflicts, 3);
+    assert.equal(settingsMigration.migration.counts.settings, 0);
+    assert.equal(settingsMigration.migration.counts.setting_conflicts, 3);
+    const settingsAfterImport = await request(baseUrl, 'GET', '/settings');
+    assert.equal(settingsAfterImport.settings.default_duration, 60);
+    assert.equal(settingsAfterImport.settings.default_priority, 'important');
+    assert.equal(settingsAfterImport.settings.appearance_background, 'focus');
+
+    const settingsConflicts = await request(baseUrl, 'GET', '/migration/conflicts?status=open');
+    const bySetting = new Map(settingsConflicts.conflicts
+      .filter(item => item.entity_type === 'setting')
+      .map(item => [item.entity_id, item]));
+    assert(bySetting.has('default_duration'));
+    assert(bySetting.has('default_priority'));
+    assert(bySetting.has('appearance_background'));
+
+    await request(baseUrl, 'PATCH', '/migration/conflicts/' + encodeURIComponent(bySetting.get('default_duration').id), {
+      resolution: 'use_cloud'
+    });
+    const localSettingResolution = await request(baseUrl, 'PATCH', '/migration/conflicts/' + encodeURIComponent(bySetting.get('default_priority').id), {
+      resolution: 'use_local'
+    });
+    assert.equal(localSettingResolution.conflict.applied_local, true);
+    await request(baseUrl, 'PATCH', '/migration/conflicts/' + encodeURIComponent(bySetting.get('appearance_background').id), {
+      resolution: 'skip'
+    });
+    const settingsAfterResolution = await request(baseUrl, 'GET', '/settings');
+    assert.equal(settingsAfterResolution.settings.default_duration, 60);
+    assert.equal(settingsAfterResolution.settings.default_priority, 'urgent');
+    assert.equal(settingsAfterResolution.settings.appearance_background, 'focus');
+
+    const repeatedSettingsMigration = await request(baseUrl, 'POST', '/migration/runs', {
+      source_runtime: 'extension_json_export_v1',
+      snapshot: settingsSnapshot
+    });
+    assert.equal(repeatedSettingsMigration.migration.run_id, settingsMigration.migration.run_id);
+    console.log('  PASS Extension JSON settings import is conflict-safe, resolvable, and idempotent');
+
+    const replacementSnapshot = {
+      schema: 'timewhere-legacy-indexeddb-snapshot-v1',
+      exported_at: '2026-07-17T00:00:00.000Z',
+      data: {
+        plans: [{ id: 'replace-plan', name: 'Replacement Plan', color: '#1d8cf8', sort_order: 0 }],
+        buckets: [{ id: 'replace-bucket', plan_id: 'replace-plan', name: 'Replacement Bucket', sort_order: 0 }],
+        labels: [{ id: 'replace-label', plan_id: 'replace-plan', name: 'Replacement Label', color: '#10b981' }],
+        tasks: [{
+          id: 'replace-task',
+          plan_id: 'replace-plan',
+          bucket_id: 'replace-bucket',
+          title: 'Replacement Task',
+          due_date: date,
+          labels: ['replace-label'],
+          checklist: [{ text: 'Replacement checklist', done: false }]
+        }],
+        containers: [{ id: 'replace-container', name: 'Replacement Container', time_start: '18:00', time_end: '19:00', days: [1, 2] }],
+        events: [{ id: 'replace-event', container_id: 'replace-container', title: 'Replacement Event', date, time_start: '18:00', time_end: '19:00' }],
+        settings: { default_duration: 25, appearance_background: 'calm' }
+      }
+    };
+
+    runWorkerSql(persistTo, "INSERT OR REPLACE INTO product_settings (account_id,key,value_json,updated_at,revision) VALUES ('acct_local_dev','desktop_runtime_state','{\"mode\":\"test\"}','2026-07-17T00:00:00.000Z',1);");
+    await waitForHealth(baseUrl, worker);
+    const replacementPreview = await request(baseUrl, 'POST', '/migration/replacements/preview', {
+      source_runtime: 'extension_json_export_v1',
+      snapshot: replacementSnapshot
+    });
+    assert.equal(replacementPreview.replacement.action_type, 'overwrite');
+    assert.equal(replacementPreview.replacement.counts.plans.create, 1);
+    assert(replacementPreview.replacement.counts.plans.delete >= 1);
+    assert(replacementPreview.replacement.counts.tasks.delete >= 1);
+    const wrongReplacementConfirmation = await requestRaw(
+      baseUrl,
+      'POST',
+      `/migration/replacements/${encodeURIComponent(replacementPreview.replacement.replacement_id)}/commit`,
+      { confirmation: 'confirm' }
+    );
+    assert.equal(wrongReplacementConfirmation.response.status, 400);
+    assert.equal(wrongReplacementConfirmation.payload.error.code, 'replacement_confirmation_invalid');
+
+    const replacementCommit = await request(
+      baseUrl,
+      'POST',
+      `/migration/replacements/${encodeURIComponent(replacementPreview.replacement.replacement_id)}/commit`,
+      { confirmation: '覆盖导入' }
+    );
+    assert.equal(replacementCommit.replacement.status, 'completed');
+    assert(replacementCommit.replacement.rollback_expires_at);
+    const replacedBootstrap = await request(baseUrl, 'GET', '/sync/bootstrap');
+    assert.deepEqual(replacedBootstrap.entities.plans.map(item => item.name), ['Replacement Plan']);
+    assert.deepEqual(replacedBootstrap.entities.tasks.map(item => item.title), ['Replacement Task']);
+    assert.deepEqual(replacedBootstrap.entities.buckets.map(item => item.name), ['Replacement Bucket']);
+    assert.deepEqual(replacedBootstrap.entities.labels.map(item => item.name), ['Replacement Label']);
+    assert.deepEqual(replacedBootstrap.entities.containers.map(item => item.name), ['Replacement Container']);
+    assert.deepEqual(replacedBootstrap.entities.calendar_events.map(item => item.title), ['Replacement Event']);
+    assert.equal(replacedBootstrap.entities.tasks[0].plan_id, replacedBootstrap.entities.plans[0].id);
+    assert.equal(replacedBootstrap.entities.tasks[0].bucket_id, replacedBootstrap.entities.buckets[0].id);
+    assert.equal(replacedBootstrap.entities.settings.default_duration, 25);
+    assert.deepEqual(replacedBootstrap.entities.settings.desktop_runtime_state, { mode: 'test' });
+    assert.equal(replacedBootstrap.account.id, 'acct_local_dev');
+    assert.equal(replacedBootstrap.profile.name, 'Integration Workspace');
+    const replacementChanges = await request(baseUrl, 'GET', `/sync/changes?cursor=${replacementPreview.replacement.expected_cursor}&limit=100`);
+    assert(replacementChanges.changes.some(change => change.entity_type === 'workspace' && change.operation === 'replaced'));
+    console.log('  PASS complete replacement adopts backup data, deletes Cloud-only data, preserves account/session, and records workspace/replaced');
+
+    const replacements = await request(baseUrl, 'GET', '/migration/replacements');
+    const completedReplacement = replacements.replacements.find(item => item.id === replacementPreview.replacement.replacement_id);
+    assert(completedReplacement?.can_rollback);
+    const rollbackPreview = await request(
+      baseUrl,
+      'POST',
+      `/migration/replacements/${encodeURIComponent(completedReplacement.id)}/rollback-preview`
+    );
+    assert.equal(rollbackPreview.replacement.action_type, 'rollback');
+    const rollbackCommit = await request(
+      baseUrl,
+      'POST',
+      `/migration/replacements/${encodeURIComponent(rollbackPreview.replacement.replacement_id)}/rollback`,
+      { confirmation: '撤销覆盖' }
+    );
+    assert.equal(rollbackCommit.replacement.status, 'completed');
+    const rolledBackBootstrap = await request(baseUrl, 'GET', '/sync/bootstrap');
+    assert(rolledBackBootstrap.entities.tasks.some(item => item.id === createdTask.task.id));
+    assert(!rolledBackBootstrap.entities.tasks.some(item => item.title === 'Replacement Task'));
+    assert.equal(rolledBackBootstrap.entities.settings.default_priority, 'urgent');
+    assert.equal(rolledBackBootstrap.account.id, 'acct_local_dev');
+    console.log('  PASS rollback restores the pre-replacement workspace and preserves account/session');
+
+    const stalePreview = await request(baseUrl, 'POST', '/migration/replacements/preview', {
+      source_runtime: 'extension_json_export_v1',
+      snapshot: replacementSnapshot
+    });
+    await request(baseUrl, 'POST', '/tasks', { title: 'Cursor changed after preview', due_date: date });
+    const staleCommit = await requestRaw(
+      baseUrl,
+      'POST',
+      `/migration/replacements/${encodeURIComponent(stalePreview.replacement.replacement_id)}/commit`,
+      { confirmation: '覆盖导入' }
+    );
+    assert.equal(staleCommit.response.status, 409);
+    assert.equal(staleCommit.payload.error.code, 'replacement_preview_stale');
+    console.log('  PASS replacement commit rejects a stale sync cursor');
+
+    const lockPreview = await request(baseUrl, 'POST', '/migration/replacements/preview', {
+      source_runtime: 'extension_json_export_v1',
+      snapshot: replacementSnapshot
+    });
+    runWorkerSql(persistTo, `INSERT INTO account_mutation_locks (account_id,replacement_id,created_at,expires_at) VALUES ('acct_local_dev','${lockPreview.replacement.replacement_id}','2026-07-17T00:00:00.000Z','2099-01-01T00:00:00.000Z');`);
+    await waitForHealth(baseUrl, worker);
+    const lockedWrite = await requestRaw(baseUrl, 'POST', '/tasks', { title: 'Must be locked', due_date: date });
+    assert.equal(lockedWrite.response.status, 409);
+    assert.equal(lockedWrite.payload.error.code, 'workspace_replacement_in_progress');
+    runWorkerSql(persistTo, "DELETE FROM account_mutation_locks WHERE account_id = 'acct_local_dev';");
+    await waitForHealth(baseUrl, worker);
+    console.log('  PASS account mutation lock blocks ordinary writes during replacement');
+
+    const duplicateSnapshot = {
+      ...replacementSnapshot,
+      data: {
+        ...replacementSnapshot.data,
+        plans: [
+          { id: 'duplicate-plan', name: 'First duplicate' },
+          { id: 'duplicate-plan', name: 'Second duplicate' }
+        ],
+        buckets: [],
+        labels: [],
+        tasks: [],
+        containers: [],
+        events: [],
+        settings: {}
+      }
+    };
+    const beforeFailedBatch = await request(baseUrl, 'GET', '/sync/bootstrap');
+    const duplicatePreview = await request(baseUrl, 'POST', '/migration/replacements/preview', {
+      source_runtime: 'integration-atomicity-test',
+      snapshot: duplicateSnapshot
+    });
+    const failedBatch = await requestRaw(
+      baseUrl,
+      'POST',
+      `/migration/replacements/${encodeURIComponent(duplicatePreview.replacement.replacement_id)}/commit`,
+      { confirmation: '覆盖导入' }
+    );
+    assert.equal(failedBatch.response.status, 500);
+    assert.equal(failedBatch.payload.error.code, 'replacement_batch_failed');
+    const afterFailedBatch = await request(baseUrl, 'GET', '/sync/bootstrap');
+    assert.deepEqual(
+      afterFailedBatch.entities.tasks.map(item => item.id).sort(),
+      beforeFailedBatch.entities.tasks.map(item => item.id).sort()
+    );
+    assert.deepEqual(
+      afterFailedBatch.entities.plans.map(item => item.id).sort(),
+      beforeFailedBatch.entities.plans.map(item => item.id).sort()
+    );
+    console.log('  PASS failed D1 replacement batch leaves canonical data unchanged');
+
+    const emptyReplacement = await requestRaw(baseUrl, 'POST', '/migration/replacements/preview', {
+      source_runtime: 'integration-empty-test',
+      snapshot: { schema: 'timewhere-legacy-indexeddb-snapshot-v1', data: { habits: [{ id: 'habit-only' }] } }
+    });
+    assert.equal(emptyReplacement.response.status, 400);
+    assert.equal(emptyReplacement.payload.error.code, 'empty_backup_not_allowed');
+    console.log('  PASS empty or unsupported-only backup cannot replace Cloud data');
 
     console.log('================================');
     console.log('All WebDev local integration checks passed.');

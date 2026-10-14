@@ -19,6 +19,9 @@ bucket_name = "timewhere-dev-snapshots"
 binding = "APP_CACHE"
 id = "REPLACE_WITH_DEV_KV_ID"
 
+[triggers]
+crons = [ "17 3 * * *" ]
+
 [vars]
 TIMEWHERE_ENV = "dev"
 GOOGLE_OIDC_CLIENT_ID = ""
@@ -41,6 +44,9 @@ bucket_name = "timewhere-preview-snapshots"
 binding = "APP_CACHE"
 id = "REPLACE_WITH_PREVIEW_KV_ID"
 
+[env.preview.triggers]
+crons = [ "17 3 * * *" ]
+
 [env.preview.vars]
 TIMEWHERE_ENV = "preview"
 GOOGLE_OIDC_CLIENT_ID = ""
@@ -62,6 +68,9 @@ bucket_name = "timewhere-snapshots"
 [[env.prod.kv_namespaces]]
 binding = "APP_CACHE"
 id = "REPLACE_WITH_PROD_KV_ID"
+
+[env.prod.triggers]
+crons = [ "17 3 * * *" ]
 
 [env.prod.vars]
 TIMEWHERE_ENV = "prod"

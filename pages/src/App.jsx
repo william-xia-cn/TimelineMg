@@ -33,6 +33,7 @@ import { disableGoogleAutoSelect, GOOGLE_SSO_CLIENT_ID, renderGoogleSsoButton } 
 import { LegacyPageShell } from './LegacyPageShell.jsx';
 
 const SYNC_CURSOR_KEY = 'timewhere.web.sync.cursor.v1';
+const DEMO_MODE_KEY = 'timewhere.web.demo_mode.v1';
 
 const seedTasks = [
   { id: 'local-preview-1', title: 'Review WebDev architecture contracts', progress: 'not_started', priority: 'important', due_date: '2026-07-10', source: 'preview' },
@@ -377,9 +378,10 @@ function writeStoredSyncCursor(cursor) {
 export function App() {
   const platform = useMemo(() => createBrowserPlatform(), []);
   const googleButtonRef = useRef(null);
-  const [googleSsoMountTick, setGoogleSsoMountTick] = useState(0);
+
   const [online, setOnline] = useState(navigator.onLine);
   const [session, setSession] = useState(() => apiClient.getSession());
+  const [demoMode, setDemoMode] = useState(() => !apiClient.getSession()?.token && window.localStorage?.getItem(DEMO_MODE_KEY) === 'true');
   const [account, setAccount] = useState(() => apiClient.getSession()?.account || null);
   const [accountProfile, setAccountProfile] = useState(() => apiClient.getSession()?.profile || null);
   const [accountStatus, setAccountStatus] = useState(null);
@@ -506,7 +508,8 @@ export function App() {
 
   useEffect(() => {
     let disposed = false;
-    if (activeView !== 'settings' || !online || session?.token) return undefined;
+    const authGateVisible = !session?.token && !demoMode;
+    if (!(activeView === 'settings' || authGateVisible) || !online || session?.token) return undefined;
     const buttonElement = googleButtonRef.current;
     if (!buttonElement) return undefined;
     setSsoState({ phase: 'loading', message: 'Loading Google SSO...' });
@@ -525,7 +528,7 @@ export function App() {
       if (!disposed) setSsoState({ phase: 'error', message: formatStatus(error) });
     });
     return () => { disposed = true; };
-  }, [activeView, online, session?.token, googleSsoMountTick]);
+  }, [activeView, online, session?.token, demoMode]);
 
   function hasCloudSession() {
     return Boolean(session?.token);
@@ -817,6 +820,8 @@ export function App() {
     try {
       const data = await apiClient.loginWithGoogleIdToken(idToken);
       const nextSession = apiClient.getSession();
+      window.localStorage?.removeItem(DEMO_MODE_KEY);
+      setDemoMode(false);
       setSession(nextSession);
       setAccount(data.account || nextSession?.account || null);
       setAccountProfile(data.profile || nextSession?.profile || null);
@@ -837,6 +842,8 @@ export function App() {
       await apiClient.logout();
       disableGoogleAutoSelect();
       setSession(null);
+      window.localStorage?.removeItem(DEMO_MODE_KEY);
+      setDemoMode(false);
       setAccount(null);
       setAccountProfile(null);
       setAccountStatus(null);
@@ -849,6 +856,14 @@ export function App() {
       setStatus({ phase: 'error', message: formatStatus(error) });
       setSsoState({ phase: 'error', message: formatStatus(error) });
     }
+  }
+
+  function enterDemoMode() {
+    window.localStorage?.setItem(DEMO_MODE_KEY, 'true');
+    setDemoMode(true);
+    setStatus({ phase: 'preview', message: 'Demo mode: sign in with Google before saving real TimeWhere Cloud data.' });
+    setCloudSessionStatus('Demo mode only. Connect with Google SSO to use your TimeWhere Cloud workspace.');
+    navigateToView('dashboard');
   }
 
   async function refreshTimeWhereSession() {
@@ -905,23 +920,28 @@ export function App() {
     if (session?.token) refreshMigrationConflicts();
   }, [session?.token, online]);
 
-  async function addTask(event) {
+  async function addTask(event, input = draft) {
     event.preventDefault();
     if (!hasCloudSession()) {
       setStatus({ phase: 'blocked', message: 'Google SSO session required before creating or queueing tasks.' });
       return;
     }
-    if (!draft.title.trim()) return;
+    if (!input.title?.trim()) return;
     try {
       const created = await legacyUiAdapter.tasks.create({
-        title: draft.title.trim(),
-        due_date: draft.due_date || null,
-        schedule_time: draft.schedule_time || null,
-        duration: Number(draft.duration || 45),
-        recurrence_frequency: draft.recurrence_frequency === 'none' ? null : draft.recurrence_frequency,
-        recurrence_count: draft.recurrence_frequency === 'none' ? null : Number(draft.recurrence_count || 1),
-        priority: draft.priority,
-        notes: draft.notes || null
+        title: input.title.trim(),
+        plan_id: input.plan_id || null,
+        bucket_id: input.bucket_id || null,
+        start_date: input.start_date || null,
+        due_date: input.due_date || null,
+        schedule_time: input.schedule_time || null,
+        duration: Number(input.duration || 45),
+        recurrence_frequency: input.recurrence_frequency === 'none' ? null : input.recurrence_frequency,
+        recurrence_count: input.recurrence_frequency === 'none' ? null : Number(input.recurrence_count || 1),
+        priority: input.priority || 'medium',
+        checklist: Array.isArray(input.checklist) ? input.checklist : [],
+        labels: Array.isArray(input.labels) ? input.labels : [],
+        notes: input.notes || null
       });
       setTasks(current => [created, ...current.filter(task => task.id !== created.id)]);
       setDraft(emptyTaskDraft);
@@ -963,7 +983,7 @@ export function App() {
     }
   }
 
-  async function addEvent(event) {
+  async function addEvent(event, input = eventDraft) {
     event.preventDefault();
     if (!online) {
       setStatus({ phase: 'offline', message: 'offline_write_blocked: reconnect before editing current calendar data.' });
@@ -973,17 +993,17 @@ export function App() {
       setStatus({ phase: 'blocked', message: 'Google SSO session required before creating Cloud calendar events.' });
       return;
     }
-    if (!eventDraft.title.trim()) return;
+    if (!input.title?.trim()) return;
     try {
-      const repeat = eventDraft.repeat || 'none';
-      const repeatDays = parseRepeatDaysText(eventDraft.repeat_days_text);
+      const repeat = input.repeat || 'none';
+      const repeatDays = parseRepeatDaysText(input.repeat_days_text);
       const created = await legacyUiAdapter.calendar.create({
-        title: eventDraft.title.trim(),
-        date: eventDraft.date || null,
-        time_start: eventDraft.time_start || null,
-        time_end: eventDraft.time_end || null,
-        active_start_date: repeat === 'none' ? null : eventDraft.active_start_date || eventDraft.date || null,
-        active_end_date: repeat === 'none' ? null : eventDraft.active_end_date || null,
+        title: input.title.trim(),
+        date: input.date || null,
+        time_start: input.time_start || null,
+        time_end: input.time_end || null,
+        active_start_date: repeat === 'none' ? null : input.active_start_date || input.date || null,
+        active_end_date: repeat === 'none' ? null : input.active_end_date || null,
         source: 'web_app',
         payload: {
           repeat,
@@ -1036,7 +1056,7 @@ export function App() {
     }
   }
 
-  async function addPlan(event) {
+  async function addPlan(event, input = planDraft) {
     event.preventDefault();
     if (!online) {
       setStatus({ phase: 'offline', message: 'offline_write_blocked: reconnect before editing structure data.' });
@@ -1046,13 +1066,13 @@ export function App() {
       setStatus({ phase: 'blocked', message: 'Google SSO session required before creating Cloud plans.' });
       return;
     }
-    if (!planDraft.name.trim()) return;
+    if (!input.name?.trim()) return;
     try {
       const created = await structureRepository.createPlan({
-        name: planDraft.name.trim(),
-        color: planDraft.color || null,
-        icon_char: planDraft.icon_char || null,
-        subject: planDraft.name.trim()
+        name: input.name.trim(),
+        color: input.color || null,
+        icon_char: input.icon_char || null,
+        subject: input.subject || input.name.trim()
       });
       setPlans(current => [created, ...current.filter(item => item.id !== created.id)]);
       setPlanDraft(emptyPlanDraft);
@@ -1081,7 +1101,7 @@ export function App() {
     }
   }
 
-  async function addBucket(event) {
+  async function addBucket(event, input = bucketDraft) {
     event.preventDefault();
     if (!online) {
       setStatus({ phase: 'offline', message: 'offline_write_blocked: reconnect before editing structure data.' });
@@ -1091,11 +1111,12 @@ export function App() {
       setStatus({ phase: 'blocked', message: 'Google SSO session required before creating Cloud buckets.' });
       return;
     }
-    if (!bucketDraft.name.trim()) return;
+    if (!input.name?.trim()) return;
     try {
       const created = await structureRepository.createBucket({
-        name: bucketDraft.name.trim(),
-        color: bucketDraft.color || null
+        name: input.name.trim(),
+        color: input.color || null,
+        plan_id: input.plan_id || null
       });
       setBuckets(current => [created, ...current.filter(item => item.id !== created.id)]);
       setBucketDraft(emptyBucketDraft);
@@ -1124,7 +1145,7 @@ export function App() {
     }
   }
 
-  async function addLabel(event) {
+  async function addLabel(event, input = labelDraft) {
     event.preventDefault();
     if (!online) {
       setStatus({ phase: 'offline', message: 'offline_write_blocked: reconnect before editing structure data.' });
@@ -1134,11 +1155,12 @@ export function App() {
       setStatus({ phase: 'blocked', message: 'Google SSO session required before creating Cloud labels.' });
       return;
     }
-    if (!labelDraft.name.trim()) return;
+    if (!input.name?.trim()) return;
     try {
       const created = await structureRepository.createLabel({
-        name: labelDraft.name.trim(),
-        color: labelDraft.color || null
+        name: input.name.trim(),
+        color: input.color || null,
+        plan_id: input.plan_id || null
       });
       setLabels(current => [created, ...current.filter(item => item.id !== created.id)]);
       setLabelDraft(emptyLabelDraft);
@@ -1167,7 +1189,7 @@ export function App() {
     }
   }
 
-  async function addContainer(event) {
+  async function addContainer(event, input = containerDraft) {
     event.preventDefault();
     if (!online) {
       setStatus({ phase: 'offline', message: 'offline_write_blocked: reconnect before editing structure data.' });
@@ -1177,14 +1199,18 @@ export function App() {
       setStatus({ phase: 'blocked', message: 'Google SSO session required before creating Cloud containers.' });
       return;
     }
-    if (!containerDraft.name.trim()) return;
+    if (!input.name?.trim()) return;
     try {
       const created = await structureRepository.createContainer({
-        name: containerDraft.name.trim(),
-        time_start: containerDraft.time_start || null,
-        time_end: containerDraft.time_end || null,
-        repeat: containerDraft.repeat || null,
-        enabled: true
+        name: input.name.trim(),
+        color: input.color || null,
+        time_start: input.time_start || null,
+        time_end: input.time_end || null,
+        repeat: input.repeat || null,
+        layer: Number(input.layer || 1),
+        active_start_date: input.active_start_date || null,
+        active_end_date: input.active_end_date || null,
+        enabled: input.enabled !== false
       });
       setContainers(current => [created, ...current.filter(item => item.id !== created.id)]);
       setContainerDraft(emptyContainerDraft);
@@ -1267,6 +1293,7 @@ export function App() {
         reminders_enabled: notificationEnabled,
         reminder_before: Number(settingsDraft.reminder_before || 15),
         start_week_on: Number(settingsDraft.start_week_on ?? 1),
+        pomodoro_work: Number(settingsDraft.pomodoro_work || 25),
         theme: settingsDraft.theme || 'light',
         appearance_background: settingsDraft.appearance_background || 'calm',
         appearance_avatar: settingsDraft.appearance_avatar || 'default',
@@ -1590,6 +1617,16 @@ export function App() {
   const accountInitial = (accountName || 'G').slice(0, 1).toUpperCase();
   const syncStateClass = !online ? 'offline' : !hasSession ? 'disconnected' : status.phase || 'ready';
   const syncStateLabel = !online ? '离线缓存' : !hasSession ? 'Google 未连接' : status.message || 'Cloud ready';
+  if (!hasSession && !demoMode) {
+    return (
+      <AuthGate
+        online={online}
+        googleButtonRef={googleButtonRef}
+        ssoState={ssoState}
+        onEnterDemo={enterDemoMode}
+      />
+    );
+  }
   const taskGroups = [
     { key: 'not_started', title: 'Not started', tasks: visibleTasks.filter(task => !isCompleted(task) && (task.progress || task.status || 'not_started') !== 'in_progress') },
     { key: 'in_progress', title: 'In progress', tasks: visibleTasks.filter(task => !isCompleted(task) && (task.progress === 'in_progress' || task.status === 'in_progress')) },
@@ -1652,7 +1689,7 @@ export function App() {
       accountProfileName={accountProfileName}
       ssoState={ssoState}
       googleButtonRef={googleButtonRef}
-      onGoogleSsoMount={() => setGoogleSsoMountTick(value => value + 1)}
+
       hasSession={hasSession}
       syncStateClass={syncStateClass}
       syncStateLabel={syncStateLabel}
@@ -1681,6 +1718,22 @@ export function App() {
       onSelectEvent={id => setSelectedEventId(id)}
       onPatchTask={updateTaskState}
       onDeleteTask={deleteTask}
+      onCreateTask={(payload) => addTask({ preventDefault() {} }, payload)}
+      onCreatePlan={(payload) => addPlan({ preventDefault() {} }, payload)}
+      onPatchPlan={(plan, patch) => updateStructureItem('plan', plan, patch)}
+      onDeletePlan={deletePlan}
+      onCreateBucket={(payload) => addBucket({ preventDefault() {} }, payload)}
+      onPatchBucket={(bucket, patch) => updateStructureItem('bucket', bucket, patch)}
+      onDeleteBucket={deleteBucket}
+      onCreateLabel={(payload) => addLabel({ preventDefault() {} }, payload)}
+      onPatchLabel={(label, patch) => updateStructureItem('label', label, patch)}
+      onDeleteLabel={deleteLabel}
+      onCreateEvent={(payload) => addEvent({ preventDefault() {} }, payload)}
+      onPatchEvent={updateEventState}
+      onDeleteEvent={deleteEvent}
+      onCreateContainer={(payload) => addContainer({ preventDefault() {} }, payload)}
+      onPatchContainer={(container, patch) => updateStructureItem('container', container, patch)}
+      onDeleteContainer={deleteContainer}
       openCalendarComposer={() => setCalendarComposerOpen(true)}
       refreshWorkspace={refreshWorkspace}
       refreshTasks={refreshTasks}
@@ -1697,6 +1750,39 @@ export function App() {
   );
 }
 
+function AuthGate({ online, googleButtonRef, ssoState, onEnterDemo }) {
+  const configured = GOOGLE_SSO_CLIENT_ID && GOOGLE_SSO_CLIENT_ID.trim();
+  const statusText = !online
+    ? '当前离线，登录需要网络连接。'
+    : ssoState?.message || '使用 Google 登录 TimeWhere Cloud。';
+  return (
+    <main className="auth-gate" aria-label="TimeWhere 登录">
+      <section className="auth-gate-panel">
+        <div className="auth-gate-brand">
+          <span className="auth-gate-logo">TW</span>
+          <div>
+            <p className="auth-gate-kicker">TimeWhere Cloud</p>
+            <h1>登录后进入你的时间工作区</h1>
+          </div>
+        </div>
+        <p className="auth-gate-copy">
+          TimeWhere Web 使用 Google 单点登录确认账户身份。登录后会加载你的 Cloud 数据；未登录时不会进入真实工作区。
+        </p>
+        <div className="auth-gate-actions">
+          <div className="auth-google-button" ref={googleButtonRef} aria-label="使用 Google 登录" />
+          {!configured && <p className="auth-gate-warning">Google SSO 尚未配置。</p>}
+          {!online && <p className="auth-gate-warning">离线状态下无法登录。</p>}
+          <button className="auth-demo-button" type="button" onClick={onEnterDemo}>查看演示</button>
+        </div>
+        <p className={`auth-gate-status ${ssoState?.phase || 'idle'}`}>{statusText}</p>
+        <div className="auth-gate-notes">
+          <span>Google 只用于登录，不请求 Drive / Calendar / Tasks 权限。</span>
+          <span>演示模式不保存真实 Cloud 数据。</span>
+        </div>
+      </section>
+    </main>
+  );
+}
 function TaskBoardView({ groups, canWrite, canDelete, onPatch, onDelete, onSelect }) {
   return (
     <section id="kanbanBoard" className="kanban-board custom-scrollbar">

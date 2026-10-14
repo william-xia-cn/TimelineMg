@@ -146,6 +146,8 @@ function assertNoProdSmokeRows() {
     ['calendar_events', smokeAccountFilter],
     ['product_settings', smokeAccountFilter],
     ['migration_runs', smokeAccountFilter],
+    ['migration_replacements', smokeAccountFilter],
+    ['account_mutation_locks', smokeAccountFilter],
     ['migration_conflicts', smokeAccountFilter],
     ['sync_changes', smokeAccountFilter],
     ['sync_conflicts', smokeAccountFilter],

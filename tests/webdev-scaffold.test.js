@@ -41,6 +41,7 @@ const requiredFiles = [
   'workers/migrations/0003_sync_changes.sql',
   'workers/migrations/0004_sync_conflicts.sql',
   'workers/migrations/0005_sync_mutation_outcomes.sql',
+  'workers/migrations/0006_migration_replacements.sql',
   'workers/scripts/clear-local-d1-state.mjs',
   'workers/scripts/create-local-seed-sql.mjs',
   'workers/scripts/run-local-d1-file.mjs',
@@ -48,6 +49,7 @@ const requiredFiles = [
   'workers/src/index.ts',
   'workers/src/auth.ts',
   'workers/src/migration.ts',
+  'workers/src/replacements.ts',
   'workers/src/offlineMutations.ts',
   'workers/src/repositories.ts',
   'workers/src/sync.ts',
@@ -72,6 +74,8 @@ const requiredFiles = [
   'pages/src/domain/calendarDateProjection.js',
   'pages/src/domain/reminderState.js',
   'pages/src/migration/legacyIndexedDbSnapshotAdapter.js',
+  'pages/src/legacy-v032/authGate.js',
+  'pages/src/legacy-v032/extensionImportUi.js',
   'pages/src/repositories/offlineMutationQueue.js',
   'pages/src/repositories/taskRepository.js',
   'pages/src/repositories/calendarRepository.js',
@@ -297,6 +301,10 @@ for (const [route, pattern] of [
   ['/settings', /\/settings/],
   ['/migration/runs', /migration\\\/runs/],
   ['/migration/conflicts', /migration\\\/conflicts/],
+  ['/migration/replacements/preview', /migration\\\/replacements\\\/preview/],
+  ['/migration/replacements/:id/commit', /migration\\\/replacements\\\/\(\[\^\/\]\+\)\\\/commit/],
+  ['/migration/replacements/:id/rollback-preview', /migration\\\/replacements\\\/\(\[\^\/\]\+\)\\\/rollback-preview/],
+  ['/migration/replacements/:id/rollback', /migration\\\/replacements\\\/\(\[\^\/\]\+\)\\\/rollback/],
   ['/sync/bootstrap', /sync\\\/bootstrap/],
   ['/sync/changes', /sync\\\/changes/],
   ['/sync/mutations', /sync\\\/mutations/],
@@ -342,6 +350,11 @@ assert('migration detects changed cloud records and skips overwrite',
   migration.includes('detectMigrationConflicts') && migration.includes('cloud_record_changed_since_snapshot') && migration.includes('skipLegacyIds.has') && migration.includes("counts.conflicts") && migration.includes("finalStatus = counts.conflicts > 0 ? 'conflict' : 'completed'"));
 assert('migration conflict use_local applies local row before closing conflict',
   migration.includes('applyLocalConflict') && migration.includes("resolution === 'use_local'") && migration.includes('applied_local'));
+assert('Extension JSON settings migration never silently overwrites different Cloud settings',
+  migration.includes('detectSettingConflicts')
+    && migration.includes('cloud_setting_differs_from_import')
+    && migration.includes("entityType === 'setting'")
+    && migration.includes('settingConflicts'));
 assert('migration preserves canonical foreign key references',
   migration.includes('function referenceId') && migration.includes("text.startsWith(`${prefix}_`)") && migration.includes("referenceId('plan', task.plan_id)") && migration.includes("referenceId('container', event.container_id)"));
 assert('migration imports recurrence and ManageBac source task fields',
@@ -558,6 +571,9 @@ const legacyTasksCss = read('extension/pages/tasks/styles.css');
 const legacyCalendarCss = read('extension/pages/calendar/styles.css');
 const legacySettingsCss = read('extension/pages/settings/styles.css');
 const pagesStyles = read('pages/src/styles.css');
+const legacyAuthGate = read('pages/src/legacy-v032/authGate.js');
+const legacyEntry = read('pages/src/legacy-v032/entry.js');
+const legacyRootRedirect = read('pages/src/legacy-v032/rootRedirect.js');
 const legacyUiAdapter = read('pages/src/legacyUiAdapter.js');
 assert('WebDev legacy UI adapter maps old page operations to repositories only',
   app.includes('createLegacyUiAdapter')
@@ -570,6 +586,38 @@ assert('WebDev legacy UI adapter does not reintroduce old runtime storage depend
     && !legacyUiAdapter.includes('chrome.')
     && !legacyUiAdapter.includes('indexedDB')
     && !legacyUiAdapter.includes('google-sync'));
+const extensionImportUi = read('pages/src/legacy-v032/extensionImportUi.js');
+const legacyMigrationAdapter = read('pages/src/migration/legacyIndexedDbSnapshotAdapter.js');
+const legacyCloudRuntime = read('pages/src/legacy-v032/cloudRuntime.js');
+assert('WebDev Settings exposes inline merge and protected complete replacement import',
+  extensionImportUi.includes('importJsonBtn')
+    && extensionImportUi.includes('input.value = \'\'')
+    && extensionImportUi.includes("addEventListener('input', handleFileSelection, true)")
+    && extensionImportUi.includes("addEventListener('change', handleFileSelection, true)")
+    && extensionImportUi.includes('runtime.prepareExtensionBackup(file)')
+    && extensionImportUi.includes('runtime.commitExtensionBackup(prepared)')
+    && extensionImportUi.includes("button('同步导入', 'merge'")
+    && extensionImportUi.includes("button('覆盖导入', 'replace'")
+    && extensionImportUi.includes("phrase: '覆盖导入'")
+    && extensionImportUi.includes("phrase: '撤销覆盖'")
+    && !extensionImportUi.includes('timewhere-json-import-confirm')
+    && extensionImportUi.includes("panel.dataset.importStage = 'completed'")
+    && legacyCloudRuntime.includes('previewExtensionReplacement')
+    && legacyCloudRuntime.includes('commitExtensionReplacement')
+    && legacyCloudRuntime.includes('commitReplacementRollback')
+    && legacyCloudRuntime.includes('import_verification_failed')
+    && legacyCloudRuntime.includes("'extension_json_export_v1'")
+    && legacyMigrationAdapter.includes('EXTENSION_BACKUP_MAX_BYTES'));
+assert('Extension JSON import explicitly reports unsupported Habits and Daily Journals',
+  extensionImportUi.includes('暂不支持并将跳过')
+    && extensionImportUi.includes('原始文件不会上传')
+    && legacyMigrationAdapter.includes('daily_journals'));const legacyIdBridge = read('pages/src/legacy-v032/idBridge.js');
+assert('Legacy Tasks Plan selection uses bootstrap caches and preserves Cloud Plan references',
+  legacyCloudRuntime.includes('taskRepository.getCachedTasks().filter')
+    && legacyCloudRuntime.includes('structureRepository.getCachedStructure().plans')
+    && legacyCloudRuntime.includes('structureRepository.getCachedStructure().buckets.filter')
+    && legacyIdBridge.includes("base.getTasksByPlan(cloudId('plan', planId))")
+    && legacyIdBridge.includes("map(item => toLegacy('task', item))"));
 const apiClient = read('pages/src/api/client.js');
 for (const label of ['Dashboard', 'Tasks', 'Calendar', 'Settings']) {
   assert(`Web App exposes ${label}`, app.includes(label));
@@ -579,12 +627,44 @@ assert('Web App supports hash/query view routing for Desktop Runtime',
     && app.includes('window.location.hash')
     && app.includes("new URLSearchParams(window.location.search).get('view')")
     && app.includes('function navigateToView')
-    && app.includes('window.history.pushState'));
-assert('Web App exposes Task-only queued pending while non-Task writes remain blocked',
+    && app.includes('window.history.pushState'));assert('Web App gates new users behind Google SSO before entering the real workspace',
+  app.includes('function AuthGate')
+    && app.includes('TimeWhere Web 使用 Google 单点登录确认账户身份')
+    && app.includes('未登录时不会进入真实工作区')
+    && app.includes('if (!hasSession && !demoMode)')
+    && app.includes('<AuthGate'));
+assert('Web App keeps demo mode explicit and separate from real Cloud workspace',
+  app.includes('DEMO_MODE_KEY')
+    && app.includes('查看演示')
+    && app.includes('Demo mode: sign in with Google before saving real TimeWhere Cloud data')
+    && app.includes('演示模式不保存真实 Cloud 数据')
+    && app.includes('window.localStorage?.removeItem(DEMO_MODE_KEY)'));
+assert('Legacy MPA root entry gates first-time users before redirecting to product pages',
+  legacyRootRedirect.includes('shouldShowAuthGate()')
+    && legacyRootRedirect.includes('renderLegacyAuthGate')
+    && legacyRootRedirect.includes('window.location.replace(targetUrl)')
+    && legacyRootRedirect.includes('onAuthenticated')
+    && legacyRootRedirect.includes('onDemo'));
+assert('Legacy MPA page entry does not create Cloud runtime or load frozen controllers before auth gate is cleared',
+  legacyEntry.indexOf('if (shouldShowAuthGate())') > -1
+    && legacyEntry.indexOf('const runtime = createLegacyCloudRuntimeWithIdBridge()') > legacyEntry.indexOf('if (shouldShowAuthGate())')
+    && legacyEntry.includes('await renderLegacyAuthGate')
+    && legacyEntry.includes('onAuthenticated: () => window.location.reload()')
+    && legacyEntry.includes('onDemo: () => window.location.reload()'));
+assert('Legacy auth gate uses Google SSO only for TimeWhere Cloud session and separates demo mode',
+  legacyAuthGate.includes("SESSION_KEY = 'timewhere.web.session'")
+    && legacyAuthGate.includes("DEMO_MODE_KEY = 'timewhere.web.demo_mode.v1'")
+    && legacyAuthGate.includes('apiClient.loginWithGoogleIdToken')
+    && legacyAuthGate.includes('renderGoogleSsoButton')
+    && legacyAuthGate.includes('Google 在这里仅用于单点登录')
+    && legacyAuthGate.includes('setDemoMode(true)')
+    && !legacyAuthGate.includes('google-sync')
+    && !legacyAuthGate.includes('drive.file')
+    && !legacyAuthGate.includes('appDataFolder'));assert('Web App exposes Task-only queued pending while non-Task writes remain blocked',
   app.includes('listPendingTaskMutations') && app.includes('offline_write_blocked') && app.includes('pendingTaskMutations'));
 assert('Web App includes migration preview', app.includes('runPreviewMigration') && legacyShell.includes('运行迁移预览'));
 assert('Web App exposes Task CRUD controls through LegacyDataBridge',
-  legacyShell.includes('onPatchTask') && legacyShell.includes('onDeleteTask') && legacyShell.includes('data-action="complete-task"') && legacyShell.includes('data-action="save-detail"'));
+  legacyShell.includes('onPatchTask') && legacyShell.includes('onDeleteTask') && legacyShell.includes('onCreateTask') && legacyShell.includes('data-action="complete-task"') && legacyShell.includes('bindTaskDetailEvents'));
 assert('Dashboard uses Daily Settle projection helper',
   app.includes('computeDashboardProjection') && legacyShell.includes('dashboardProjection') && legacyShell.includes('Current container'));
 assert('Web App uses LegacyPageShell instead of React near-copy layout',
@@ -598,6 +678,23 @@ assert('LegacyPageShell imports original page HTML and CSS directly',
     && legacyShell.includes('../../extension/pages/tasks/styles.css?raw')
     && legacyShell.includes('../../extension/pages/calendar/styles.css?raw')
     && legacyShell.includes('../../extension/pages/settings/styles.css?raw'));
+assert('LegacyPageShell reuses the legacy SVG icon renderer',
+  legacyShell.includes("../../extension/shared/js/icons.js"));
+assert('LegacyPageShell intercepts the unimplemented More navigation without changing routes',
+  legacyShell.includes("const isMoreLink = href === '#'")
+    && legacyShell.includes("showLegacyToast(root, '更多功能暂未开放', 'info')")
+    && legacyShell.includes("event.stopPropagation()"));
+assert('WebDev global CSS does not override legacy Settings action button colors',
+  !/\.save-btn,\s*\.action-btn\s*\{/.test(pagesStyles)
+    && !pagesStyles.includes('.action-btn.danger {'));
+assert('LegacyPageShell mounts each legacy page once instead of resetting innerHTML on every render',
+  legacyShell.includes('mountedHtmlRef.current !== html')
+    && legacyShell.includes('root.innerHTML = html')
+    && !legacyShell.includes('dangerouslySetInnerHTML'));
+assert('Google SSO mount does not trigger an extra React initialization cycle',
+  !legacyShell.includes('onGoogleSsoMount') && !app.includes('googleSsoMountTick'));
+assert('LegacyPageShell replaces repeated DOM listeners instead of accumulating them',
+  legacyShell.includes('function bindEvent') && !legacyShell.includes('.addEventListener('));
 assert('LegacyPageShell strips old scripts and does not execute old runtimes',
   legacyShell.includes('replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script>/gi')
     && !legacyShell.includes('TimeWhereDB')
@@ -632,7 +729,7 @@ assert('Calendar and Settings preserve original dense product surfaces',
     && legacySettingsCss.includes('.setting-row')
     && legacySettingsCss.includes('.google-sync-card'));
 assert('Web App exposes Task detail first version',
-  legacyShell.includes('taskDetailHtml') && legacyShell.includes('data-action="save-detail"') && app.includes('TaskDetailPanel'));
+  legacyShell.includes('taskDetailHtml') && legacyShell.includes('bindTaskDetailEvents') && legacyShell.includes('checklistNewItem') && legacyShell.includes('labels-picker'));
 assert('Web App exposes task recurrence fields in create and detail flows',
   app.includes('recurrence_frequency') && app.includes('Repeat count') && app.includes('Weekly') && app.includes('Monthly'));
 assert('Web App enforces ManageBac source task edit boundary in task detail',
@@ -656,7 +753,7 @@ assert('Web App exposes Phase 4 replay safety gate in Settings',
 assert('Web App exposes Phase 5 pending Task queue retry preview and discard UX',
   app.includes('PendingTaskQueuePanel') && app.includes('Pending Task queue') && app.includes('Retry preview') && app.includes('Discard local pending') && app.includes('previewPendingTaskRetry') && app.includes('discardPendingTask'));
 assert('Web App hardens Phase 8 Task pending UX without enabling full offline-first',
-  app.includes('pendingTaskMutations') && legacyShell.includes('data-action="save-detail"'));
+  app.includes('pendingTaskMutations') && legacyShell.includes('bindTaskDetailEvents'));
 assert('Pages API client can read sync replay outcome diagnostics',
   apiClient.includes('listSyncMutationOutcomes') && apiClient.includes('getSyncMutationOutcome') && apiClient.includes('getSyncReplayReadinessSummary') && apiClient.includes('getSyncReplayEnablementSimulation') && apiClient.includes('getSyncReplaySafety') && apiClient.includes('getSyncBootstrap') && apiClient.includes('/sync/bootstrap') && apiClient.includes('/sync/mutations/readiness-summary') && apiClient.includes('/sync/mutations/enablement-simulation') && apiClient.includes('/sync/replay-safety') && apiClient.includes('/sync/mutations') && apiClient.includes('encodeURIComponent(mutationId)'));
 assert('Pages API client can read sync changes by cursor',
@@ -674,7 +771,7 @@ assert('Pages API client can read and resolve Task sync conflicts',
 assert('Web App uses legacy IndexedDB snapshot adapter for migration preview',
   app.includes('buildLegacyIndexedDbSnapshot') && app.includes("deviceId: 'web-preview'"));
 assert('Web App exposes Calendar event CRUD controls',
-  app.includes('addEvent') && app.includes('deleteEvent') && app.includes('updateEventState') && legacyCalendarHtml.includes('calModal') && legacyShell.includes('openCalendarComposer'));
+  app.includes('addEvent') && app.includes('deleteEvent') && app.includes('updateEventState') && legacyCalendarHtml.includes('calModal') && legacyShell.includes('openCalendarModal') && legacyShell.includes('onCreateEvent') && legacyShell.includes('onPatchEvent') && legacyShell.includes('onDeleteEvent'));
 assert('Web App exposes Calendar event recurrence fields without changing D1 schema',
   app.includes('Repeat days') && app.includes('active_start_date') && app.includes('parseRepeatDaysText') && app.includes('payload: {') && app.includes('repeat_days'));
 assert('Web App exposes Structure management controls',
@@ -864,12 +961,13 @@ assert('preview UI smoke script uses stable preview Pages and temporary smoke ac
     && previewUiSmoke.includes('cleanupSmokeAccounts')
     && previewUiSmoke.includes('No prod resources were touched'));
 assert('preview UI smoke script covers core Web App views without Google browser session',
-  previewUiSmoke.includes('Today projection')
+  previewUiSmoke.includes('Preview Dashboard uses original app layout')
     && previewUiSmoke.includes('/tasks')
     && previewUiSmoke.includes('/calendar/events')
-    && previewUiSmoke.includes('自动迁移')
-    && previewUiSmoke.includes('original centered glass container')
-    && previewUiSmoke.includes('Replay safety gate')
+    && previewUiSmoke.includes('Preview Tasks uses original context sidebar')
+    && previewUiSmoke.includes('Preview Calendar keeps legacy week view')
+    && previewUiSmoke.includes('Preview Settings uses original centered glass container')
+    && previewUiSmoke.includes('Preview Settings renders account Cloud section inside legacy settings container')
     && previewUiSmoke.includes('no Google session, token, account email, or Cloudflare id was printed')
     && !previewUiSmoke.includes('writes_enabled=true'));
 assert('preview data hygiene smoke checks temporary smoke cleanup without prod',
@@ -982,15 +1080,32 @@ assert('completion audit script classifies readiness without approving gated wor
     && !completionAudit.includes('wrangler deploy')
     && !completionAudit.includes('pages deploy'));
 assert('root package has webdev integration script', rootPackage.scripts['webdev:integration'] === 'node tests/webdev-integration.test.js');
-assert('root package has WebDev UI walkthrough script', rootPackage.scripts['webdev:ui:walkthrough'] === 'node scripts/webdev/ui-walkthrough.mjs');
-const webdevUiWalkthrough = read('scripts/webdev/ui-walkthrough.mjs');
-assert('WebDev UI walkthrough exercises read cache change refresh',
-  /getByRole\('button', \{ name: '刷新变更' \}\)\.click/.test(webdevUiWalkthrough)
-    && webdevUiWalkthrough.includes('Settings refreshes read cache changes by cursor')
-    && /Applied \\d\+ updated/.test(webdevUiWalkthrough)
-    && webdevUiWalkthrough.includes('requestWorker')
-    && webdevUiWalkthrough.includes("POST', '/tasks'")
-    && webdevUiWalkthrough.includes('Tasks view receives incremental Cloud task from sync changes'));
+assert('root package has frozen legacy MPA UI verification commands',
+  rootPackage.scripts['webdev:legacy-ui:freeze']?.includes('freeze-legacy-v032-ui.mjs')
+    && rootPackage.scripts['webdev:legacy-ui:verify'] === 'node scripts/webdev/verify-legacy-v032-frozen-ui.mjs'
+    && rootPackage.scripts['webdev:legacy-ui:functional'] === 'node scripts/webdev/legacy-mpa-functional-walkthrough.mjs'
+    && rootPackage.scripts['webdev:legacy-ui:probe'] === 'node scripts/webdev/legacy-mpa-runtime-probe.mjs');
+assert('root package WebDev UI walkthrough runs frozen source functional and visual gates',
+  rootPackage.scripts['webdev:ui:walkthrough']?.includes('webdev:legacy-ui:verify')
+    && rootPackage.scripts['webdev:ui:walkthrough']?.includes('webdev:legacy-ui:functional')
+    && rootPackage.scripts['webdev:ui:walkthrough']?.includes('webdev:legacy-ui:probe'));
+const legacyMpaWalkthrough = read('scripts/webdev/legacy-mpa-functional-walkthrough.mjs');
+const legacyMpaProbe = read('scripts/webdev/legacy-mpa-runtime-probe.mjs');
+const legacyFrozenVerifier = read('scripts/webdev/verify-legacy-v032-frozen-ui.mjs');
+assert('Legacy MPA walkthrough exercises Task Calendar and Settings Cloud operations',
+  legacyMpaWalkthrough.includes('Task CRUD reaches Cloud repository')
+    && legacyMpaWalkthrough.includes('Calendar CRUD reaches Cloud repository')
+    && legacyMpaWalkthrough.includes('Settings save reaches Cloud repository')
+    && legacyMpaWalkthrough.includes('Settings session rotation control executed'));
+assert('Legacy MPA probe enforces 2048x1210 four-column first viewport',
+  legacyMpaProbe.includes('width: 2048, height: 1210')
+    && legacyMpaProbe.includes('Dashboard expected 4 columns')
+    && legacyMpaProbe.includes('Dashboard has horizontal overflow'));
+assert('Legacy frozen verifier compares v0.3.2 bytes controls and Cloud adapter boundary',
+  legacyFrozenVerifier.includes("const baseline = 'v0.3.2'")
+    && legacyFrozenVerifier.includes('byte-identical')
+    && legacyFrozenVerifier.includes('preserves every static control opening tag')
+    && legacyFrozenVerifier.includes('Web legacy adapter does not access IndexedDB'));
 const webdevDesktopRuntimeSmoke = read('scripts/webdev/desktop-runtime-smoke.mjs');
 assert('root package has WebDev Browser Extension readiness script',
   rootPackage.scripts['webdev:extension:readiness'] === 'node scripts/webdev/browser-extension-readiness-check.mjs');

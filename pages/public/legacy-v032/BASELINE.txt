@@ -1,0 +1,5 @@
+TimeWhere Web legacy UI visual baseline
+source_tag=v0.3.2
+source_scope=extension/pages/focus,tasks,calendar,settings and required shared assets
+generated_by=scripts/webdev/freeze-legacy-v032-ui.mjs
+Do not edit generated snapshot files directly.

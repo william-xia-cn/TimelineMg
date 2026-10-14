@@ -46,10 +46,13 @@ try {
       && header(indexHead, 'permissions-policy').includes('camera=()'));
   assert('root HTML is no-store', header(indexHead, 'cache-control') === 'no-store');
 
-  const { response: indexGet, text: html } = await fetchText(`${previewPagesUrl}/`);
+  const { response: indexGet, text: indexHtml } = await fetchText(`${previewPagesUrl}/`);
   assert('stable preview Pages HTML is reachable', indexGet.ok, `HTTP ${indexGet.status}`);
+  assert('preview root redirects into the frozen Dashboard MPA', indexHtml.includes('/legacy-v032/pages/focus/focus.html'));
+  const { response: appGet, text: html } = await fetchText(`${previewPagesUrl}/legacy-v032/pages/focus/focus.html`);
+  assert('preview frozen Dashboard HTML is reachable', appGet.ok, `HTTP ${appGet.status}`);
   const assetPath = html.match(/\/assets\/[^"']+\.js/)?.[0];
-  assert('preview HTML references a hashed JS asset', Boolean(assetPath));
+  assert('preview Dashboard HTML references a hashed JS asset', Boolean(assetPath));
   if (assetPath) {
     const assetHead = await fetchHead(new URL(assetPath, previewPagesUrl).href);
     assert('hashed JS asset is reachable', assetHead.ok, `HTTP ${assetHead.status}`);
